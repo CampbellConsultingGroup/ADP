@@ -4,10 +4,10 @@ from adp.store.records import DesignRecord, DesignVersion, VerdictChain
 from adp.store.store import (
     ConcurrencyConflictError,
     DesignNotFoundError,
+    DesignStore,
     EntityNotFoundError,
     SchemaValidationError,
     StoreError,
-    DesignStore,
 )
 
 __all__ = [

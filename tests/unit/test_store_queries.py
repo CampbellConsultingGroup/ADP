@@ -9,15 +9,6 @@ import pytest
 
 from adp.models import (
     ArchitectureDescription,
-    AuditEntry,
-    Element,
-    ElementKind,
-    Finding,
-    Relationship,
-    Requirement,
-    SolutionOption,
-    Verdict,
-    VerdictStatus,
 )
 from adp.store.queries import (
     query_by_provenance,
@@ -93,7 +84,10 @@ def test_query_satisfies_returns_matching_elements() -> None:
 
 
 def test_query_satisfies_returns_empty_for_unknown_requirement() -> None:
-    content = _content(elements=[_elm("ELM-001", satisfies=["REQ-001"])])
+    content = _content(
+        requirements=[_req("REQ-001")],
+        elements=[_elm("ELM-001", satisfies=["REQ-001"])],
+    )
     result = query_satisfies(content, "REQ-999")
     assert result == []
 

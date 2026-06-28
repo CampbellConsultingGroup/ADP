@@ -6,7 +6,6 @@ Each test runs inside a rolled-back transaction (see conftest.py) for isolation.
 
 from __future__ import annotations
 
-import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,11 +17,9 @@ from adp.models import (
     AuditEntry,
     Element,
     ElementKind,
-    Finding,
     Relationship,
     Requirement,
     SolutionOption,
-    Verdict,
     VerdictStatus,
 )
 from adp.store import (
@@ -108,6 +105,7 @@ async def test_get_schema_version_mismatch_logs_warning(
 async def test_save_writes_audit_entries_atomically(store: DesignStore, db_session) -> None:  # type: ignore[type-arg]
     """Audit entries commit in the same transaction as the design version (FR-003)."""
     import sqlalchemy as sa
+
     from adp.store.records import audit_entries
 
     desc = _minimal("DESIGN-AUDIT").model_copy(update={
@@ -136,7 +134,6 @@ async def test_save_writes_audit_entries_atomically(store: DesignStore, db_sessi
 
 async def test_audit_trigger_fires_on_delete(store: DesignStore, db_session) -> None:  # type: ignore[type-arg]
     """Attempting to DELETE an audit entry raises a database exception (FR-004 / ART-IX)."""
-    import sqlalchemy as sa
     from adp.store.records import audit_entries
 
     desc = _minimal("DESIGN-TRIGGER").model_copy(update={
@@ -163,7 +160,8 @@ async def test_audit_trigger_fires_on_delete(store: DesignStore, db_session) -> 
 async def test_mutation_rolls_back_without_audit(store: DesignStore) -> None:
     """If audit write fails (duplicate PK), the design version is also rolled back (FR-003)."""
     import sqlalchemy as sa
-    from adp.store.records import audit_entries, design_versions
+
+    from adp.store.records import design_versions
 
     dup_entry = AuditEntry(
         id="AUD-DUP",
@@ -237,6 +235,7 @@ async def test_optimistic_concurrency_conflict(store: DesignStore) -> None:
 async def test_design_version_row_is_immutable(store: DesignStore, db_session) -> None:  # type: ignore[type-arg]
     """Direct SQL UPDATE on design_versions is rejected by DB constraints (FR-002)."""
     import sqlalchemy as sa
+
     from adp.store.records import design_versions
 
     await store.save(_minimal("DESIGN-IMM"), actor="test")

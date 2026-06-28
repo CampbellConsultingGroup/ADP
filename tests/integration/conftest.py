@@ -8,6 +8,7 @@ committed rows from one test never leak into the next (ART-IV: deterministic).
 from __future__ import annotations
 
 import os
+
 import pytest
 
 

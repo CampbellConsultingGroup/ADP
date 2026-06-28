@@ -81,7 +81,6 @@ def query_by_provenance(content: dict, provenance_value: str) -> list[Element | 
 
 def query_relationships(content: dict, element_id: str) -> list:  # type: ignore[type-arg]
     """Return all relationships where source or target equals element_id."""
-    from adp.models import Relationship
 
     desc = _description_from(content)
     return [

@@ -14,9 +14,9 @@ from typing import TYPE_CHECKING
 import pydantic
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from adp.models import ArchitectureDescription, SCHEMA_VERSION
+from adp.models import SCHEMA_VERSION, ArchitectureDescription
 from adp.store.logging import log_operation, timed_operation
 from adp.store.queries import (
     query_by_provenance,
@@ -35,7 +35,7 @@ from adp.store.records import (
 )
 
 if TYPE_CHECKING:
-    from adp.models import Element, Requirement, SolutionOption
+    pass
 
 
 # ── Exception hierarchy ───────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ class DesignStore:
 
     def __init__(self, database_url: str) -> None:
         self._engine: AsyncEngine = create_async_engine(database_url, echo=False)
-        self._session_factory = sessionmaker(
+        self._session_factory = async_sessionmaker(
             self._engine, class_=AsyncSession, expire_on_commit=False
         )
 
@@ -115,7 +115,8 @@ class DesignStore:
                     if expected_version is not None and expected_version != 0:
                         raise ConcurrencyConflictError(
                             description.id,
-                            f"Design does not exist; expected_version must be 0 or None for first save",
+                            "Design does not exist; expected_version must be 0 or None"
+                            " for first save",
                         )
                     new_version = 1
 
@@ -205,7 +206,10 @@ class DesignStore:
 
             result = row.fetchone()
             if result is None:
-                raise DesignNotFoundError(design_id, f"Design {design_id!r} (version {version}) not found")
+                raise DesignNotFoundError(
+                    design_id,
+                    f"Design {design_id!r} (version {version}) not found",
+                )
 
             content, stored_schema_version, version_num = result
             description = ArchitectureDescription.model_validate(content)
