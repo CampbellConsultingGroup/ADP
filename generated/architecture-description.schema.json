@@ -1,0 +1,528 @@
+{
+  "$defs": {
+    "AuditEntry": {
+      "additionalProperties": false,
+      "description": "Immutable record of a mutation. Append-only per ART-IX.",
+      "properties": {
+        "action": {
+          "minLength": 1,
+          "title": "Action",
+          "type": "string"
+        },
+        "actor": {
+          "minLength": 1,
+          "title": "Actor",
+          "type": "string"
+        },
+        "affected_entity": {
+          "minLength": 1,
+          "title": "Affected Entity",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^AUD-\\d{3}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "origin": {
+          "enum": [
+            "human",
+            "ai"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "actor",
+        "action",
+        "affected_entity",
+        "summary",
+        "timestamp",
+        "origin"
+      ],
+      "title": "AuditEntry",
+      "type": "object"
+    },
+    "Element": {
+      "additionalProperties": false,
+      "description": "A C4 structural element with traceability fields.",
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "id": {
+          "pattern": "^ELM-\\d{3}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ElementKind"
+        },
+        "name": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provenance"
+        },
+        "satisfies": {
+          "items": {
+            "pattern": "^REQ-\\d{3}$",
+            "type": "string"
+          },
+          "title": "Satisfies",
+          "type": "array"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind"
+      ],
+      "title": "Element",
+      "type": "object"
+    },
+    "ElementKind": {
+      "description": "C4 structural element types. Stops at component level (v1 scope).",
+      "enum": [
+        "person",
+        "system",
+        "container",
+        "component"
+      ],
+      "title": "ElementKind",
+      "type": "string"
+    },
+    "Finding": {
+      "additionalProperties": false,
+      "description": "An audit or review observation attached to an element or option.",
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Detail"
+        },
+        "id": {
+          "pattern": "^FND-\\d{3}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "severity": {
+          "default": "info",
+          "enum": [
+            "info",
+            "warning",
+            "critical"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "subject": {
+          "title": "Subject",
+          "type": "string"
+        },
+        "summary": {
+          "maxLength": 240,
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "subject",
+        "summary"
+      ],
+      "title": "Finding",
+      "type": "object"
+    },
+    "Relationship": {
+      "additionalProperties": false,
+      "description": "A directed link between two elements.",
+      "properties": {
+        "id": {
+          "pattern": "^REL-\\d{3}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "source": {
+          "pattern": "^ELM-\\d{3}$",
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^ELM-\\d{3}$",
+          "title": "Target",
+          "type": "string"
+        },
+        "technology": {
+          "anyOf": [
+            {
+              "maxLength": 80,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Technology"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "target"
+      ],
+      "title": "Relationship",
+      "type": "object"
+    },
+    "Requirement": {
+      "additionalProperties": false,
+      "description": "A single design requirement. Starting point of every traceability chain.",
+      "properties": {
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^REQ-\\d{3}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "enum": [
+                "must",
+                "should",
+                "may"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Priority"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "title": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description"
+      ],
+      "title": "Requirement",
+      "type": "object"
+    },
+    "SolutionOption": {
+      "additionalProperties": false,
+      "description": "A recommendation option under consideration for a design decision.",
+      "properties": {
+        "description": {
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^OPT-\\d{3}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provenance"
+        },
+        "satisfies": {
+          "items": {
+            "pattern": "^REQ-\\d{3}$",
+            "type": "string"
+          },
+          "title": "Satisfies",
+          "type": "array"
+        },
+        "status": {
+          "$ref": "#/$defs/VerdictStatus"
+        },
+        "title": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "description",
+        "status"
+      ],
+      "title": "SolutionOption",
+      "type": "object"
+    },
+    "Verdict": {
+      "additionalProperties": false,
+      "description": "A recorded decision on a SolutionOption. Closes the traceability chain.",
+      "properties": {
+        "decided_at": {
+          "format": "date-time",
+          "title": "Decided At",
+          "type": "string"
+        },
+        "decided_by": {
+          "minLength": 1,
+          "title": "Decided By",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^VRD-\\d{3}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "option_id": {
+          "pattern": "^OPT-\\d{3}$",
+          "title": "Option Id",
+          "type": "string"
+        },
+        "provenance": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provenance"
+        },
+        "rationale": {
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/VerdictStatus"
+        }
+      },
+      "required": [
+        "id",
+        "option_id",
+        "status",
+        "rationale",
+        "decided_by",
+        "decided_at"
+      ],
+      "title": "Verdict",
+      "type": "object"
+    },
+    "VerdictStatus": {
+      "description": "Decision state of a SolutionOption.",
+      "enum": [
+        "pending",
+        "accepted",
+        "rejected",
+        "deferred"
+      ],
+      "title": "VerdictStatus",
+      "type": "string"
+    }
+  },
+  "$id": "https://adp.example.org/schemas/architecture-description.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "Aggregate root. Unit of serialization, validation, and schema conformance.",
+  "properties": {
+    "audit_log": {
+      "items": {
+        "$ref": "#/$defs/AuditEntry"
+      },
+      "title": "Audit Log",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "elements": {
+      "items": {
+        "$ref": "#/$defs/Element"
+      },
+      "title": "Elements",
+      "type": "array"
+    },
+    "findings": {
+      "items": {
+        "$ref": "#/$defs/Finding"
+      },
+      "title": "Findings",
+      "type": "array"
+    },
+    "id": {
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+    },
+    "options": {
+      "items": {
+        "$ref": "#/$defs/SolutionOption"
+      },
+      "title": "Options",
+      "type": "array"
+    },
+    "relationships": {
+      "items": {
+        "$ref": "#/$defs/Relationship"
+      },
+      "title": "Relationships",
+      "type": "array"
+    },
+    "requirements": {
+      "items": {
+        "$ref": "#/$defs/Requirement"
+      },
+      "title": "Requirements",
+      "type": "array"
+    },
+    "schema_version": {
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "title": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+    },
+    "verdicts": {
+      "items": {
+        "$ref": "#/$defs/Verdict"
+      },
+      "title": "Verdicts",
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "title",
+    "created_at",
+    "updated_at"
+  ],
+  "schema_version": "1.0.0",
+  "title": "Architecture Description",
+  "type": "object"
+}

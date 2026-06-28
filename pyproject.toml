@@ -1,0 +1,65 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adp"
+version = "0.1.0"
+description = "AI-Assisted Architecture Design Platform — canonical data model and schema generator"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic==2.13.2",
+    "jsonschema==4.10.3",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.29",
+    "alembic>=1.13",
+    "pydantic-settings>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.0.3",
+    "pytest-cov==7.1.0",
+    "pytest-asyncio>=0.23",
+    "testcontainers[postgres]>=4.0",
+    "ruff==0.15.20",
+    "mypy==2.1.0",
+    "bandit==1.9.4",
+    "pip-audit==2.10.1",
+]
+
+[project.scripts]
+adp-generate = "adp.generate:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# ── Ruff ──────────────────────────────────────────────────────────────────────
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I"]
+
+# ── Mypy ──────────────────────────────────────────────────────────────────────
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = true
+python_version = "3.11"
+
+# ── Pytest ────────────────────────────────────────────────────────────────────
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=adp --cov-report=term-missing"
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["adp"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 85

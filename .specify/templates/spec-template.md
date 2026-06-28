@@ -5,6 +5,30 @@
 **Status**: Draft  
 **Input**: User description: "$ARGUMENTS"
 
+## Constitutional Articles Touched *(mandatory — ART-I)*
+
+List every article from the ADP Constitution that this feature engages. At minimum state whether
+the feature is in scope for ART-V (security/threat model) and ART-VII (AI grounding).
+
+- **ART-I** — Spec-Driven Development: (always applies)
+- **ART-IV** — Test-Driven Development: (always applies)
+- **[ART-N]** — [Title]: [How this feature engages it]
+
+## Threat Model *(mandatory — ART-V)*
+
+Provide a brief threat model proportional to the feature's risk. For low-risk, internal-only
+features a single paragraph is sufficient; for features touching auth, data export, AI outputs,
+or external integrations, expand each section.
+
+**Assets at risk**: [What data or capabilities could be harmed — e.g., user designs, auth tokens]
+
+**Trust boundaries crossed**: [Which system borders this feature spans — e.g., browser→API, API→LLM]
+
+**Abuse cases**:
+- [Attacker goal]: [How they could abuse this feature] → [Mitigation]
+
+**Residual risk**: [Accepted risks and why they are acceptable at this threat level]
+
 ## User Scenarios & Testing *(mandatory)*
 
 <!--

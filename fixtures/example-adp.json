@@ -1,0 +1,97 @@
+{
+  "schema_version": "1.0.0",
+  "id": "DESIGN-EXAMPLE-001",
+  "title": "Example Architecture Description",
+  "description": "Canonical example covering all entity types. Validates against the published schema and serves as the QG-05 contract test fixture.",
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "title": "Stateless request handling",
+      "description": "All API handlers must be stateless so any instance can serve any request without session affinity.",
+      "priority": "must",
+      "tags": ["performance", "scalability"]
+    }
+  ],
+  "elements": [
+    {
+      "id": "ELM-001",
+      "name": "API Gateway",
+      "kind": "container",
+      "description": "Entry point for all client requests. Routes to backend services.",
+      "satisfies": ["REQ-001"],
+      "provenance": "human",
+      "tags": ["api", "gateway"]
+    },
+    {
+      "id": "ELM-002",
+      "name": "Order Service",
+      "kind": "container",
+      "description": "Processes and persists order lifecycle events.",
+      "satisfies": ["REQ-001"],
+      "provenance": null,
+      "tags": []
+    }
+  ],
+  "relationships": [
+    {
+      "id": "REL-001",
+      "source": "ELM-001",
+      "target": "ELM-002",
+      "label": "Routes order requests",
+      "technology": "HTTPS"
+    }
+  ],
+  "options": [
+    {
+      "id": "OPT-001",
+      "title": "JWT-based stateless auth",
+      "description": "Issue short-lived JWTs at login; validate at gateway without a session store.",
+      "status": "accepted",
+      "satisfies": ["REQ-001"],
+      "provenance": "ai-recommendation-session-42"
+    }
+  ],
+  "findings": [
+    {
+      "id": "FND-001",
+      "subject": "ELM-001",
+      "summary": "API Gateway has no rate limiting configured.",
+      "detail": "Without rate limiting, the gateway is vulnerable to burst traffic and potential DoS.",
+      "severity": "warning",
+      "source": "security-review-2026-06-27"
+    }
+  ],
+  "verdicts": [
+    {
+      "id": "VRD-001",
+      "option_id": "OPT-001",
+      "status": "accepted",
+      "rationale": "Aligns with stateless requirement and is consistent with existing platform patterns. JWT validation at the gateway eliminates session store dependency.",
+      "decided_by": "architecture-board",
+      "decided_at": "2026-06-27T14:00:00Z",
+      "provenance": null
+    }
+  ],
+  "audit_log": [
+    {
+      "id": "AUD-001",
+      "actor": "jmuir",
+      "action": "add-element",
+      "affected_entity": "ELM-001",
+      "summary": "Added API Gateway element as entry point.",
+      "timestamp": "2026-06-27T10:00:00Z",
+      "origin": "human"
+    },
+    {
+      "id": "AUD-002",
+      "actor": "jmuir",
+      "action": "accept-verdict",
+      "affected_entity": "VRD-001",
+      "summary": "Accepted JWT-based auth option after architecture board review.",
+      "timestamp": "2026-06-27T14:01:00Z",
+      "origin": "human"
+    }
+  ],
+  "created_at": "2026-06-27T10:00:00Z",
+  "updated_at": "2026-06-27T14:01:00Z"
+}
