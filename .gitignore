@@ -48,3 +48,12 @@ Thumbs.db
 
 # Keep generated schema committed (it IS a source artifact per ART-II)
 # generated/architecture-description.schema.json  ← NOT ignored
+
+# Node.js / TypeScript (web/)
+web/node_modules/
+web/dist/
+web/.vite/
+web/coverage/
+web/playwright-report/
+web/test-results/
+*.log
