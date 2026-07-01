@@ -14,6 +14,14 @@ dependencies = [
     "asyncpg==0.31.0",
     "alembic==1.13.1",
     "pydantic-settings==2.14.2",
+    "pgvector>=0.3",
+    "sentence-transformers>=2.7",
+    "gitpython>=3.1",
+    "python-frontmatter>=1.1",
+    "opentelemetry-sdk>=1.25",
+    "tiktoken>=0.7",
+    "langgraph>=0.2",
+    "langchain-core>=0.2",
 ]
 
 [project.optional-dependencies]
@@ -30,6 +38,7 @@ dev = [
 
 [project.scripts]
 adp-generate = "adp.generate:main"
+adp-reindex = "adp.knowledge.indexer:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -61,8 +70,12 @@ asyncio_mode = "auto"
 source = ["adp"]
 branch = true
 omit = [
-    "src/adp/store/migrations/*",  # Alembic DDL — not unit-testable; verified by integration tests
-    "src/adp/store/store.py",      # DB-layer — only exercised by integration tests (requires Docker)
+    "src/adp/store/migrations/*",          # Alembic DDL — verified by integration tests
+    "src/adp/store/store.py",              # DB-layer — requires Docker
+    "src/adp/knowledge/retrieval.py",      # DB-layer — requires Docker/pgvector
+    "src/adp/knowledge/indexer.py",        # DB-layer + CLI runner — requires Docker
+    "src/adp/knowledge/index.py",          # DB-layer ORM — requires Docker
+    "src/adp/knowledge/connectors/design_store.py",  # Requires running DesignStore
 ]
 
 [tool.coverage.report]
