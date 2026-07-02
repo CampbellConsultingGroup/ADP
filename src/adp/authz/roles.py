@@ -23,3 +23,4 @@ class ActionType(StrEnum):
     ADD_FINDING = "add_finding"
     AMEND_STANDARD = "amend_standard"
     MANAGE_ROLES = "manage_roles"
+    EXPORT_DESIGN = "export_design"

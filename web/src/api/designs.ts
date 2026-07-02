@@ -1,0 +1,183 @@
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  type UseQueryResult,
+  type UseMutationResult,
+} from "@tanstack/react-query";
+import { apiGet, apiMutation, ApiError } from "./client";
+import type {
+  ArchitectureDescription,
+  DiagramLayout,
+  DrawRelationshipInput,
+  Element,
+  PlaceElementInput,
+  Relationship,
+  SaveLayoutInput,
+} from "../types";
+import { notifyConflict } from "../canvas/ConflictNotification";
+
+// ── Query keys ──────────────────────────────────────────────────────────────
+
+const designKey = (id: string) => ["design", id] as const;
+const layoutKey = (id: string, level: string) => ["layout", id, level] as const;
+
+// ── Queries ──────────────────────────────────────────────────────────────────
+
+export function useDesign(designId: string): UseQueryResult<ArchitectureDescription> {
+  return useQuery<ArchitectureDescription>({
+    queryKey: designKey(designId),
+    queryFn: () => apiGet<ArchitectureDescription>(`/api/v1/designs/${designId}`),
+    enabled: !!designId,
+  });
+}
+
+export function useLayout(
+  designId: string,
+  level: string,
+): UseQueryResult<DiagramLayout> {
+  return useQuery<DiagramLayout>({
+    queryKey: layoutKey(designId, level),
+    queryFn: () => apiGet<DiagramLayout>(`/api/v1/designs/${designId}/layout/${level}`),
+    enabled: !!designId,
+  });
+}
+
+// ── Mutations ─────────────────────────────────────────────────────────────────
+
+export function useSaveLayout(): UseMutationResult<void, Error, SaveLayoutInput> {
+  const qc = useQueryClient();
+  return useMutation<void, Error, SaveLayoutInput>({
+    mutationFn: ({ design_id, level, positions }) =>
+      apiMutation("PUT", `/api/v1/designs/${design_id}/layout/${level}`, { positions }),
+    onSuccess: (_data, { design_id, level }) => {
+      void qc.invalidateQueries({ queryKey: layoutKey(design_id, level) });
+    },
+  });
+}
+
+export function usePlaceElement(): UseMutationResult<Element, Error, PlaceElementInput> {
+  const qc = useQueryClient();
+  return useMutation<Element, Error, PlaceElementInput>({
+    mutationFn: async ({ design_id, name, kind, description, satisfies, position }) => {
+      const design = qc.getQueryData<ArchitectureDescription>(designKey(design_id));
+      if (!design) throw new Error("Design not loaded");
+
+      const newId = `ELM-${String(Date.now()).slice(-6)}`;
+      const newElement: Element = { id: newId, name, kind, description, satisfies, provenance: undefined };
+
+      const updated: ArchitectureDescription = {
+        ...design,
+        elements: [...design.elements, newElement],
+      };
+
+      const saved = await apiMutation<ArchitectureDescription, ArchitectureDescription>(
+        "PUT",
+        `/api/v1/designs/${design_id}`,
+        updated,
+      );
+
+      // Save layout position separately (ART-II: position is not in the canonical model)
+      const activeLevel = kind === "person" || kind === "system"
+        ? "context"
+        : kind === "container"
+        ? "container"
+        : "component";
+
+      await apiMutation("PUT", `/api/v1/designs/${design_id}/layout/${activeLevel}`, {
+        positions: {
+          ...((qc.getQueryData<DiagramLayout>(layoutKey(design_id, activeLevel))?.positions) ?? {}),
+          [newId]: position,
+        },
+      });
+
+      return saved.elements.find((e) => e.name === name && e.kind === kind) ?? newElement;
+    },
+    onMutate: async ({ design_id, name, kind, description, satisfies }) => {
+      await qc.cancelQueries({ queryKey: designKey(design_id) });
+      const snapshot = qc.getQueryData<ArchitectureDescription>(designKey(design_id));
+      if (snapshot) {
+        const optimistic: Element = {
+          id: `__optimistic__${Date.now()}`,
+          name,
+          kind,
+          description,
+          satisfies,
+        };
+        qc.setQueryData<ArchitectureDescription>(designKey(design_id), {
+          ...snapshot,
+          elements: [...snapshot.elements, optimistic],
+        });
+      }
+      return { snapshot };
+    },
+    onError: (_err, { design_id }, context) => {
+      const ctx = context as { snapshot?: ArchitectureDescription } | undefined;
+      if (ctx?.snapshot) {
+        qc.setQueryData(designKey(design_id), ctx.snapshot);
+      }
+      if (_err instanceof ApiError && _err.status === 409) {
+        notifyConflict(design_id);
+      }
+    },
+    onSettled: (_data, _err, { design_id }) => {
+      void qc.invalidateQueries({ queryKey: designKey(design_id) });
+    },
+  });
+}
+
+export function useDrawRelationship(): UseMutationResult<Relationship, Error, DrawRelationshipInput> {
+  const qc = useQueryClient();
+  return useMutation<Relationship, Error, DrawRelationshipInput>({
+    mutationFn: async ({ design_id, source, target, label, technology }) => {
+      const design = qc.getQueryData<ArchitectureDescription>(designKey(design_id));
+      if (!design) throw new Error("Design not loaded");
+
+      const newId = `REL-${String(Date.now()).slice(-6)}`;
+      const newRel: Relationship = { id: newId, source, target, label, technology };
+
+      const updated: ArchitectureDescription = {
+        ...design,
+        relationships: [...design.relationships, newRel],
+      };
+
+      const saved = await apiMutation<ArchitectureDescription, ArchitectureDescription>(
+        "PUT",
+        `/api/v1/designs/${design_id}`,
+        updated,
+      );
+
+      return saved.relationships.find((r) => r.source === source && r.target === target) ?? newRel;
+    },
+    onMutate: async ({ design_id, source, target, label, technology }) => {
+      await qc.cancelQueries({ queryKey: designKey(design_id) });
+      const snapshot = qc.getQueryData<ArchitectureDescription>(designKey(design_id));
+      if (snapshot) {
+        const optimistic: Relationship = {
+          id: `__optimistic__${Date.now()}`,
+          source,
+          target,
+          label,
+          technology,
+        };
+        qc.setQueryData<ArchitectureDescription>(designKey(design_id), {
+          ...snapshot,
+          relationships: [...snapshot.relationships, optimistic],
+        });
+      }
+      return { snapshot };
+    },
+    onError: (_err, { design_id }, context) => {
+      const ctx = context as { snapshot?: ArchitectureDescription } | undefined;
+      if (ctx?.snapshot) {
+        qc.setQueryData(designKey(design_id), ctx.snapshot);
+      }
+      if (_err instanceof ApiError && _err.status === 409) {
+        notifyConflict(design_id);
+      }
+    },
+    onSettled: (_data, _err, { design_id }) => {
+      void qc.invalidateQueries({ queryKey: designKey(design_id) });
+    },
+  });
+}

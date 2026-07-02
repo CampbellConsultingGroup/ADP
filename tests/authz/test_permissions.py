@@ -96,6 +96,11 @@ _EXPECTED: dict[tuple[PersonaRole, ActionType], bool] = {
     (PersonaRole.REVIEWER, ActionType.ADD_FINDING): True,
     (PersonaRole.REVIEWER, ActionType.AMEND_STANDARD): False,
     (PersonaRole.REVIEWER, ActionType.MANAGE_ROLES): False,
+    # export_design: enterprise + solution architects only (ADP-SPEC-011)
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.EXPORT_DESIGN): True,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.EXPORT_DESIGN): True,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.EXPORT_DESIGN): False,
+    (PersonaRole.REVIEWER, ActionType.EXPORT_DESIGN): False,
 }
 
 
@@ -162,6 +167,7 @@ _CONFIRMATION_EXPECTED: dict[ActionType, bool] = {
     ActionType.ADD_FINDING: False,
     ActionType.AMEND_STANDARD: True,
     ActionType.MANAGE_ROLES: True,
+    ActionType.EXPORT_DESIGN: True,
 }
 
 

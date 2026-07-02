@@ -1,0 +1,114 @@
+{
+  "$defs": {
+    "ElementStyle": {
+      "additionalProperties": false,
+      "properties": {
+        "color": {
+          "title": "Color",
+          "type": "string"
+        },
+        "fill": {
+          "title": "Fill",
+          "type": "string"
+        },
+        "font_size": {
+          "title": "Font Size",
+          "type": "integer"
+        },
+        "font_weight": {
+          "enum": [
+            "normal",
+            "bold"
+          ],
+          "title": "Font Weight",
+          "type": "string"
+        },
+        "shape": {
+          "enum": [
+            "box",
+            "actor",
+            "cylinder",
+            "hexagon"
+          ],
+          "title": "Shape",
+          "type": "string"
+        },
+        "stroke": {
+          "title": "Stroke",
+          "type": "string"
+        }
+      },
+      "required": [
+        "fill",
+        "stroke",
+        "color",
+        "shape",
+        "font_size",
+        "font_weight"
+      ],
+      "title": "ElementStyle",
+      "type": "object"
+    },
+    "RelationshipStyle": {
+      "additionalProperties": false,
+      "properties": {
+        "arrow_end": {
+          "enum": [
+            "open",
+            "filled",
+            "none"
+          ],
+          "title": "Arrow End",
+          "type": "string"
+        },
+        "stroke": {
+          "title": "Stroke",
+          "type": "string"
+        },
+        "stroke_width": {
+          "title": "Stroke Width",
+          "type": "number"
+        }
+      },
+      "required": [
+        "stroke",
+        "stroke_width",
+        "arrow_end"
+      ],
+      "title": "RelationshipStyle",
+      "type": "object"
+    }
+  },
+  "$id": "https://adp.example.org/schemas/c4-theme.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "locked": {
+      "const": true,
+      "title": "Locked",
+      "type": "boolean"
+    },
+    "relationship_style": {
+      "$ref": "#/$defs/RelationshipStyle"
+    },
+    "styles": {
+      "additionalProperties": {
+        "$ref": "#/$defs/ElementStyle"
+      },
+      "title": "Styles",
+      "type": "object"
+    },
+    "version": {
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "locked",
+    "styles",
+    "relationship_style"
+  ],
+  "title": "ADP Locked C4 Theme",
+  "type": "object"
+}

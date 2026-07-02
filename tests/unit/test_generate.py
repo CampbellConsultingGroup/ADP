@@ -78,6 +78,29 @@ def test_validate_mode_valid_file(tmp_path: Path, capsys: pytest.CaptureFixture[
     assert "valid" in captured.out.lower() or "intact" in captured.out.lower()
 
 
+# ── Theme schema drift (T030) ─────────────────────────────────────────────────
+
+
+def test_theme_schema_exists_and_is_valid_json() -> None:
+    schema_path = Path("src/adp/theme/c4-theme.schema.json")
+    assert schema_path.exists(), f"Missing: {schema_path}"
+    data = json.loads(schema_path.read_text())
+    assert data.get("title") == "ADP Locked C4 Theme"
+    assert "$schema" in data
+
+
+def test_theme_schema_matches_pydantic_model() -> None:
+    """c4-theme.schema.json must match LockedTheme.model_json_schema() — no drift."""
+    from adp.generate import generate_theme_schema
+
+    schema_path = Path("src/adp/theme/c4-theme.schema.json")
+    committed = schema_path.read_text(encoding="utf-8")
+    fresh = generate_theme_schema()
+    assert committed == fresh, (
+        "c4-theme.schema.json is out of date — run 'adp-generate' to regenerate"
+    )
+
+
 def test_validate_mode_invalid_file(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """validate() exits 1 with error message for invalid JSON content."""
     bad_data = {"schema_version": "not-semver", "id": "D-001", "title": "T",
