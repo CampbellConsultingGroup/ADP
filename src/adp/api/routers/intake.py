@@ -491,3 +491,21 @@ async def list_requirements(
         requirements=items,
         total=len(items),
     )
+
+
+# ── Core design CRUD (wiring existing DesignStore) ────────────────────────────
+
+@router.get("/{design_id}", response_model=None)
+async def get_design(
+    design_id: str,
+    store=Depends(_get_design_store),
+) -> dict:
+    """Fetch a design from the store. Enables the web canvas to load designs (ADP-SPEC-003)."""
+    from adp.store.store import DesignNotFoundError  # type: ignore[attr-defined]
+
+    try:
+        design = await store.get(design_id)
+    except DesignNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Design {design_id!r} not found")
+
+    return design.model_dump(mode="json")

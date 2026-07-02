@@ -40,12 +40,65 @@ export default function Workspace({ designId, onNavigateToIntake }: WorkspacePro
   const { data: layout } = useLayout(designId, activeLevel);
   const { data: theme } = useC4Theme();
 
+  // Header is always rendered so Requirements button is accessible even while design loads.
+  const header = (
+    <div style={{ display: "flex", gap: 0, padding: "8px 16px", background: "#f5f5f5", borderBottom: "1px solid #ddd" }}>
+      <span style={{ fontWeight: 600, marginRight: 16, alignSelf: "center" }}>
+        {design?.title ?? designId}
+      </span>
+      {LEVELS.map(({ label, value }) => (
+        <button
+          key={value}
+          onClick={() => setActiveLevel(value)}
+          style={{
+            padding: "6px 16px",
+            background: activeLevel === value ? "#1168BD" : "#fff",
+            color: activeLevel === value ? "#fff" : "#333",
+            border: "1px solid #ccc",
+            cursor: "pointer",
+            fontWeight: activeLevel === value ? 600 : 400,
+          }}
+        >
+          {label}
+        </button>
+      ))}
+      {onNavigateToIntake && (
+        <button
+          onClick={onNavigateToIntake}
+          style={{
+            marginLeft: "auto",
+            padding: "6px 14px",
+            background: "#fff",
+            color: "#166534",
+            border: "1px solid #166534",
+            borderRadius: 4,
+            cursor: "pointer",
+            fontSize: 13,
+            fontWeight: 500,
+          }}
+        >
+          Requirements
+        </button>
+      )}
+    </div>
+  );
+
   if (isLoading) {
-    return <div style={{ padding: 32, fontFamily: "sans-serif" }}>Loading design...</div>;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "sans-serif" }}>
+        {header}
+        <div style={{ padding: 32 }}>Loading design...</div>
+      </div>
+    );
   }
 
   if (isError || !design) {
-    return <div style={{ padding: 32, fontFamily: "sans-serif", color: "#c0392b" }}>Failed to load design.</div>;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "sans-serif" }}>
+        {header}
+        <div style={{ padding: 32, color: "#c0392b" }}>Failed to load design.</div>
+      </div>
+    );
   }
 
   return (
@@ -57,44 +110,7 @@ export default function Workspace({ designId, onNavigateToIntake }: WorkspacePro
         />
       )}
 
-      {/* Level toggle + Requirements nav */}
-      <div style={{ display: "flex", gap: 0, padding: "8px 16px", background: "#f5f5f5", borderBottom: "1px solid #ddd" }}>
-        <span style={{ fontWeight: 600, marginRight: 16, alignSelf: "center" }}>{design.title}</span>
-        {LEVELS.map(({ label, value }) => (
-          <button
-            key={value}
-            onClick={() => setActiveLevel(value)}
-            style={{
-              padding: "6px 16px",
-              background: activeLevel === value ? "#1168BD" : "#fff",
-              color: activeLevel === value ? "#fff" : "#333",
-              border: "1px solid #ccc",
-              cursor: "pointer",
-              fontWeight: activeLevel === value ? 600 : 400,
-            }}
-          >
-            {label}
-          </button>
-        ))}
-        {onNavigateToIntake && (
-          <button
-            onClick={onNavigateToIntake}
-            style={{
-              marginLeft: "auto",
-              padding: "6px 14px",
-              background: "#fff",
-              color: "#166534",
-              border: "1px solid #166534",
-              borderRadius: 4,
-              cursor: "pointer",
-              fontSize: 13,
-              fontWeight: 500,
-            }}
-          >
-            Requirements
-          </button>
-        )}
-      </div>
+      {header}
 
       {/* Main content */}
       <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
