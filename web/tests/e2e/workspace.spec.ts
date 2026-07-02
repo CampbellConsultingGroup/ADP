@@ -15,7 +15,6 @@
 import { test, expect, type Page } from "@playwright/test";
 
 const WEB_URL = process.env.ADP_WEB_URL;
-const API_URL = process.env.ADP_API_URL ?? "http://localhost:8001";
 
 const MOCK_DESIGN = {
   id: "E2E-D001",

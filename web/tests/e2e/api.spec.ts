@@ -239,3 +239,64 @@ test.describe("Round-Trip Import (ADP-SPEC-011)", () => {
     expect(resp.status()).toBe(422);
   });
 });
+
+// ── ADP-SPEC-014: Requirements Intake API (T043) ──────────────────────────────
+
+test.describe("Requirements Intake API (ADP-SPEC-014)", () => {
+  test("POST /intake returns operation_id (202)", async ({ request }) => {
+    const resp = await request.post("/api/v1/designs/E2E-IMPORT/intake", {
+      data: {
+        mode: "bulk_text",
+        text: "The system must handle 10,000 concurrent users without degradation in performance.",
+      },
+    });
+    // 202 if design exists; 404 if not — either way not a 500
+    expect([202, 404]).toContain(resp.status());
+    if (resp.status() === 202) {
+      const body = await resp.json() as { operation_id: string; status: string };
+      expect(body.operation_id).toBeTruthy();
+      expect(body.status).toBe("pending");
+    }
+  });
+
+  test("POST /intake with short text returns 422 (validation gate)", async ({ request }) => {
+    const resp = await request.post("/api/v1/designs/E2E-IMPORT/intake", {
+      data: { mode: "bulk_text", text: "short" },
+    });
+    expect(resp.status()).toBe(422);
+  });
+
+  test("GET /requirements returns 200 with list (ADP-SPEC-014 US4)", async ({ request }) => {
+    const resp = await request.get("/api/v1/designs/E2E-IMPORT/requirements");
+    // 200 if design exists (with empty or populated list); 404 if not
+    expect([200, 404]).toContain(resp.status());
+    if (resp.status() === 200) {
+      const body = await resp.json() as { requirements: unknown[]; total: number };
+      expect(Array.isArray(body.requirements)).toBe(true);
+      expect(typeof body.total).toBe("number");
+    }
+  });
+
+  test("POST /requirements with valid statement creates requirement (ADP-SPEC-014 US3)", async ({ request }) => {
+    const resp = await request.post("/api/v1/designs/E2E-IMPORT/requirements", {
+      data: {
+        statement: "The API must be stateless and handle 100 requests per second",
+        kind: "non_functional",
+      },
+    });
+    // 201 if design exists; 404 if not
+    expect([201, 404]).toContain(resp.status());
+    if (resp.status() === 201) {
+      const body = await resp.json() as { requirement_id: string; proposal_id: null };
+      expect(body.requirement_id).toMatch(/^REQ-/);
+      expect(body.proposal_id).toBeNull(); // I1 fix: null for direct add
+    }
+  });
+
+  test("POST /requirements with missing statement returns 422", async ({ request }) => {
+    const resp = await request.post("/api/v1/designs/E2E-IMPORT/requirements", {
+      data: { kind: "functional" },
+    });
+    expect(resp.status()).toBe(422);
+  });
+});

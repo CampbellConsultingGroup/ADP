@@ -9,6 +9,7 @@ import { ConflictNotificationBanner, subscribeConflict } from "./ConflictNotific
 
 interface WorkspaceProps {
   designId: string;
+  onNavigateToIntake?: () => void;
 }
 
 const LEVELS: { label: string; value: C4Level }[] = [
@@ -17,7 +18,7 @@ const LEVELS: { label: string; value: C4Level }[] = [
   { label: "Component", value: "component" },
 ];
 
-export default function Workspace({ designId }: WorkspaceProps): React.ReactElement {
+export default function Workspace({ designId, onNavigateToIntake }: WorkspaceProps): React.ReactElement {
   const { activeLevel, setActiveLevel, selectedElementId, inspectionPanelOpen, setDesignId, clearSelection } =
     useWorkspaceStore();
 
@@ -56,7 +57,7 @@ export default function Workspace({ designId }: WorkspaceProps): React.ReactElem
         />
       )}
 
-      {/* Level toggle */}
+      {/* Level toggle + Requirements nav */}
       <div style={{ display: "flex", gap: 0, padding: "8px 16px", background: "#f5f5f5", borderBottom: "1px solid #ddd" }}>
         <span style={{ fontWeight: 600, marginRight: 16, alignSelf: "center" }}>{design.title}</span>
         {LEVELS.map(({ label, value }) => (
@@ -75,6 +76,24 @@ export default function Workspace({ designId }: WorkspaceProps): React.ReactElem
             {label}
           </button>
         ))}
+        {onNavigateToIntake && (
+          <button
+            onClick={onNavigateToIntake}
+            style={{
+              marginLeft: "auto",
+              padding: "6px 14px",
+              background: "#fff",
+              color: "#166534",
+              border: "1px solid #166534",
+              borderRadius: 4,
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 500,
+            }}
+          >
+            Requirements
+          </button>
+        )}
       </div>
 
       {/* Main content */}
