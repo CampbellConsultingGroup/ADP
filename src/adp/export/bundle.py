@@ -87,7 +87,13 @@ class ExportOrchestrator:
                 "Export requires a non-empty confirmation_id (ART-VIII / FR-005)"
             )
 
-        design = self._store.get(design_id)  # type: ignore[attr-defined]
+        import inspect as _inspect
+        _result = self._store.get(design_id)  # type: ignore[attr-defined]
+        if _inspect.isawaitable(_result):
+            import asyncio
+            design = asyncio.get_event_loop().run_until_complete(_result)
+        else:
+            design = _result
         if design is None:
             raise KeyError(f"Design {design_id!r} not found")
 
@@ -188,7 +194,17 @@ class ExportOrchestrator:
             level_dir = tmpdir / level
             level_dir.mkdir()
             try:
-                result = render_orch.render(design_id, level)
+                import asyncio as _asyncio
+                _coro = render_orch.arender(design_id, level)
+                try:
+                    loop = _asyncio.get_event_loop()
+                    if loop.is_running():
+                        # Inside an async context (shouldn't normally happen but handle gracefully)
+                        result = render_orch.render(design_id, level)
+                    else:
+                        result = loop.run_until_complete(_coro)
+                except RuntimeError:
+                    result = _asyncio.run(_coro)
             except Exception as exc:
                 raise RuntimeError(f"Render failed for level {level!r}: {exc}") from exc
             (level_dir / "diagram.dsl").write_text(result.dsl, encoding="utf-8")

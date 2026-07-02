@@ -6,6 +6,7 @@ No side effects; no confirmation required; available to all authenticated roles.
 
 from __future__ import annotations
 
+import inspect
 import logging
 import uuid
 
@@ -35,14 +36,20 @@ async def get_render_orchestrator() -> RenderOrchestrator:
     return RenderOrchestrator(design_store=store)
 
 
-def _get_design_or_404(design_id: str, store):  # type: ignore[return]
-    design = store.get(design_id)
-    if design is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Design {design_id!r} not found",
-        )
-    return design
+async def _get_design_or_404(design_id: str, store: object) -> object:
+    """Fetch a design, awaiting if store.get() is a coroutine, raising 404 if absent."""
+    from adp.store.store import DesignNotFoundError  # type: ignore[attr-defined]
+    try:
+        result = store.get(design_id)  # type: ignore[attr-defined]
+        if inspect.isawaitable(result):
+            result = await result
+        if result is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                                detail=f"Design {design_id!r} not found")
+        return result
+    except DesignNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Design {design_id!r} not found")
 
 
 @router.get("/{design_id}/document", response_class=PlainTextResponse)
@@ -57,7 +64,7 @@ async def get_document(
         "document.start",
         extra={"event": "document.start", "design_id": design_id, "correlation_id": correlation_id},
     )
-    design = _get_design_or_404(design_id, store)
+    design = await _get_design_or_404(design_id, store)
     doc = DocumentGenerator().generate(design)
     return PlainTextResponse(doc.markdown, media_type="text/markdown; charset=utf-8")
 
@@ -78,7 +85,7 @@ async def get_traceability(
             "correlation_id": correlation_id,
         },
     )
-    design = _get_design_or_404(design_id, store)
+    design = await _get_design_or_404(design_id, store)
     return TraceabilityGenerator().generate(design)
 
 
@@ -95,11 +102,11 @@ async def get_views(
         "views.start",
         extra={"event": "views.start", "design_id": design_id, "correlation_id": correlation_id},
     )
-    _get_design_or_404(design_id, store)
+    await _get_design_or_404(design_id, store)
 
-    context = orchestrator.render(design_id, "context")
-    container = orchestrator.render(design_id, "container")
-    component = orchestrator.render(design_id, "component")
+    context = await orchestrator.arender(design_id, "context")
+    container = await orchestrator.arender(design_id, "container")
+    component = await orchestrator.arender(design_id, "component")
 
     return ViewBundle(
         design_id=design_id, context=context, container=container, component=component

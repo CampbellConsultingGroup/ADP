@@ -53,14 +53,21 @@ def test_sc004_export_bundle_under_120s(tmp_path):
     mock_store = MagicMock()
     mock_store.get = MagicMock(return_value=design)
 
-    mock_render = MagicMock()
-    mock_render.render = MagicMock(return_value=RenderResult(
+    _mock_result = RenderResult(
         design_id="D-PERF",
         level="container",  # type: ignore[arg-type]
         dsl="workspace {}",
         svg="<svg></svg>",
         png_base64="aGVsbG8=",
-    ))
+    )
+    mock_render = MagicMock()
+    mock_render.render = MagicMock(return_value=_mock_result)
+
+    # arender must be a coroutine function so bundle.py's async path works
+    async def _async_render(did: str, level: str) -> RenderResult:
+        return _mock_result
+
+    mock_render.arender = _async_render
 
     orchestrator = ExportOrchestrator(design_store=mock_store, render_orchestrator=mock_render)
 

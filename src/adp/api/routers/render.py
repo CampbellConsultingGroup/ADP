@@ -58,7 +58,7 @@ async def render_design(
     )
 
     try:
-        result = orchestrator.render(design_id, request.level)
+        result = await orchestrator.arender(design_id, request.level)
     except ThemeValidationError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,

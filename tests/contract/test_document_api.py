@@ -47,7 +47,13 @@ def client():
 
     design = _make_design()
     mock_store = MagicMock()
-    mock_store.get = MagicMock(side_effect=lambda did: design if did == "D-001" else None)
+
+    async def _fake_get(did: str):
+        if did == "D-001":
+            return design
+        return None
+
+    mock_store.get = _fake_get
 
     app = create_app()
 
@@ -57,7 +63,11 @@ def client():
     async def _get_render_orch():
         from adp.renderer.orchestrator import RenderOrchestrator
         mock_render = MagicMock(spec=RenderOrchestrator)
-        mock_render.render = MagicMock(side_effect=lambda did, level: _make_render_result(level))
+
+        async def _fake_arender(did: str, level: str) -> RenderResult:
+            return _make_render_result(level)
+
+        mock_render.arender = _fake_arender
         return mock_render
 
     if hasattr(docs_module, "get_design_store"):
