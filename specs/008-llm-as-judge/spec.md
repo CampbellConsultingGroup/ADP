@@ -140,7 +140,7 @@ Every critic emits an observable telemetry span that records: the knowledge item
 ### Non-Functional Requirements
 
 - **NFR-001**: Validation MUST run asynchronously; the operation handle MUST be available within 2 seconds; full fan-out completion MUST occur within 120 seconds for typical designs (≤ 500 elements) under normal LLM endpoint conditions
-- **NFR-002**: Each `Verdict` MUST record the design version id it evaluated; verdict history MUST be retained indefinitely and queryable by design id and version number; a verdict MUST NOT be interpreted as valid for a design version other than the one it evaluated
+- **NFR-002**: Each `Verdict` MUST record the design version id it evaluated; for v1, verdicts are accessible via their operation handle within the operation TTL (24 hours); long-term verdict history queryable by design id and version number is deferred to v2 when a persistent `validation_verdicts` table will be added; a verdict MUST NOT be interpreted as valid for a design version other than the one it evaluated
 
 ### Key Entities
 
