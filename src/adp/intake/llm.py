@@ -105,6 +105,13 @@ class LLMClient:
                 text_content = block["text"]
                 break
 
+        # Strip markdown code fences Claude sometimes wraps JSON in (```json...```)
+        stripped = text_content.strip()
+        if stripped.startswith("```"):
+            lines = stripped.split("\n")
+            end = -1 if lines[-1].strip() == "```" else len(lines)
+            text_content = "\n".join(lines[1:end]).strip()
+
         usage = raw.get("usage", {})
         return {
             "choices": [{"message": {"content": text_content}}],
