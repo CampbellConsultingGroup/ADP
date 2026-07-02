@@ -11,7 +11,8 @@ function getDesignIdFromPath(): string {
 // TanStack Query cache and ADP-SPEC-012 trace_id ContextVar across view switch (ART-VI).
 export default function App(): React.ReactElement {
   const designId = getDesignIdFromPath();
-  const [view, setView] = useState<"canvas" | "intake">("canvas");
+  // ADP-SPEC-016: Requirements Intake is the default landing view (FR-001)
+  const [view, setView] = useState<"canvas" | "intake">("intake");
 
   if (view === "intake") {
     return <IntakePage designId={designId} onBack={() => setView("canvas")} />;
