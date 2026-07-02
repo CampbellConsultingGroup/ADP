@@ -16,6 +16,8 @@ export default function IntakePage({ designId, onBack }: IntakePageProps): React
   const { data: statusData } = useIntakeStatus(designId, operationId);
 
   const status = statusData?.status;
+  const proposals = statusData?.proposals ?? [];
+  const noLlm = status === "completed" && proposals.length === 0;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "Arial, sans-serif" }}>
@@ -62,13 +64,28 @@ export default function IntakePage({ designId, onBack }: IntakePageProps): React
                   Extraction failed: {statusData?.error_description ?? "Unknown error"}. Please try again.
                 </div>
               )}
-              {operationId && status === "completed" && (
+
+              {/* No LLM configured — guide user to structured form */}
+              {noLlm && (
+                <div style={{ marginTop: 16, padding: 12, background: "#FEF9C3", border: "1px solid #FDE68A", borderRadius: 6 }}>
+                  <p style={{ margin: "0 0 6px", fontWeight: 600, fontSize: 13, color: "#92400E" }}>
+                    AI extraction requires an LLM endpoint
+                  </p>
+                  <p style={{ margin: "0 0 8px", fontSize: 13, color: "#78350F" }}>
+                    Set <code style={{ background: "#FDE68A", padding: "1px 4px", borderRadius: 3 }}>ADP_LLM_ENDPOINT</code> and restart the server to enable automatic extraction.
+                  </p>
+                  <button
+                    onClick={() => setActiveTab("form")}
+                    style={{ padding: "6px 14px", background: "#166534", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13 }}
+                  >
+                    Use Structured Form instead →
+                  </button>
+                </div>
+              )}
+
+              {operationId && status === "completed" && proposals.length > 0 && (
                 <div style={{ marginTop: 16 }}>
-                  <ProposalsList
-                    proposals={statusData?.proposals ?? []}
-                    designId={designId}
-                    operationId={operationId}
-                  />
+                  <ProposalsList proposals={proposals} designId={designId} operationId={operationId} />
                 </div>
               )}
             </div>
