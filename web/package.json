@@ -25,7 +25,9 @@
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "tsc": "tsc --noEmit"
+    "tsc": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:api": "playwright test --project=api"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.0.0",
@@ -44,6 +46,7 @@
     "@vitest/ui": "^2.0.0",
     "eslint": "^9.0.0",
     "jsdom": "^25.0.0",
+    "@playwright/test": "^1.47.0",
     "playwright": "^1.47.0",
     "tsd": "^0.31.0",
     "typescript": "^5.5.3",

@@ -1,0 +1,42 @@
+{
+  "schema_version": "1.0.0",
+  "id": "E2E-IMPORT",
+  "title": "E2E Import Test",
+  "description": null,
+  "requirements": [],
+  "elements": [
+    {
+      "id": "ELM-001",
+      "name": "API Gateway",
+      "kind": "container",
+      "description": null,
+      "satisfies": [],
+      "provenance": null,
+      "tags": []
+    },
+    {
+      "id": "ELM-002",
+      "name": "Auth Service",
+      "kind": "container",
+      "description": null,
+      "satisfies": [],
+      "provenance": null,
+      "tags": []
+    }
+  ],
+  "relationships": [
+    {
+      "id": "REL-001",
+      "source": "ELM-001",
+      "target": "ELM-002",
+      "label": "authenticates via",
+      "technology": null
+    }
+  ],
+  "options": [],
+  "findings": [],
+  "verdicts": [],
+  "audit_log": [],
+  "created_at": "2026-07-02T00:00:00Z",
+  "updated_at": "2026-07-02T00:00:00Z"
+}
