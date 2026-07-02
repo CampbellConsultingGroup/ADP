@@ -119,10 +119,10 @@ class TestThemeEndpoint:
         resp = client.get("/api/v1/theme/c4")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["version"] == "1.0.0"
         assert body["locked"] is True
         assert "container" in body["styles"]
-        assert body["styles"]["container"]["fill"] == "#438DD5"
+        # v1.0.1: container fill updated to #2874A6 (WCAG AA compliant, SC-005)
+        assert body["styles"]["container"]["fill"] == "#2874A6"
 
     def test_theme_has_all_element_kinds(self, client: TestClient) -> None:
         resp = client.get("/api/v1/theme/c4")

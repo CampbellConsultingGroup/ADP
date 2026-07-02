@@ -22,9 +22,9 @@ router = APIRouter(prefix="/api/v1/designs", tags=["render"])
 
 async def get_render_orchestrator() -> RenderOrchestrator:
     """Dependency — overridable in tests via app.dependency_overrides."""
-    from adp.store.store import DesignStore  # type: ignore[attr-defined]
+    from adp.api.deps import get_design_store
 
-    store = DesignStore()
+    store = await get_design_store()
     return RenderOrchestrator(design_store=store)
 
 

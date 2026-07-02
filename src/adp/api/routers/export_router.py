@@ -25,8 +25,9 @@ _EXPORT_ROLES = {"architect", "enterprise_architect"}
 
 async def get_design_store():  # type: ignore[return]
     """Dependency — overridable in tests."""
-    from adp.store.store import DesignStore  # type: ignore[attr-defined]
-    return DesignStore()
+    from adp.api.deps import get_design_store as _get
+
+    return await _get()
 
 
 def _get_actor(request: Request) -> str:

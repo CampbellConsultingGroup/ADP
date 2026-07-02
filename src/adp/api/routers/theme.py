@@ -1,86 +1,35 @@
-"""C4 theme router — development stub.
+"""C4 theme router — reads from the locked theme artifact via ThemeLoader.
 
-# TODO(ADP-SPEC-010): replace stub with real theme store
-Returns the locked baseline C4 theme defined in contracts/theme-contract.md.
-No database required; the theme JSON is a static constant for v1.
+ADP-SPEC-010 implemented; this router now delegates to adp.theme.loader
+rather than returning a hardcoded constant. The ThemeLoader reads
+src/adp/theme/c4-theme.json, validates it against c4-theme.schema.json,
+and returns the authoritative LockedTheme.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter
-from pydantic import BaseModel
+from fastapi import APIRouter, HTTPException, status
+
+from adp.theme.loader import ThemeLoader
+from adp.theme.models import LockedTheme, ThemeValidationError
 
 router = APIRouter(prefix="/api/v1/theme", tags=["theme"])
 
-
-class ElementStyle(BaseModel):
-    fill: str
-    stroke: str
-    color: str
-    shape: str
-    font_size: int
-    font_weight: str
+_loader = ThemeLoader()
 
 
-class RelationshipStyle(BaseModel):
-    stroke: str
-    stroke_width: float
-    arrow_end: str
+@router.get("/c4", response_model=LockedTheme)
+async def get_c4_theme() -> LockedTheme:
+    """Return the locked C4 visual theme (ADP-SPEC-010 / ART-XII).
 
-
-class C4ThemeResponse(BaseModel):
-    version: str
-    locked: bool
-    styles: dict[str, ElementStyle]
-    relationship_style: RelationshipStyle
-
-
-_BASELINE_THEME = C4ThemeResponse(
-    version="1.0.0",
-    locked=True,
-    styles={
-        "person": ElementStyle(
-            fill="#08427B",
-            stroke="#073B6F",
-            color="#ffffff",
-            shape="actor",
-            font_size=14,
-            font_weight="normal",
-        ),
-        "system": ElementStyle(
-            fill="#1168BD",
-            stroke="#0E5FA3",
-            color="#ffffff",
-            shape="box",
-            font_size=14,
-            font_weight="bold",
-        ),
-        "container": ElementStyle(
-            fill="#438DD5",
-            stroke="#3C7FC0",
-            color="#ffffff",
-            shape="box",
-            font_size=13,
-            font_weight="normal",
-        ),
-        "component": ElementStyle(
-            fill="#85BBE0",
-            stroke="#78A8CC",
-            color="#000000",
-            shape="box",
-            font_size=12,
-            font_weight="normal",
-        ),
-    },
-    relationship_style=RelationshipStyle(
-        stroke="#707070",
-        stroke_width=1.5,
-        arrow_end="open",
-    ),
-)
-
-
-@router.get("/c4", response_model=C4ThemeResponse)
-async def get_c4_theme() -> C4ThemeResponse:
-    """Return the locked baseline C4 visual theme."""
-    return _BASELINE_THEME
+    Reads from src/adp/theme/c4-theme.json and validates against the schema.
+    Returns 422 if the theme file is missing or invalid (should not happen in
+    a correctly deployed instance).
+    """
+    try:
+        return _loader.load_and_validate()
+    except ThemeValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Theme validation failed: {exc}",
+        ) from exc
