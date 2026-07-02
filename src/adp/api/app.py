@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from adp.api.routers import layouts, theme
+from adp.api.routers import layouts, render, theme
 
 
 def create_app() -> FastAPI:
@@ -16,6 +16,7 @@ def create_app() -> FastAPI:
     )
     app.include_router(layouts.router)
     app.include_router(theme.router)
+    app.include_router(render.router)
     return app
 
 
