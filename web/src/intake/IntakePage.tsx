@@ -20,28 +20,21 @@ const KIND_COLORS: Record<string, string> = {
   driver: "#166534",
 };
 
+/** Rejected Requirements section — renders in the right sidebar below Confirmed Requirements (FR-003, FR-004). */
 function RejectedRequirementsSection({ proposals }: { proposals: ProposalResponse[] }) {
   const rejected = proposals.filter((p) => p.status === "rejected");
   if (rejected.length === 0) return null;
 
   return (
-    <div style={{ marginTop: 24 }}>
-      <h3 style={{ fontSize: 14, fontWeight: 600, color: "#6B7280", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-        <span style={{ fontSize: 16 }}>✕</span> Rejected Requirements ({rejected.length})
-      </h3>
-      <div style={{ border: "1px solid #E5E7EB", borderRadius: 6, overflow: "hidden" }}>
-        {rejected.map((p, i) => (
+    <div>
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid #E5E7EB", fontWeight: 600, fontSize: 14, color: "#6B7280", display: "flex", alignItems: "center", gap: 6 }}>
+        <span>✕</span> Rejected Requirements ({rejected.length})
+      </div>
+      <div>
+        {rejected.map((p) => (
           <div
             key={p.proposal_id}
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: 10,
-              padding: "10px 12px",
-              background: i % 2 === 0 ? "#F9FAFB" : "#fff",
-              borderBottom: i < rejected.length - 1 ? "1px solid #E5E7EB" : "none",
-              opacity: 0.65,
-            }}
+            style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", borderBottom: "1px solid #F3F4F6", opacity: 0.6 }}
           >
             <span
               style={{
@@ -50,14 +43,14 @@ function RejectedRequirementsSection({ proposals }: { proposals: ProposalRespons
                 color: "#fff",
                 fontSize: 10,
                 fontWeight: "bold",
-                padding: "2px 6px",
+                padding: "2px 5px",
                 borderRadius: 3,
                 marginTop: 2,
               }}
             >
               {p.kind.replace("_", " ")}
             </span>
-            <span style={{ fontSize: 13, color: "#6B7280", textDecoration: "line-through" }}>
+            <span style={{ fontSize: 12, color: "#6B7280", textDecoration: "line-through" }}>
               {p.draft_statement}
             </span>
           </div>
@@ -73,9 +66,10 @@ export default function IntakePage({ designId, onBack }: IntakePageProps): React
   const { data: statusData } = useIntakeStatus(designId, operationId);
 
   const status = statusData?.status;
-  const proposals = statusData?.proposals ?? [];
-  const pendingProposals = proposals.filter((p) => p.status === "pending");
-  const noLlm = status === "completed" && proposals.length === 0;
+  const allProposals = statusData?.proposals ?? [];
+  // Only show pending proposals in the review panel (FR-002); confirmed/rejected are removed
+  const pendingProposals = allProposals.filter((p) => p.status === "pending");
+  const noLlm = status === "completed" && allProposals.length === 0;
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "bulk", label: "Bulk Text" },
@@ -85,7 +79,7 @@ export default function IntakePage({ designId, onBack }: IntakePageProps): React
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "Arial, sans-serif" }}>
-      {/* Header — FR-002: "Go to Canvas" button */}
+      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 16px", background: "#1168BD", color: "#fff" }}>
         <h2 style={{ margin: 0, fontSize: 16, fontWeight: 600, flex: 1 }}>Requirements Intake</h2>
         <span style={{ fontSize: 13, opacity: 0.8 }}>{designId}</span>
@@ -98,9 +92,8 @@ export default function IntakePage({ designId, onBack }: IntakePageProps): React
       </div>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* Left: Tabs + content */}
+        {/* Left: Tabs + extraction content */}
         <div style={{ flex: 2, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          {/* Tab bar */}
           <div style={{ display: "flex", gap: 0, borderBottom: "2px solid #E5E7EB", flexShrink: 0, background: "#fff" }}>
             {TABS.map((tab) => (
               <button
@@ -119,7 +112,6 @@ export default function IntakePage({ designId, onBack }: IntakePageProps): React
             ))}
           </div>
 
-          {/* Tab content */}
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
             {activeTab === "bulk" && (
               <div>
@@ -146,15 +138,19 @@ export default function IntakePage({ designId, onBack }: IntakePageProps): React
                   </div>
                 )}
 
-                {/* Active (pending) proposals */}
+                {/* Pending proposals to review — confirmed/rejected are removed (FR-002, FR-003) */}
                 {operationId && status === "completed" && pendingProposals.length > 0 && (
                   <div style={{ marginTop: 16 }}>
                     <ProposalsList proposals={pendingProposals} designId={designId} operationId={operationId} />
                   </div>
                 )}
 
-                {/* Rejected Requirements section — FR-003–FR-006 */}
-                {operationId && <RejectedRequirementsSection proposals={proposals} />}
+                {/* Show empty state when all proposals have been actioned */}
+                {operationId && status === "completed" && allProposals.length > 0 && pendingProposals.length === 0 && (
+                  <div style={{ marginTop: 16, padding: 12, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 6, fontSize: 13, color: "#166534" }}>
+                    ✓ All proposals have been reviewed. See the sidebar for results.
+                  </div>
+                )}
               </div>
             )}
 
@@ -163,12 +159,16 @@ export default function IntakePage({ designId, onBack }: IntakePageProps): React
           </div>
         </div>
 
-        {/* Right: Confirmed requirements sidebar */}
+        {/* Right sidebar: Confirmed then Rejected (FR-003, FR-004) */}
         <div style={{ flex: 1, borderLeft: "1px solid #E5E7EB", overflowY: "auto", background: "#FAFAFA" }}>
+          {/* Confirmed Requirements */}
           <div style={{ padding: "12px 16px", borderBottom: "1px solid #E5E7EB", fontWeight: 600, fontSize: 14, color: "#166534", display: "flex", alignItems: "center", gap: 6 }}>
             <span>✓</span> Confirmed Requirements
           </div>
           <RequirementsList designId={designId} />
+
+          {/* Rejected Requirements — below confirmed (FR-003) */}
+          <RejectedRequirementsSection proposals={allProposals} />
         </div>
       </div>
     </div>

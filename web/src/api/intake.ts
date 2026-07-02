@@ -110,12 +110,15 @@ export function useConfirmProposal(designId: string, operationId: string) {
         { edited_statement: editedStatement ?? null },
       ),
     onSuccess: () => {
+      // Refresh confirmed requirements sidebar AND the proposals list (FR-001)
       void qc.invalidateQueries({ queryKey: ["requirements", designId] });
+      void qc.invalidateQueries({ queryKey: ["intake-status", designId, operationId] });
     },
   });
 }
 
 export function useRejectProposal(designId: string, operationId: string) {
+  const qc = useQueryClient();
   return useMutation<{ proposal_id: string; status: string }, Error, { proposalId: string }>({
     mutationFn: ({ proposalId }) =>
       apiMutation(
@@ -123,6 +126,10 @@ export function useRejectProposal(designId: string, operationId: string) {
         `/api/v1/designs/${designId}/intake/${operationId}/proposals/${proposalId}/reject`,
         {},
       ),
+    onSuccess: () => {
+      // Refresh the proposals list so rejected proposal disappears (FR-001)
+      void qc.invalidateQueries({ queryKey: ["intake-status", designId, operationId] });
+    },
   });
 }
 
