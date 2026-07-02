@@ -12,6 +12,7 @@ export interface IntakeSubmitRequest {
   mode: IntakeMode;
   text: string;
   kind?: RequirementKind;
+  model?: string;  // optional model override; uses server-configured default if omitted
 }
 
 export interface IntakeSubmitResponse {

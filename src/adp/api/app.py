@@ -7,7 +7,7 @@ import time
 
 from fastapi import FastAPI, Request, Response
 
-from adp.api.routers import documents, export_router, health, intake, layouts, render, theme
+from adp.api.routers import config, documents, export_router, health, intake, layouts, render, theme
 from adp.telemetry.context import TraceIdFilter, generate_trace_id, set_trace_id
 from adp.telemetry.metrics import ACTIVE_REQUESTS, ERROR_COUNTER, REQUEST_COUNTER, REQUEST_LATENCY
 
@@ -74,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(export_router.router)
     app.include_router(health.router)
     app.include_router(intake.router)
+    app.include_router(config.router)
     return app
 
 

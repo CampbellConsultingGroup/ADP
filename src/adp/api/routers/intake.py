@@ -41,6 +41,8 @@ class IntakeSubmitRequest(BaseModel):
     mode: Literal["bulk_text", "structured_form"]
     text: str
     kind: RequirementKind | None = None
+    # Optional model override — if not provided, uses the globally configured extraction model
+    model: str | None = None
 
     @field_validator("text")
     @classmethod
@@ -154,15 +156,23 @@ async def _get_design_store():  # type: ignore[return]
     return await get_design_store()
 
 
-def _make_orchestrator():
-    """Create ExtractionOrchestrator; stub LLMClient if ADP_LLM_ENDPOINT is not set."""
+def _make_orchestrator(model: str | None = None):  # type: ignore[return]
+    """Create ExtractionOrchestrator; stub LLMClient if ADP_LLM_ENDPOINT is not set.
+
+    Uses the model from:
+    1. The request-specified model (if provided)
+    2. The globally configured extraction model (from PUT /api/v1/config/llm)
+    3. ADP_LLM_MODEL env var fallback
+    4. claude-sonnet-4-6 default
+    """
+    from adp.api.routers.config import get_extraction_model
     from adp.intake.llm import LLMClient
     from adp.intake.orchestrator import ExtractionOrchestrator
 
-    endpoint = os.environ.get("ADP_LLM_ENDPOINT", "")
+    endpoint = os.environ.get("ADP_LLM_ENDPOINT", "https://api.anthropic.com")
     api_key = os.environ.get("ADP_LLM_API_KEY", "")
 
-    if not endpoint:
+    if not api_key:
         # Graceful degradation: stub client returns empty extraction
         class _StubLLMClient(LLMClient):
             async def extract(self, text: str, correlation_id: str | None = None) -> dict:  # type: ignore[override]
@@ -170,8 +180,8 @@ def _make_orchestrator():
 
         llm = _StubLLMClient(base_url="http://stub", api_key="stub", model="stub")
     else:
-        model = os.environ.get("ADP_LLM_MODEL", "claude-sonnet-4-6")
-        llm = LLMClient(base_url=endpoint, api_key=api_key, model=model)
+        active_model = model or get_extraction_model()
+        llm = LLMClient(base_url=endpoint, api_key=api_key, model=active_model)
 
     return ExtractionOrchestrator(llm_client=llm)
 
@@ -242,7 +252,7 @@ async def submit_intake(
         operation_id=operation_id,
     )
 
-    orchestrator = _make_orchestrator()
+    orchestrator = _make_orchestrator(model=request.model)
     background_tasks.add_task(orchestrator.run, submission, _intake_store)
 
     logger.info(
