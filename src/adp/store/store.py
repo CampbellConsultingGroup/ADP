@@ -155,9 +155,13 @@ class DesignStore:
                     )
 
                 # Write audit entries atomically (FR-003).
+                # Use INSERT ... ON CONFLICT DO NOTHING because audit_log accumulates
+                # all historical entries — prior entries already exist in the table
+                # from previous saves and must not be re-inserted.
+                from sqlalchemy.dialects.postgresql import insert as pg_insert
                 for entry in description.audit_log:
                     await session.execute(
-                        audit_entries.insert().values(
+                        pg_insert(audit_entries).values(
                             id=entry.id,
                             design_id=description.id,
                             design_version=new_version,
@@ -168,7 +172,7 @@ class DesignStore:
                             timestamp=entry.timestamp,
                             origin=entry.origin,
                             created_at=now,
-                        )
+                        ).on_conflict_do_nothing(index_elements=["id"])
                     )
 
         log_operation("save", description.id, version_num=new_version, actor=actor)

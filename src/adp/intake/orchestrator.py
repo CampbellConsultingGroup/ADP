@@ -8,10 +8,27 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
+
+_AUD_ID_RE = re.compile(r"^AUD-(\d+)$")
+
+
+def _next_audit_id(design: Any) -> str:
+    """Return the next AUD-NNN id by finding max(existing) + 1.
+
+    Uses max-based logic (not len+1) so it is safe when prior entries
+    exist in the database — avoids UniqueViolationError on the audit_entries PK.
+    """
+    max_n = 0
+    for entry in (design.audit_log or []):
+        m = _AUD_ID_RE.match(entry.id)
+        if m:
+            max_n = max(max_n, int(m.group(1)))
+    return f"AUD-{(max_n + 1):03d}"
 
 from adp.intake.linker import KnowledgeLinker
 from adp.intake.llm import LLMClient
@@ -202,7 +219,7 @@ class ExtractionOrchestrator:
         )
 
         from adp.models import AuditEntry as _AuditEntry
-        audit_entry_id = f"AUD-{len(design.audit_log) + 1:03d}"
+        audit_entry_id = _next_audit_id(design)
         audit_entry = _AuditEntry(
             id=audit_entry_id,
             actor=confirming_actor,
@@ -262,7 +279,7 @@ class ExtractionOrchestrator:
             from adp.models import AuditEntry as _AuditEntry
 
             audit_entry = _AuditEntry(
-                id=f"AUD-{len(design.audit_log) + 1:03d}",
+                id=_next_audit_id(design),
                 actor=rejecting_actor,
                 action="reject-requirement-proposal",
                 affected_entity=proposal_id,

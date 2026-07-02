@@ -427,7 +427,8 @@ async def add_requirement(
         description=description,
     )
 
-    audit_id = f"AUD-{len(design.audit_log) + 1:03d}"
+    from adp.intake.orchestrator import _next_audit_id
+    audit_id = _next_audit_id(design)
     audit_entry = AuditEntry(
         id=audit_id,
         actor=actor,
