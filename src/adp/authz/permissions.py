@@ -28,6 +28,7 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.CONFIRM_RECOMMENDATION,
         ActionType.OVERRIDE_VERDICT,
         ActionType.ADD_FINDING,
+        ActionType.EXPORT_DESIGN,
     }),
     PersonaRole.TECHNICAL_ARCHITECT: frozenset({
         ActionType.READ_DESIGN,
@@ -52,6 +53,7 @@ REQUIRES_CONFIRMATION: frozenset[ActionType] = frozenset({
     ActionType.OVERRIDE_VERDICT,
     ActionType.AMEND_STANDARD,
     ActionType.MANAGE_ROLES,
+    ActionType.EXPORT_DESIGN,
 })
 
 
