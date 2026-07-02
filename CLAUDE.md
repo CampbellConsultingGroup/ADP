@@ -25,6 +25,7 @@ Auto-generated from all feature plans. Last updated: 2026-07-02 (013-playwright-
 - Python 3.11+ + `prometheus-client>=0.17` (metrics scrape endpoint); new `adp.telemetry` package with canonical span attribute constants, `TraceIdFilter` logging filter, `ai_step_span()` context manager, `ContextVar` trace ID carrier; `GET /health` + `GET /metrics` endpoints; QG-08 no-leak test enforced in CI; existing ADP-SPEC-006/007/008 telemetry.py files normalized to use `adp.telemetry.contract` constants (012-observability-telemetry)
 - TypeScript 5.x + `@playwright/test` v1.47+ (E2E test runner); `playwright` browser lib (already in stack); Chromium browser; 18 API tests (no browser, no DB) + 4 browser tests (Chromium, route-mocked); `ADP_API_URL` and `ADP_WEB_URL` env vars control targets; `npm run test:e2e:api` for CI (013-playwright-e2e)
 - Python 3.11+ + `psycopg2-binary` (synchronous driver for Alembic migrations; asyncpg used at runtime); `alembic.ini` at project root with `sqlalchemy.url` for direct CLI use; `ADP_DATABASE_URL` env var for runtime (DB setup)
+- Python 3.12 (backend); TypeScript 5.x (frontend) (015-anthropic-llm)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -69,11 +70,9 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 015-anthropic-llm: (RETROACTIVE SPEC — ART-I violation corrected) Anthropic Claude integration: LLMClient detects anthropic.com URL → uses /v1/messages with x-api-key header; normalizes response to OpenAI shape; strips markdown code fences from Claude JSON output. GET/PUT /api/v1/config/llm for model selection (Sonnet 4.6, Opus 4.8, Haiku 4.5, Fable 5). ModelSelector + LLMSettings components. Vite server.proxy forwards /api/ to :8001. Bug fixes: DesignStore.save() uses ON CONFLICT DO NOTHING for audit entries; _next_audit_id() uses max+1 not len+1
+- 014-requirements-intake-ui: No new deps; wires existing `adp.intake.ExtractionOrchestrator` to 6 new FastAPI routes (`POST /intake`, `GET /intake/{op_id}`, `POST /proposals/{pid}/confirm`, `POST /proposals/{pid}/reject`, `POST /requirements`, `GET /requirements`); new React intake screen at `/designs/{id}/intake` with bulk-text + structured-form tabs, proposals review panel (confirm/edit/reject per card with source excerpt), and requirements summary; TanStack Query polling (2s) for async extraction status; all confirm actions are explicit per-proposal (ART-VIII — no auto-confirm)
 - 013-playwright-e2e: Added `@playwright/test` v1.47+; Chromium browser; 22 E2E tests (18 API + 4 browser); `npm run test:e2e:api` CI command; key fix: use regex `/\/api\/v1\//` not glob for Playwright route mocking to avoid intercepting Vite source files
-- 012-observability-telemetry: Added `prometheus-client>=0.17`; `adp.telemetry` package; QG-08/10/11 CI gates; normalized existing telemetry files to `adp.telemetry.contract` constants
-- 011-document-export: Added `pyyaml>=6.0`; `adp.docs` + `adp.export` packages; GET /document, /traceability, /views, POST /export, POST /import endpoints; ART-VIII `confirmation_id` gate
-- 010-locked-theme-rendering: `cairosvg>=2.7`; locked theme v1.0.1 (`#2874A6` container fill, WCAG AA); `adp-generate` extended to emit `c4-theme.schema.json`
-- DB setup: PostgreSQL 16.14 + pgvector 0.6.0 running natively; `psycopg2-binary` for Alembic sync migrations; `alembic.ini` updated with `sqlalchemy.url`; async/sync fix: `DesignStore.get()` is async, orchestrators now use `arender()` not `render()`
 
 
 <!-- MANUAL ADDITIONS START -->
