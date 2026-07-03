@@ -211,7 +211,9 @@ class RecommendationOrchestrator:
             created_elements.append(element)
 
         # Write audit entry (QG-13 / FR-004)
-        audit_entry_id = f"AUD-{len(design.audit_log) + 1:03d}"
+        # ADP-SPEC-017 fix: use max(existing)+1 not len+1 to avoid UniqueViolationError
+        from adp.intake.orchestrator import _next_audit_id
+        audit_entry_id = _next_audit_id(design)
         from adp.models import AuditEntry as _AE
 
         audit_entry = _AE(

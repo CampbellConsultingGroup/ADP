@@ -1,22 +1,30 @@
 import React, { useState } from "react";
 import Workspace from "./canvas/Workspace";
 import IntakePage from "./intake/IntakePage";
+import RecommendationPage from "./recommend/RecommendationPage";
+
+type AppView = "canvas" | "intake" | "recommend";
 
 function getDesignIdFromPath(): string {
   const match = window.location.pathname.match(/\/designs\/([^/]+)/);
   return match?.[1] ?? "DESIGN-001";
 }
 
-// C1 fix: use in-app view state instead of window.location.href to preserve
-// TanStack Query cache and ADP-SPEC-012 trace_id ContextVar across view switch (ART-VI).
+// I1 fix (ADP-SPEC-018): single onNavigate(view) prop passed to all three pages.
+// Replaces the previous mix of onBack/onNavigateToIntake/onNavigateToRecommend.
 export default function App(): React.ReactElement {
   const designId = getDesignIdFromPath();
-  // ADP-SPEC-016: Requirements Intake is the default landing view (FR-001)
-  const [view, setView] = useState<"canvas" | "intake">("intake");
+  const [view, setView] = useState<AppView>("intake"); // ADP-SPEC-016: Intake is the default
 
-  if (view === "intake") {
-    return <IntakePage designId={designId} onBack={() => setView("canvas")} />;
+  const onNavigate = (nextView: AppView) => setView(nextView);
+
+  if (view === "recommend") {
+    return <RecommendationPage designId={designId} onNavigate={onNavigate} />;
   }
 
-  return <Workspace designId={designId} onNavigateToIntake={() => setView("intake")} />;
+  if (view === "intake") {
+    return <IntakePage designId={designId} onNavigate={onNavigate} />;
+  }
+
+  return <Workspace designId={designId} onNavigate={onNavigate} />;
 }

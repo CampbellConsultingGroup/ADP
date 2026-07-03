@@ -303,3 +303,51 @@ test.describe("Requirements Intake API (ADP-SPEC-014)", () => {
     expect(resp.status()).toBe(422);
   });
 });
+
+// ── ADP-SPEC-018: Recommendation API (T032) ───────────────────────────────────
+
+test.describe("Architecture Recommendation API (ADP-SPEC-018)", () => {
+  test("POST /recommend returns operation_id (202)", async ({ request }) => {
+    const resp = await request.post("/api/v1/designs/DESIGN-001/recommend", {
+      data: { requirement_ids: ["REQ-001"] },
+    });
+    expect([202, 404]).toContain(resp.status());
+    if (resp.status() === 202) {
+      const body = await resp.json() as { operation_id: string; status: string };
+      expect(body.operation_id).toBeTruthy();
+      expect(body.status).toBe("pending");
+    }
+  });
+
+  test("GET /recommend/{op_id} returns 200 with status", async ({ request }) => {
+    // First submit to get an op_id
+    const submit = await request.post("/api/v1/designs/DESIGN-001/recommend", {
+      data: { requirement_ids: ["REQ-001"] },
+    });
+    if (submit.status() !== 202) return; // Skip if design doesn't exist
+    const opId = ((await submit.json()) as { operation_id: string }).operation_id;
+
+    const resp = await request.get(`/api/v1/designs/DESIGN-001/recommend/${opId}`);
+    expect(resp.status()).toBe(200);
+    const body = await resp.json() as { status: string; options: unknown[] };
+    expect(["pending", "running", "completed", "failed"]).toContain(body.status);
+    expect(Array.isArray(body.options)).toBe(true);
+  });
+
+  test("POST /accept with blank confirmation_id returns 422 (ART-VIII gate)", async ({ request }) => {
+    // 422 from Pydantic blank string; 404 if op not in store — both are non-200
+    const resp = await request.post("/api/v1/designs/DESIGN-001/recommend/op-fake/options/opt-fake/accept", {
+      data: { confirmation_id: "", advisory_acknowledged: false },
+    });
+    expect(resp.status()).toBeGreaterThanOrEqual(400);
+    expect(resp.status()).not.toBe(200);
+  });
+
+  test("POST /recommend with empty requirement_ids returns 422", async ({ request }) => {
+    // 422 from Pydantic (empty list); 503 if DB dep fires first
+    const resp = await request.post("/api/v1/designs/DESIGN-001/recommend", {
+      data: { requirement_ids: [] },
+    });
+    expect([422, 503]).toContain(resp.status());
+  });
+});

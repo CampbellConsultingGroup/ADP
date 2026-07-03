@@ -7,9 +7,12 @@ import C4Canvas from "./C4Canvas";
 import InspectionPanel from "../inspection/InspectionPanel";
 import { ConflictNotificationBanner, subscribeConflict } from "./ConflictNotification";
 
+type NavView = "canvas" | "intake" | "recommend";
+
 interface WorkspaceProps {
   designId: string;
-  onNavigateToIntake?: () => void;
+  // I1 fix (ADP-SPEC-018): single onNavigate replaces onNavigateToIntake
+  onNavigate?: (view: NavView) => void;
 }
 
 const LEVELS: { label: string; value: C4Level }[] = [
@@ -18,7 +21,7 @@ const LEVELS: { label: string; value: C4Level }[] = [
   { label: "Component", value: "component" },
 ];
 
-export default function Workspace({ designId, onNavigateToIntake }: WorkspaceProps): React.ReactElement {
+export default function Workspace({ designId, onNavigate }: WorkspaceProps): React.ReactElement {
   const { activeLevel, setActiveLevel, selectedElementId, inspectionPanelOpen, setDesignId, clearSelection } =
     useWorkspaceStore();
 
@@ -62,23 +65,19 @@ export default function Workspace({ designId, onNavigateToIntake }: WorkspacePro
           {label}
         </button>
       ))}
-      {onNavigateToIntake && (
-        <button
-          onClick={onNavigateToIntake}
-          style={{
-            marginLeft: "auto",
-            padding: "6px 14px",
-            background: "#fff",
-            color: "#166534",
-            border: "1px solid #166534",
-            borderRadius: 4,
-            cursor: "pointer",
-            fontSize: 13,
-            fontWeight: 500,
-          }}
-        >
-          Requirements
-        </button>
+      {/* Three-view nav — Intake | Recommendations | Canvas (active) */}
+      {onNavigate && (
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+          {(["intake", "recommend"] as NavView[]).map((view) => (
+            <button
+              key={view}
+              onClick={() => onNavigate(view)}
+              style={{ padding: "5px 12px", background: "#fff", color: "#1168BD", border: "1px solid #1168BD", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 500 }}
+            >
+              {view === "intake" ? "Intake" : "Recommendations"}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );
