@@ -13,8 +13,12 @@ from typing import TYPE_CHECKING
 
 import pydantic
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from adp.models import SCHEMA_VERSION, ArchitectureDescription
 from adp.store.logging import log_operation, timed_operation
@@ -155,9 +159,13 @@ class DesignStore:
                     )
 
                 # Write audit entries atomically (FR-003).
+                # Use INSERT ... ON CONFLICT DO NOTHING because audit_log accumulates
+                # all historical entries — prior entries already exist in the table
+                # from previous saves and must not be re-inserted.
+                from sqlalchemy.dialects.postgresql import insert as pg_insert
                 for entry in description.audit_log:
                     await session.execute(
-                        audit_entries.insert().values(
+                        pg_insert(audit_entries).values(
                             id=entry.id,
                             design_id=description.id,
                             design_version=new_version,
@@ -168,7 +176,7 @@ class DesignStore:
                             timestamp=entry.timestamp,
                             origin=entry.origin,
                             created_at=now,
-                        )
+                        ).on_conflict_do_nothing(index_elements=["id"])
                     )
 
         log_operation("save", description.id, version_num=new_version, actor=actor)
@@ -304,6 +312,56 @@ class DesignStore:
         with timed_operation("query_relationships", design_id):
             result = query_relationships(content, element_id)
         return result
+
+    async def list_all(
+        self,
+        page: int = 1,
+        page_size: int = 50,
+    ) -> list[ArchitectureDescription]:
+        """Return a paginated list of the latest version of each design (ADP-SPEC-025).
+
+        Loads the full ArchitectureDescription for each design so callers can
+        compute element/requirement counts from the canonical model.
+        Sorted by created_at descending (most recent first).
+        """
+        offset = (page - 1) * page_size
+        async with self._session_factory() as session:
+            rows = await session.execute(
+                sa.select(designs.c.id)
+                .order_by(designs.c.created_at.desc())
+                .limit(page_size)
+                .offset(offset)
+            )
+            design_ids = [r[0] for r in rows.fetchall()]
+
+        result: list[ArchitectureDescription] = []
+        for did in design_ids:
+            try:
+                result.append(await self.get(did))
+            except DesignNotFoundError:
+                pass  # race: design deleted between list and get
+        return result
+
+    async def count_all(self) -> int:
+        """Return total count of designs in the store (ADP-SPEC-025)."""
+        async with self._session_factory() as session:
+            row = await session.execute(sa.select(sa.func.count()).select_from(designs))
+            return int(row.scalar() or 0)
+
+    async def next_design_id(self) -> str:
+        """Generate the next DSN-NNN id atomically (ADP-SPEC-025)."""
+        import re
+
+        async with self._session_factory() as session:
+            rows = await session.execute(sa.select(designs.c.id))
+            all_ids = [r[0] for r in rows.fetchall()]
+
+        max_n = 0
+        for did in all_ids:
+            m = re.match(r"^DSN-(\d+)$", did)
+            if m:
+                max_n = max(max_n, int(m.group(1)))
+        return f"DSN-{max_n + 1:03d}"
 
     async def dispose(self) -> None:
         """Release database connections."""

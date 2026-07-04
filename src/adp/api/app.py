@@ -2,12 +2,29 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
 
 from fastapi import FastAPI, Request, Response
 
-from adp.api.routers import documents, export_router, health, layouts, render, theme
+from adp.api.routers import (
+    calm,
+    config,
+    designs,
+    documents,
+    export_router,
+    health,
+    intake,
+    knowledge,
+    layouts,
+    recommend,
+    render,
+    theme,
+)
+from adp.auth.middleware import AuthMiddleware
 from adp.telemetry.context import TraceIdFilter, generate_trace_id, set_trace_id
 from adp.telemetry.metrics import ACTIVE_REQUESTS, ERROR_COUNTER, REQUEST_COUNTER, REQUEST_LATENCY
 
@@ -23,6 +40,43 @@ def _install_trace_id_logging() -> None:
         root_logger.addFilter(TraceIdFilter())
 
 
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Startup: mark stale operations failed + schedule cleanup. Shutdown: cancel cleanup."""
+    from adp.api.deps import get_operation_store
+
+    _cleanup_task: asyncio.Task | None = None
+    try:
+        op_store = await get_operation_store()
+        stale = await op_store.mark_stale_running_as_failed("server restarted during processing")
+        if stale:
+            logging.getLogger(__name__).info(
+                "startup: marked %d stale running operations as failed", stale
+            )
+
+        async def _cleanup_loop() -> None:
+            while True:
+                await asyncio.sleep(600)  # 10 minutes
+                try:
+                    deleted = await op_store.delete_expired()
+                    if deleted:
+                        logging.getLogger(__name__).info(
+                            "cleanup: deleted %d expired operations", deleted
+                        )
+                except Exception as exc:
+                    logging.getLogger(__name__).warning("cleanup error: %s", exc)
+
+        _cleanup_task = asyncio.create_task(_cleanup_loop())
+    except Exception as exc:
+        # DB may not be configured — log and continue (graceful degradation)
+        logging.getLogger(__name__).warning("lifespan startup skipped: %s", exc)
+
+    yield
+
+    if _cleanup_task:
+        _cleanup_task.cancel()
+
+
 def create_app() -> FastAPI:
     _install_trace_id_logging()
 
@@ -31,7 +85,12 @@ def create_app() -> FastAPI:
         version="1.0.0",
         docs_url=None,
         redoc_url=None,
+        lifespan=_lifespan,
     )
+
+    # Auth middleware — validates Bearer tokens for all /api/v1/ routes (ADP-SPEC-026)
+    # Must be added before other middleware; no-op when ADP_AUTH_ENABLED=false
+    app.add_middleware(AuthMiddleware)
 
     @app.middleware("http")
     async def observability_middleware(request: Request, call_next) -> Response:  # type: ignore[type-arg]
@@ -67,12 +126,26 @@ def create_app() -> FastAPI:
             response.headers["X-Trace-ID"] = trace_id
             return response
 
+    app.include_router(designs.router)
     app.include_router(layouts.router)
     app.include_router(theme.router)
     app.include_router(render.router)
     app.include_router(documents.router)
     app.include_router(export_router.router)
     app.include_router(health.router)
+    app.include_router(intake.router)
+    app.include_router(recommend.router)
+    app.include_router(knowledge.router)
+    app.include_router(calm.router)
+    app.include_router(config.router)
+
+    # Serve Vite-built frontend static files when running in Docker (ADP-SPEC-025)
+    import os
+    static_dir = os.environ.get("ADP_STATIC_DIR", "")
+    if static_dir and os.path.isdir(static_dir):
+        from fastapi.staticfiles import StaticFiles
+        app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
     return app
 
 

@@ -57,8 +57,37 @@ def _make_orch() -> tuple[RecommendationOrchestrator, AsyncMock]:
     return orch, mock_store
 
 
-def _op_store(option: SolutionOption) -> dict:
-    return {"op-001": {"status": "completed", "options": {"opt-001": option}}}
+class DictOperationStore:
+    """In-memory OperationStore shim for unit tests (ADP-SPEC-024)."""
+
+    def __init__(self, data: dict) -> None:
+        self._data = data
+
+    async def get(self, op_id) -> dict | None:
+        return self._data.get(op_id)
+
+    async def update(self, op_id, *, status=None, payload_patch=None, error=None) -> None:
+        op = self._data.setdefault(op_id, {})
+        if status is not None:
+            op["status"] = status
+        if payload_patch:
+            op.update(payload_patch)
+
+    async def update_option_status(self, op_id, option_id, new_status) -> bool:
+        op = self._data.get(op_id, {})
+        options = op.get("options", {})
+        option = options.get(option_id)
+        if option is None or option.get("status") != "pending":
+            return False
+        option["status"] = new_status
+        return True
+
+
+def _op_store(option: SolutionOption) -> DictOperationStore:
+    from adp.api.routers.recommend import _option_to_dict
+    return DictOperationStore({
+        "op-001": {"status": "completed", "options": {"opt-001": _option_to_dict(option)}}
+    })
 
 
 @pytest.mark.asyncio

@@ -181,3 +181,45 @@ export function useDrawRelationship(): UseMutationResult<Relationship, Error, Dr
     },
   });
 }
+
+// ── ADP-SPEC-025: Design list + create ───────────────────────────────────────
+
+export interface DesignSummary {
+  id: string;
+  title: string;
+  description?: string | null;
+  element_count: number;
+  requirement_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DesignListResponse {
+  designs: DesignSummary[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface CreateDesignRequest {
+  title: string;
+  description?: string;
+}
+
+export function useDesignList(page: number = 1) {
+  return useQuery<DesignListResponse>({
+    queryKey: ["designs", page],
+    queryFn: () => apiGet<DesignListResponse>(`/api/v1/designs?page=${page}&page_size=50`),
+  });
+}
+
+export function useCreateDesign() {
+  const qc = useQueryClient();
+  return useMutation<ArchitectureDescription, Error, CreateDesignRequest>({
+    mutationFn: (body) =>
+      apiMutation<ArchitectureDescription, CreateDesignRequest>("POST", "/api/v1/designs", body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["designs"] });
+    },
+  });
+}

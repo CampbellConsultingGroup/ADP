@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 import sqlalchemy as sa
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import Boolean, Column, DateTime, Float, Index, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -28,8 +29,7 @@ knowledge_items = sa.Table(
     Column("source_ref", Text, nullable=False),
     Column("schema_version", Text, nullable=False, default="1.0.0"),
     Column("active", Boolean, nullable=False, default=True),
-    # Embedding stored as JSONB array for portability; Alembic migration uses vector(dim)
-    Column("embedding", JSONB, nullable=False, default=[]),
+    Column("embedding", Vector(384), nullable=False),
     Column("indexed_at", DateTime(timezone=True), nullable=False),
 )
 

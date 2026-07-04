@@ -414,3 +414,93 @@ for kind, style in theme.styles.items():
     print(f'{kind}: {ratio:.2f}:1 {status}  ({style.color} on {style.fill})')
 "
 ```
+
+---
+
+## Production Deployment
+
+### Prerequisites
+
+- Docker Engine 24+ and Docker Compose v2+
+- A server with at least 2 GB RAM and 10 GB disk
+- An Anthropic API key (or compatible LLM endpoint)
+
+### 1. First-Time Setup
+
+```bash
+# Clone the repository
+git clone <your-repo-url> adp && cd adp
+
+# Copy the example env file and fill in your values
+cp .env.example .env
+# Edit .env — set POSTGRES_PASSWORD and ADP_LLM_API_KEY at minimum
+
+# Start the database
+docker compose up -d db
+
+# Wait for it to be healthy, then run migrations
+docker compose run --rm api alembic upgrade head
+
+# Optional: seed the knowledge base with industry best practices
+docker compose run --rm api python scripts/seed_knowledge.py
+```
+
+### 2. Start ADP
+
+```bash
+docker compose up -d
+```
+
+Verify it's running:
+```bash
+curl http://localhost:8001/health
+# → {"status": "healthy", ...}
+```
+
+Open `http://localhost:8001` in a browser to access the UI.
+
+### 3. Upgrade Procedure
+
+```bash
+git pull
+docker compose build
+docker compose run --rm api alembic upgrade head   # apply any new DB migrations
+docker compose up -d
+```
+
+### 4. Scale Workers
+
+Edit `.env`:
+```
+ADP_WORKERS=4
+```
+
+Then restart:
+```bash
+docker compose up -d
+```
+
+### 5. Troubleshooting
+
+**Check logs**:
+```bash
+docker compose logs api --tail=100
+docker compose logs db --tail=50
+```
+
+**Database connection failures**:
+```bash
+# Verify DB is healthy
+docker compose ps db
+# Check connectivity
+docker compose exec db psql -U adp_user -d adp -c "\dt"
+```
+
+**Operations not persisting across restarts**:
+```bash
+# Verify the operations table exists (added in migration 003)
+docker compose exec db psql -U adp_user -d adp -c "\d operations"
+```
+
+**Port conflict**:
+Edit `.env` and set `ADP_PORT=8002` (or another available port), then `docker compose up -d`.

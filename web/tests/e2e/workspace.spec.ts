@@ -15,7 +15,6 @@
 import { test, expect, type Page } from "@playwright/test";
 
 const WEB_URL = process.env.ADP_WEB_URL;
-const API_URL = process.env.ADP_API_URL ?? "http://localhost:8001";
 
 const MOCK_DESIGN = {
   id: "E2E-D001",
@@ -84,17 +83,30 @@ test.describe("C4 Workspace — Browser Tests", () => {
     }
   });
 
-  test("workspace page loads with mocked design and canvas is visible", async ({ page }) => {
+  // ADP-SPEC-016: default view is now Intake; navigate to canvas first
+  async function goToCanvas(page: import("@playwright/test").Page) {
+    await page.getByRole("button", { name: /Go to Canvas/i }).click();
+  }
+
+  test("intake page is the landing page (ADP-SPEC-016)", async ({ page }) => {
     await mockApis(page);
     await page.goto(`${WEB_URL}/designs/E2E-D001`);
     await expect(page).toHaveTitle(/ADP/);
-    // The canvas Add Element button must appear once the design loads
+    await expect(page.getByText("Requirements Intake")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("button", { name: /Go to Canvas/i })).toBeVisible();
+  });
+
+  test("workspace canvas loads after clicking Go to Canvas", async ({ page }) => {
+    await mockApis(page);
+    await page.goto(`${WEB_URL}/designs/E2E-D001`);
+    await goToCanvas(page);
     await expect(page.getByText("+ Add Element")).toBeVisible({ timeout: 10_000 });
   });
 
   test("level toggle shows all three C4 levels", async ({ page }) => {
     await mockApis(page);
     await page.goto(`${WEB_URL}/designs/E2E-D001`);
+    await goToCanvas(page);
     await page.waitForLoadState("networkidle");
     await expect(page.getByRole("button", { name: "Context" })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("button", { name: "Container" })).toBeVisible();
@@ -104,6 +116,7 @@ test.describe("C4 Workspace — Browser Tests", () => {
   test("clicking Add Element shows element kind and name inputs", async ({ page }) => {
     await mockApis(page);
     await page.goto(`${WEB_URL}/designs/E2E-D001`);
+    await goToCanvas(page);
     await page.getByText("+ Add Element").click();
     await expect(page.getByPlaceholder("Element name")).toBeVisible({ timeout: 2_000 });
     await expect(page.locator("select")).toBeVisible();
@@ -112,6 +125,7 @@ test.describe("C4 Workspace — Browser Tests", () => {
   test("level toggle switches the active level highlighting", async ({ page }) => {
     await mockApis(page);
     await page.goto(`${WEB_URL}/designs/E2E-D001`);
+    await goToCanvas(page);
     await expect(page.getByRole("button", { name: "Context" })).toBeVisible({ timeout: 10_000 });
 
     // Click Context — should become active (different background)

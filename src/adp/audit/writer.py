@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from adp.authz.permissions import requires_confirmation
 from adp.authz.roles import ActionType
@@ -19,6 +19,21 @@ if TYPE_CHECKING:
     from adp.store import DesignStore
 
 _AUD_ID_RE = re.compile(r"^AUD-(\d+)$")
+
+
+def next_audit_id(design: Any) -> str:
+    """Return the next AUD-NNN id by finding max(existing) + 1.
+
+    Public utility for any module that needs to generate an audit entry ID
+    without going through write_audit_record (ADP-SPEC-023 Move B).
+    Uses max-based logic so it is safe when prior entries exist in the database.
+    """
+    max_n = 0
+    for entry in (design.audit_log or []):
+        m = _AUD_ID_RE.match(entry.id)
+        if m:
+            max_n = max(max_n, int(m.group(1)))
+    return f"AUD-{(max_n + 1):03d}"
 
 
 @dataclass

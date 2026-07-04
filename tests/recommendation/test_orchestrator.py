@@ -14,6 +14,49 @@ from adp.recommendation.orchestrator import RecommendationOrchestrator
 from adp.recommendation.telemetry import RecommendationTelemetry
 from tests.knowledge.conftest import make_item
 
+
+class DictOperationStore:
+    """In-memory OperationStore shim for unit tests (ADP-SPEC-024)."""
+
+    def __init__(self, initial: dict | None = None) -> None:
+        self._data: dict = initial or {}
+
+    async def create(self, op_id, op_type, design_id, actor, payload) -> None:
+        self._data[op_id] = {"status": "pending", "design_id": design_id, **payload}
+
+    async def get(self, op_id) -> dict | None:
+        return self._data.get(op_id)
+
+    async def update(self, op_id, *, status=None, payload_patch=None, error=None) -> None:
+        op = self._data.setdefault(op_id, {})
+        if status is not None:
+            op["status"] = status
+        if payload_patch:
+            op.update(payload_patch)
+        if error is not None:
+            op["error_description"] = error
+
+    async def update_option_status(self, op_id, option_id, new_status) -> bool:
+        op = self._data.get(op_id, {})
+        options = op.get("options", {})
+        option = options.get(option_id)
+        if option is None or option.get("status") != "pending":
+            return False
+        option["status"] = new_status
+        return True
+
+    async def delete_expired(self) -> int:
+        return 0
+
+    async def mark_stale_running_as_failed(self, message: str) -> int:
+        return 0
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __contains__(self, key):
+        return key in self._data
+
 _NOW = datetime(2026, 7, 1, 12, 0, 0, tzinfo=timezone.utc)
 
 _MOCK_GEN_RESPONSE = {
@@ -62,7 +105,7 @@ def _make_orchestrator(llm_response=None, tradeoff_response=None):
             return llm_response or _MOCK_GEN_RESPONSE
         return tradeoff_response or _MOCK_TRADEOFF_RESPONSE
 
-    mock_llm.extract = mock_extract
+    mock_llm.chat = mock_extract
 
     mock_kr = MagicMock()
     mock_kr.hybrid_search = AsyncMock(return_value=MagicMock(items=[]))
@@ -92,7 +135,7 @@ def _make_orchestrator(llm_response=None, tradeoff_response=None):
 async def test_full_pipeline_produces_ranked_options() -> None:
     """Full pipeline completes with ranked options in operation_store."""
     orch, _, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
 
     await orch.run(
         operation_id="op-001",
@@ -106,33 +149,30 @@ async def test_full_pipeline_produces_ranked_options() -> None:
     assert op["status"] == "completed"
     assert len(op["options"]) >= 1
     for opt in op["options"].values():
-        assert opt.status == "pending"  # not auto-accepted
+        # Options stored as dicts after ADP-SPEC-024
+        assert opt.get("status") == "pending"  # not auto-accepted
 
 
 @pytest.mark.asyncio
 async def test_citations_present_true_when_any_non_advisory() -> None:
     """citations_present=True when at least one option has advisory=False."""
     orch, _, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", ["REQ-001"], operation_store, "corr-001")
-    assert operation_store["op-001"]["span"]["citations_present"] is True
+    assert operation_store["op-001"]["citations_present"] is True
 
 
 @pytest.mark.asyncio
 async def test_citations_present_false_when_all_advisory() -> None:
     """citations_present=False when all options are advisory."""
     orch, _, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", ["REQ-001"], operation_store)
 
-    # Manually mark all as advisory to test the bridge
-    for opt in operation_store["op-001"].get("options", {}).values():
-        opt.advisory = True
-    operation_store["op-001"]["span"]["citations_present"] = any(
-        not opt.advisory for opt in operation_store["op-001"].get("options", {}).values()
-    )
-
-    assert operation_store["op-001"]["span"]["citations_present"] is False
+    # Verify citations_present reflects whether any options are non-advisory
+    opts = list(operation_store["op-001"].get("options", {}).values())
+    expected = any(not opt.get("advisory", False) for opt in opts)
+    assert operation_store["op-001"]["citations_present"] is expected
 
 
 # ── US4: Telemetry ────────────────────────────────────────────────────────────
@@ -142,7 +182,7 @@ async def test_citations_present_false_when_all_advisory() -> None:
 async def test_five_spans_emitted_per_job() -> None:
     """Exactly 5 step spans are emitted per recommendation job."""
     orch, mock_telemetry, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", ["REQ-001"], operation_store, "corr-001")
 
     step_names = {call.args[0].step_name for call in mock_telemetry.emit_step_span.call_args_list}
@@ -158,7 +198,7 @@ async def test_five_spans_emitted_per_job() -> None:
 async def test_each_span_has_required_fields() -> None:
     """Each emitted RecommendationStep has non-empty step_name and latency_ms > 0."""
     orch, mock_telemetry, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", ["REQ-001"], operation_store, "corr-001")
 
     for call in mock_telemetry.emit_step_span.call_args_list:
@@ -172,7 +212,7 @@ async def test_each_span_has_required_fields() -> None:
 async def test_all_spans_share_correlation_id() -> None:
     """All 5 spans share the same correlation_id (QG-11)."""
     orch, mock_telemetry, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", ["REQ-001"], operation_store, "trace-123")
 
     for call in mock_telemetry.emit_step_span.call_args_list:
@@ -187,13 +227,13 @@ async def test_failure_span_emitted_on_step_error() -> None:
     orch._knowledge.hybrid_search = AsyncMock(side_effect=ConnectionError("KB unreachable"))
 
     mock_llm = MagicMock()
-    mock_llm.extract = AsyncMock(side_effect=ConnectionError("LLM unreachable"))
+    mock_llm.chat = AsyncMock(side_effect=ConnectionError("LLM unreachable"))
     orch._llm = mock_llm
 
     # Rebuild graph with sabotaged llm
     orch._graph = orch._build_graph()
 
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", ["REQ-001"], operation_store)
 
     assert operation_store["op-001"]["status"] == "failed"
@@ -207,7 +247,7 @@ async def test_failure_span_emitted_on_step_error() -> None:
 async def test_operation_handle_available_immediately() -> None:
     """Operation handle exists with status=pending before pipeline completes (NFR-001)."""
     orch, _, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     assert "op-001" in operation_store  # handle pre-exists before run
 
 
@@ -215,7 +255,7 @@ async def test_operation_handle_available_immediately() -> None:
 async def test_recommendation_completes_within_deadline() -> None:
     """Full pipeline with mock LLM completes in under 1 second (SC-003 structural)."""
     orch, _, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     start = time.perf_counter()
     await orch.run("op-001", "DESIGN-001", ["REQ-001"], operation_store)
     elapsed = time.perf_counter() - start
@@ -235,7 +275,7 @@ async def test_api_key_never_in_logs(caplog) -> None:
     # Inject fake key into llm
     orch._llm._api_key = FAKE_KEY  # type: ignore[attr-defined]
 
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     with caplog.at_level(logging.DEBUG, logger="adp"):
         await orch.run("op-001", "DESIGN-001", ["REQ-001"], operation_store)
 

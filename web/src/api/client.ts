@@ -1,4 +1,4 @@
-// v1 security debt: migrate to httpOnly cookies before production (ADP-SPEC-004)
+// ADP-SPEC-026: Bearer token injected from Keycloak when VITE_AUTH_ENABLED=true.
 
 export class ApiError extends Error {
   constructor(
@@ -10,14 +10,23 @@ export class ApiError extends Error {
   }
 }
 
-function getAuthHeader(): Record<string, string> {
-  const token = localStorage.getItem("adp_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
+const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED !== "false";
+
+async function getAuthHeader(): Promise<Record<string, string>> {
+  if (!AUTH_ENABLED) return {};
+  try {
+    const { getValidToken } = await import("../auth/keycloak");
+    const token = await getValidToken(30);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
+  const authHeader = await getAuthHeader();
   const res = await fetch(path, {
-    headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+    headers: { ...authHeader, "Content-Type": "application/json" },
   });
   if (!res.ok) {
     throw new ApiError(res.status, `GET ${path} failed: ${res.status}`);
@@ -30,9 +39,10 @@ export async function apiMutation<T, B = unknown>(
   path: string,
   body?: B,
 ): Promise<T> {
+  const authHeader = await getAuthHeader();
   const res = await fetch(path, {
     method,
-    headers: { ...getAuthHeader(), "Content-Type": "application/json" },
+    headers: { ...authHeader, "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {

@@ -42,7 +42,8 @@ async def test_api_key_never_in_logs(caplog: pytest.LogCaptureFixture) -> None:
         submitted_at=_NOW,
         operation_id="op-key-test",
     )
-    operation_store: dict = {"op-key-test": {"status": "pending"}}
+    from tests.intake.test_orchestrator import DictOperationStore
+    operation_store = DictOperationStore({"op-key-test": {"status": "pending"}})
 
     with caplog.at_level(logging.DEBUG, logger="adp"):
         await orchestrator.run(submission, operation_store)

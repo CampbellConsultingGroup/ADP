@@ -30,8 +30,8 @@ from adp.validation.prompts import (
 )
 
 if TYPE_CHECKING:
-    from adp.intake.llm import LLMClient
     from adp.knowledge import KnowledgeRetrieval
+    from adp.llm.client import LLMClient
     from adp.validation.telemetry import ValidationTelemetry
 
 _logger = logging.getLogger("adp.validation")

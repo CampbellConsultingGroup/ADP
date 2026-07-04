@@ -20,6 +20,52 @@ from adp.intake.models import (
 from adp.intake.orchestrator import ExtractionOrchestrator
 from adp.intake.telemetry import IntakeTelemetry
 
+
+# ── Test-only shim: wraps a plain dict as an OperationStore ──────────────────
+
+class DictOperationStore:
+    """In-memory OperationStore shim for unit tests (ADP-SPEC-024)."""
+
+    def __init__(self, initial: dict | None = None) -> None:
+        self._data: dict = initial or {}
+
+    async def create(self, op_id, op_type, design_id, actor, payload) -> None:
+        self._data[op_id] = {"status": "pending", "design_id": design_id, **payload}
+
+    async def get(self, op_id) -> dict | None:
+        return self._data.get(op_id)
+
+    async def update(self, op_id, *, status=None, payload_patch=None, error=None) -> None:
+        op = self._data.setdefault(op_id, {})
+        if status is not None:
+            op["status"] = status
+        if payload_patch:
+            op.update(payload_patch)
+        if error is not None:
+            op["error_description"] = error
+
+    async def update_option_status(self, op_id, option_id, new_status) -> bool:
+        op = self._data.get(op_id, {})
+        options = op.get("options", {})
+        option = options.get(option_id)
+        if option is None or option.get("status") != "pending":
+            return False
+        option["status"] = new_status
+        return True
+
+    async def delete_expired(self) -> int:
+        return 0
+
+    async def mark_stale_running_as_failed(self, message: str) -> int:
+        return 0
+
+    # Dict-style access for test assertions
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __contains__(self, key):
+        return key in self._data
+
 _NOW = datetime(2026, 7, 1, 12, 0, 0, tzinfo=timezone.utc)
 
 _MOCK_LLM_RESPONSE = {
@@ -85,7 +131,7 @@ def _make_orchestrator(llm_response: dict = None) -> tuple[ExtractionOrchestrato
 async def test_orchestrator_run_produces_proposals() -> None:
     """Orchestrator produces proposals with correct fields (US1)."""
     orchestrator, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
 
     await orchestrator.run(_make_submission(), operation_store)
 
@@ -93,7 +139,7 @@ async def test_orchestrator_run_produces_proposals() -> None:
     assert op["status"] == "completed"
     assert len(op["proposals"]) == 2
     for proposal in op["proposals"].values():
-        assert proposal.status == ProposalStatus.PENDING
+        assert proposal.get("status") == "pending"
 
 
 def test_all_proposals_start_pending() -> None:
@@ -102,6 +148,7 @@ def test_all_proposals_start_pending() -> None:
 
     parser = LLMResponseParser()
     proposals = parser.parse(_MOCK_LLM_RESPONSE, "sub-001", "op-001")
+    # Parser returns ExtractedProposal dataclass objects — attribute access
     assert all(p.status == ProposalStatus.PENDING for p in proposals)
 
 
@@ -109,12 +156,12 @@ def test_all_proposals_start_pending() -> None:
 async def test_source_excerpt_verification_set() -> None:
     """Orchestrator sets verification_status on each proposal (FR-007)."""
     orchestrator, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
 
     await orchestrator.run(_make_submission(), operation_store)
 
     proposals = list(operation_store["op-001"]["proposals"].values())
-    assert all(p.verification_status in (VerificationStatus.VERIFIED, VerificationStatus.UNVERIFIED)
+    assert all(p.get("verification_status") in ("verified", "unverified")
                for p in proposals)
 
 
@@ -122,11 +169,11 @@ async def test_source_excerpt_verification_set() -> None:
 async def test_citations_present_true_when_any_verified() -> None:
     """citations_present=True when at least one verified proposal exists (I2 bridge)."""
     orchestrator, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     await orchestrator.run(_make_submission(), operation_store)
 
     # Both source excerpts are substrings of _SOURCE_TEXT, so at least one should be verified
-    assert operation_store["op-001"]["span"]["citations_present"] is True
+    assert operation_store["op-001"]["citations_present"] is True
 
 
 @pytest.mark.asyncio
@@ -141,17 +188,17 @@ async def test_citations_present_false_when_all_unverified() -> None:
         "usage": {"prompt_tokens": 10, "completion_tokens": 5},
     }
     orchestrator, _ = _make_orchestrator(response)
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     await orchestrator.run(_make_submission(), operation_store)
 
-    assert operation_store["op-001"]["span"]["citations_present"] is False
+    assert operation_store["op-001"]["citations_present"] is False
 
 
 @pytest.mark.asyncio
 async def test_structured_form_skips_llm() -> None:
     """structured_form mode creates a proposal without calling LLMClient.extract (FR-001)."""
     orchestrator, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
 
     submission = _make_submission(mode=SubmissionMode.STRUCTURED_FORM)
     await orchestrator.run(submission, operation_store)
@@ -161,25 +208,38 @@ async def test_structured_form_skips_llm() -> None:
     assert op["status"] == "completed"
     assert len(op["proposals"]) == 1
     proposal = list(op["proposals"].values())[0]
-    assert proposal.verification_status == VerificationStatus.VERIFIED
-    assert proposal.confidence == 1.0
+    assert proposal.get("verification_status") == "verified"
+    assert proposal.get("confidence") == 1.0
 
 
 # ── US2: Confirmation / rejection ─────────────────────────────────────────────
 
 
 def _make_design_with_proposals():  # type: ignore[return]
-    """Return (operation_store, mock_store) with 2 pending proposals."""
+    """Return (DictOperationStore, mock_store) with 2 pending proposals (serialized dicts)."""
     from adp.intake.parser import LLMResponseParser
     from adp.models import ArchitectureDescription
 
     proposals = LLMResponseParser().parse(_MOCK_LLM_RESPONSE, "sub-001", "op-001")
-    operation_store = {
-        "op-001": {
-            "status": "completed",
-            "proposals": {p.proposal_id: p for p in proposals},
+    # Serialize proposals as dicts (matching ADP-SPEC-024 storage format)
+    serialized = {
+        p.proposal_id: {
+            "proposal_id": p.proposal_id,
+            "operation_id": p.operation_id,
+            "submission_id": p.submission_id,
+            "draft_statement": p.draft_statement,
+            "kind": p.kind.value,
+            "source_excerpt": p.source_excerpt,
+            "verification_status": p.verification_status.value,
+            "confidence": p.confidence,
+            "status": p.status.value,
+            "confirmed_statement": p.confirmed_statement,
         }
+        for p in proposals
     }
+    operation_store = DictOperationStore({
+        "op-001": {"status": "completed", "proposals": serialized}
+    })
 
     design = ArchitectureDescription(
         schema_version="1.0.0", id="DESIGN-001", title="Test",
@@ -239,7 +299,7 @@ async def test_edit_confirm_uses_edited_statement() -> None:
     expected = "Revised: all requests must be authenticated."
     assert saved_design.requirements[0].description == expected
     proposal = operation_store["op-001"]["proposals"][proposal_id]
-    assert proposal.status == ProposalStatus.EDITED_CONFIRMED
+    assert proposal.get("status") == "edited_confirmed"
 
 
 @pytest.mark.asyncio
@@ -288,7 +348,7 @@ async def test_reject_proposal_does_not_add_requirement() -> None:
         assert len(saved_design.requirements) == 0
 
     proposal = operation_store["op-001"]["proposals"][proposal_id]
-    assert proposal.status == ProposalStatus.REJECTED
+    assert proposal.get("status") == "rejected"
 
 
 @pytest.mark.asyncio
@@ -297,8 +357,8 @@ async def test_confirm_rejects_empty_statement() -> None:
     orchestrator, _ = _make_orchestrator()
     operation_store, mock_store, _ = _make_design_with_proposals()
     proposal_id = list(operation_store["op-001"]["proposals"].keys())[0]
-    # Force empty draft_statement
-    operation_store["op-001"]["proposals"][proposal_id].draft_statement = ""
+    # Force empty draft_statement (proposals stored as dicts after ADP-SPEC-024)
+    operation_store["op-001"]["proposals"][proposal_id]["draft_statement"] = ""
 
     with pytest.raises(ValueError, match="non-empty"):
         await orchestrator.confirm_proposal(
@@ -321,7 +381,7 @@ async def test_confirm_rejects_empty_statement() -> None:
 async def test_span_emitted_on_success() -> None:
     """Telemetry span is emitted on successful extraction (US4 / QG-11)."""
     orchestrator, mock_telemetry = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     await orchestrator.run(_make_submission(), operation_store)
 
     mock_telemetry.emit.assert_called_once()
@@ -337,7 +397,7 @@ async def test_span_emitted_on_failure() -> None:
     orchestrator, mock_telemetry = _make_orchestrator()
     orchestrator._llm.extract = AsyncMock(side_effect=ConnectionError("unreachable"))
 
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     await orchestrator.run(_make_submission(), operation_store)
 
     mock_telemetry.emit.assert_called_once()
@@ -354,7 +414,7 @@ async def test_span_emitted_on_failure() -> None:
 async def test_operation_handle_available_immediately() -> None:
     """Operation handle exists with status=pending before extraction completes (NFR-001)."""
     orchestrator, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
 
     task = asyncio.create_task(orchestrator.run(_make_submission(), operation_store))
     # Immediately check — handle must be available
@@ -366,7 +426,7 @@ async def test_operation_handle_available_immediately() -> None:
 async def test_extraction_completes_within_deadline() -> None:
     """Full orchestrator.run with mock LLM completes well under 60 seconds (SC-003)."""
     orchestrator, _ = _make_orchestrator()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     start = time.perf_counter()
     await orchestrator.run(_make_submission(), operation_store)
     elapsed = time.perf_counter() - start

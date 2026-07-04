@@ -162,7 +162,7 @@ async def test_retrieve_step_deduplicates_by_id() -> None:
 async def test_generate_step_produces_structured_options() -> None:
     """generate_step produces SolutionOptions with grounded_on, satisfies, proposed_elements."""
     mock_llm = MagicMock()
-    mock_llm.extract = AsyncMock(return_value=_llm_generation_response(3))
+    mock_llm.chat = AsyncMock(return_value=_llm_generation_response(3))
 
     state = await generate_step(
         _base_state(retrieved_knowledge=[_make_entry("PAT-001")]),
@@ -185,7 +185,7 @@ async def test_generate_step_produces_structured_options() -> None:
 async def test_generate_step_caps_options_at_option_count() -> None:
     """Generate step truncates LLM response exceeding option_count."""
     mock_llm = MagicMock()
-    mock_llm.extract = AsyncMock(return_value=_llm_generation_response(5))
+    mock_llm.chat = AsyncMock(return_value=_llm_generation_response(5))
 
     state = await generate_step(
         _base_state(), llm=mock_llm, telemetry=_mock_telemetry(), option_count=3
@@ -209,7 +209,7 @@ async def test_generate_defaults_invalid_kind_to_component(caplog) -> None:
         "usage": {"prompt_tokens": 10, "completion_tokens": 5},
     }
     mock_llm = MagicMock()
-    mock_llm.extract = AsyncMock(return_value=bad_response)
+    mock_llm.chat = AsyncMock(return_value=bad_response)
 
     with caplog.at_level(logging.WARNING, logger="adp.recommendation"):
         state = await generate_step(
@@ -291,7 +291,7 @@ async def test_tradeoff_step_produces_entry_per_criterion() -> None:
         "usage": {"prompt_tokens": 50, "completion_tokens": 80},
     }
     mock_llm = MagicMock()
-    mock_llm.extract = AsyncMock(return_value=tradeoff_response)
+    mock_llm.chat = AsyncMock(return_value=tradeoff_response)
 
     from adp.models import Requirement
 
@@ -329,7 +329,7 @@ async def test_tradeoff_step_surfaces_does_not_meet() -> None:
         "usage": {"prompt_tokens": 10, "completion_tokens": 5},
     }
     mock_llm = MagicMock()
-    mock_llm.extract = AsyncMock(return_value=response)
+    mock_llm.chat = AsyncMock(return_value=response)
 
     from adp.models import Requirement
 
@@ -353,7 +353,7 @@ async def test_tradeoff_step_surfaces_does_not_meet() -> None:
 async def test_tradeoff_parse_failure_leaves_empty_list_not_error() -> None:
     """Trade-off parse failure sets trade_offs=[] and continues without failing."""
     mock_llm = MagicMock()
-    mock_llm.extract = AsyncMock(return_value={
+    mock_llm.chat = AsyncMock(return_value={
         "choices": [{"message": {"content": "not valid json"}}],
         "usage": {},
     })

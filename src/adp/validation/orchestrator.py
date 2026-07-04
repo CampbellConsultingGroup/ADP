@@ -39,8 +39,8 @@ from adp.validation.models import (
 from adp.validation.telemetry import ValidationTelemetry
 
 if TYPE_CHECKING:
-    from adp.intake.llm import LLMClient
     from adp.knowledge import KnowledgeRetrieval
+    from adp.llm.client import LLMClient
     from adp.store import DesignStore
 
 _logger = logging.getLogger("adp.validation")

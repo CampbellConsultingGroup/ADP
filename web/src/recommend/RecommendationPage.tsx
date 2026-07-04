@@ -1,0 +1,77 @@
+import React, { useState } from "react";
+import { useStartRecommendation, useRecommendStatus } from "../api/recommend";
+import { NavBar, type AppView } from "../shell";
+import RequirementSelector from "./RequirementSelector";
+import OptionCard from "./OptionCard";
+
+interface RecommendationPageProps {
+  designId: string;
+  onNavigate: (view: AppView) => void;
+}
+
+export default function RecommendationPage({ designId, onNavigate }: RecommendationPageProps): React.ReactElement {
+  const [operationId, setOperationId] = useState<string | null>(null);
+  const start = useStartRecommendation(designId);
+  const { data: statusData } = useRecommendStatus(designId, operationId);
+
+  const status = statusData?.status;
+  const options = statusData?.options ?? [];
+
+  const handleSubmit = (ids: string[]) => {
+    start.mutate({ requirement_ids: ids }, {
+      onSuccess: (data) => setOperationId(data.operation_id),
+    });
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "Arial, sans-serif" }}>
+      <NavBar currentView="recommend" onNavigate={onNavigate} designId={designId} />
+
+      {/* Main content */}
+      <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 900, width: "100%", margin: "0 auto" }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 4 }}>Architecture Recommendations</h2>
+        <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 20 }}>
+          Claude will analyse your requirements and suggest ranked architectural options grounded in your organisation's knowledge base.
+        </p>
+
+        {/* Requirement selector */}
+        <RequirementSelector designId={designId} onSubmit={handleSubmit} isPending={start.isPending || status === "running"} />
+
+        {/* Status indicators */}
+        {operationId && status === "running" && (
+          <div style={{ marginTop: 16, padding: 14, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 6, fontSize: 13, color: "#1D4ED8" }}>
+            ⏳ Claude is analysing your requirements and generating options...
+          </div>
+        )}
+        {operationId && status === "failed" && (
+          <div style={{ marginTop: 16, padding: 14, background: "#FEE2E2", border: "1px solid #FECACA", borderRadius: 6, fontSize: 13, color: "#B91C1C" }}>
+            ✗ Generation failed: {statusData?.error_description ?? "Unknown error"}. Check LLM configuration.
+          </div>
+        )}
+
+        {/* Options */}
+        {operationId && status === "completed" && options.length === 0 && (
+          <div style={{ marginTop: 16, padding: 14, background: "#FEF9C3", border: "1px solid #FDE68A", borderRadius: 6, fontSize: 13, color: "#92400E" }}>
+            No options were generated. This may be because the knowledge base is empty (all options would be advisory) or the LLM did not return structured output. Try again or check LLM settings.
+          </div>
+        )}
+        {operationId && status === "completed" && options.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 14 }}>
+              {statusData?.result_summary} — ranked by fit with your requirements
+            </div>
+            {options.map((opt) => (
+              <OptionCard
+                key={opt.option_id}
+                option={opt}
+                designId={designId}
+                operationId={operationId}
+                onAcceptSuccess={() => onNavigate("canvas")}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

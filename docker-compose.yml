@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: adp
+      POSTGRES_USER: adp_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-adp_pass}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U adp_user -d adp"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: .
+    environment:
+      ADP_DATABASE_URL: postgresql+asyncpg://adp_user:${POSTGRES_PASSWORD:-adp_pass}@db:5432/adp
+      ADP_LLM_ENDPOINT: ${ADP_LLM_ENDPOINT:-https://api.anthropic.com}
+      ADP_LLM_API_KEY: ${ADP_LLM_API_KEY}
+      ADP_LLM_MODEL: ${ADP_LLM_MODEL:-claude-sonnet-4-6}
+      ADP_WORKERS: ${ADP_WORKERS:-2}
+      ADP_PORT: ${ADP_PORT:-8001}
+      ADP_MAX_DESIGNS: ${ADP_MAX_DESIGNS:-1000}
+      ADP_AUTH_ENABLED: ${ADP_AUTH_ENABLED:-true}
+      ADP_KEYCLOAK_ISSUER: ${ADP_KEYCLOAK_ISSUER:-http://keycloak:8080/realms/ADPRealm}
+      ADP_KEYCLOAK_CLIENT_ID: ${ADP_KEYCLOAK_CLIENT_ID:-adp-frontend}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${ADP_PORT:-8001}:${ADP_PORT:-8001}"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
