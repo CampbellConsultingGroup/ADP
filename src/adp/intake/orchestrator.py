@@ -63,7 +63,6 @@ class ExtractionOrchestrator:
 
         operation_store is an OperationStore instance (ADP-SPEC-024).
         """
-        from adp.store.operations import OperationStore as _OpStore
 
         op_id = submission.operation_id
         await operation_store.update(op_id, status="running")
@@ -220,7 +219,7 @@ class ExtractionOrchestrator:
                 f"Proposal {proposal_id!r} is not pending (status={p_status})"
             )
 
-        draft = proposal.get("draft_statement") if isinstance(proposal, dict) else proposal.draft_statement
+        draft = proposal.get("draft_statement") if isinstance(proposal, dict) else proposal.draft_statement  # noqa: E501
         statement = edited_statement or draft
         if not statement or not statement.strip():
             raise ValueError("Requirement statement must be non-empty (NFR-002)")
@@ -266,10 +265,9 @@ class ExtractionOrchestrator:
             proposals[proposal_id] = {**proposal, **proposal_update}
         else:
             # Legacy path (should not occur in production after ADP-SPEC-024)
-            import dataclasses as _dc
             proposal_dict = {
                 "proposal_id": proposal.proposal_id, "operation_id": proposal.operation_id,
-                "submission_id": proposal.submission_id, "draft_statement": proposal.draft_statement,
+                "submission_id": proposal.submission_id, "draft_statement": proposal.draft_statement,  # noqa: E501
                 "kind": proposal.kind.value, "source_excerpt": proposal.source_excerpt,
                 "verification_status": proposal.verification_status.value,
                 "confidence": proposal.confidence, "status": proposal.status.value,
@@ -316,7 +314,7 @@ class ExtractionOrchestrator:
         else:
             proposals[proposal_id] = {
                 "proposal_id": proposal.proposal_id, "operation_id": proposal.operation_id,
-                "submission_id": proposal.submission_id, "draft_statement": proposal.draft_statement,
+                "submission_id": proposal.submission_id, "draft_statement": proposal.draft_statement,  # noqa: E501
                 "kind": proposal.kind.value, "source_excerpt": proposal.source_excerpt,
                 "verification_status": proposal.verification_status.value,
                 "confidence": proposal.confidence, "status": "rejected",

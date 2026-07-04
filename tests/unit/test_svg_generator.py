@@ -34,7 +34,7 @@ def test_design_to_svg_contains_theme_fill_color(theme):
     from adp.renderer.svg import design_to_svg
 
     design = _make_design([
-        {"id": "ELM-001", "name": "API Gateway", "kind": "container", "satisfies": [], "provenance": None},
+        {"id": "ELM-001", "name": "API Gateway", "kind": "container", "satisfies": [], "provenance": None},  # noqa: E501
     ])
     svg = design_to_svg(design, theme, "container")
 
@@ -48,10 +48,10 @@ def test_two_designs_render_identical_element_colors(theme):
     from adp.renderer.svg import design_to_svg
 
     design1 = _make_design([
-        {"id": "ELM-001", "name": "Alpha Gateway", "kind": "container", "satisfies": [], "provenance": None},
+        {"id": "ELM-001", "name": "Alpha Gateway", "kind": "container", "satisfies": [], "provenance": None},  # noqa: E501
     ])
     design2 = _make_design([
-        {"id": "ELM-002", "name": "Beta Gateway", "kind": "container", "satisfies": [], "provenance": None},
+        {"id": "ELM-002", "name": "Beta Gateway", "kind": "container", "satisfies": [], "provenance": None},  # noqa: E501
     ])
     svg1 = design_to_svg(design1, theme, "container")
     svg2 = design_to_svg(design2, theme, "container")
@@ -75,10 +75,10 @@ def test_same_kind_same_output_regardless_of_content(theme):
     from adp.renderer.svg import design_to_svg
 
     design_a = _make_design([
-        {"id": "ELM-001", "name": "Service Alpha", "kind": "container", "satisfies": [], "provenance": None},
+        {"id": "ELM-001", "name": "Service Alpha", "kind": "container", "satisfies": [], "provenance": None},  # noqa: E501
     ])
     design_b = _make_design([
-        {"id": "ELM-002", "name": "Service Beta", "kind": "container", "satisfies": [], "provenance": None},
+        {"id": "ELM-002", "name": "Service Beta", "kind": "container", "satisfies": [], "provenance": None},  # noqa: E501
     ])
     svg_a = design_to_svg(design_a, theme, "container")
     svg_b = design_to_svg(design_b, theme, "container")
@@ -99,7 +99,7 @@ def test_svg_all_four_element_kinds_use_theme_colors(theme):
     }
     for kind, (fill, level) in expected.items():
         design = _make_design([
-            {"id": "ELM-001", "name": f"Test {kind}", "kind": kind, "satisfies": [], "provenance": None},
+            {"id": "ELM-001", "name": f"Test {kind}", "kind": kind, "satisfies": [], "provenance": None},  # noqa: E501
         ])
         svg = design_to_svg(design, theme, level)
         assert fill in svg, f"Expected fill {fill} for kind {kind!r} not found in SVG"

@@ -16,7 +16,6 @@ from adp.auth.models import TokenExpiredError, TokenValidationError
 from adp.auth.tokens import JwksCache, _map_groups_to_role, decode_token
 from adp.authz.roles import PersonaRole
 
-
 # ── Test RSA key pair fixture ─────────────────────────────────────────────────
 
 @pytest.fixture(scope="module")

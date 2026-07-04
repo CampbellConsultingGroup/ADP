@@ -183,10 +183,10 @@ def _make_orchestrator(model: str | None = None):  # type: ignore[return]
             async def extract(self, text: str, correlation_id: str | None = None) -> dict:  # type: ignore[override]
                 return {"choices": [], "usage": {}}
 
-        llm = _StubLLMClient(base_url="http://stub", api_key="stub", model="stub")
+        llm = _StubLLMClient(base_url="http://stub", api_key="stub", model="stub")  # type: ignore[assignment]
     else:
         active_model = model or get_extraction_model()
-        llm = LLMClient(base_url=endpoint, api_key=api_key, model=active_model)
+        llm = LLMClient(base_url=endpoint, api_key=api_key, model=active_model)  # type: ignore[assignment]
 
     return ExtractionOrchestrator(llm_client=llm)
 

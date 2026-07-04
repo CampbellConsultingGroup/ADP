@@ -15,11 +15,11 @@ def _make_design(**kwargs) -> ArchitectureDescription:  # type: ignore[return]
         created_at="2026-07-02T00:00:00Z",
         updated_at="2026-07-02T00:00:00Z",
         elements=[
-            Element.model_validate({"id": "ELM-001", "name": "API Gateway", "kind": "container", "satisfies": ["REQ-001"], "provenance": "OPT-001"}),
-            Element.model_validate({"id": "ELM-002", "name": "User", "kind": "person", "satisfies": [], "provenance": None}),
+            Element.model_validate({"id": "ELM-001", "name": "API Gateway", "kind": "container", "satisfies": ["REQ-001"], "provenance": "OPT-001"}),  # noqa: E501
+            Element.model_validate({"id": "ELM-002", "name": "User", "kind": "person", "satisfies": [], "provenance": None}),  # noqa: E501
         ],
         requirements=[
-            Requirement.model_validate({"id": "REQ-001", "title": "Stateless handling", "description": "The system must handle requests statelessly."}),
+            Requirement.model_validate({"id": "REQ-001", "title": "Stateless handling", "description": "The system must handle requests statelessly."}),  # noqa: E501
         ],
         relationships=[],
     )

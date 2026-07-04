@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import json
-import re
-from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
 
-from adp.models import ArchitectureDescription, Element
+from adp.models import ArchitectureDescription
 
 
 def _make_design(design_id: str = "D-001") -> ArchitectureDescription:
@@ -20,7 +18,7 @@ def _make_design(design_id: str = "D-001") -> ArchitectureDescription:
         "title": "Test Design",
         "created_at": "2026-07-02T00:00:00Z",
         "updated_at": "2026-07-02T00:00:00Z",
-        "elements": [{"id": "ELM-001", "name": "API", "kind": "container", "satisfies": [], "provenance": None}],
+        "elements": [{"id": "ELM-001", "name": "API", "kind": "container", "satisfies": [], "provenance": None}],  # noqa: E501
         "requirements": [],
         "relationships": [],
     })
@@ -48,7 +46,7 @@ def client(tmp_path):
 
 def test_export_without_confirmation_returns_422(client):
     c, _ = client
-    resp = c.post("/api/v1/designs/D-001/export", json={"confirmation_id": "", "export_root": "/tmp/test"})
+    resp = c.post("/api/v1/designs/D-001/export", json={"confirmation_id": "", "export_root": "/tmp/test"})  # noqa: E501
     assert resp.status_code == 422
     body = json.dumps(resp.json())
     assert "confirmation_id" in body.lower() or "consequential" in body.lower()

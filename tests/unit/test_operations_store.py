@@ -6,7 +6,6 @@ Uses in-memory SQLite via aiosqlite — no PostgreSQL required.
 from __future__ import annotations
 
 import asyncio
-import json
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -90,7 +89,6 @@ def test_delete_expired_removes_old_rows(store):
 
     # Manually set expires_at for the expired one
     async def _force_expiry():
-        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
         async with store._session_factory() as session:
             await session.execute(sa.text(
                 "UPDATE operations SET expires_at = :ts WHERE id = 'OP-EXPIRED'"

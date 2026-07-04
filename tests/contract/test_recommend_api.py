@@ -6,21 +6,18 @@ T016-T019 (US2): POST /accept, confirmation gate, advisory gate, 409
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from adp.models import ArchitectureDescription, Requirement
+from adp.models import ArchitectureDescription, ElementKind
 from adp.recommendation.models import (
     ProposedElement,
-    RecommendationState,
     SolutionOption,
     TradeOffEntry,
     TradeOffStance,
 )
-from adp.models import ElementKind
 
 
 def _make_design(design_id: str = "D-001") -> ArchitectureDescription:
@@ -47,7 +44,7 @@ def _make_pending_option(option_id: str = "OPT-001", advisory: bool = False) -> 
         rationale="Addresses scalability via horizontal scaling.",
         advisory=advisory,
         satisfies=["REQ-001"],
-        trade_offs=[TradeOffEntry(criterion="Scalability", stance=TradeOffStance.MEETS, rationale="...")],
+        trade_offs=[TradeOffEntry(criterion="Scalability", stance=TradeOffStance.MEETS, rationale="...")],  # noqa: E501
         proposed_elements=[
             ProposedElement(name="API Gateway", kind=ElementKind.CONTAINER, satisfies=["REQ-001"])
         ],
@@ -133,7 +130,7 @@ def test_recommend_status_nonexistent_operation_returns_404(client):
 
 # ── US2 tests ─────────────────────────────────────────────────────────────────
 
-def _seed_operation(mock_op_store, option_id: str = "OPT-001", advisory: bool = False, already_accepted: bool = False) -> str:
+def _seed_operation(mock_op_store, option_id: str = "OPT-001", advisory: bool = False, already_accepted: bool = False) -> str:  # noqa: E501
     """Configure mock OperationStore to return an operation with one serialized option."""
     from adp.api.routers.recommend import _option_to_dict
     op_id = "OP-TEST-001"
@@ -208,7 +205,7 @@ def test_accept_with_reason_includes_reason_in_response(client):
     op_id = _seed_operation(op_store)
     resp = c.post(
         f"/api/v1/designs/D-001/recommend/{op_id}/options/OPT-001/accept",
-        json={"confirmation_id": "CONF-TEST", "advisory_acknowledged": False, "acceptance_reason": "Aligns with our standard"},
+        json={"confirmation_id": "CONF-TEST", "advisory_acknowledged": False, "acceptance_reason": "Aligns with our standard"},  # noqa: E501
     )
     assert resp.status_code == 200
     assert resp.json()["option_id"] == "OPT-001"

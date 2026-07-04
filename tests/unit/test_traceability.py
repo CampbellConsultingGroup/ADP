@@ -22,7 +22,7 @@ def test_matrix_contains_all_elements():
     from adp.docs.traceability import TraceabilityGenerator
 
     design = _make_design([
-        {"id": "ELM-001", "name": "A", "kind": "container", "satisfies": ["REQ-001"], "provenance": None},
+        {"id": "ELM-001", "name": "A", "kind": "container", "satisfies": ["REQ-001"], "provenance": None},  # noqa: E501
         {"id": "ELM-002", "name": "B", "kind": "person", "satisfies": [], "provenance": None},
         {"id": "ELM-003", "name": "C", "kind": "system", "satisfies": [], "provenance": None},
     ])
@@ -38,7 +38,7 @@ def test_orphan_elements_flagged():
     from adp.docs.traceability import TraceabilityGenerator
 
     design = _make_design([
-        {"id": "ELM-001", "name": "A", "kind": "container", "satisfies": ["REQ-001"], "provenance": None},
+        {"id": "ELM-001", "name": "A", "kind": "container", "satisfies": ["REQ-001"], "provenance": None},  # noqa: E501
         {"id": "ELM-002", "name": "B", "kind": "person", "satisfies": [], "provenance": None},
     ])
     result = TraceabilityGenerator().generate(design)
@@ -54,7 +54,7 @@ def test_matrix_is_deterministic():
 
     design = _make_design([
         {"id": "ELM-002", "name": "B", "kind": "person", "satisfies": [], "provenance": None},
-        {"id": "ELM-001", "name": "A", "kind": "container", "satisfies": ["REQ-001"], "provenance": None},
+        {"id": "ELM-001", "name": "A", "kind": "container", "satisfies": ["REQ-001"], "provenance": None},  # noqa: E501
     ])
     gen = TraceabilityGenerator()
     r1 = gen.generate(design)
@@ -69,7 +69,7 @@ def test_provenance_captured():
     from adp.docs.traceability import TraceabilityGenerator
 
     design = _make_design([
-        {"id": "ELM-001", "name": "A", "kind": "container", "satisfies": ["REQ-001"], "provenance": "OPT-001"},
+        {"id": "ELM-001", "name": "A", "kind": "container", "satisfies": ["REQ-001"], "provenance": "OPT-001"},  # noqa: E501
     ])
     result = TraceabilityGenerator().generate(design)
     assert result.entries[0].provenance == "OPT-001"

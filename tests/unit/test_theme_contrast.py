@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import pytest
-
 from adp.theme.contrast import compute_contrast_ratio
 from adp.theme.loader import ThemeLoader
-
 
 # T031 — known-value tests for the WCAG formula
 

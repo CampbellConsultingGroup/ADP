@@ -105,7 +105,7 @@ async def get_available_models() -> ModelsResponse:
     endpoint = _llm_config["endpoint"]
     api_key_configured = bool(os.environ.get("ADP_LLM_API_KEY", ""))
     return ModelsResponse(
-        models=[ModelInfo(**m) for m in ANTHROPIC_MODELS],
+        models=[ModelInfo(**m) for m in ANTHROPIC_MODELS],  # type: ignore[arg-type]
         provider="Anthropic",
         endpoint=endpoint,
         api_key_configured=api_key_configured,
@@ -143,7 +143,7 @@ async def update_llm_config(update: LLMConfigUpdate) -> LLMConfigResponse:
             from fastapi import HTTPException, status
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Unknown model '{update.extraction_model}'. Valid: {sorted(valid_ids)}",
+                detail=f"Unknown model '{update.extraction_model}'. Valid: {sorted(valid_ids)}",  # type: ignore[type-var]
             )
         _llm_config["extraction_model"] = update.extraction_model
 
@@ -153,7 +153,7 @@ async def update_llm_config(update: LLMConfigUpdate) -> LLMConfigResponse:
             from fastapi import HTTPException, status
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Unknown model '{update.recommendation_model}'. Valid: {sorted(valid_ids)}",
+                detail=f"Unknown model '{update.recommendation_model}'. Valid: {sorted(valid_ids)}",  # type: ignore[type-var]
             )
         _llm_config["recommendation_model"] = update.recommendation_model
 

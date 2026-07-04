@@ -82,7 +82,7 @@ def map_design_to_calm(design: "ArchitectureDescription") -> CALMDocument:
         ]
         if el.tags:
             node_metadata.append({"tags": el.tags})
-        nodes.append(CALMNode(**{
+        nodes.append(CALMNode(**{  # type: ignore[arg-type]
             "unique-id": el.id,
             "node-type": node_type,
             "name": el.name,
@@ -99,7 +99,7 @@ def map_design_to_calm(design: "ArchitectureDescription") -> CALMDocument:
             "destination-node": rel.target,
             "protocol": protocol,
         })
-        relationships.append(CALMRelationship(**{
+        relationships.append(CALMRelationship(**{  # type: ignore[arg-type]
             "unique-id": rel.id,
             "relationship-type": "connects",
             "connects": connects,

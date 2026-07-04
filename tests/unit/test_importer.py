@@ -6,7 +6,7 @@ import json
 
 import pytest
 
-from adp.models import ArchitectureDescription, SCHEMA_VERSION
+from adp.models import SCHEMA_VERSION, ArchitectureDescription
 
 
 def _make_valid_dict(design_id: str = "D-001") -> dict:  # type: ignore[return]
@@ -17,7 +17,7 @@ def _make_valid_dict(design_id: str = "D-001") -> dict:  # type: ignore[return]
         "created_at": "2026-07-02T00:00:00Z",
         "updated_at": "2026-07-02T00:00:00Z",
         "elements": [
-            {"id": "ELM-001", "name": "API", "kind": "container", "satisfies": [], "provenance": None},
+            {"id": "ELM-001", "name": "API", "kind": "container", "satisfies": [], "provenance": None},  # noqa: E501
         ],
         "requirements": [],
         "relationships": [],
@@ -59,8 +59,9 @@ def test_import_malformed_json_rejected():
 
 
 def test_import_invalid_schema_field_rejected():
-    from adp.export.importer import DesignImporter
     import pydantic
+
+    from adp.export.importer import DesignImporter
 
     data = _make_valid_dict()
     data["unknown_extra_field"] = "boom"  # extra fields forbidden by ArchitectureDescription

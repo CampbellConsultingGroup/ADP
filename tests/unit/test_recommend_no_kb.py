@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from adp.recommendation.models import SolutionOption
 
 
@@ -20,13 +18,14 @@ def test_generation_prompt_with_kb_includes_knowledge():
     """With KB entries, the prompt includes the knowledge and grounding instruction."""
     from adp.recommendation.prompts import generation_user_prompt
 
-    prompt = generation_user_prompt("REQ-001: Scalability", "KB-001: Microservices", 3, has_knowledge=True)
+    prompt = generation_user_prompt("REQ-001: Scalability", "KB-001: Microservices", 3, has_knowledge=True)  # noqa: E501
     assert "KB-001" in prompt
 
 
 async def test_validate_citations_requirements_only_not_advisory():
     """Options with knowledge_source='requirements_only' must NOT be marked advisory (T003)."""
     from unittest.mock import AsyncMock, MagicMock
+
     from adp.recommendation.steps import validate_citations_step
 
     opt = SolutionOption(
@@ -46,7 +45,7 @@ async def test_validate_citations_requirements_only_not_advisory():
         "correlation_id": None,
     }
     from adp.recommendation.telemetry import RecommendationTelemetry
-    result = await validate_citations_step(state, knowledge_retrieval=mock_kr, telemetry=RecommendationTelemetry())
+    result = await validate_citations_step(state, knowledge_retrieval=mock_kr, telemetry=RecommendationTelemetry())  # noqa: E501
     validated = result["validated_options"]
     assert len(validated) == 1
     assert validated[0].advisory is False, "requirements_only options must never be marked advisory"

@@ -59,10 +59,10 @@ def test_sc001_recommend_submit_returns_within_2s(client):
     """
     fast_chat = AsyncMock(return_value=_fast_llm_response())
 
-    with patch("adp.recommendation.steps.LLMClient.chat" if False else "adp.intake.llm.LLMClient.chat",
+    with patch("adp.recommendation.steps.LLMClient.chat" if False else "adp.intake.llm.LLMClient.chat",  # noqa: E501
                fast_chat, create=True):
         t0 = time.perf_counter()
-        resp = client.post("/api/v1/designs/D-PERF/recommend", json={"requirement_ids": ["REQ-001"]})
+        resp = client.post("/api/v1/designs/D-PERF/recommend", json={"requirement_ids": ["REQ-001"]})  # noqa: E501
         elapsed = time.perf_counter() - t0
 
     assert resp.status_code == 202, f"Expected 202, got {resp.status_code}: {resp.text}"

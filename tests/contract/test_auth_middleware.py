@@ -5,7 +5,6 @@ Tests use ADP_AUTH_ENABLED=true with a mocked decode_token to avoid needing a li
 
 from __future__ import annotations
 
-import time
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -88,7 +87,7 @@ def test_request_without_token_returns_401(auth_client):
 def test_request_with_valid_token_returns_200(auth_client):
     user = _make_user()
     with patch("adp.auth.middleware.decode_token", new_callable=AsyncMock, return_value=user):
-        resp = auth_client.get("/api/v1/designs", headers={"Authorization": "Bearer valid.token.here"})
+        resp = auth_client.get("/api/v1/designs", headers={"Authorization": "Bearer valid.token.here"})  # noqa: E501
     assert resp.status_code == 200
 
 

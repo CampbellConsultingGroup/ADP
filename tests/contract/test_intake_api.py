@@ -7,23 +7,21 @@ Uses TestClient with mocked DesignStore — no database required.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from adp.models import ArchitectureDescription, Element, Requirement
 from adp.intake.models import (
     ExtractedProposal,
     ProposalStatus,
     RequirementKind,
-    SubmissionMode,
     VerificationStatus,
 )
+from adp.models import ArchitectureDescription
 
 
-def _make_design(design_id: str = "D-001", requirements: list | None = None) -> ArchitectureDescription:
+def _make_design(design_id: str = "D-001", requirements: list | None = None) -> ArchitectureDescription:  # noqa: E501
     return ArchitectureDescription.model_validate({
         "schema_version": "1.0.0",
         "id": design_id,
@@ -36,7 +34,7 @@ def _make_design(design_id: str = "D-001", requirements: list | None = None) -> 
     })
 
 
-def _make_proposal(proposal_id: str = "PROP-001", status: ProposalStatus = ProposalStatus.PENDING) -> ExtractedProposal:
+def _make_proposal(proposal_id: str = "PROP-001", status: ProposalStatus = ProposalStatus.PENDING) -> ExtractedProposal:  # noqa: E501
     return ExtractedProposal(
         proposal_id=proposal_id,
         operation_id="OP-001",
@@ -149,7 +147,6 @@ def _seed_operation(
     op_id = "OP-TEST-001"
     proposal = _make_proposal(proposal_id=proposal_id, status=status)
     # Proposals stored as serialized dicts in the persistent store
-    import dataclasses
     mock_op_store.get = AsyncMock(return_value={
         "id": op_id,
         "status": "completed",

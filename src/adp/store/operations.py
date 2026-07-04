@@ -122,7 +122,7 @@ class OperationStore:
                 params["error"] = error
 
             await session.execute(
-                sa.text(f"UPDATE operations SET {', '.join(sets)} WHERE id = :id"),  # noqa: S608
+                sa.text(f"UPDATE operations SET {', '.join(sets)} WHERE id = :id"),  # nosec B608 - sets contains only hardcoded column names, not user input
                 params,
             )
             await session.commit()

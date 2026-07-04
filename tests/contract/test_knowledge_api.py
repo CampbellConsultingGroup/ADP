@@ -6,14 +6,12 @@ is overridden with an in-memory SQLite database per test.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
 import pytest
 import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-from adp.knowledge.index import knowledge_items
 
 
 async def _create_tables(engine):
