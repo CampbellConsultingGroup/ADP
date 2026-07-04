@@ -1,20 +1,13 @@
 import React, { useState } from "react";
 import { useStartRecommendation, useRecommendStatus } from "../api/recommend";
+import { NavBar, type AppView } from "../shell";
 import RequirementSelector from "./RequirementSelector";
 import OptionCard from "./OptionCard";
 
 interface RecommendationPageProps {
   designId: string;
-  onNavigate: (view: "canvas" | "intake" | "recommend") => void;
+  onNavigate: (view: AppView) => void;
 }
-
-type NavView = "canvas" | "intake" | "recommend";
-
-const NAV_ITEMS: { view: NavView; label: string }[] = [
-  { view: "intake", label: "Intake" },
-  { view: "recommend", label: "Recommendations" },
-  { view: "canvas", label: "Canvas" },
-];
 
 export default function RecommendationPage({ designId, onNavigate }: RecommendationPageProps): React.ReactElement {
   const [operationId, setOperationId] = useState<string | null>(null);
@@ -32,29 +25,7 @@ export default function RecommendationPage({ designId, onNavigate }: Recommendat
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "Arial, sans-serif" }}>
-      {/* Header with three-view nav */}
-      <div style={{ display: "flex", alignItems: "center", gap: 0, padding: "0 16px", background: "#1168BD", color: "#fff", flexShrink: 0 }}>
-        <span style={{ fontWeight: 700, fontSize: 15, marginRight: 20, padding: "12px 0" }}>ADP</span>
-        {NAV_ITEMS.map(({ view, label }) => (
-          <button
-            key={view}
-            onClick={() => onNavigate(view)}
-            style={{
-              padding: "12px 18px",
-              background: view === "recommend" ? "rgba(255,255,255,0.2)" : "transparent",
-              color: "#fff",
-              border: "none",
-              borderBottom: view === "recommend" ? "3px solid #fff" : "3px solid transparent",
-              cursor: "pointer",
-              fontSize: 14,
-              fontWeight: view === "recommend" ? 600 : 400,
-            }}
-          >
-            {label}
-          </button>
-        ))}
-        <span style={{ fontSize: 13, opacity: 0.7, marginLeft: "auto", padding: "12px 0" }}>{designId}</span>
-      </div>
+      <NavBar currentView="recommend" onNavigate={onNavigate} designId={designId} />
 
       {/* Main content */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 900, width: "100%", margin: "0 auto" }}>

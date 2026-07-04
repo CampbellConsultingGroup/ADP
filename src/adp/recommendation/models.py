@@ -60,6 +60,8 @@ class SolutionOption:
     status: str = "pending"
     accepted_by: str | None = None
     accepted_at: datetime | None = None
+    # ADP-SPEC-019: "knowledge_base" when KB had entries; "requirements_only" when KB was empty
+    knowledge_source: str = "knowledge_base"
 
 
 @dataclass

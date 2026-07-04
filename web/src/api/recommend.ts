@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
 
 export type RecommendStatus = "pending" | "running" | "completed" | "failed";
-export type OptionStatus = "pending" | "accepted";
+export type OptionStatus = "pending" | "accepted" | "rejected";
 export type TradeOffStance = "meets" | "partially_meets" | "does_not_meet";
 
 export interface RecommendRequest {
@@ -37,6 +37,7 @@ export interface SolutionOption {
   grounded_on: string[];
   ranking_score: number;
   status: OptionStatus;
+  knowledge_source: string;  // ADP-SPEC-019: "knowledge_base" | "requirements_only"
 }
 
 export interface RecommendStatusResponse {
@@ -51,6 +52,11 @@ export interface RecommendStatusResponse {
 export interface AcceptOptionRequest {
   confirmation_id: string;
   advisory_acknowledged: boolean;
+  acceptance_reason?: string;  // ADP-SPEC-019: optional reason stored in KB
+}
+
+export interface RejectOptionRequest {
+  rejection_reason: string;  // ADP-SPEC-019: required reason stored as KB anti-pattern
 }
 
 export interface ElementSummary {
@@ -100,15 +106,34 @@ export function useAcceptOption(designId: string, operationId: string) {
     Error,
     { optionId: string } & AcceptOptionRequest
   >({
-    mutationFn: ({ optionId, confirmation_id, advisory_acknowledged }) =>
+    mutationFn: ({ optionId, confirmation_id, advisory_acknowledged, acceptance_reason }) =>
       apiMutation<AcceptOptionResponse, AcceptOptionRequest>(
         "POST",
         `/api/v1/designs/${designId}/recommend/${operationId}/options/${optionId}/accept`,
-        { confirmation_id, advisory_acknowledged },
+        { confirmation_id, advisory_acknowledged, acceptance_reason },
       ),
     onSuccess: () => {
       // Refresh design so canvas shows the new elements
       void qc.invalidateQueries({ queryKey: ["design", designId] });
+    },
+  });
+}
+
+export function useRejectOption(designId: string, operationId: string) {
+  const qc = useQueryClient();
+  return useMutation<
+    { option_id: string; status: string },
+    Error,
+    { optionId: string } & RejectOptionRequest
+  >({
+    mutationFn: ({ optionId, rejection_reason }) =>
+      apiMutation<{ option_id: string; status: string }, RejectOptionRequest>(
+        "POST",
+        `/api/v1/designs/${designId}/recommend/${operationId}/options/${optionId}/reject`,
+        { rejection_reason },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["recommend-status", designId, operationId] });
     },
   });
 }

@@ -11,6 +11,7 @@ interface AcceptDialogProps {
 
 export default function AcceptDialog({ option, onConfirm, onCancel, isPending }: AcceptDialogProps): React.ReactElement {
   const [advisoryChecked, setAdvisoryChecked] = useState(false);
+  const [acceptanceReason, setAcceptanceReason] = useState("");
 
   const canConfirm = !isPending && (!option.advisory || advisoryChecked);
 
@@ -40,6 +41,29 @@ export default function AcceptDialog({ option, onConfirm, onCancel, isPending }:
           These elements can be edited on the canvas after acceptance.
         </p>
 
+        {/* ADP-SPEC-019: optional acceptance reason saved to KB */}
+        <div style={{ marginBottom: 16 }}>
+          <p style={{ margin: "0 0 6px", fontSize: 13, color: "#374151", fontWeight: 600 }}>
+            Acceptance reason <span style={{ color: "#6B7280", fontWeight: 400 }}>(optional)</span>
+          </p>
+          <textarea
+            value={acceptanceReason}
+            onChange={(e) => setAcceptanceReason(e.target.value)}
+            placeholder="Why are you accepting this recommendation? (stored in knowledge base)"
+            rows={3}
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              fontSize: 13,
+              borderRadius: 6,
+              border: "1px solid #D1D5DB",
+              resize: "vertical",
+              boxSizing: "border-box",
+              fontFamily: "inherit",
+            }}
+          />
+        </div>
+
         {/* Advisory acknowledgement checkbox — required for advisory options (ART-VII) */}
         {option.advisory && (
           <div style={{ marginBottom: 16, padding: 12, background: "#FEF9C3", border: "1px solid #FDE68A", borderRadius: 6 }}>
@@ -67,7 +91,11 @@ export default function AcceptDialog({ option, onConfirm, onCancel, isPending }:
             Cancel
           </button>
           <button
-            onClick={() => onConfirm({ confirmation_id: `CONFIRM-${option.option_id}`, advisory_acknowledged: advisoryChecked })}
+            onClick={() => onConfirm({
+              confirmation_id: `CONFIRM-${option.option_id}`,
+              advisory_acknowledged: advisoryChecked,
+              acceptance_reason: acceptanceReason.trim() || undefined,
+            })}
             disabled={!canConfirm}
             style={{ padding: "8px 18px", background: canConfirm ? "#166534" : "#D1D5DB", color: "#fff", border: "none", borderRadius: 4, cursor: canConfirm ? "pointer" : "not-allowed", fontSize: 14, fontWeight: 600 }}
           >

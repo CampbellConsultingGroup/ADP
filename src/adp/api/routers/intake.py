@@ -18,7 +18,6 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from adp.intake.models import (
     IntakeSubmission,
-    ProposalStatus,
     RequirementKind,
     SubmissionMode,
 )
@@ -27,10 +26,6 @@ from adp.telemetry.context import get_trace_id
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/designs", tags=["intake"])
-
-# In-process operation store: keyed by operation_id (same pattern as ADP-SPEC-003).
-# Operations are transient — lost on process restart. TTL 24h (not enforced in v1).
-_intake_store: dict[str, Any] = {}
 
 
 # ── Pydantic v2 request / response models ─────────────────────────────────────
@@ -148,12 +143,22 @@ class RequirementListResponse(BaseModel):
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 
 def _get_actor(request: Request) -> str:
+    """Return actor identity: authenticated user if available, else X-Actor header."""
+    from adp.auth.models import UNAUTHENTICATED_USER
+    user = getattr(request.state, "user", UNAUTHENTICATED_USER)
+    if user is not UNAUTHENTICATED_USER:
+        return user.username
     return request.headers.get("X-Actor", "architect")
 
 
 async def _get_design_store():  # type: ignore[return]
     from adp.api.deps import get_design_store
     return await get_design_store()
+
+
+async def _get_op_store():  # type: ignore[return]
+    from adp.api.deps import get_operation_store
+    return await get_operation_store()
 
 
 def _make_orchestrator(model: str | None = None):  # type: ignore[return]
@@ -166,8 +171,8 @@ def _make_orchestrator(model: str | None = None):  # type: ignore[return]
     4. claude-sonnet-4-6 default
     """
     from adp.api.routers.config import get_extraction_model
-    from adp.intake.llm import LLMClient
     from adp.intake.orchestrator import ExtractionOrchestrator
+    from adp.llm.client import LLMClient
 
     endpoint = os.environ.get("ADP_LLM_ENDPOINT", "https://api.anthropic.com")
     api_key = os.environ.get("ADP_LLM_API_KEY", "")
@@ -187,21 +192,37 @@ def _make_orchestrator(model: str | None = None):  # type: ignore[return]
 
 
 def _proposals_from_store(op: dict) -> list[ProposalResponse]:
-    from adp.intake.models import ExtractedProposal
-    proposals_dict: dict[str, ExtractedProposal] = op.get("proposals", {})
-    return [
-        ProposalResponse(
-            proposal_id=p.proposal_id,
-            draft_statement=p.draft_statement,
-            kind=p.kind.value,
-            source_excerpt=p.source_excerpt,
-            confidence=p.confidence,
-            verification_status=p.verification_status.value,
-            status=p.status.value,
-            confirmed_statement=p.confirmed_statement,
-        )
-        for p in proposals_dict.values()
-    ]
+    """Convert stored proposal dicts to ProposalResponse objects.
+
+    Proposals are stored as serialized dicts (ADP-SPEC-024).
+    """
+    proposals_raw = op.get("proposals", {})
+    result = []
+    for p in proposals_raw.values():
+        if isinstance(p, dict):
+            result.append(ProposalResponse(
+                proposal_id=p["proposal_id"],
+                draft_statement=p["draft_statement"],
+                kind=p["kind"],
+                source_excerpt=p.get("source_excerpt", ""),
+                confidence=p.get("confidence", 0.0),
+                verification_status=p.get("verification_status", "unverified"),
+                status=p.get("status", "pending"),
+                confirmed_statement=p.get("confirmed_statement"),
+            ))
+        else:
+            # Legacy in-memory path (e.g. in unit tests using raw objects)
+            result.append(ProposalResponse(
+                proposal_id=p.proposal_id,
+                draft_statement=p.draft_statement,
+                kind=p.kind.value,
+                source_excerpt=p.source_excerpt,
+                confidence=p.confidence,
+                verification_status=p.verification_status.value,
+                status=p.status.value,
+                confirmed_statement=p.confirmed_statement,
+            ))
+    return result
 
 
 # ── US1: Submit intake + poll status ──────────────────────────────────────────
@@ -217,6 +238,7 @@ async def submit_intake(
     raw_request: Request,
     background_tasks: BackgroundTasks,
     store=Depends(_get_design_store),
+    op_store=Depends(_get_op_store),
 ) -> IntakeSubmitResponse:
     """Start AI extraction from text or structured form (ADP-SPEC-014 US1 / FR-001).
 
@@ -233,15 +255,12 @@ async def submit_intake(
     correlation_id = raw_request.headers.get("X-Trace-ID", get_trace_id() or str(uuid.uuid4()))
     actor = _get_actor(raw_request)
 
-    _intake_store[operation_id] = {
-        "status": "pending",
-        "design_id": design_id,
+    await op_store.create(operation_id, "intake", design_id, actor, {
         "proposals": {},
-        "created_at": datetime.now(timezone.utc),
         "correlation_id": correlation_id,
         "result_summary": None,
         "error_description": None,
-    }
+    })
 
     submission = IntakeSubmission(
         submission_id=str(uuid.uuid4()),
@@ -253,7 +272,7 @@ async def submit_intake(
     )
 
     orchestrator = _make_orchestrator(model=request.model)
-    background_tasks.add_task(orchestrator.run, submission, _intake_store)
+    background_tasks.add_task(orchestrator.run, submission, op_store)
 
     logger.info(
         "intake.submit",
@@ -278,9 +297,13 @@ async def submit_intake(
     "/{design_id}/intake/{operation_id}",
     response_model=IntakeStatusResponse,
 )
-async def get_intake_status(design_id: str, operation_id: str) -> IntakeStatusResponse:
+async def get_intake_status(
+    design_id: str,
+    operation_id: str,
+    op_store=Depends(_get_op_store),
+) -> IntakeStatusResponse:
     """Poll extraction status and retrieve proposals (ADP-SPEC-014 US1 / FR-002)."""
-    op = _intake_store.get(operation_id)
+    op = await op_store.get(operation_id)
     if op is None:
         raise HTTPException(status_code=404, detail=f"Operation {operation_id!r} not found")
 
@@ -307,9 +330,10 @@ async def confirm_proposal(
     request: ConfirmProposalRequest,
     raw_request: Request,
     store=Depends(_get_design_store),
+    op_store=Depends(_get_op_store),
 ) -> ConfirmProposalResponse:
     """Confirm a proposal → writes Requirement + AuditEntry (ART-VIII / ART-IX / FR-003)."""
-    op = _intake_store.get(operation_id)
+    op = await op_store.get(operation_id)
     if op is None:
         raise HTTPException(status_code=404, detail=f"Operation {operation_id!r} not found")
 
@@ -317,10 +341,16 @@ async def confirm_proposal(
     proposal = proposals.get(proposal_id)
     if proposal is None:
         raise HTTPException(status_code=404, detail=f"Proposal {proposal_id!r} not found")
-    if proposal.status != ProposalStatus.PENDING:
+
+    # Proposal is a dict; check status as string
+    if isinstance(proposal, dict):
+        proposal_status = proposal.get("status")
+    else:
+        proposal_status = proposal.status.value
+    if proposal_status != "pending":
         raise HTTPException(
             status_code=409,
-            detail=f"Proposal {proposal_id!r} has already been actioned (status={proposal.status})",
+            detail=f"Proposal {proposal_id!r} has already been actioned (status={proposal_status})",
         )
 
     actor = _get_actor(raw_request)
@@ -332,18 +362,19 @@ async def confirm_proposal(
             operation_id=operation_id,
             confirming_actor=actor,
             edited_statement=request.edited_statement,
-            operation_store=_intake_store,
+            operation_store=op_store,
             design_store=store,
             design_id=design_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
+    proposal_kind = proposal.get("kind") if isinstance(proposal, dict) else proposal.kind.value
     return ConfirmProposalResponse(
         requirement_id=requirement.id,
         title=requirement.title,
         description=requirement.description,
-        kind=str(proposal.kind.value),
+        kind=str(proposal_kind),
         proposal_id=proposal_id,
     )
 
@@ -358,9 +389,10 @@ async def reject_proposal(
     proposal_id: str,
     raw_request: Request,
     store=Depends(_get_design_store),
+    op_store=Depends(_get_op_store),
 ) -> dict:
     """Reject a proposal — no Requirement written (ART-VIII / FR-004)."""
-    op = _intake_store.get(operation_id)
+    op = await op_store.get(operation_id)
     if op is None:
         raise HTTPException(status_code=404, detail=f"Operation {operation_id!r} not found")
 
@@ -368,7 +400,12 @@ async def reject_proposal(
     proposal = proposals.get(proposal_id)
     if proposal is None:
         raise HTTPException(status_code=404, detail=f"Proposal {proposal_id!r} not found")
-    if proposal.status != ProposalStatus.PENDING:
+
+    if isinstance(proposal, dict):
+        proposal_status = proposal.get("status")
+    else:
+        proposal_status = proposal.status.value
+    if proposal_status != "pending":
         raise HTTPException(
             status_code=409,
             detail=f"Proposal {proposal_id!r} has already been actioned",
@@ -381,7 +418,7 @@ async def reject_proposal(
         proposal_id=proposal_id,
         operation_id=operation_id,
         rejecting_actor=actor,
-        operation_store=_intake_store,
+        operation_store=op_store,
         design_store=store,
         design_id=design_id,
     )
@@ -427,7 +464,7 @@ async def add_requirement(
         description=description,
     )
 
-    from adp.intake.orchestrator import _next_audit_id
+    from adp.audit.writer import next_audit_id as _next_audit_id
     audit_id = _next_audit_id(design)
     audit_entry = AuditEntry(
         id=audit_id,

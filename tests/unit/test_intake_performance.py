@@ -28,19 +28,28 @@ def _make_design() -> ArchitectureDescription:
 def client():
     from adp.api.app import create_app
     from adp.api.routers import intake as intake_module
+    from adp.store.operations import OperationStore
 
     design = _make_design()
     mock_store = AsyncMock()
     mock_store.get = AsyncMock(return_value=design)
     mock_store.save = AsyncMock()
 
+    mock_op_store = AsyncMock(spec=OperationStore)
+    mock_op_store.create = AsyncMock(return_value=None)
+    mock_op_store.get = AsyncMock(return_value=None)
+    mock_op_store.update = AsyncMock(return_value=None)
+
     app = create_app()
 
     async def _fake_store():
         return mock_store
 
+    async def _fake_op_store():
+        return mock_op_store
+
     app.dependency_overrides[intake_module._get_design_store] = _fake_store
-    intake_module._intake_store.clear()
+    app.dependency_overrides[intake_module._get_op_store] = _fake_op_store
 
     return TestClient(app, raise_server_exceptions=False), intake_module
 

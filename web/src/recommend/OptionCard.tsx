@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import type { SolutionOption } from "../api/recommend";
 import AcceptDialog from "./AcceptDialog";
-import { useAcceptOption } from "../api/recommend";
+import RejectDialog from "./RejectDialog";
+import { useAcceptOption, useRejectOption } from "../api/recommend";
 
 interface OptionCardProps {
   option: SolutionOption;
@@ -24,27 +25,40 @@ const KIND_COLORS: Record<string, string> = {
 };
 
 export default function OptionCard({ option, designId, operationId, onAcceptSuccess }: OptionCardProps): React.ReactElement {
-  const [showDialog, setShowDialog] = useState(false);
+  const [showAcceptDialog, setShowAcceptDialog] = useState(false);
+  const [showRejectDialog, setShowRejectDialog] = useState(false);
   const accept = useAcceptOption(designId, operationId);
+  const reject = useRejectOption(designId, operationId);
 
   const isAccepted = option.status === "accepted";
+  const isRejected = option.status === "rejected";
+  const isSettled = isAccepted || isRejected;
+  const isRequirementsOnly = option.knowledge_source === "requirements_only";
 
   return (
-    <div style={{ border: "1px solid #E5E7EB", borderRadius: 8, marginBottom: 16, overflow: "hidden", opacity: isAccepted ? 0.7 : 1 }}>
+    <div style={{ border: "1px solid #E5E7EB", borderRadius: 8, marginBottom: 16, overflow: "hidden", opacity: isSettled ? 0.7 : 1 }}>
       {/* Header */}
-      <div style={{ padding: "12px 16px", background: isAccepted ? "#F0FDF4" : "#F8FAFC", borderBottom: "1px solid #E5E7EB", display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ padding: "12px 16px", background: isAccepted ? "#F0FDF4" : isRejected ? "#FEF2F2" : "#F8FAFC", borderBottom: "1px solid #E5E7EB", display: "flex", alignItems: "center", gap: 12 }}>
         <span style={{ background: "#1168BD", color: "#fff", fontWeight: 700, fontSize: 13, padding: "3px 10px", borderRadius: 4 }}>#{option.rank}</span>
         <span style={{ fontWeight: 600, fontSize: 15, flex: 1 }}>{option.title}</span>
         <span style={{ fontSize: 12, color: "#6B7280" }}>score: {Math.round(option.ranking_score * 100)}%</span>
-        {option.advisory && (
+        {option.advisory && !isRequirementsOnly && (
           <span style={{ background: "#FEF3C7", color: "#92400E", border: "1px solid #FDE68A", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 4 }}>⚠ ADVISORY</span>
         )}
         {isAccepted && <span style={{ background: "#D1FAE5", color: "#065F46", fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 4 }}>✓ Accepted</span>}
+        {isRejected && <span style={{ background: "#FEE2E2", color: "#991B1B", fontSize: 12, fontWeight: 600, padding: "2px 8px", borderRadius: 4 }}>✗ Rejected</span>}
       </div>
 
       <div style={{ padding: 16 }}>
-        {/* Advisory warning */}
-        {option.advisory && (
+        {/* ADP-SPEC-019: requirements_only info box (blue, neutral) */}
+        {isRequirementsOnly && (
+          <div style={{ marginBottom: 12, padding: 10, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 6, fontSize: 13, color: "#1E40AF" }}>
+            ℹ Generated from requirements — no prior knowledge base entries were available. Accepting this option will save it to the knowledge base for future recommendations.
+          </div>
+        )}
+
+        {/* Advisory warning for KB-grounded options that lack citations */}
+        {option.advisory && !isRequirementsOnly && (
           <div style={{ marginBottom: 12, padding: 10, background: "#FEF9C3", border: "1px solid #FDE68A", borderRadius: 6, fontSize: 13, color: "#78350F" }}>
             ⚠ This option lacks full knowledge-base grounding. Additional review recommended before accepting.
           </div>
@@ -100,45 +114,79 @@ export default function OptionCard({ option, designId, operationId, onAcceptSucc
 
         {/* Grounding */}
         <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 14 }}>
-          {option.grounded_on.length > 0
-            ? `Grounded on: ${option.grounded_on.join(", ")}`
-            : "No knowledge citations (advisory)"}
+          {isRequirementsOnly
+            ? "No knowledge citations — generated from requirements only"
+            : option.grounded_on.length > 0
+              ? `Grounded on: ${option.grounded_on.join(", ")}`
+              : "No knowledge citations (advisory)"}
         </div>
 
-        {/* Accept button */}
-        {!isAccepted && (
-          <button
-            onClick={() => setShowDialog(true)}
-            disabled={accept.isPending}
-            style={{ padding: "8px 18px", background: "#166534", color: "#fff", border: "none", borderRadius: 4, cursor: accept.isPending ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 600 }}
-          >
-            {accept.isPending ? "Accepting..." : "Accept this option"}
-          </button>
+        {/* Action buttons */}
+        {!isSettled && (
+          <div style={{ display: "flex", gap: 10 }}>
+            <button
+              onClick={() => setShowAcceptDialog(true)}
+              disabled={accept.isPending || reject.isPending}
+              style={{ padding: "8px 18px", background: "#166534", color: "#fff", border: "none", borderRadius: 4, cursor: (accept.isPending || reject.isPending) ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 600 }}
+            >
+              {accept.isPending ? "Accepting..." : "Accept"}
+            </button>
+            <button
+              onClick={() => setShowRejectDialog(true)}
+              disabled={accept.isPending || reject.isPending}
+              style={{ padding: "8px 18px", background: "#fff", color: "#991B1B", border: "1px solid #FCA5A5", borderRadius: 4, cursor: (accept.isPending || reject.isPending) ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 600 }}
+            >
+              {reject.isPending ? "Rejecting..." : "Reject"}
+            </button>
+          </div>
         )}
         {accept.isError && (
           <div style={{ marginTop: 8, color: "#B91C1C", fontSize: 13 }}>
             {String(accept.error?.message ?? "Accept failed")}
           </div>
         )}
+        {reject.isError && (
+          <div style={{ marginTop: 8, color: "#B91C1C", fontSize: 13 }}>
+            {String(reject.error?.message ?? "Reject failed")}
+          </div>
+        )}
       </div>
 
-      {showDialog && (
+      {showAcceptDialog && (
         <AcceptDialog
           option={option}
-          designId={/* unused */ ""}
+          designId={""}
           onConfirm={(req) => {
             accept.mutate(
               { optionId: option.option_id, ...req },
               {
                 onSuccess: () => {
-                  setShowDialog(false);
+                  setShowAcceptDialog(false);
                   onAcceptSuccess();
                 },
               },
             );
           }}
-          onCancel={() => setShowDialog(false)}
+          onCancel={() => setShowAcceptDialog(false)}
           isPending={accept.isPending}
+        />
+      )}
+
+      {showRejectDialog && (
+        <RejectDialog
+          option={option}
+          onConfirm={(reason) => {
+            reject.mutate(
+              { optionId: option.option_id, rejection_reason: reason },
+              {
+                onSuccess: () => {
+                  setShowRejectDialog(false);
+                },
+              },
+            );
+          }}
+          onCancel={() => setShowRejectDialog(false)}
+          isPending={reject.isPending}
         />
       )}
     </div>

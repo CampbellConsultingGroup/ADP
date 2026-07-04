@@ -8,30 +8,13 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
 import uuid
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
-_AUD_ID_RE = re.compile(r"^AUD-(\d+)$")
-
-
-def _next_audit_id(design: Any) -> str:
-    """Return the next AUD-NNN id by finding max(existing) + 1.
-
-    Uses max-based logic (not len+1) so it is safe when prior entries
-    exist in the database — avoids UniqueViolationError on the audit_entries PK.
-    """
-    max_n = 0
-    for entry in (design.audit_log or []):
-        m = _AUD_ID_RE.match(entry.id)
-        if m:
-            max_n = max(max_n, int(m.group(1)))
-    return f"AUD-{(max_n + 1):03d}"
-
+from adp.audit.writer import next_audit_id
 from adp.intake.linker import KnowledgeLinker
-from adp.intake.llm import LLMClient
 from adp.intake.models import (
     ExtractedProposal,
     ExtractionSpan,
@@ -44,9 +27,14 @@ from adp.intake.models import (
 from adp.intake.parser import LLMResponseParser
 from adp.intake.telemetry import IntakeTelemetry
 from adp.intake.verifier import SourceExcerptVerifier
+from adp.llm.client import LLMClient
 
 if TYPE_CHECKING:
     from adp.store import DesignStore
+
+# Backward-compatible alias — callers inside this module use the private name;
+# external callers should import from adp.audit.writer (ADP-SPEC-023 Move B).
+_next_audit_id = next_audit_id
 
 _logger = logging.getLogger("adp.intake")
 
@@ -69,26 +57,35 @@ class ExtractionOrchestrator:
     async def run(
         self,
         submission: IntakeSubmission,
-        operation_store: dict[str, Any],
+        operation_store: Any,
     ) -> None:
-        """Execute extraction pipeline. Called as background task by ADP-SPEC-003."""
-        op = operation_store.get(submission.operation_id, {})
-        op["status"] = "running"
-        operation_store[submission.operation_id] = op
+        """Execute extraction pipeline. Called as background task (ADP-SPEC-024).
+
+        operation_store is an OperationStore instance (ADP-SPEC-024).
+        """
+        from adp.store.operations import OperationStore as _OpStore
+
+        op_id = submission.operation_id
+        await operation_store.update(op_id, status="running")
 
         start = time.perf_counter()
         proposals: list[ExtractedProposal] = []
         error_msg: str | None = None
         input_tokens = 0
         output_tokens = 0
+        correlation_id: str | None = None
 
         try:
+            # Read correlation_id from persisted payload
+            current_op = await operation_store.get(op_id) or {}
+            correlation_id = current_op.get("correlation_id")
+
             if submission.mode == SubmissionMode.STRUCTURED_FORM:
                 # Skip LLM — single pre-written requirement
                 proposals = [
                     ExtractedProposal(
                         proposal_id=str(uuid.uuid4()),
-                        operation_id=submission.operation_id,
+                        operation_id=op_id,
                         submission_id=submission.submission_id,
                         draft_statement=submission.text,
                         kind=RequirementKind.FUNCTIONAL,
@@ -100,7 +97,6 @@ class ExtractionOrchestrator:
                 ]
             else:
                 # Bulk text: AI extraction
-                correlation_id = op.get("correlation_id")
                 raw_response = await self._llm.extract(submission.text, correlation_id)
 
                 # Count tokens for telemetry
@@ -111,7 +107,7 @@ class ExtractionOrchestrator:
                 proposals = self._parser.parse(
                     raw_response,
                     submission.submission_id,
-                    submission.operation_id,
+                    op_id,
                 )
 
             # Verify source excerpts (FR-007)
@@ -125,40 +121,59 @@ class ExtractionOrchestrator:
                 if proposal.proposed_links:
                     proposal.proposed_links = await self._linker.link(proposal.proposed_links)
 
-            # Set citations_present on operation span (bridges to ADP-SPEC-003 ART-VII gate)
+            suffix = "s" if len(proposals) != 1 else ""
+            result_summary = f"{len(proposals)} requirement{suffix} extracted"
+
+            # Serialize proposals as dicts for persistent storage (ADP-SPEC-024)
+            # ExtractedProposal is a dataclass — convert fields to JSON-safe dict
+            serialized_proposals = {
+                p.proposal_id: {
+                    "proposal_id": p.proposal_id,
+                    "operation_id": p.operation_id,
+                    "submission_id": p.submission_id,
+                    "draft_statement": p.draft_statement,
+                    "kind": p.kind.value,
+                    "source_excerpt": p.source_excerpt,
+                    "verification_status": p.verification_status.value,
+                    "confidence": p.confidence,
+                    "status": p.status.value,
+                    "confirmed_statement": p.confirmed_statement,
+                }
+                for p in proposals
+            }
             citations_present = any(
                 p.verification_status == VerificationStatus.VERIFIED for p in proposals
             )
-            op.setdefault("span", {})["citations_present"] = citations_present
-
-            op["proposals"] = {p.proposal_id: p for p in proposals}
-            op["status"] = "completed"
-            suffix = "s" if len(proposals) != 1 else ""
-            op["result_summary"] = f"{len(proposals)} requirement{suffix} extracted"
+            await operation_store.update(op_id, status="completed", payload_patch={
+                "proposals": serialized_proposals,
+                "result_summary": result_summary,
+                "citations_present": citations_present,
+            })
 
         except Exception as exc:
             error_msg = str(exc)
-            op["status"] = "failed"
-            op["error_description"] = error_msg
+            await operation_store.update(op_id, status="failed", payload_patch={
+                "error_description": error_msg,
+            })
             _logger.error(
                 json.dumps({
                     "operation": "intake.extraction_failed",
-                    "operation_id": submission.operation_id,
+                    "operation_id": op_id,
                     "error": error_msg,
                 })
             )
         finally:
             latency_ms = (time.perf_counter() - start) * 1000
-            # Emit telemetry span regardless of success/failure (QG-11 / FR-006)
+            current_op_final = await operation_store.get(op_id) or {}
             span_data = ExtractionSpan(
-                operation_id=submission.operation_id,
-                correlation_id=op.get("correlation_id"),
+                operation_id=op_id,
+                correlation_id=correlation_id,
                 model=self._llm._model,
                 endpoint=self._llm._base_url,
                 source_char_count=len(submission.text),
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
-                cost_usd=0.0,  # populated if cost rates are configured
+                cost_usd=0.0,
                 proposal_count=len(proposals),
                 proposal_ids=[p.proposal_id for p in proposals],
                 latency_ms=latency_ms,
@@ -169,10 +184,10 @@ class ExtractionOrchestrator:
             _logger.info(
                 json.dumps({
                     "operation": "intake.extraction",
-                    "operation_id": submission.operation_id,
+                    "operation_id": op_id,
                     "proposal_count": len(proposals),
                     "latency_ms": round(latency_ms, 2),
-                    "status": op.get("status"),
+                    "status": current_op_final.get("status"),
                 })
             )
             # Discard source text — never retained after extraction
@@ -184,25 +199,29 @@ class ExtractionOrchestrator:
         operation_id: str,
         confirming_actor: str,
         edited_statement: str | None,
-        operation_store: dict[str, Any],
+        operation_store: Any,
         design_store: "DesignStore",
         design_id: str,
     ) -> Any:
         """Confirm one proposal → write Requirement + AuditEntry to the design store."""
         from adp.models import Requirement
 
-        op = operation_store.get(operation_id, {})
-        proposals: dict[str, ExtractedProposal] = op.get("proposals", {})
+        op = await operation_store.get(operation_id) or {}
+        proposals: dict = op.get("proposals", {})
         proposal = proposals.get(proposal_id)
 
         if proposal is None:
             raise ValueError(f"Proposal {proposal_id!r} not found in operation {operation_id!r}")
-        if proposal.status != ProposalStatus.PENDING:
+
+        # Proposal is a dict (serialized); check status as string
+        p_status = proposal.get("status") if isinstance(proposal, dict) else proposal.status.value
+        if p_status != "pending":
             raise ValueError(
-                f"Proposal {proposal_id!r} is not pending (status={proposal.status})"
+                f"Proposal {proposal_id!r} is not pending (status={p_status})"
             )
 
-        statement = edited_statement or proposal.draft_statement
+        draft = proposal.get("draft_statement") if isinstance(proposal, dict) else proposal.draft_statement
+        statement = edited_statement or draft
         if not statement or not statement.strip():
             raise ValueError("Requirement statement must be non-empty (NFR-002)")
 
@@ -234,13 +253,31 @@ class ExtractionOrchestrator:
         design.audit_log.append(audit_entry)
         await design_store.save(design, actor=confirming_actor)
 
-        proposal.status = (
-            ProposalStatus.EDITED_CONFIRMED if edited_statement else ProposalStatus.CONFIRMED
-        )
-        proposal.confirmed_statement = statement
-        proposal.confirmed_by = confirming_actor
-        proposal.confirmed_at = datetime.now(timezone.utc)
-        proposal.requirement_id = req_id
+        # Update proposal dict and write back to persistent store
+        new_status = "edited_confirmed" if edited_statement else "confirmed"
+        proposal_update: dict = {
+            "status": new_status,
+            "confirmed_statement": statement,
+            "confirmed_by": confirming_actor,
+            "confirmed_at": datetime.now(timezone.utc).isoformat(),
+            "requirement_id": req_id,
+        }
+        if isinstance(proposal, dict):
+            proposals[proposal_id] = {**proposal, **proposal_update}
+        else:
+            # Legacy path (should not occur in production after ADP-SPEC-024)
+            import dataclasses as _dc
+            proposal_dict = {
+                "proposal_id": proposal.proposal_id, "operation_id": proposal.operation_id,
+                "submission_id": proposal.submission_id, "draft_statement": proposal.draft_statement,
+                "kind": proposal.kind.value, "source_excerpt": proposal.source_excerpt,
+                "verification_status": proposal.verification_status.value,
+                "confidence": proposal.confidence, "status": proposal.status.value,
+                "confirmed_statement": proposal.confirmed_statement,
+            }
+            proposals[proposal_id] = {**proposal_dict, **proposal_update}
+
+        await operation_store.update(operation_id, payload_patch={"proposals": proposals})
 
         _logger.info(
             json.dumps({
@@ -257,21 +294,36 @@ class ExtractionOrchestrator:
         proposal_id: str,
         operation_id: str,
         rejecting_actor: str,
-        operation_store: dict[str, Any],
+        operation_store: Any,
         design_store: "DesignStore | None" = None,
         design_id: str | None = None,
     ) -> None:
         """Reject one proposal — writes rejection audit entry, DOES NOT add Requirement."""
-        op = operation_store.get(operation_id, {})
-        proposals: dict[str, ExtractedProposal] = op.get("proposals", {})
+        op = await operation_store.get(operation_id) or {}
+        proposals: dict = op.get("proposals", {})
         proposal = proposals.get(proposal_id)
 
         if proposal is None:
             raise ValueError(f"Proposal {proposal_id!r} not found in operation {operation_id!r}")
-        if proposal.status != ProposalStatus.PENDING:
+
+        p_status = proposal.get("status") if isinstance(proposal, dict) else proposal.status.value
+        if p_status != "pending":
             raise ValueError(f"Proposal {proposal_id!r} is not pending")
 
-        proposal.status = ProposalStatus.REJECTED
+        # Update proposal status in persistent store
+        if isinstance(proposal, dict):
+            proposals[proposal_id] = {**proposal, "status": "rejected"}
+        else:
+            proposals[proposal_id] = {
+                "proposal_id": proposal.proposal_id, "operation_id": proposal.operation_id,
+                "submission_id": proposal.submission_id, "draft_statement": proposal.draft_statement,
+                "kind": proposal.kind.value, "source_excerpt": proposal.source_excerpt,
+                "verification_status": proposal.verification_status.value,
+                "confidence": proposal.confidence, "status": "rejected",
+                "confirmed_statement": proposal.confirmed_statement,
+            }
+
+        await operation_store.update(operation_id, payload_patch={"proposals": proposals})
 
         # Write rejection audit entry to design if store is available
         if design_store is not None and design_id is not None:

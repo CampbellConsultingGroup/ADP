@@ -23,17 +23,62 @@ from adp.recommendation.models import (
 )
 from adp.recommendation.prompts import (
     GENERATION_SYSTEM_PROMPT,
+    GENERATION_SYSTEM_PROMPT_NO_KB,
     TRADEOFF_SYSTEM_PROMPT,
     generation_user_prompt,
     tradeoff_user_prompt,
 )
 
 if TYPE_CHECKING:
-    from adp.intake.llm import LLMClient
     from adp.knowledge import KnowledgeRetrieval
+    from adp.llm.client import LLMClient
     from adp.recommendation.telemetry import RecommendationTelemetry
 
 _logger = logging.getLogger("adp.recommendation")
+
+
+def _parse_json_with_repair(content: str) -> dict:
+    """Parse JSON; on failure attempt to recover a partial options array.
+
+    Claude may truncate mid-JSON when output is large. We try to salvage any
+    fully-formed options that appear before the truncation point.
+    """
+    try:
+        return json.loads(content)
+    except json.JSONDecodeError as exc:
+        _logger.warning("JSON parse failed (%s); attempting partial recovery", exc)
+
+    # Strategy: find the last complete '}' that closes an option object inside
+    # the options array, then close the array and root object manually.
+    bracket = content.find('"options"')
+    if bracket == -1:
+        return {}
+    arr_start = content.find("[", bracket)
+    if arr_start == -1:
+        return {}
+
+    # Walk backwards from the truncation point to find the last valid object close
+    snippet = content[arr_start:]
+    depth = 0
+    last_complete = -1
+    for i, ch in enumerate(snippet):
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                last_complete = i
+    if last_complete == -1:
+        return {}
+
+    repaired = snippet[: last_complete + 1] + "]}"
+    try:
+        recovered = json.loads('{"options": ' + repaired[1:])
+        _logger.info("Partial recovery succeeded: %d option(s)", len(recovered.get("options", [])))
+        return recovered
+    except json.JSONDecodeError:
+        return {}
+
 
 _QUALITY_KEYWORDS = frozenset({
     "performance", "security", "scalability", "reliability",
@@ -118,8 +163,15 @@ async def generate_step(
     knowledge_summary = _knowledge_summary(retrieved)
     req_ids = [getattr(r, "id", str(i)) for i, r in enumerate(requirements)]
 
-    system = GENERATION_SYSTEM_PROMPT.format(option_count=option_count)
-    user = generation_user_prompt(req_list, knowledge_summary, option_count)
+    # ADP-SPEC-019: use requirements-only prompt when KB is empty
+    has_knowledge = bool(retrieved)
+    if has_knowledge:
+        system = GENERATION_SYSTEM_PROMPT.format(option_count=option_count)
+    else:
+        system = GENERATION_SYSTEM_PROMPT_NO_KB.format(option_count=option_count)
+    user = generation_user_prompt(
+        req_list, knowledge_summary, option_count, has_knowledge=has_knowledge
+    )
 
     input_tokens = 0
     output_tokens = 0
@@ -127,14 +179,14 @@ async def generate_step(
     error_msg = None
 
     try:
-        raw = await llm.extract(f"SYSTEM: {system}\n\nUSER: {user}", state.get("correlation_id"))
+        raw = await llm.chat(system, user, correlation_id=state.get("correlation_id"))
 
         usage = raw.get("usage", {})
         input_tokens = usage.get("prompt_tokens", 0)
         output_tokens = usage.get("completion_tokens", 0)
 
         content = raw.get("choices", [{}])[0].get("message", {}).get("content", "{}")
-        data = json.loads(content) if isinstance(content, str) else content
+        data = _parse_json_with_repair(content) if isinstance(content, str) else content
         raw_options = data.get("options", [])[:option_count]  # cap at option_count
 
         for item in raw_options:
@@ -169,6 +221,7 @@ async def generate_step(
                 satisfies=list(item.get("satisfies", req_ids)),
                 proposed_elements=elements,
                 advisory=False,
+                knowledge_source="knowledge_base" if has_knowledge else "requirements_only",
             ))
 
     except Exception as exc:
@@ -234,8 +287,8 @@ async def analyze_tradeoffs_step(
             option.title, option.rationale, element_names, criteria_list
         )
         try:
-            raw = await llm.extract(
-                f"SYSTEM: {system}\n\nUSER: {user}", state.get("correlation_id")
+            raw = await llm.chat(
+                system, user, correlation_id=state.get("correlation_id")
             )
             usage = raw.get("usage", {})
             total_input += usage.get("prompt_tokens", 0)
@@ -346,6 +399,10 @@ async def validate_citations_step(
     advisory_count = 0
 
     for option in ranked:
+        # ADP-SPEC-019: requirements_only options are never advisory — skip citation check
+        if getattr(option, "knowledge_source", "knowledge_base") == "requirements_only":
+            continue
+
         if not option.grounded_on:
             option.advisory = True
             advisory_count += 1

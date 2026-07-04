@@ -1,21 +1,15 @@
 import React, { useState } from "react";
 import { useIntakeStatus, type ProposalResponse } from "../api/intake";
+import { NavBar, type AppView } from "../shell";
 import IntakeTextForm from "./IntakeTextForm";
 import StructuredForm from "./StructuredForm";
 import ProposalsList from "./ProposalsList";
 import RequirementsList from "./RequirementsList";
 import LLMSettings from "./LLMSettings";
 
-type NavView = "canvas" | "intake" | "recommend";
-const NAV_ITEMS: { view: NavView; label: string }[] = [
-  { view: "intake", label: "Intake" },
-  { view: "recommend", label: "Recommendations" },
-  { view: "canvas", label: "Canvas" },
-];
-
 interface IntakePageProps {
   designId: string;
-  onNavigate: (view: "canvas" | "intake" | "recommend") => void;
+  onNavigate: (view: AppView) => void;
 }
 
 type Tab = "bulk" | "form" | "settings";
@@ -86,30 +80,7 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "Arial, sans-serif" }}>
-      {/* Header */}
-      {/* Three-view nav header (I1 fix: uses onNavigate not onBack) */}
-      <div style={{ display: "flex", alignItems: "center", gap: 0, padding: "0 16px", background: "#1168BD", color: "#fff", flexShrink: 0 }}>
-        <span style={{ fontWeight: 700, fontSize: 15, marginRight: 20, padding: "12px 0" }}>ADP</span>
-        {NAV_ITEMS.map(({ view, label }) => (
-          <button
-            key={view}
-            onClick={() => onNavigate(view)}
-            style={{
-              padding: "12px 18px",
-              background: view === "intake" ? "rgba(255,255,255,0.2)" : "transparent",
-              color: "#fff",
-              border: "none",
-              borderBottom: view === "intake" ? "3px solid #fff" : "3px solid transparent",
-              cursor: "pointer",
-              fontSize: 14,
-              fontWeight: view === "intake" ? 600 : 400,
-            }}
-          >
-            {label}
-          </button>
-        ))}
-        <span style={{ fontSize: 13, opacity: 0.7, marginLeft: "auto", padding: "12px 0" }}>{designId}</span>
-      </div>
+      <NavBar currentView="intake" onNavigate={onNavigate} designId={designId} />
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Left: Tabs + extraction content */}

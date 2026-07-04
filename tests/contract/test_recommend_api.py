@@ -61,21 +61,31 @@ def _make_pending_option(option_id: str = "OPT-001", advisory: bool = False) -> 
 def client():
     from adp.api.app import create_app
     from adp.api.routers import recommend as rec_module
+    from adp.store.operations import OperationStore
 
     design = _make_design()
     mock_store = AsyncMock()
     mock_store.get = AsyncMock(return_value=design)
     mock_store.save = AsyncMock()
 
+    mock_op_store = AsyncMock(spec=OperationStore)
+    mock_op_store.get = AsyncMock(return_value=None)
+    mock_op_store.create = AsyncMock(return_value=None)
+    mock_op_store.update = AsyncMock(return_value=None)
+    mock_op_store.update_option_status = AsyncMock(return_value=True)
+
     app = create_app()
 
     async def _fake_store():
         return mock_store
 
-    app.dependency_overrides[rec_module._get_design_store_dep] = _fake_store
-    rec_module._recommend_store.clear()
+    async def _fake_op_store():
+        return mock_op_store
 
-    return TestClient(app, raise_server_exceptions=False), mock_store, rec_module
+    app.dependency_overrides[rec_module._get_design_store_dep] = _fake_store
+    app.dependency_overrides[rec_module._get_op_store_dep] = _fake_op_store
+
+    return TestClient(app, raise_server_exceptions=False), mock_store, mock_op_store
 
 
 # ── US1 tests ─────────────────────────────────────────────────────────────────
@@ -91,9 +101,15 @@ def test_recommend_returns_202(client):
 
 
 def test_recommend_status_returns_200(client):
-    c, _, _ = client
+    c, _, op_store = client
     sub = c.post("/api/v1/designs/D-001/recommend", json={"requirement_ids": ["REQ-001"]})
     op_id = sub.json()["operation_id"]
+
+    # Configure mock to return a pending operation for the submitted op_id
+    op_store.get = AsyncMock(return_value={
+        "id": op_id, "status": "pending", "design_id": "D-001",
+        "options": {}, "result_summary": None, "error_description": None,
+    })
 
     resp = c.get(f"/api/v1/designs/D-001/recommend/{op_id}")
     assert resp.status_code == 200
@@ -117,26 +133,28 @@ def test_recommend_status_nonexistent_operation_returns_404(client):
 
 # ── US2 tests ─────────────────────────────────────────────────────────────────
 
-def _seed_operation(module, option_id: str = "OPT-001", advisory: bool = False, already_accepted: bool = False) -> str:
+def _seed_operation(mock_op_store, option_id: str = "OPT-001", advisory: bool = False, already_accepted: bool = False) -> str:
+    """Configure mock OperationStore to return an operation with one serialized option."""
+    from adp.api.routers.recommend import _option_to_dict
     op_id = "OP-TEST-001"
     option = _make_pending_option(option_id=option_id, advisory=advisory)
     if already_accepted:
         option.status = "accepted"
-    module._recommend_store[op_id] = {
+    mock_op_store.get = AsyncMock(return_value={
+        "id": op_id,
         "status": "completed",
         "design_id": "D-001",
         "requirement_ids": ["REQ-001"],
-        "options": {option_id: option},
+        "options": {option_id: _option_to_dict(option)},
         "result_summary": "1 option generated",
         "error_description": None,
-        "created_at": datetime.now(timezone.utc),
-    }
+    })
     return op_id
 
 
 def test_accept_option_returns_200(client):
-    c, mock_store, module = client
-    op_id = _seed_operation(module)
+    c, mock_store, op_store = client
+    op_id = _seed_operation(op_store)
 
     resp = c.post(
         f"/api/v1/designs/D-001/recommend/{op_id}/options/OPT-001/accept",
@@ -152,8 +170,8 @@ def test_accept_option_returns_200(client):
 
 
 def test_accept_blank_confirmation_id_returns_422(client):
-    c, _, module = client
-    op_id = _seed_operation(module)
+    c, _, op_store = client
+    op_id = _seed_operation(op_store)
     resp = c.post(
         f"/api/v1/designs/D-001/recommend/{op_id}/options/OPT-001/accept",
         json={"confirmation_id": "", "advisory_acknowledged": False},
@@ -162,8 +180,8 @@ def test_accept_blank_confirmation_id_returns_422(client):
 
 
 def test_accept_already_accepted_returns_409(client):
-    c, _, module = client
-    op_id = _seed_operation(module, already_accepted=True)
+    c, _, op_store = client
+    op_id = _seed_operation(op_store, already_accepted=True)
     resp = c.post(
         f"/api/v1/designs/D-001/recommend/{op_id}/options/OPT-001/accept",
         json={"confirmation_id": "CONF-TEST", "advisory_acknowledged": False},
@@ -172,8 +190,8 @@ def test_accept_already_accepted_returns_409(client):
 
 
 def test_accept_advisory_without_acknowledged_returns_422(client):
-    c, _, module = client
-    op_id = _seed_operation(module, advisory=True)
+    c, _, op_store = client
+    op_id = _seed_operation(op_store, advisory=True)
     resp = c.post(
         f"/api/v1/designs/D-001/recommend/{op_id}/options/OPT-001/accept",
         json={"confirmation_id": "CONF-TEST", "advisory_acknowledged": False},
@@ -181,3 +199,63 @@ def test_accept_advisory_without_acknowledged_returns_422(client):
     assert resp.status_code == 422
     body = resp.json()
     assert "advisory" in body.get("detail", "").lower()
+
+# ── ADP-SPEC-019: accept with reason, reject endpoint ─────────────────────────
+
+def test_accept_with_reason_includes_reason_in_response(client):
+    """T010: accept with acceptance_reason succeeds."""
+    c, _, op_store = client
+    op_id = _seed_operation(op_store)
+    resp = c.post(
+        f"/api/v1/designs/D-001/recommend/{op_id}/options/OPT-001/accept",
+        json={"confirmation_id": "CONF-TEST", "advisory_acknowledged": False, "acceptance_reason": "Aligns with our standard"},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["option_id"] == "OPT-001"
+
+
+def test_accept_without_reason_still_succeeds(client):
+    """T011: acceptance_reason is optional — accept with no reason still works."""
+    c, _, op_store = client
+    op_id = _seed_operation(op_store)
+    resp = c.post(
+        f"/api/v1/designs/D-001/recommend/{op_id}/options/OPT-001/accept",
+        json={"confirmation_id": "CONF-TEST", "advisory_acknowledged": False},
+    )
+    assert resp.status_code == 200
+
+
+def test_reject_option_returns_200(client):
+    """T016: reject endpoint accepts a reason and returns 200."""
+    c, _, op_store = client
+    op_id = _seed_operation(op_store)
+    resp = c.post(
+        f"/api/v1/designs/D-001/recommend/{op_id}/options/OPT-001/reject",
+        json={"rejection_reason": "Too complex for our team's current capability"},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "rejected"
+    assert body["option_id"] == "OPT-001"
+
+
+def test_reject_blank_reason_returns_422(client):
+    """T017: blank rejection_reason is rejected by Pydantic validation."""
+    c, _, op_store = client
+    op_id = _seed_operation(op_store)
+    resp = c.post(
+        f"/api/v1/designs/D-001/recommend/{op_id}/options/OPT-001/reject",
+        json={"rejection_reason": ""},
+    )
+    assert resp.status_code == 422
+
+
+def test_reject_already_rejected_returns_409(client):
+    """T018: second reject attempt returns 409."""
+    c, _, op_store = client
+    op_id = _seed_operation(op_store, already_accepted=True)  # status != pending
+    resp = c.post(
+        f"/api/v1/designs/D-001/recommend/{op_id}/options/OPT-001/reject",
+        json={"rejection_reason": "Some reason"},
+    )
+    assert resp.status_code == 409

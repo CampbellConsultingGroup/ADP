@@ -49,7 +49,7 @@ async def test_llm_client_sends_correct_request() -> None:
         kwargs["transport"] = httpx.MockTransport(handler)
         return _RealClient(*args, **kwargs)
 
-    with mock.patch("adp.intake.llm.httpx.AsyncClient", side_effect=make_client):
+    with mock.patch("adp.llm.client.httpx.AsyncClient", side_effect=make_client):
         await client.extract("The system must authenticate all requests.", "corr-001")
 
     assert len(captured) == 1
@@ -80,7 +80,7 @@ async def test_api_key_not_in_log_output(caplog: pytest.LogCaptureFixture) -> No
         kwargs["transport"] = httpx.MockTransport(handler)
         return _RealClient2(*args, **kwargs)
 
-    with mock.patch("adp.intake.llm.httpx.AsyncClient", side_effect=make_client2), \
+    with mock.patch("adp.llm.client.httpx.AsyncClient", side_effect=make_client2), \
          caplog.at_level(logging.DEBUG, logger="adp.intake"):
         await client.extract("Some text.", None)
 

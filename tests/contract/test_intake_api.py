@@ -54,23 +54,32 @@ def _make_proposal(proposal_id: str = "PROP-001", status: ProposalStatus = Propo
 def client():
     from adp.api.app import create_app
     from adp.api.routers import intake as intake_module
+    from adp.store.operations import OperationStore
 
     design = _make_design()
     mock_store = AsyncMock()
     mock_store.get = AsyncMock(return_value=design)
     mock_store.save = AsyncMock(return_value=None)
 
+    # Mock OperationStore — all methods are async no-ops by default
+    mock_op_store = AsyncMock(spec=OperationStore)
+    mock_op_store.get = AsyncMock(return_value=None)
+    mock_op_store.create = AsyncMock(return_value=None)
+    mock_op_store.update = AsyncMock(return_value=None)
+    mock_op_store.update_option_status = AsyncMock(return_value=True)
+
     app = create_app()
 
     async def _fake_store():
         return mock_store
 
+    async def _fake_op_store():
+        return mock_op_store
+
     app.dependency_overrides[intake_module._get_design_store] = _fake_store
+    app.dependency_overrides[intake_module._get_op_store] = _fake_op_store
 
-    # Clear operation store between tests
-    intake_module._intake_store.clear()
-
-    return TestClient(app, raise_server_exceptions=False), mock_store, intake_module
+    return TestClient(app, raise_server_exceptions=False), mock_store, mock_op_store
 
 
 # ── US1: Submit + poll ────────────────────────────────────────────────────────
@@ -90,13 +99,20 @@ def test_submit_intake_bulk_text_returns_202(client):
 
 
 def test_get_intake_status_returns_200(client):
-    c, _, module = client
-    # First submit to create an operation
+    from unittest.mock import AsyncMock
+    c, _, op_store = client
+    # Submit to create an operation
     submit_resp = c.post("/api/v1/designs/D-001/intake", json={
         "mode": "bulk_text",
         "text": "The system must handle 10,000 concurrent users.",
     })
     op_id = submit_resp.json()["operation_id"]
+
+    # Configure mock to return a pending operation for the given op_id
+    op_store.get = AsyncMock(return_value={
+        "id": op_id, "status": "pending", "design_id": "D-001",
+        "proposals": {}, "result_summary": None, "error_description": None,
+    })
 
     resp = c.get(f"/api/v1/designs/D-001/intake/{op_id}")
     assert resp.status_code == 200
@@ -124,24 +140,41 @@ def test_get_nonexistent_operation_returns_404(client):
 
 # ── US2: Confirm / Reject ─────────────────────────────────────────────────────
 
-def _seed_operation(module, proposal_id: str = "PROP-001", status: ProposalStatus = ProposalStatus.PENDING) -> str:
-    """Seed the operation store with a test operation + proposal."""
+def _seed_operation(
+    mock_op_store,
+    proposal_id: str = "PROP-001",
+    status: ProposalStatus = ProposalStatus.PENDING,
+) -> str:
+    """Configure the mock OperationStore to return a test operation with one proposal."""
     op_id = "OP-TEST-001"
     proposal = _make_proposal(proposal_id=proposal_id, status=status)
-    module._intake_store[op_id] = {
+    # Proposals stored as serialized dicts in the persistent store
+    import dataclasses
+    mock_op_store.get = AsyncMock(return_value={
+        "id": op_id,
         "status": "completed",
         "design_id": "D-001",
-        "proposals": {proposal_id: proposal},
-        "created_at": datetime.now(timezone.utc),
+        "proposals": {proposal_id: {
+            "proposal_id": proposal.proposal_id,
+            "operation_id": proposal.operation_id,
+            "submission_id": proposal.submission_id,
+            "draft_statement": proposal.draft_statement,
+            "kind": proposal.kind.value,
+            "source_excerpt": proposal.source_excerpt,
+            "verification_status": proposal.verification_status.value,
+            "confidence": proposal.confidence,
+            "status": proposal.status.value,
+            "confirmed_statement": proposal.confirmed_statement,
+        }},
         "result_summary": "1 requirement extracted",
         "error_description": None,
-    }
+    })
     return op_id
 
 
 def test_confirm_proposal_creates_requirement(client):
-    c, mock_store, module = client
-    op_id = _seed_operation(module)
+    c, mock_store, op_store = client
+    op_id = _seed_operation(op_store)
 
     resp = c.post(f"/api/v1/designs/D-001/intake/{op_id}/proposals/PROP-001/confirm",
                   json={})
@@ -155,8 +188,8 @@ def test_confirm_proposal_creates_requirement(client):
 
 
 def test_reject_proposal_returns_200_no_requirement(client):
-    c, mock_store, module = client
-    op_id = _seed_operation(module)
+    c, mock_store, op_store = client
+    op_id = _seed_operation(op_store)
 
     resp = c.post(f"/api/v1/designs/D-001/intake/{op_id}/proposals/PROP-001/reject",
                   json={})
@@ -167,8 +200,8 @@ def test_reject_proposal_returns_200_no_requirement(client):
 
 
 def test_confirm_already_confirmed_returns_409(client):
-    c, _, module = client
-    op_id = _seed_operation(module, status=ProposalStatus.CONFIRMED)
+    c, _, op_store = client
+    op_id = _seed_operation(op_store, status=ProposalStatus.CONFIRMED)
 
     resp = c.post(f"/api/v1/designs/D-001/intake/{op_id}/proposals/PROP-001/confirm",
                   json={})
@@ -176,8 +209,8 @@ def test_confirm_already_confirmed_returns_409(client):
 
 
 def test_confirm_with_edited_statement(client):
-    c, mock_store, module = client
-    op_id = _seed_operation(module)
+    c, mock_store, op_store = client
+    op_id = _seed_operation(op_store)
 
     edited = "The system MUST handle 10,000 concurrent users with p99 latency < 200ms"
     resp = c.post(

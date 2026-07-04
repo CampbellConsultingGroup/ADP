@@ -21,8 +21,8 @@ from adp.recommendation.steps import (
 from adp.recommendation.telemetry import RecommendationTelemetry
 
 if TYPE_CHECKING:
-    from adp.intake.llm import LLMClient
     from adp.knowledge import KnowledgeRetrieval
+    from adp.llm.client import LLMClient
     from adp.models import Element
     from adp.store import DesignStore
 
@@ -97,19 +97,21 @@ class RecommendationOrchestrator:
         operation_id: str,
         design_id: str,
         requirement_ids: list[str],
-        operation_store: dict[str, Any],
+        operation_store: Any,
         correlation_id: str | None = None,
     ) -> None:
-        """Execute the five-step pipeline as a background task."""
-        op = operation_store.get(operation_id, {})
-        op["status"] = "running"
-        operation_store[operation_id] = op
+        """Execute the five-step pipeline as a background task (ADP-SPEC-024).
+
+        operation_store is an OperationStore instance.
+        """
+        from adp.api.routers.recommend import _option_to_dict
+
+        await operation_store.update(operation_id, status="running")
 
         validated_options: list[SolutionOption] = []
         error_msg: str | None = None
 
         try:
-            # Load requirements from design store (U1 fix)
             design = await self._store.get(design_id)
             req_id_set = set(requirement_ids)
             requirements = [r for r in design.requirements if r.id in req_id_set]
@@ -136,20 +138,24 @@ class RecommendationOrchestrator:
             if pipeline_error:
                 raise RuntimeError(pipeline_error)
 
-            # Bridge citations_present to ADP-SPEC-003 ART-VII gate (I1 fix)
             citations_present = any(not opt.advisory for opt in validated_options)
-            op.setdefault("span", {})["citations_present"] = citations_present
-
-            op["options"] = {opt.option_id: opt for opt in validated_options}
-            op["status"] = "completed"
             suffix = "s" if len(validated_options) != 1 else ""
-            op["result_summary"] = f"{len(validated_options)} option{suffix} generated"
+            result_summary = f"{len(validated_options)} option{suffix} generated"
+
+            # Serialize SolutionOption objects for persistent storage (ADP-SPEC-024)
+            serialized_options = {opt.option_id: _option_to_dict(opt) for opt in validated_options}
+            await operation_store.update(operation_id, status="completed", payload_patch={
+                "options": serialized_options,
+                "result_summary": result_summary,
+                "citations_present": citations_present,
+            })
 
         except Exception as exc:
             error_msg = str(exc)
-            op["status"] = "failed"
-            op["error_description"] = error_msg
-            op.setdefault("span", {})["citations_present"] = False
+            await operation_store.update(operation_id, status="failed", payload_patch={
+                "error_description": error_msg,
+                "citations_present": False,
+            })
             _logger.error(
                 json.dumps({
                     "operation": "recommendation.pipeline_failed",
@@ -158,13 +164,14 @@ class RecommendationOrchestrator:
                 })
             )
         finally:
+            current_op = await operation_store.get(operation_id) or {}
             _logger.info(
                 json.dumps({
                     "operation": "recommendation.pipeline",
                     "operation_id": operation_id,
                     "option_count": len(validated_options),
                     "advisory_count": sum(1 for o in validated_options if o.advisory),
-                    "status": op.get("status"),
+                    "status": current_op.get("status"),
                 })
             )
 
@@ -173,20 +180,25 @@ class RecommendationOrchestrator:
         option_id: str,
         operation_id: str,
         accepting_actor: str,
-        operation_store: dict[str, Any],
+        operation_store: Any,
         design_id: str,
         *,
         advisory_acknowledged: bool = False,
     ) -> list["Element"]:
         """Accept one option and materialize its ProposedElements into the design store."""
+        from adp.api.routers.recommend import _dict_to_option
         from adp.models import Element
 
-        op = operation_store.get(operation_id, {})
-        options: dict[str, SolutionOption] = op.get("options", {})
-        option = options.get(option_id)
+        op = await operation_store.get(operation_id) or {}
+        options_raw: dict = op.get("options", {})
+        option_raw = options_raw.get(option_id)
 
-        if option is None:
+        if option_raw is None:
             raise ValueError(f"Option {option_id!r} not found in operation {operation_id!r}")
+
+        # Reconstruct SolutionOption from stored dict (ADP-SPEC-024)
+        option = _dict_to_option(option_raw) if isinstance(option_raw, dict) else option_raw
+
         if option.status != "pending":
             raise ValueError(f"Option {option_id!r} is not pending (status={option.status})")
         if option.advisory and not advisory_acknowledged:
@@ -211,8 +223,7 @@ class RecommendationOrchestrator:
             created_elements.append(element)
 
         # Write audit entry (QG-13 / FR-004)
-        # ADP-SPEC-017 fix: use max(existing)+1 not len+1 to avoid UniqueViolationError
-        from adp.intake.orchestrator import _next_audit_id
+        from adp.audit.writer import next_audit_id as _next_audit_id
         audit_entry_id = _next_audit_id(design)
         from adp.models import AuditEntry as _AE
 
@@ -228,9 +239,8 @@ class RecommendationOrchestrator:
         design.audit_log.append(audit_entry)
         await self._store.save(design, actor=accepting_actor)
 
-        option.status = "accepted"
-        option.accepted_by = accepting_actor
-        option.accepted_at = datetime.now(timezone.utc)
+        # Update option status via OperationStore (ADP-SPEC-024)
+        await operation_store.update_option_status(operation_id, option_id, "accepted")
 
         _logger.info(
             json.dumps({
