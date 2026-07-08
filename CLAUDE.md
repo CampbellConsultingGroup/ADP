@@ -1,6 +1,6 @@
 # ADP Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-07-02 (013-playwright-e2e added)
+Auto-generated from all feature plans. Last updated: 2026-07-05 (013-playwright-e2e added)
 
 ## Active Technologies
 - Python 3.11+ + SQLAlchemy 2.x (async ORM), asyncpg (PostgreSQL async driver), Alembic (migrations), testcontainers-python (PostgreSQL container for integration tests), pydantic-settings (database URL config) (002-design-store)
@@ -26,6 +26,13 @@ Auto-generated from all feature plans. Last updated: 2026-07-02 (013-playwright-
 - TypeScript 5.x + `@playwright/test` v1.47+ (E2E test runner); `playwright` browser lib (already in stack); Chromium browser; 18 API tests (no browser, no DB) + 4 browser tests (Chromium, route-mocked); `ADP_API_URL` and `ADP_WEB_URL` env vars control targets; `npm run test:e2e:api` for CI (013-playwright-e2e)
 - Python 3.11+ + `psycopg2-binary` (synchronous driver for Alembic migrations; asyncpg used at runtime); `alembic.ini` at project root with `sqlalchemy.url` for direct CLI use; `ADP_DATABASE_URL` env var for runtime (DB setup)
 - Python 3.12 (backend); TypeScript 5.x (frontend) (015-anthropic-llm)
+- Python 3.12 (backend); TypeScript 5.x (frontend) + FastAPI, SQLAlchemy 2 async, asyncpg, Pydantic v2, React 18, TanStack Query v5 — all existing stack, zero new packages (029-element-technology-tags)
+- PostgreSQL 16; new `element_technology_tags` table + B-tree + GIN indexes; `design_versions` JSONB extended with `technology_metadata` nested in element objects (029-element-technology-tags)
+- PostgreSQL 16 — add `lifecycle_status` (B-tree indexed) + 4 date columns to `designs` table; extend `ArchitectureDescription` JSONB with lifecycle fields (030-design-lifecycle)
+- Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) + FastAPI, SQLAlchemy 2 async (raw SQL with sa.text() for aggregates), existing stack — zero new packages (031-portfolio-analysis)
+- PostgreSQL 16; queries use existing `element_technology_tags` (B-tree + GIN indexes) and `designs` (lifecycle_status B-tree index) — no new migrations (031-portfolio-analysis)
+- Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) + Python stdlib `csv` module for CSV export; all else existing stack — zero new packages (032-governance-reporting)
+- PostgreSQL 16; reads from `audit_entries`, `designs`, `design_versions.content` (JSONB for findings), `operations`, `llm_reasoning_log` — no new migrations (032-governance-reporting)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -70,9 +77,9 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
-- 018-recommendation-screen: No new deps; wires existing `adp.recommendation.RecommendationOrchestrator` (ADP-SPEC-007) to 3 FastAPI routes (POST /recommend, GET /recommend/{op_id}, POST /options/{id}/accept with ART-VIII confirmation_id + ART-IX audit + ART-XI provenance); KnowledgeRetrieval stub for empty pgvector; fix materialize_option() audit ID to use _next_audit_id(); React RecommendationPage with RequirementSelector, OptionCard (trade-off table, proposed elements, advisory badge), AcceptDialog (ART-VIII confirmation); three-view nav Intake→Recommendations→Canvas in App.tsx
-- 015-anthropic-llm: (RETROACTIVE SPEC — ART-I violation corrected) Anthropic Claude integration: LLMClient detects anthropic.com URL → uses /v1/messages with x-api-key header; normalizes response to OpenAI shape; strips markdown code fences from Claude JSON output. GET/PUT /api/v1/config/llm for model selection (Sonnet 4.6, Opus 4.8, Haiku 4.5, Fable 5). ModelSelector + LLMSettings components. Vite server.proxy forwards /api/ to :8001. Bug fixes: DesignStore.save() uses ON CONFLICT DO NOTHING for audit entries; _next_audit_id() uses max+1 not len+1
-- 014-requirements-intake-ui: No new deps; wires existing `adp.intake.ExtractionOrchestrator` to 6 new FastAPI routes (`POST /intake`, `GET /intake/{op_id}`, `POST /proposals/{pid}/confirm`, `POST /proposals/{pid}/reject`, `POST /requirements`, `GET /requirements`); new React intake screen at `/designs/{id}/intake` with bulk-text + structured-form tabs, proposals review panel (confirm/edit/reject per card with source excerpt), and requirements summary; TanStack Query polling (2s) for async extraction status; all confirm actions are explicit per-proposal (ART-VIII — no auto-confirm)
+- 032-governance-reporting: Added Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) + Python stdlib `csv` module for CSV export; all else existing stack — zero new packages
+- 031-portfolio-analysis: Added Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) + FastAPI, SQLAlchemy 2 async (raw SQL with sa.text() for aggregates), existing stack — zero new packages
+- 030-design-lifecycle: Added Python 3.12 (backend); TypeScript 5.x (frontend) + FastAPI, SQLAlchemy 2 async, asyncpg, Pydantic v2, React 18, TanStack Query v5 — all existing stack, zero new packages
 
 
 <!-- MANUAL ADDITIONS START -->

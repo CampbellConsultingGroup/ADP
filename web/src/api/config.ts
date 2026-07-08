@@ -29,6 +29,7 @@ export interface LLMConfig {
 export interface LLMConfigUpdate {
   extraction_model?: string;
   recommendation_model?: string;
+  api_key?: string;
 }
 
 export function useAvailableModels() {

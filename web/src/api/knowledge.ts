@@ -97,13 +97,7 @@ export function useUpdateKnowledgeItem(itemId: string) {
 export function useDeleteKnowledgeItem() {
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
-    mutationFn: async (itemId) => {
-      const resp = await fetch(`/api/v1/knowledge/${itemId}`, { method: "DELETE" });
-      if (!resp.ok) {
-        const body = await resp.json().catch(() => ({}));
-        throw new Error((body as { detail?: string }).detail ?? `Delete failed: ${resp.status}`);
-      }
-    },
+    mutationFn: (itemId) => apiMutation<void>("DELETE", `/api/v1/knowledge/${itemId}`),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["knowledge-items"] });
     },
@@ -121,17 +115,14 @@ export interface CALMImportResult {
 export function useImportCalmPattern() {
   const qc = useQueryClient();
   return useMutation<CALMImportResult, Error, string>({
-    mutationFn: async (jsonText: string) => {
-      const resp = await fetch("/api/v1/knowledge/import/calm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: jsonText,
-      });
-      if (!resp.ok) {
-        const body = await resp.json().catch(() => ({}));
-        throw new Error((body as { detail?: string }).detail ?? `Import failed: ${resp.status}`);
+    mutationFn: (jsonText: string) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(jsonText);
+      } catch {
+        throw new Error("Invalid JSON — please paste a valid CALM pattern document");
       }
-      return resp.json() as Promise<CALMImportResult>;
+      return apiMutation<CALMImportResult, unknown>("POST", "/api/v1/knowledge/import/calm", parsed);
     },
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["knowledge-items"] });

@@ -10,7 +10,7 @@ import logging
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from adp.audit.writer import next_audit_id
@@ -49,6 +49,13 @@ class DesignSummary(BaseModel):
     requirement_count: int
     created_at: datetime
     updated_at: datetime
+    # ADP-SPEC-030: lifecycle fields
+    lifecycle_status: str = "draft"
+    proposed_date: datetime | None = None
+    current_since: datetime | None = None
+    review_due: datetime | None = None
+    retirement_date: datetime | None = None
+    overdue_review: bool = False  # computed: current + review_due in the past
 
 
 class DesignListResponse(BaseModel):
@@ -76,13 +83,15 @@ class CreateDesignRequest(BaseModel):
 
 @router.get("", response_model=DesignListResponse, status_code=200)
 async def list_designs(
-    page: int = 1,
-    page_size: int = 50,
+    page: int = Query(default=1, ge=1, le=10_000),
+    page_size: int = Query(default=50, ge=1, le=200),
+    status: str | None = Query(default=None, description="Filter by lifecycle status"),
     store=Depends(_get_design_store),
 ) -> DesignListResponse:
-    """FR-001/002: List all designs with summary metadata."""
-    designs = await store.list_all(page=page, page_size=page_size)
-    total = await store.count_all()
+    """FR-001/002: List all designs with summary metadata. Optionally filter by lifecycle status."""
+    now = datetime.now(timezone.utc)
+    all_designs = await store.list_all(page=page, page_size=page_size, status=status)
+    total = await store.count_all(status=status)
 
     summaries = [
         DesignSummary(
@@ -93,8 +102,18 @@ async def list_designs(
             requirement_count=len(d.requirements),
             created_at=d.created_at,
             updated_at=d.updated_at,
+            lifecycle_status=d.lifecycle_status.value,
+            proposed_date=d.proposed_date,
+            current_since=d.current_since,
+            review_due=d.review_due,
+            retirement_date=d.retirement_date,
+            overdue_review=(
+                d.lifecycle_status.value == "current"
+                and d.review_due is not None
+                and d.review_due < now
+            ),
         )
-        for d in designs
+        for d in all_designs
     ]
     return DesignListResponse(
         designs=summaries,

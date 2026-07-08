@@ -4,6 +4,8 @@ import Workspace from "./canvas/Workspace";
 import IntakePage from "./intake/IntakePage";
 import KnowledgePage from "./knowledge/KnowledgePage";
 import RecommendationPage from "./recommend/RecommendationPage";
+import PortfolioPage from "./portfolio/PortfolioPage";
+import GovernancePage from "./governance/GovernancePage";
 import type { AppView } from "./shell";
 
 // ADP-SPEC-025: Multi-design support.
@@ -19,6 +21,15 @@ export default function App(): React.ReactElement {
     setCurrentDesignId(id);
     setView("intake");
   };
+
+  // Portfolio and governance views are independent of design selection
+  if (view === "portfolio") {
+    return <PortfolioPage onNavigate={onNavigate} onSelectDesign={onSelectDesign} />;
+  }
+
+  if (view === "governance") {
+    return <GovernancePage onNavigate={onNavigate} onSelectDesign={onSelectDesign} />;
+  }
 
   // No design selected → always show the Designs screen
   if (!currentDesignId || view === "designs") {

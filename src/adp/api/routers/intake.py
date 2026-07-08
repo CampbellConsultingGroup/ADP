@@ -170,12 +170,12 @@ def _make_orchestrator(model: str | None = None):  # type: ignore[return]
     3. ADP_LLM_MODEL env var fallback
     4. claude-sonnet-4-6 default
     """
-    from adp.api.routers.config import get_extraction_model
+    from adp.api.routers.config import get_api_key, get_extraction_model
     from adp.intake.orchestrator import ExtractionOrchestrator
     from adp.llm.client import LLMClient
 
     endpoint = os.environ.get("ADP_LLM_ENDPOINT", "https://api.anthropic.com")
-    api_key = os.environ.get("ADP_LLM_API_KEY", "")
+    api_key = get_api_key()
 
     if not api_key:
         # Graceful degradation: stub client returns empty extraction

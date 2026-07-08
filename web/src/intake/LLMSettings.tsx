@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useLLMConfig, useUpdateLLMConfig, useAvailableModels, type ModelInfo } from "../api/config";
 
 export default function LLMSettings(): React.ReactElement {
@@ -6,12 +6,28 @@ export default function LLMSettings(): React.ReactElement {
   const { data: models } = useAvailableModels();
   const update = useUpdateLLMConfig();
 
+  const [apiKeyDraft, setApiKeyDraft] = useState("");
+  const [keySaved, setKeySaved] = useState(false);
+
   if (isLoading) return <div style={{ padding: 16, fontSize: 13 }}>Loading...</div>;
 
-  const statusColor = config?.api_key_configured ? "#166534" : "#c0392b";
-  const statusText = config?.api_key_configured
-    ? `Connected (${config.provider})`
-    : "API key not configured";
+  const connected = config?.api_key_configured ?? false;
+  const statusColor = connected ? "#166534" : "#c0392b";
+  const statusText = connected ? `Connected (${config?.provider})` : "API key not configured";
+
+  function handleSaveKey() {
+    if (!apiKeyDraft.trim()) return;
+    update.mutate(
+      { api_key: apiKeyDraft.trim() },
+      {
+        onSuccess: () => {
+          setApiKeyDraft("");
+          setKeySaved(true);
+          setTimeout(() => setKeySaved(false), 3000);
+        },
+      }
+    );
+  }
 
   return (
     <div style={{ padding: 16 }}>
@@ -23,10 +39,50 @@ export default function LLMSettings(): React.ReactElement {
         <div style={{ fontSize: 12, color: statusColor, marginTop: 4 }}>
           ● {statusText}
         </div>
-        {!config?.api_key_configured && (
-          <div style={{ fontSize: 11, color: "#666", marginTop: 6 }}>
-            Set <code style={{ background: "#e5e7eb", padding: "1px 4px", borderRadius: 3 }}>ADP_LLM_API_KEY</code> and restart the server.
-          </div>
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
+          {connected ? "Update API Key" : "API Key"}
+        </label>
+        <div style={{ display: "flex", gap: 6 }}>
+          <input
+            type="password"
+            value={apiKeyDraft}
+            onChange={(e) => setApiKeyDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSaveKey()}
+            placeholder={connected ? "Enter new key to replace…" : "sk-ant-…"}
+            style={{
+              flex: 1,
+              padding: "6px 8px",
+              fontSize: 13,
+              border: "1px solid #ccc",
+              borderRadius: 4,
+              fontFamily: "monospace",
+            }}
+          />
+          <button
+            onClick={handleSaveKey}
+            disabled={!apiKeyDraft.trim() || update.isPending}
+            style={{
+              padding: "6px 12px",
+              fontSize: 13,
+              background: "#1168BD",
+              color: "#fff",
+              border: "none",
+              borderRadius: 4,
+              cursor: apiKeyDraft.trim() ? "pointer" : "not-allowed",
+              opacity: apiKeyDraft.trim() ? 1 : 0.5,
+            }}
+          >
+            {update.isPending ? "Saving…" : "Save"}
+          </button>
+        </div>
+        {keySaved && (
+          <div style={{ fontSize: 12, color: "#166534", marginTop: 4 }}>✓ API key updated</div>
+        )}
+        {update.isError && (
+          <div style={{ fontSize: 12, color: "#c0392b", marginTop: 4 }}>Failed to save key</div>
         )}
       </div>
 
@@ -37,7 +93,7 @@ export default function LLMSettings(): React.ReactElement {
         <select
           value={config?.extraction_model ?? "claude-sonnet-4-6"}
           onChange={(e) => update.mutate({ extraction_model: e.target.value })}
-          disabled={!config?.api_key_configured}
+          disabled={!connected}
           style={{ width: "100%", padding: "6px 8px", fontSize: 13, border: "1px solid #ccc", borderRadius: 4 }}
         >
           {(models?.models ?? []).map((m: ModelInfo) => (
@@ -58,7 +114,7 @@ export default function LLMSettings(): React.ReactElement {
         <select
           value={config?.recommendation_model ?? "claude-sonnet-4-6"}
           onChange={(e) => update.mutate({ recommendation_model: e.target.value })}
-          disabled={!config?.api_key_configured}
+          disabled={!connected}
           style={{ width: "100%", padding: "6px 8px", fontSize: 13, border: "1px solid #ccc", borderRadius: 4 }}
         >
           {(models?.models ?? []).map((m: ModelInfo) => (
@@ -72,7 +128,7 @@ export default function LLMSettings(): React.ReactElement {
         </div>
       </div>
 
-      {update.isSuccess && (
+      {update.isSuccess && !keySaved && (
         <div style={{ fontSize: 12, color: "#166534", marginTop: 8 }}>✓ Model preferences saved</div>
       )}
     </div>

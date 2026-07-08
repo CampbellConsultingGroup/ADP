@@ -30,6 +30,16 @@ AuditEntryId = Annotated[str, Field(pattern=r"^AUD-\d{3}$")]
 # ── Enumerations ─────────────────────────────────────────────────────────────
 
 
+class LifecycleStatus(StrEnum):
+    """Design lifecycle states (ADP-SPEC-030)."""
+
+    DRAFT = "draft"
+    PROPOSED = "proposed"
+    CURRENT = "current"
+    DEPRECATED = "deprecated"
+    DECOMMISSIONED = "decommissioned"
+
+
 class ElementKind(StrEnum):
     """C4 structural element types. Stops at component level (v1 scope)."""
 
@@ -60,6 +70,19 @@ class _BaseModel(BaseModel):
 # ── Entity models ─────────────────────────────────────────────────────────────
 
 
+class TechnologyMetadata(_BaseModel):
+    """Structured technology metadata for a C4 element (ADP-SPEC-029).
+
+    All fields are optional — absence means no technology metadata has been set.
+    """
+
+    technology: str | None = Field(default=None, max_length=200)
+    vendor: str | None = Field(default=None, max_length=200)
+    platform: str | None = Field(default=None, max_length=200)
+    version: str | None = Field(default=None, max_length=50)
+    owner_team: str | None = Field(default=None, max_length=200)
+
+
 class Requirement(_BaseModel):
     """A single design requirement. Starting point of every traceability chain."""
 
@@ -80,6 +103,7 @@ class Element(_BaseModel):
     satisfies: list[RequirementId] = Field(default_factory=list)
     provenance: str | None = None
     tags: list[str] = Field(default_factory=list)
+    technology_metadata: TechnologyMetadata | None = None  # ADP-SPEC-029
 
 
 class Relationship(_BaseModel):
@@ -159,6 +183,12 @@ class ArchitectureDescription(_BaseModel):
     audit_log: list[AuditEntry] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
+    # ADP-SPEC-030: lifecycle management
+    lifecycle_status: LifecycleStatus = LifecycleStatus.DRAFT
+    proposed_date: datetime | None = None
+    current_since: datetime | None = None
+    review_due: datetime | None = None
+    retirement_date: datetime | None = None
 
     @field_validator("schema_version")
     @classmethod

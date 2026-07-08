@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import type { SolutionOption } from "../api/recommend";
 import AcceptDialog from "./AcceptDialog";
 import RejectDialog from "./RejectDialog";
+import ReasoningPanel from "./ReasoningPanel";
 import { useAcceptOption, useRejectOption } from "../api/recommend";
 
 interface OptionCardProps {
@@ -112,14 +113,12 @@ export default function OptionCard({ option, designId, operationId, onAcceptSucc
           </div>
         )}
 
-        {/* Grounding */}
-        <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 14 }}>
-          {isRequirementsOnly
-            ? "No knowledge citations — generated from requirements only"
-            : option.grounded_on.length > 0
-              ? `Grounded on: ${option.grounded_on.join(", ")}`
-              : "No knowledge citations (advisory)"}
-        </div>
+        {/* Reasoning panel (ADP-SPEC-028) */}
+        <ReasoningPanel
+          option={option}
+          operationId={operationId}
+          designId={designId}
+        />
 
         {/* Action buttons */}
         {!isSettled && (

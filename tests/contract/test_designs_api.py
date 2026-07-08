@@ -136,3 +136,67 @@ def test_create_design_audit_entry_written(client):
     design = saved[0]
     assert len(design.audit_log) == 1
     assert design.audit_log[0].action == "design-created"
+
+
+# ── ADP-SPEC-030: Lifecycle filter + default status ───────────────────────────
+
+def test_list_designs_filter_by_status(client):
+    """T016: GET /designs?status=current returns only current designs."""
+    from adp.models import LifecycleStatus
+    from unittest.mock import AsyncMock
+
+    c, mock_store, _ = client
+    d1 = _make_design("DSN-001", "Current Design")
+    d2 = _make_design("DSN-002", "Draft Design")
+    d1.lifecycle_status = LifecycleStatus.CURRENT
+    d2.lifecycle_status = LifecycleStatus.DRAFT
+
+    mock_store.list_all = AsyncMock(return_value=[d1])  # store pre-filtered
+    mock_store.count_all = AsyncMock(return_value=1)
+
+    resp = c.get("/api/v1/designs?status=current")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 1
+    assert len(body["designs"]) == 1
+    assert body["designs"][0]["lifecycle_status"] == "current"
+
+
+def test_list_designs_no_filter_returns_all(client):
+    """T017: GET /designs without status returns all designs."""
+    from adp.models import LifecycleStatus
+    from unittest.mock import AsyncMock
+
+    c, mock_store, _ = client
+    d1 = _make_design("DSN-001", "Current Design")
+    d2 = _make_design("DSN-002", "Draft Design")
+    d1.lifecycle_status = LifecycleStatus.CURRENT
+    d2.lifecycle_status = LifecycleStatus.DRAFT
+
+    mock_store.list_all = AsyncMock(return_value=[d1, d2])
+    mock_store.count_all = AsyncMock(return_value=2)
+
+    resp = c.get("/api/v1/designs")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 2
+
+
+def test_create_design_defaults_lifecycle_to_draft(client):
+    """T018: New designs default to draft status."""
+    from unittest.mock import AsyncMock
+
+    c, mock_store, _ = client
+    mock_store.count_all = AsyncMock(return_value=0)
+    mock_store.list_all = AsyncMock(return_value=[])
+    mock_store.next_design_id = AsyncMock(return_value="DSN-001")
+    mock_store.save = AsyncMock()
+
+    resp = c.post("/api/v1/designs", json={"title": "New Design"})
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["lifecycle_status"] == "draft"
+    assert body["proposed_date"] is None
+    assert body["current_since"] is None
+    assert body["review_due"] is None
+    assert body["retirement_date"] is None

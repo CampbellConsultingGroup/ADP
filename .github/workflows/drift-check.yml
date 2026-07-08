@@ -59,3 +59,154 @@ jobs:
 
       - name: QG-07 — Dependency CVE scan (pip-audit)
         run: pip-audit --strict
+
+  # ── ZAP API security scan ─────────────────────────────────────────────────
+  # Runs the full OpenAPI-driven active scan against a live ADP instance.
+  # Requires PostgreSQL (via service container) so operations and reasoning
+  # tables are available for realistic API behaviour.
+  #
+  # Exit behaviour:
+  #   FAIL threshold in .zap/rules.tsv  → job fails  (critical regression)
+  #   WARN threshold                     → job passes (report uploaded)
+  #   All other findings                 → ignored
+  zap-api-scan:
+    name: ZAP API Security Scan
+    runs-on: ubuntu-latest
+    needs: quality-gates          # only run if tests pass
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: adp
+          POSTGRES_USER: adp_user
+          POSTGRES_PASSWORD: adp_pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ADP_DATABASE_URL: postgresql+asyncpg://adp_user:adp_pass@localhost:5432/adp
+      ADP_AUTH_ENABLED: "false"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_DATASETS_OFFLINE: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libpq-dev \
+            libcairo2-dev \
+            libglib2.0-dev \
+            gcc \
+            pkg-config
+
+      - name: Install package
+        run: |
+          pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Run database migrations
+        run: alembic upgrade head
+
+      - name: Start ADP server
+        run: |
+          uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 &
+          echo "Waiting for server to be ready..."
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8001/health && break
+            sleep 2
+          done
+          echo "Server ready"
+          curl -f http://localhost:8001/health
+
+      - name: Pull ZAP Docker image
+        run: docker pull ghcr.io/zaproxy/zaproxy:stable
+
+      - name: Create ZAP report directory
+        run: mkdir -p zap-reports
+
+      - name: Run ZAP API scan
+        # --network host lets ZAP reach localhost:8001 directly on Linux runners
+        # -I continues on warnings (only FAIL-threshold rules abort the scan)
+        # -c .zap/rules.tsv configures per-rule thresholds
+        run: |
+          docker run --rm \
+            --network host \
+            -v "$(pwd)/zap-reports:/zap/wrk:rw" \
+            -v "$(pwd)/.zap:/zap/rules:ro" \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-api-scan.py \
+              -t http://localhost:8001/openapi.json \
+              -f openapi \
+              -r zap-report.html \
+              -J zap-report.json \
+              -c /zap/rules/rules.tsv \
+              -I \
+              2>&1 | tee zap-output.txt
+          ZAP_EXIT=${PIPESTATUS[0]}
+          echo "ZAP exit code: $ZAP_EXIT"
+          # Exit code 2 = warnings only → pass; 3 = failures → fail
+          if [ "$ZAP_EXIT" -eq 3 ]; then
+            echo "::error::ZAP found FAIL-threshold security issues — see zap-report.html"
+            exit 1
+          fi
+
+      - name: Parse and summarise ZAP findings
+        if: always()
+        run: |
+          python3 - << 'EOF'
+          import json, sys, os
+
+          report_path = "zap-reports/zap-report.json"
+          if not os.path.exists(report_path):
+              print("No ZAP report found")
+              sys.exit(0)
+
+          with open(report_path) as f:
+              report = json.load(f)
+
+          sites = report.get("site", [])
+          if not sites:
+              print("No sites scanned")
+              sys.exit(0)
+
+          alerts = sites[0].get("alerts", [])
+          counts = {"FAIL": 0, "WARN": 0, "INFO": 0}
+          print(f"\n{'='*60}")
+          print("ZAP API Scan Summary")
+          print(f"{'='*60}")
+          print(f"Total unique alert types: {len(alerts)}")
+
+          for alert in sorted(alerts, key=lambda a: a.get("riskcode", 0), reverse=True):
+              risk = alert.get("riskdesc", "Unknown")
+              name = alert.get("name", "?")
+              count = len(alert.get("instances", []))
+              print(f"  [{risk[:4]}] {name} ({count} instance(s))")
+
+          print(f"{'='*60}\n")
+          EOF
+
+      - name: Upload ZAP reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-security-report-${{ github.run_id }}
+          path: |
+            zap-reports/zap-report.html
+            zap-reports/zap-report.json
+            zap-output.txt
+          retention-days: 30

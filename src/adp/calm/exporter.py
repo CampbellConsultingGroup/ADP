@@ -82,6 +82,19 @@ def map_design_to_calm(design: "ArchitectureDescription") -> CALMDocument:
         ]
         if el.tags:
             node_metadata.append({"tags": el.tags})
+        # ADP-SPEC-029: include structured technology metadata in CALM node
+        if el.technology_metadata:
+            tm = el.technology_metadata
+            if tm.technology:
+                node_metadata.append({"technology": tm.technology})
+            if tm.vendor:
+                node_metadata.append({"vendor": tm.vendor})
+            if tm.platform:
+                node_metadata.append({"platform": tm.platform})
+            if tm.version:
+                node_metadata.append({"version": tm.version})
+            if tm.owner_team:
+                node_metadata.append({"owner-team": tm.owner_team})
         nodes.append(CALMNode(**{  # type: ignore[arg-type]
             "unique-id": el.id,
             "node-type": node_type,
@@ -116,14 +129,23 @@ def map_design_to_calm(design: "ArchitectureDescription") -> CALMDocument:
             for req in design.requirements
         ]
 
-    # Provenance metadata (ART-XI)
+    # Provenance metadata (ART-XI) + lifecycle (ADP-SPEC-030)
     metadata: list[dict] = [
         {"source": "adp"},
         {"adp-version": "1.0.0"},
         {"design-id": design.id},
         {"design-title": design.title},
         {"exported-at": datetime.now(timezone.utc).isoformat()},
+        {"lifecycle-status": design.lifecycle_status.value},
     ]
+    if design.proposed_date:
+        metadata.append({"proposed-date": design.proposed_date.isoformat()})
+    if design.current_since:
+        metadata.append({"current-since": design.current_since.isoformat()})
+    if design.review_due:
+        metadata.append({"review-due": design.review_due.isoformat()})
+    if design.retirement_date:
+        metadata.append({"retirement-date": design.retirement_date.isoformat()})
 
     return CALMDocument(
         nodes=nodes,

@@ -8,6 +8,12 @@ version = "0.1.0"
 description = "AI-Assisted Architecture Design Platform — canonical data model and schema generator"
 requires-python = ">=3.11"
 dependencies = [
+    # ── Web framework (ADP-SPEC-003) ──────────────────────────────────────────
+    "fastapi>=0.111",
+    "uvicorn[standard]>=0.30",
+    "starlette>=0.37",                  # FastAPI dependency; pin for stability
+    "click>=8.0",                       # CLI entry points (adp-import-calm etc.)
+    # ── Data layer ────────────────────────────────────────────────────────────
     "pydantic==2.13.2",
     "jsonschema==4.10.3",
     "sqlalchemy[asyncio]==2.0.51",
@@ -15,16 +21,22 @@ dependencies = [
     "alembic==1.13.1",
     "pydantic-settings==2.14.2",
     "pgvector>=0.3",
+    # ── AI / ML ───────────────────────────────────────────────────────────────
     "sentence-transformers>=2.7",
-    "gitpython>=3.1",
-    "python-frontmatter>=1.1",
-    "opentelemetry-sdk>=1.25",
-    "tiktoken>=0.7",
     "langgraph>=0.2",
     "langchain-core>=0.2",
+    "tiktoken>=0.7",
+    # ── Knowledge connectors ──────────────────────────────────────────────────
+    "gitpython>=3.1",
+    "python-frontmatter>=1.1",
+    # ── Rendering ─────────────────────────────────────────────────────────────
     "cairosvg>=2.7",
-    "pyyaml>=6.0",
+    # ── Observability ─────────────────────────────────────────────────────────
+    "opentelemetry-sdk>=1.25",
     "prometheus-client>=0.17",
+    # ── Utilities ─────────────────────────────────────────────────────────────
+    "pyyaml>=6.0",
+    # ── Authentication (ADP-SPEC-026) ─────────────────────────────────────────
     "python-jose[cryptography]>=3.3",
     "httpx>=0.27",
 ]

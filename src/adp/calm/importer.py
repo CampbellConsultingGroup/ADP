@@ -40,19 +40,23 @@ def _slugify(name: str) -> str:
 
 def _extract_pattern_name(data: dict, fallback: str) -> str:
     """Best-effort name extraction from a CALM document dict."""
-    # 1. $id URL — use the final path segment
-    schema_id = data.get("$id", "")
-    if schema_id:
-        segment = schema_id.rstrip("/").split("/")[-1]
-        if segment:
-            # Replace hyphens/underscores with spaces for readability
-            return segment.replace("-", " ").replace("_", " ").title()
+    # 1. top-level title field (most authoritative — present in CALM pattern schema docs)
+    if data.get("title"):
+        return str(data["title"])
 
     # 2. top-level name field
     if data.get("name"):
         return str(data["name"])
 
-    # 3. first node's name
+    # 3. $id URL — strip extension, title-case the path segment
+    schema_id = data.get("$id", "")
+    if schema_id:
+        segment = schema_id.rstrip("/").split("/")[-1]
+        segment = re.sub(r"\.[^.]+$", "", segment)  # strip .json etc.
+        if segment:
+            return segment.replace("-", " ").replace("_", " ").title()
+
+    # 4. first node's name (instance format)
     nodes = data.get("nodes", [])
     if nodes and isinstance(nodes, list) and nodes[0].get("name"):
         return str(nodes[0]["name"])
@@ -60,17 +64,69 @@ def _extract_pattern_name(data: dict, fallback: str) -> str:
     return fallback
 
 
+def _schema_nodes(data: dict) -> list[dict]:
+    """Extract nodes from CALM pattern schema format (properties.nodes.prefixItems)."""
+    prefix_items = (
+        data.get("properties", {})
+        .get("nodes", {})
+        .get("prefixItems", [])
+    )
+    nodes = []
+    for item in prefix_items:
+        props = item.get("properties", {})
+        nodes.append({
+            "unique-id": props.get("unique-id", {}).get("const", "?"),
+            "node-type": props.get("node-type", {}).get("const", "unknown"),
+            "name": props.get("name", {}).get("const", "?"),
+        })
+    return nodes
+
+
+def _schema_relationships(data: dict) -> list[dict]:
+    """Extract relationships from CALM pattern schema format (properties.relationships.prefixItems)."""
+    prefix_items = (
+        data.get("properties", {})
+        .get("relationships", {})
+        .get("prefixItems", [])
+    )
+    rels = []
+    for item in prefix_items:
+        props = item.get("properties", {})
+        uid = props.get("unique-id", {}).get("const", "?")
+        protocol = props.get("protocol", {}).get("const", "")
+        connects_const = props.get("relationship-type", {}).get("const", {})
+        connects = connects_const.get("connects", {}) if isinstance(connects_const, dict) else {}
+        src = connects.get("source", {}).get("node", "?")
+        dst = connects.get("destination", {}).get("node", "?")
+        rels.append({"unique-id": uid, "protocol": protocol, "src": src, "dst": dst})
+    return rels
+
+
 def _generate_full_text(name: str, data: dict) -> str:
-    """Generate a human-readable summary of a CALM document for embedding."""
-    nodes = data.get("nodes", []) or []
-    relationships = data.get("relationships", []) or []
+    """Generate a human-readable summary of a CALM document for embedding.
+
+    Handles both instance format (nodes/relationships as top-level arrays) and
+    pattern schema format (nodes/relationships under properties.*.prefixItems).
+    """
+    # Instance format: nodes directly in top-level array
+    nodes_instance = data.get("nodes", []) or []
+    rels_instance = data.get("relationships", []) or []
     controls = data.get("controls", []) or []
 
-    lines: list[str] = [f"Pattern: {name}", ""]
+    # Pattern schema format: nodes/relationships in properties.*.prefixItems
+    nodes_schema = _schema_nodes(data) if not nodes_instance else []
+    rels_schema = _schema_relationships(data) if not rels_instance else []
 
-    if nodes:
-        lines.append(f"Nodes ({len(nodes)}):")
-        for n in nodes:
+    description = data.get("description", "")
+
+    lines: list[str] = [f"Pattern: {name}"]
+    if description:
+        lines.append(description)
+    lines.append("")
+
+    if nodes_instance:
+        lines.append(f"Nodes ({len(nodes_instance)}):")
+        for n in nodes_instance:
             node_type = n.get("node-type", "unknown")
             node_name = n.get("name", n.get("unique-id", "?"))
             desc = n.get("description", "")
@@ -79,10 +135,15 @@ def _generate_full_text(name: str, data: dict) -> str:
                 line += f": {desc}"
             lines.append(line)
         lines.append("")
+    elif nodes_schema:
+        lines.append(f"Nodes ({len(nodes_schema)}):")
+        for n in nodes_schema:
+            lines.append(f"- [{n['node-type']}] {n['name']} (id: {n['unique-id']})")
+        lines.append("")
 
-    if relationships:
-        lines.append(f"Relationships ({len(relationships)}):")
-        for r in relationships:
+    if rels_instance:
+        lines.append(f"Relationships ({len(rels_instance)}):")
+        for r in rels_instance:
             uid = r.get("unique-id", "?")
             rel_type = r.get("relationship-type", "connects")
             connects = r.get("connects", {}) or {}
@@ -91,6 +152,12 @@ def _generate_full_text(name: str, data: dict) -> str:
             protocol = connects.get("protocol", "")
             proto_str = f" [{protocol}]" if protocol else ""
             lines.append(f"- {uid} ({rel_type}): {src} → {dst}{proto_str}")
+        lines.append("")
+    elif rels_schema:
+        lines.append(f"Relationships ({len(rels_schema)}):")
+        for r in rels_schema:
+            proto_str = f" [{r['protocol']}]" if r["protocol"] else ""
+            lines.append(f"- {r['unique-id']}: {r['src']} → {r['dst']}{proto_str}")
         lines.append("")
 
     if controls:
@@ -129,6 +196,11 @@ def parse_calm_document(
 
     nodes = data.get("nodes", []) or []
     relationships = data.get("relationships", []) or []
+    # Also count from schema format if top-level arrays are absent
+    if not nodes:
+        nodes = _schema_nodes(data)
+    if not relationships:
+        relationships = _schema_relationships(data)
     schema_id = data.get("$id", "")
 
     metadata: dict[str, Any] = {

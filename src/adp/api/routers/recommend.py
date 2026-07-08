@@ -288,12 +288,12 @@ def _make_stub_knowledge_retrieval():
 
 def _make_recommend_orchestrator(model: str | None = None):
     """Create RecommendationOrchestrator with stub knowledge retrieval and configured LLM."""
-    from adp.api.routers.config import get_recommendation_model
+    from adp.api.routers.config import get_api_key, get_recommendation_model
     from adp.llm.client import LLMClient
     from adp.recommendation.orchestrator import RecommendationOrchestrator
 
     endpoint = os.environ.get("ADP_LLM_ENDPOINT", "https://api.anthropic.com")
-    api_key = os.environ.get("ADP_LLM_API_KEY", "")
+    api_key = get_api_key()
 
     if not api_key:
         class _StubLLMClient(LLMClient):
@@ -420,6 +420,9 @@ async def start_recommendation(
         await store.get(design_id)
     except DesignNotFoundError:
         raise HTTPException(status_code=404, detail=f"Design {design_id!r} not found")
+    except Exception as exc:
+        logger.error("recommend: unexpected store error for design %s: %s", design_id, exc)
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable")
 
     operation_id = str(uuid.uuid4())
     correlation_id = raw_request.headers.get("X-Trace-ID", get_trace_id() or str(uuid.uuid4()))

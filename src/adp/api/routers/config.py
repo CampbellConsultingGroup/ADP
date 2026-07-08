@@ -53,12 +53,15 @@ ANTHROPIC_MODELS = [
 ]
 
 # ── In-process LLM config store ───────────────────────────────────────────────
-# Defaults read from environment; overridable via PUT /api/v1/config/llm
+# Defaults read from environment; overridable via PUT /api/v1/config/llm.
+# The API key is held only in process memory and is NEVER logged or returned
+# in GET responses — only api_key_configured (bool) is exposed.
 
 _llm_config: dict[str, str] = {
     "endpoint": os.environ.get("ADP_LLM_ENDPOINT", "https://api.anthropic.com"),
     "extraction_model": os.environ.get("ADP_LLM_MODEL", "claude-sonnet-4-6"),
     "recommendation_model": os.environ.get("ADP_LLM_RECOMMENDATION_MODEL", "claude-sonnet-4-6"),
+    "api_key": os.environ.get("ADP_LLM_API_KEY", ""),
 }
 
 
@@ -95,6 +98,7 @@ class LLMConfigUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     extraction_model: str | None = None
     recommendation_model: str | None = None
+    api_key: str | None = None  # NEVER logged; stored only in process memory
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -103,7 +107,7 @@ class LLMConfigUpdate(BaseModel):
 async def get_available_models() -> ModelsResponse:
     """Return available Anthropic models for extraction and recommendations."""
     endpoint = _llm_config["endpoint"]
-    api_key_configured = bool(os.environ.get("ADP_LLM_API_KEY", ""))
+    api_key_configured = bool(_llm_config.get("api_key", ""))
     return ModelsResponse(
         models=[ModelInfo(**m) for m in ANTHROPIC_MODELS],  # type: ignore[arg-type]
         provider="Anthropic",
@@ -116,7 +120,7 @@ async def get_available_models() -> ModelsResponse:
 async def get_llm_config() -> LLMConfigResponse:
     """Return current LLM configuration (active models and connection status)."""
     endpoint = _llm_config["endpoint"]
-    api_key_configured = bool(os.environ.get("ADP_LLM_API_KEY", ""))
+    api_key_configured = bool(_llm_config.get("api_key", ""))
 
     if not endpoint or not api_key_configured:
         provider: Literal["anthropic", "openai_compatible", "not_configured"] = "not_configured"
@@ -136,7 +140,7 @@ async def get_llm_config() -> LLMConfigResponse:
 
 @router.put("/llm", response_model=LLMConfigResponse)
 async def update_llm_config(update: LLMConfigUpdate) -> LLMConfigResponse:
-    """Update active model selection for extraction and/or recommendations."""
+    """Update active model selection and/or API key for extraction and/or recommendations."""
     if update.extraction_model is not None:
         valid_ids = {m["id"] for m in ANTHROPIC_MODELS}
         if update.extraction_model not in valid_ids:
@@ -157,6 +161,10 @@ async def update_llm_config(update: LLMConfigUpdate) -> LLMConfigResponse:
             )
         _llm_config["recommendation_model"] = update.recommendation_model
 
+    if update.api_key is not None:
+        # Store only; never log this value
+        _llm_config["api_key"] = update.api_key
+
     return await get_llm_config()
 
 
@@ -168,3 +176,8 @@ def get_extraction_model() -> str:
 def get_recommendation_model() -> str:
     """Return the currently configured recommendation model ID."""
     return _llm_config["recommendation_model"]
+
+
+def get_api_key() -> str:
+    """Return the current LLM API key. NEVER log the return value."""
+    return _llm_config.get("api_key", "")

@@ -192,6 +192,13 @@ export interface DesignSummary {
   requirement_count: number;
   created_at: string;
   updated_at: string;
+  // ADP-SPEC-030: lifecycle fields (T023)
+  lifecycle_status: string;
+  proposed_date: string | null;
+  current_since: string | null;
+  review_due: string | null;
+  retirement_date: string | null;
+  overdue_review: boolean;
 }
 
 export interface DesignListResponse {
@@ -206,10 +213,14 @@ export interface CreateDesignRequest {
   description?: string;
 }
 
-export function useDesignList(page: number = 1) {
+// T024: status filter parameter
+export function useDesignList(page: number = 1, status?: string) {
   return useQuery<DesignListResponse>({
-    queryKey: ["designs", page],
-    queryFn: () => apiGet<DesignListResponse>(`/api/v1/designs?page=${page}&page_size=50`),
+    queryKey: ["designs", page, status],
+    queryFn: () => {
+      const statusParam = status ? `&status=${encodeURIComponent(status)}` : "";
+      return apiGet<DesignListResponse>(`/api/v1/designs?page=${page}&page_size=50${statusParam}`);
+    },
   });
 }
 
@@ -218,6 +229,80 @@ export function useCreateDesign() {
   return useMutation<ArchitectureDescription, Error, CreateDesignRequest>({
     mutationFn: (body) =>
       apiMutation<ArchitectureDescription, CreateDesignRequest>("POST", "/api/v1/designs", body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["designs"] });
+    },
+  });
+}
+
+// ── ADP-SPEC-029: Element Technology Tags ────────────────────────────────────
+
+export interface TagsRequest {
+  technology?: string | null;
+  vendor?: string | null;
+  platform?: string | null;
+  version?: string | null;
+  owner_team?: string | null;
+  tags?: string[];
+}
+
+export interface TagsResponse {
+  element_id: string;
+  design_id: string;
+  technology?: string | null;
+  vendor?: string | null;
+  platform?: string | null;
+  version?: string | null;
+  owner_team?: string | null;
+  tags: string[];
+  updated_at: string;
+}
+
+export function useUpdateElementTags(designId: string, elementId: string) {
+  const qc = useQueryClient();
+  return useMutation<TagsResponse, Error, TagsRequest>({
+    mutationFn: (body) =>
+      apiMutation<TagsResponse, TagsRequest>(
+        "PUT",
+        `/api/v1/designs/${designId}/elements/${elementId}/tags`,
+        body,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["design", designId] });
+    },
+  });
+}
+
+// ── ADP-SPEC-030: Design Lifecycle ───────────────────────────────────────────
+
+export interface LifecycleTransitionRequest {
+  status: string;
+  note?: string;
+  proposed_date?: string | null;
+  current_since?: string | null;
+  review_due?: string | null;
+  retirement_date?: string | null;
+}
+
+export interface LifecycleResponse {
+  design_id: string;
+  lifecycle_status: string;
+  proposed_date?: string | null;
+  current_since?: string | null;
+  review_due?: string | null;
+  retirement_date?: string | null;
+}
+
+// T025: useTransitionLifecycle mutation hook
+export function useTransitionLifecycle(designId: string) {
+  const qc = useQueryClient();
+  return useMutation<LifecycleResponse, Error, LifecycleTransitionRequest>({
+    mutationFn: (body) =>
+      apiMutation<LifecycleResponse, LifecycleTransitionRequest>(
+        "PATCH",
+        `/api/v1/designs/${designId}/lifecycle`,
+        body,
+      ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["designs"] });
     },

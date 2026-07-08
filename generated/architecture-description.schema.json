@@ -112,6 +112,17 @@
           },
           "title": "Tags",
           "type": "array"
+        },
+        "technology_metadata": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TechnologyMetadata"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -194,6 +205,18 @@
       ],
       "title": "Finding",
       "type": "object"
+    },
+    "LifecycleStatus": {
+      "description": "Design lifecycle states (ADP-SPEC-030).",
+      "enum": [
+        "draft",
+        "proposed",
+        "current",
+        "deprecated",
+        "decommissioned"
+      ],
+      "title": "LifecycleStatus",
+      "type": "string"
     },
     "Relationship": {
       "additionalProperties": false,
@@ -355,6 +378,79 @@
       "title": "SolutionOption",
       "type": "object"
     },
+    "TechnologyMetadata": {
+      "additionalProperties": false,
+      "description": "Structured technology metadata for a C4 element (ADP-SPEC-029).\n\nAll fields are optional \u2014 absence means no technology metadata has been set.",
+      "properties": {
+        "owner_team": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Owner Team"
+        },
+        "platform": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Platform"
+        },
+        "technology": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Technology"
+        },
+        "vendor": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vendor"
+        },
+        "version": {
+          "anyOf": [
+            {
+              "maxLength": 50,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Version"
+        }
+      },
+      "title": "TechnologyMetadata",
+      "type": "object"
+    },
     "Verdict": {
       "additionalProperties": false,
       "description": "A recorded decision on a SolutionOption. Closes the traceability chain.",
@@ -440,6 +536,19 @@
       "title": "Created At",
       "type": "string"
     },
+    "current_since": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Current Since"
+    },
     "description": {
       "anyOf": [
         {
@@ -471,12 +580,29 @@
       "title": "Id",
       "type": "string"
     },
+    "lifecycle_status": {
+      "$ref": "#/$defs/LifecycleStatus",
+      "default": "draft"
+    },
     "options": {
       "items": {
         "$ref": "#/$defs/SolutionOption"
       },
       "title": "Options",
       "type": "array"
+    },
+    "proposed_date": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Proposed Date"
     },
     "relationships": {
       "items": {
@@ -491,6 +617,32 @@
       },
       "title": "Requirements",
       "type": "array"
+    },
+    "retirement_date": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Retirement Date"
+    },
+    "review_due": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Review Due"
     },
     "schema_version": {
       "title": "Schema Version",

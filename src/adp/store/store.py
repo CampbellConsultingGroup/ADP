@@ -139,12 +139,25 @@ class DesignStore:
                 )
 
                 # Upsert designs pointer.
+                # Lifecycle fields to sync to the `designs` table (ADP-SPEC-030)
+                lifecycle_vals = {
+                    "lifecycle_status": description.lifecycle_status.value,
+                    "proposed_date": description.proposed_date,
+                    "current_since": description.current_since,
+                    "review_due": description.review_due,
+                    "retirement_date": description.retirement_date,
+                }
+
                 if existing is not None:
                     await session.execute(
                         designs.update()
                         .where(designs.c.id == description.id)
-                        .values(current_version=new_version, updated_at=now,
-                                title=description.title)
+                        .values(
+                            current_version=new_version,
+                            updated_at=now,
+                            title=description.title,
+                            **lifecycle_vals,
+                        )
                     )
                 else:
                     await session.execute(
@@ -155,6 +168,7 @@ class DesignStore:
                             schema_version_at_creation=description.schema_version,
                             created_at=now,
                             updated_at=now,
+                            **lifecycle_vals,
                         )
                     )
 
@@ -317,21 +331,21 @@ class DesignStore:
         self,
         page: int = 1,
         page_size: int = 50,
+        status: str | None = None,
     ) -> list[ArchitectureDescription]:
-        """Return a paginated list of the latest version of each design (ADP-SPEC-025).
+        """Return a paginated list of the latest version of each design (ADP-SPEC-025/030).
 
         Loads the full ArchitectureDescription for each design so callers can
         compute element/requirement counts from the canonical model.
         Sorted by created_at descending (most recent first).
+        Optionally filtered by lifecycle_status (ADP-SPEC-030).
         """
         offset = (page - 1) * page_size
         async with self._session_factory() as session:
-            rows = await session.execute(
-                sa.select(designs.c.id)
-                .order_by(designs.c.created_at.desc())
-                .limit(page_size)
-                .offset(offset)
-            )
+            q = sa.select(designs.c.id).order_by(designs.c.created_at.desc())
+            if status is not None:
+                q = q.where(designs.c.lifecycle_status == status)
+            rows = await session.execute(q.limit(page_size).offset(offset))
             design_ids = [r[0] for r in rows.fetchall()]
 
         result: list[ArchitectureDescription] = []
@@ -342,10 +356,16 @@ class DesignStore:
                 pass  # race: design deleted between list and get
         return result
 
-    async def count_all(self) -> int:
-        """Return total count of designs in the store (ADP-SPEC-025)."""
+    async def count_all(self, status: str | None = None) -> int:
+        """Return total count of designs (ADP-SPEC-025/030).
+
+        Optionally filtered by lifecycle_status (ADP-SPEC-030).
+        """
         async with self._session_factory() as session:
-            row = await session.execute(sa.select(sa.func.count()).select_from(designs))
+            q = sa.select(sa.func.count()).select_from(designs)
+            if status is not None:
+                q = q.where(designs.c.lifecycle_status == status)
+            row = await session.execute(q)
             return int(row.scalar() or 0)
 
     async def next_design_id(self) -> str:

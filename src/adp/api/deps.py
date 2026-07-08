@@ -75,6 +75,22 @@ async def get_operation_store() -> Any:
     return _op_store_singleton
 
 
+_reasoning_store_singleton: Any = None
+
+
+async def get_reasoning_store() -> Any:
+    """FastAPI dependency: returns the singleton ReasoningStore (ADP-SPEC-027).
+
+    Uses the shared KB session factory so no additional DB connections are created.
+    Override in tests via app.dependency_overrides.
+    """
+    global _reasoning_store_singleton
+    if _reasoning_store_singleton is None:
+        from adp.store.reasoning import ReasoningStore
+        _reasoning_store_singleton = ReasoningStore(_get_kb_session_factory())
+    return _reasoning_store_singleton
+
+
 async def get_kb_session() -> AsyncGenerator[Any, None]:
     """FastAPI dependency: yields a SQLAlchemy AsyncSession for knowledge-base access.
 

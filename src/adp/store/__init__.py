@@ -1,6 +1,7 @@
 """ADP design store — PostgreSQL-backed persistence for ArchitectureDescription."""
 
 from adp.store.operations import OperationStore
+from adp.store.reasoning import ReasoningRecord, ReasoningStore, _hash_prompt
 from adp.store.records import DesignRecord, DesignVersion, VerdictChain
 from adp.store.store import (
     ConcurrencyConflictError,
@@ -22,4 +23,7 @@ __all__ = [
     "SchemaValidationError",
     "ConcurrencyConflictError",
     "OperationStore",
+    "ReasoningStore",
+    "ReasoningRecord",
+    "_hash_prompt",
 ]
