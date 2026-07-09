@@ -48,8 +48,8 @@ class RenderOrchestrator:
         if design is None:
             raise KeyError(f"Design {design_id!r} not found")
 
-        dsl = design_to_dsl(design, theme, level)
-        svg = design_to_svg(design, theme, level)
+        dsl = design_to_dsl(design, theme, level)  # type: ignore[arg-type]
+        svg = design_to_svg(design, theme, level)  # type: ignore[arg-type]
         png = svg_to_png(svg)
         png_b64 = base64.b64encode(png).decode("utf-8")
 

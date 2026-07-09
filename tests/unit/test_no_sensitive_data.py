@@ -10,7 +10,7 @@ import logging
 
 import pytest
 
-from adp.models import ArchitectureDescription, Element, Requirement
+from adp.models import ArchitectureDescription
 
 _SECRET_PATTERNS = [
     "sk-",           # common LLM API key prefix
@@ -30,7 +30,7 @@ def _make_design() -> ArchitectureDescription:
         "created_at": "2026-07-02T00:00:00Z",
         "updated_at": "2026-07-02T00:00:00Z",
         "elements": [
-            {"id": "ELM-001", "name": "API Gateway", "kind": "container", "satisfies": [], "provenance": None},
+            {"id": "ELM-001", "name": "API Gateway", "kind": "container", "satisfies": [], "provenance": None},  # noqa: E501
         ],
         "requirements": [
             {"id": "REQ-001", "title": "Stateless handling", "description": "Must be stateless."},
@@ -62,6 +62,7 @@ def test_no_api_key_in_logs(caplog):
 def test_no_design_content_in_span_attrs():
     """QG-08: Span attribute values must not contain raw design content."""
     from opentelemetry import trace as otel_trace
+
     from adp.telemetry.contract import SPAN_ATTR_KNOWLEDGE_ITEM_IDS
     from adp.telemetry.spans import ai_step_span
 
@@ -69,7 +70,7 @@ def test_no_design_content_in_span_attrs():
         # Correct: only IDs, not content
         span.set_attribute(SPAN_ATTR_KNOWLEDGE_ITEM_IDS, '["K-001", "K-002"]')
 
-    current_span = otel_trace.get_current_span()
+    otel_trace.get_current_span()  # verify no exception
     # Just verify the context manager didn't pass design content through
     # The key assertion: attribute values are IDs only, no element descriptions
     assert True  # no exception means values were accepted; content policy enforced by code review
@@ -92,10 +93,9 @@ def test_no_sensitive_data_in_traceability_logs(caplog):
 
 def test_no_silent_exceptions_in_docs_pipeline(caplog):
     """FR-005 / US4: exceptions must not be silently swallowed."""
-    from unittest.mock import patch
     from adp.docs.generator import DocumentGenerator
 
-    design = _make_design()
+    design = _make_design()  # noqa: F841
     with caplog.at_level(logging.DEBUG):
         with pytest.raises((ValueError, Exception)):
             # Trigger ValueError by using an empty title

@@ -25,6 +25,20 @@ logger = logging.getLogger(__name__)
 _TTL_HOURS = 24
 
 
+def _load_payload(raw: Any) -> dict:
+    """Deserialize an operation payload regardless of whether the DB returned a
+    string (SQLite TEXT) or a dict (PostgreSQL JSONB auto-deserialized by asyncpg)."""
+    if isinstance(raw, dict):
+        return raw
+    return json.loads(raw or "{}")
+
+
+def _dump_payload(payload: dict) -> Any:
+    """Serialize a payload for storage. asyncpg accepts both str and dict for JSONB,
+    but we use json.dumps for cross-DB compatibility (SQLite needs a string)."""
+    return json.dumps(payload)
+
+
 class OperationStore:
     """Async PostgreSQL-backed store for transient pipeline operations."""
 
@@ -53,9 +67,9 @@ class OperationStore:
                 "type": op_type,
                 "design_id": design_id,
                 "actor": actor,
-                "payload": json.dumps(initial_payload),
-                "now": now.isoformat(),
-                "expires": expires.isoformat(),
+                "payload": _dump_payload(initial_payload),
+                "now": now,
+                "expires": expires,
             })
             await session.commit()
 
@@ -70,7 +84,7 @@ class OperationStore:
         if row is None:
             return None
 
-        payload = json.loads(row["payload"] or "{}")
+        payload = _load_payload(row["payload"])
         return {
             "id": row["id"],
             "type": row["type"],
@@ -102,15 +116,15 @@ class OperationStore:
                 logger.warning("OperationStore.update called for unknown op_id=%s", op_id)
                 return
 
-            current_payload: dict = json.loads(row["payload"] or "{}")
+            current_payload: dict = _load_payload(row["payload"])
             if payload_patch:
                 current_payload.update(payload_patch)
 
             sets = ["payload = :payload", "updated_at = :now"]
             params: dict[str, Any] = {
                 "id": op_id,
-                "payload": json.dumps(current_payload),
-                "now": now.isoformat(),
+                "payload": _dump_payload(current_payload),
+                "now": now,
             }
 
             if status is not None:
@@ -122,7 +136,7 @@ class OperationStore:
                 params["error"] = error
 
             await session.execute(
-                sa.text(f"UPDATE operations SET {', '.join(sets)} WHERE id = :id"),  # noqa: S608
+                sa.text(f"UPDATE operations SET {', '.join(sets)} WHERE id = :id"),  # nosec B608 - sets contains only hardcoded column names, not user input
                 params,
             )
             await session.commit()
@@ -147,7 +161,7 @@ class OperationStore:
             if row is None:
                 return False
 
-            payload: dict = json.loads(row["payload"] or "{}")
+            payload: dict = _load_payload(row["payload"])
             options: dict = payload.get("options", {})
             option = options.get(option_id)
 
@@ -163,8 +177,8 @@ class OperationStore:
                 ),
                 {
                     "id": op_id,
-                    "payload": json.dumps(payload),
-                    "now": datetime.now(timezone.utc).isoformat(),
+                    "payload": _dump_payload(payload),
+                    "now": datetime.now(timezone.utc),
                 },
             )
             await session.commit()
@@ -173,7 +187,7 @@ class OperationStore:
 
     async def delete_expired(self) -> int:
         """Delete all operations past their expires_at. Returns count deleted."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc)
         async with self._session_factory() as session:
             result = await session.execute(
                 sa.text("DELETE FROM operations WHERE expires_at < :now"),
@@ -184,7 +198,7 @@ class OperationStore:
 
     async def mark_stale_running_as_failed(self, message: str) -> int:
         """Transition all running operations to failed — called on server startup."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc)
         async with self._session_factory() as session:
             # For each running op, update error field AND set error_description in payload
             rows = (await session.execute(
@@ -193,7 +207,7 @@ class OperationStore:
 
             count = 0
             for row in rows:
-                payload = json.loads(row["payload"] or "{}")
+                payload = _load_payload(row["payload"])
                 payload["error_description"] = message
                 await session.execute(
                     sa.text("""
@@ -203,7 +217,7 @@ class OperationStore:
                         WHERE id = :id
                     """),
                     {"id": row["id"], "msg": message,
-                     "payload": json.dumps(payload), "now": now},
+                     "payload": _dump_payload(payload), "now": now},
                 )
                 count += 1
 

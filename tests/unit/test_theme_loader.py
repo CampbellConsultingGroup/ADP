@@ -15,10 +15,10 @@ def _minimal_valid_theme() -> dict:  # type: ignore[type-arg]
         "version": "1.0.0",
         "locked": True,
         "styles": {
-            "person":    {"fill": "#08427B", "stroke": "#073B6F", "color": "#ffffff", "shape": "actor", "font_size": 14, "font_weight": "normal"},
-            "system":    {"fill": "#1168BD", "stroke": "#0E5FA3", "color": "#ffffff", "shape": "box", "font_size": 14, "font_weight": "bold"},
-            "container": {"fill": "#438DD5", "stroke": "#3C7FC0", "color": "#ffffff", "shape": "box", "font_size": 13, "font_weight": "normal"},
-            "component": {"fill": "#85BBE0", "stroke": "#78A8CC", "color": "#000000", "shape": "box", "font_size": 12, "font_weight": "normal"},
+            "person":    {"fill": "#08427B", "stroke": "#073B6F", "color": "#ffffff", "shape": "actor", "font_size": 14, "font_weight": "normal"},  # noqa: E501
+            "system":    {"fill": "#1168BD", "stroke": "#0E5FA3", "color": "#ffffff", "shape": "box", "font_size": 14, "font_weight": "bold"},  # noqa: E501
+            "container": {"fill": "#438DD5", "stroke": "#3C7FC0", "color": "#ffffff", "shape": "box", "font_size": 13, "font_weight": "normal"},  # noqa: E501
+            "component": {"fill": "#85BBE0", "stroke": "#78A8CC", "color": "#000000", "shape": "box", "font_size": 12, "font_weight": "normal"},  # noqa: E501
         },
         "relationship_style": {"stroke": "#707070", "stroke_width": 1.5, "arrow_end": "open"},
     }

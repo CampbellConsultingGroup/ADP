@@ -148,7 +148,7 @@ def main() -> None:
     embedding_model = os.environ["ADP_EMBEDDING_MODEL"]
     embedding_dim = int(os.environ.get("ADP_EMBEDDING_DIM", "384"))
     git_urls = [u for u in os.environ.get("ADP_GIT_REPO_URLS", "").split(",") if u]
-    git_path = os.environ.get("ADP_GIT_LOCAL_CLONE_PATH", "/tmp/adp-knowledge")
+    git_path = os.environ.get("ADP_GIT_LOCAL_CLONE_PATH", "/tmp/adp-knowledge")  # nosec B108 - path configurable via env var
 
     indexer = Indexer(
         database_url=database_url,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import AsyncMock
 
 import pytest
@@ -20,7 +19,7 @@ def _make_design(design_id: str = "D-001") -> ArchitectureDescription:
         "updated_at": "2026-07-03T00:00:00Z",
         "elements": [
             {"id": "ELM-001", "kind": "person", "name": "Alice", "description": "End user"},
-            {"id": "ELM-002", "kind": "system", "name": "Payment API", "description": "Handles payments"},
+            {"id": "ELM-002", "kind": "system", "name": "Payment API", "description": "Handles payments"},  # noqa: E501
         ],
         "requirements": [
             {"id": "REQ-001", "title": "Scalability", "description": "Handle 10k concurrent users"},

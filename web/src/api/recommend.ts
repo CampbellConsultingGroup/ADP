@@ -137,3 +137,37 @@ export function useRejectOption(designId: string, operationId: string) {
     },
   });
 }
+
+// ── ADP-SPEC-028: Reasoning records (immutable, from llm_reasoning_log) ───────
+
+export interface ReasoningRecord {
+  id: string;
+  option_id: string | null;
+  step_name: "generate" | "analyze_tradeoffs" | "extract" | string;
+  model_id: string;
+  reasoning_text: string;
+  truncated: boolean;
+  input_tokens: number;
+  output_tokens: number;
+  created_at: string;
+}
+
+export interface ReasoningResponse {
+  records: ReasoningRecord[];
+}
+
+export function useOptionReasoning(
+  operationId: string,
+  optionId: string,
+  enabled: boolean,
+) {
+  return useQuery<ReasoningResponse>({
+    queryKey: ["reasoning", operationId, optionId],
+    queryFn: () =>
+      apiGet<ReasoningResponse>(
+        `/api/v1/reasoning?operation_id=${encodeURIComponent(operationId)}&option_id=${encodeURIComponent(optionId)}`,
+      ),
+    enabled: enabled && !!operationId && !!optionId,
+    staleTime: Infinity,  // reasoning records are immutable — never re-fetch
+  });
+}

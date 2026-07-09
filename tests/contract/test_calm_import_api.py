@@ -10,14 +10,11 @@ import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from adp.api.routers import calm as calm_module
-from adp.api.routers import knowledge as kb_module
-
 _VALID_CALM = {
     "$id": "https://example.com/patterns/api-gateway",
     "nodes": [
-        {"unique-id": "N-001", "node-type": "actor", "name": "Client", "description": "API consumer"},
-        {"unique-id": "N-002", "node-type": "service", "name": "API Gateway", "description": "Entry point"},
+        {"unique-id": "N-001", "node-type": "actor", "name": "Client", "description": "API consumer"},  # noqa: E501
+        {"unique-id": "N-002", "node-type": "service", "name": "API Gateway", "description": "Entry point"},  # noqa: E501
     ],
     "relationships": [
         {
@@ -101,7 +98,7 @@ def test_import_calm_pattern_item_has_correct_title(client):
         headers={"Content-Type": "application/json"},
     )
     body = resp.json()
-    assert "api-gateway" in body["items"][0]["title"].lower() or "api gateway" in body["items"][0]["title"].lower()
+    assert "api-gateway" in body["items"][0]["title"].lower() or "api gateway" in body["items"][0]["title"].lower()  # noqa: E501
 
 
 # ── T016: 422 for invalid JSON ────────────────────────────────────────────────

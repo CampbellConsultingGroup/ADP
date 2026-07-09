@@ -37,6 +37,78 @@ if TYPE_CHECKING:
 _logger = logging.getLogger("adp.recommendation")
 
 
+# ── Reasoning write helpers (ADP-SPEC-027) ────────────────────────────────────
+
+def _write_reasoning_for_options(
+    candidates: list,
+    step_name: str,
+    system_prompt: str,
+    user_prompt: str,
+    model_id: str,
+    input_tokens: int,
+    output_tokens: int,
+    operation_id: str,
+) -> None:
+    """Fire-and-forget write of generation reasoning for each option."""
+    import asyncio as _asyncio
+
+    from adp.store.reasoning import ReasoningRecord, _hash_prompt
+
+    prompt_hash = _hash_prompt(f"{system_prompt}\n{user_prompt}")
+    per_option_in = input_tokens // max(1, len(candidates))
+    per_option_out = output_tokens // max(1, len(candidates))
+
+    for opt in candidates:
+        _asyncio.create_task(_fire_reasoning_write(ReasoningRecord(
+            operation_id=operation_id,
+            option_id=opt.option_id,
+            step_name=step_name,
+            model_id=model_id,
+            reasoning_text=opt.rationale,
+            prompt_hash=prompt_hash,
+            input_tokens=per_option_in,
+            output_tokens=per_option_out,
+        )))
+
+
+def _write_reasoning_for_option(
+    option: Any,
+    step_name: str,
+    reasoning_text: str,
+    system_prompt: str,
+    user_prompt: str,
+    model_id: str,
+    input_tokens: int,
+    output_tokens: int,
+    operation_id: str,
+) -> None:
+    """Fire-and-forget write of reasoning for a single option."""
+    import asyncio as _asyncio
+
+    from adp.store.reasoning import ReasoningRecord, _hash_prompt
+
+    _asyncio.create_task(_fire_reasoning_write(ReasoningRecord(
+        operation_id=operation_id,
+        option_id=option.option_id,
+        step_name=step_name,
+        model_id=model_id,
+        reasoning_text=reasoning_text,
+        prompt_hash=_hash_prompt(f"{system_prompt}\n{user_prompt}"),
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+    )))
+
+
+async def _fire_reasoning_write(record: Any) -> None:
+    """Write one reasoning record; silently swallow all errors."""
+    try:
+        from adp.api.deps import get_reasoning_store
+        store = await get_reasoning_store()
+        await store.write(record)
+    except Exception as exc:
+        _logger.debug("reasoning write skipped: %s", exc)
+
+
 def _parse_json_with_repair(content: str) -> dict:
     """Parse JSON; on failure attempt to recover a partial options array.
 
@@ -242,6 +314,19 @@ async def generate_step(
         error=error_msg,
     ))
 
+    # ADP-SPEC-027: write immutable reasoning records (fire-and-forget)
+    if not error_msg and candidates:
+        _write_reasoning_for_options(
+            candidates=candidates,
+            step_name="generate",
+            system_prompt=system,
+            user_prompt=user,
+            model_id=getattr(llm, "_model", "unknown"),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            operation_id=state["operation_id"],
+        )
+
     if error_msg:
         return {**state, "candidate_options": [], "error": error_msg}
     return {**state, "candidate_options": candidates}
@@ -322,6 +407,30 @@ async def analyze_tradeoffs_step(
         output_tokens=total_output,
         latency_ms=latency,
     ))
+
+    # ADP-SPEC-027: write trade-off reasoning records per option (fire-and-forget)
+    if candidates:
+        for opt in candidates:
+            if opt.trade_offs:
+                tradeoff_text = "\n\n".join(
+                    f"{t.criterion} [{t.stance.value}]: {t.rationale}"
+                    for t in opt.trade_offs
+                )
+                _write_reasoning_for_option(
+                    option=opt,
+                    step_name="analyze_tradeoffs",
+                    reasoning_text=tradeoff_text,
+                    system_prompt=TRADEOFF_SYSTEM_PROMPT,
+                    user_prompt=tradeoff_user_prompt(
+                        opt.title, opt.rationale,
+                        ", ".join(pe.name for pe in opt.proposed_elements) or "none",
+                        criteria_list,
+                    ),
+                    model_id=getattr(llm, "_model", "unknown"),
+                    input_tokens=total_input // max(1, len(candidates)),
+                    output_tokens=total_output // max(1, len(candidates)),
+                    operation_id=state["operation_id"],
+                )
 
     return {**state, "candidate_options": candidates}
 

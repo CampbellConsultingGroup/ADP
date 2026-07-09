@@ -1,18 +1,28 @@
 import React, { useState } from "react";
 import { useDesignList, useCreateDesign } from "../api/designs";
 import { NavBar, type AppView } from "../shell";
+import LifecycleTransitionButton from "./LifecycleTransitionButton";
 
 interface DesignsPageProps {
   onSelectDesign: (id: string) => void;
   onNavigate: (view: AppView) => void;
 }
 
+const LIFECYCLE_COLORS: Record<string, { bg: string; text: string; label: string }> = {
+  draft:          { bg: "#F3F4F6", text: "#374151", label: "Draft" },
+  proposed:       { bg: "#DBEAFE", text: "#1E40AF", label: "Proposed" },
+  current:        { bg: "#D1FAE5", text: "#065F46", label: "Current" },
+  deprecated:     { bg: "#FEF3C7", text: "#92400E", label: "Deprecated" },
+  decommissioned: { bg: "#FEE2E2", text: "#991B1B", label: "Decommissioned" },
+};
+
 export default function DesignsPage({ onSelectDesign, onNavigate }: DesignsPageProps): React.ReactElement {
   const [showForm, setShowForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [titleError, setTitleError] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("");
 
-  const { data, isLoading, error } = useDesignList();
+  const { data, isLoading, error } = useDesignList(1, statusFilter || undefined);
   const createDesign = useCreateDesign();
 
   const designs = data?.designs ?? [];
@@ -40,21 +50,36 @@ export default function DesignsPage({ onSelectDesign, onNavigate }: DesignsPageP
       <NavBar currentView="designs" onNavigate={onNavigate} designId={null} />
 
       <div style={{ flex: 1, overflowY: "auto", padding: 24, maxWidth: 800, width: "100%", margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
           <div>
             <h1 style={{ fontSize: 22, fontWeight: 700, color: "#111827", margin: "0 0 4px" }}>Designs</h1>
             <p style={{ fontSize: 13, color: "#6B7280", margin: 0 }}>
               {data ? `${data.total} design${data.total !== 1 ? "s" : ""}` : "Loading..."}
             </p>
           </div>
-          {!showForm && (
-            <button
-              onClick={() => setShowForm(true)}
-              style={{ padding: "9px 20px", background: "#1168BD", color: "#fff", border: "none", borderRadius: 5, cursor: "pointer", fontSize: 14, fontWeight: 600 }}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Lifecycle filter dropdown (ADP-SPEC-030) */}
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              style={{ padding: "7px 12px", fontSize: 13, borderRadius: 5, border: "1px solid #D1D5DB", background: "#fff", color: "#374151" }}
             >
-              + New Design
-            </button>
-          )}
+              <option value="">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="proposed">Proposed</option>
+              <option value="current">Current</option>
+              <option value="deprecated">Deprecated</option>
+              <option value="decommissioned">Decommissioned</option>
+            </select>
+            {!showForm && (
+              <button
+                onClick={() => setShowForm(true)}
+                style={{ padding: "9px 20px", background: "#1168BD", color: "#fff", border: "none", borderRadius: 5, cursor: "pointer", fontSize: 14, fontWeight: 600 }}
+              >
+                + New Design
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Create form */}
@@ -138,17 +163,37 @@ export default function DesignsPage({ onSelectDesign, onNavigate }: DesignsPageP
                 }}
               >
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 600, color: "#111827", marginBottom: 3 }}>{d.title}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: "#111827" }}>{d.title}</span>
+                    {/* Lifecycle status badge (ADP-SPEC-030) */}
+                    {(() => {
+                      const lc = LIFECYCLE_COLORS[d.lifecycle_status] ?? LIFECYCLE_COLORS.draft;
+                      return (
+                        <span style={{ background: lc.bg, color: lc.text, fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 10 }}>
+                          {lc.label}
+                        </span>
+                      );
+                    })()}
+                    {/* Overdue review indicator (ADP-SPEC-030 US3) */}
+                    {d.overdue_review && (
+                      <span style={{ background: "#FEF3C7", color: "#92400E", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 10 }}>
+                        ⚠ Review overdue
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontSize: 12, color: "#9CA3AF" }}>
                     {d.id} · {d.element_count} element{d.element_count !== 1 ? "s" : ""} · {d.requirement_count} requirement{d.requirement_count !== 1 ? "s" : ""} · {new Date(d.created_at).toLocaleDateString()}
                   </div>
                 </div>
-                <button
-                  onClick={() => onSelectDesign(d.id)}
-                  style={{ padding: "7px 18px", background: "#1168BD", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600, flexShrink: 0 }}
-                >
-                  Open
-                </button>
+                <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                  <LifecycleTransitionButton designId={d.id} currentStatus={d.lifecycle_status} />
+                  <button
+                    onClick={() => onSelectDesign(d.id)}
+                    style={{ padding: "7px 18px", background: "#1168BD", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+                  >
+                    Open
+                  </button>
+                </div>
               </div>
             ))}
           </div>

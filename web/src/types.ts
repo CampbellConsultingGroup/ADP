@@ -3,6 +3,15 @@
 export type ElementKind = "person" | "system" | "container" | "component";
 export type C4Level = "context" | "container" | "component";
 
+/** Structured technology metadata for a design element (ADP-SPEC-029). */
+export interface TechnologyMetadata {
+  technology?: string | null;
+  vendor?: string | null;
+  platform?: string | null;
+  version?: string | null;
+  owner_team?: string | null;
+}
+
 export interface Element {
   id: string;
   name: string;
@@ -10,6 +19,8 @@ export interface Element {
   description?: string;
   satisfies?: string[];
   provenance?: string;
+  tags?: string[];
+  technology_metadata?: TechnologyMetadata | null;  // ADP-SPEC-029
 }
 
 export interface Relationship {

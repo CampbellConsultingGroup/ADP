@@ -29,7 +29,8 @@
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
     "tsc": "tsc --noEmit",
     "test:e2e": "playwright test",
-    "test:e2e:api": "playwright test --project=api"
+    "test:e2e:api": "playwright test --project=api",
+    "test:e2e:flows": "ADP_API_URL=http://127.0.0.1:8001 ADP_WEB_URL=http://localhost:5173 playwright test --project=fullstack"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.0.0",

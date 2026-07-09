@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from adp.calm.importer import _extract_pattern_name, _generate_full_text, _slugify, parse_calm_document
+from adp.calm.importer import (
+    _extract_pattern_name,
+    _slugify,
+    parse_calm_document,
+)
 from adp.knowledge.schema import KnowledgeType
 
 
@@ -18,7 +22,7 @@ def _calm(nodes=None, relationships=None, **extras) -> dict:
     return doc
 
 
-def _node(uid: str, node_type: str = "service", name: str = "My Service", description: str = "A service") -> dict:
+def _node(uid: str, node_type: str = "service", name: str = "My Service", description: str = "A service") -> dict:  # noqa: E501
     return {"unique-id": uid, "node-type": node_type, "name": name, "description": description}
 
 

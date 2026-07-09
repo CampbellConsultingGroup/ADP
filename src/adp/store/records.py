@@ -30,6 +30,12 @@ designs = Table(
     Column("schema_version_at_creation", Text, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
+    # ADP-SPEC-030: Design lifecycle columns (added by migration 006)
+    Column("lifecycle_status", Text, nullable=False, server_default="draft"),
+    Column("proposed_date", DateTime(timezone=True), nullable=True),
+    Column("current_since", DateTime(timezone=True), nullable=True),
+    Column("review_due", DateTime(timezone=True), nullable=True),
+    Column("retirement_date", DateTime(timezone=True), nullable=True),
 )
 
 design_versions = Table(

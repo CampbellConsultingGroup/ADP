@@ -6,7 +6,7 @@
 import React from "react";
 import { useAuth } from "../auth/AuthProvider";
 
-export type AppView = "designs" | "intake" | "recommend" | "canvas" | "knowledge";
+export type AppView = "designs" | "intake" | "recommend" | "canvas" | "knowledge" | "portfolio" | "governance";
 
 interface NavBarProps {
   currentView: AppView;
@@ -53,6 +53,23 @@ export default function NavBar({ currentView, onNavigate, designId }: NavBarProp
         }}
       >
         Designs
+      </button>
+
+      {/* Portfolio tab — always visible */}
+      <button
+        onClick={() => onNavigate("portfolio")}
+        style={{
+          padding: "12px 16px",
+          background: currentView === "portfolio" || currentView === "governance" ? "rgba(255,255,255,0.2)" : "transparent",
+          color: "#fff",
+          border: "none",
+          borderBottom: currentView === "portfolio" || currentView === "governance" ? "3px solid #fff" : "3px solid transparent",
+          cursor: "pointer",
+          fontSize: 14,
+          fontWeight: currentView === "portfolio" || currentView === "governance" ? 600 : 400,
+        }}
+      >
+        Portfolio
       </button>
 
       {/* Design-scoped tabs — only when a design is open */}

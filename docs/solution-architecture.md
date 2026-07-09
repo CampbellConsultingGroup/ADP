@@ -1,8 +1,8 @@
 ---
 document_type: solution-architecture
 title: AI-Assisted Architecture Design Platform (ADP)
-status: draft
-version: 0.1.0
+status: current
+version: 1.0.0
 classification: internal
 level: high-level
 machine_readable: true
@@ -17,7 +17,7 @@ generated_views:
 
 ## Document Metadata
 
-This document is the canonical, human-readable rendering of a machine-readable architecture description. The platform it describes ("ADP", a working name) is itself an instrument for producing architecture, so this document deliberately follows the same conventions ADP enforces on its own outputs: stable section headers, typed front matter, fenced code blocks with explicit languages, and tabular data rather than prose where the content is structured.
+This document is the canonical, human-readable rendering of a machine-readable architecture description. The platform it describes ("ADP") is itself an instrument for producing architecture, so this document deliberately follows the same conventions ADP enforces on its own outputs: stable section headers, typed front matter, fenced code blocks with explicit languages, and tabular data rather than prose where the content is structured.
 
 | Field | Value |
 |---|---|
@@ -25,16 +25,18 @@ This document is the canonical, human-readable rendering of a machine-readable a
 | Document scope | High-level solution architecture |
 | Audience | Enterprise, solution, and technical architects |
 | Source of truth | Structured artifacts (YAML/JSON), not this prose |
-| Diagram source | Diagram-as-code (Structurizr DSL), rendered to SVG/PNG |
-| Status | Draft for review |
+| Diagram source | React Flow canvas (`@xyflow/react`); PNG rendered by CairoSVG from locked theme |
+| Status | Current — reflects implemented system as of ADP-SPEC-032 |
 
-The front matter above is intended to be parsed. Every artifact ADP emits — including this document — carries equivalent typed metadata so that downstream tooling (CI gates, search indexes, lineage trackers) can consume it without scraping prose.
+This document supersedes v0.1.0. All capabilities described here are implemented and tested.
 
 ## Purpose and Scope
 
-ADP is a platform that lets architects design solutions at every level of abstraction, from enterprise landscapes down to technical component designs, with AI assistance grounded in the organization's existing patterns, standards, and principles. It accepts business requirements as input, recommends candidate solutions drawn from a curated knowledge base, provides a governed C4 diagramming surface with a fixed visual language, and validates every design against enterprise standards using an LLM-as-a-Judge evaluation layer.
+ADP is a platform that lets architects design solutions at every level of abstraction — from enterprise landscapes down to technical component designs — with AI assistance grounded in the organization's existing patterns, standards, and principles. It accepts business requirements as input, recommends candidate solutions drawn from a curated knowledge base, provides a governed C4 diagramming surface with a fixed visual language, validates every design against enterprise standards using an LLM-as-a-Judge evaluation layer, and exposes the resulting design portfolio for cross-cutting governance and reporting.
 
-In scope: requirements intake and normalization, AI-driven solution recommendation, C4 visual design with locked styling, automated design validation, and the persistence of all design artifacts as machine-readable data. Out of scope for this version: build/deployment automation of the designed solutions themselves, cost management tooling, and runtime observability of deployed solutions. ADP designs solutions; it does not operate them.
+In scope: requirements intake and normalization, AI-driven solution recommendation with persistent reasoning logs, C4 visual design with locked styling, automated design validation, knowledge base management, design lifecycle management (draft → current → decommissioned), cross-portfolio technology analysis, governance reporting and audit export, CALM pattern import/export, and the persistence of all design artifacts as machine-readable data.
+
+Out of scope: build/deployment automation of the designed solutions themselves, cost management tooling, and runtime observability of deployed solutions. ADP designs solutions; it does not operate them.
 
 The defining constraint that shapes the entire architecture is that **every artifact ADP produces is machine-readable first and human-readable second**. Prose documents and rendered diagrams are projections of an underlying typed model, never the primary record. This makes designs queryable, diffable, gate-able in CI, and consumable by other AI systems.
 
@@ -42,7 +44,7 @@ The defining constraint that shapes the entire architecture is that **every arti
 
 The platform treats an architecture design as data, not as a document or a drawing. An architect interacts with editing surfaces (forms, a diagram canvas, a recommendation panel), but each interaction mutates a single canonical model. Human-readable documents, C4 diagrams, requirements traceability matrices, and validation reports are all generated views over that model. Because the model is typed and versioned, the same design can be rendered for an enterprise audience as a system landscape and for a technical audience as a component decomposition without divergence.
 
-AI is woven through three distinct touchpoints rather than bolted on as a single chatbot: it normalizes incoming requirements into the canonical model, it recommends solution options grounded in retrieved organizational knowledge, and it judges finished designs against standards. Each touchpoint produces structured, cited, auditable output. No AI step is permitted to write to the canonical model without provenance and, where the change is consequential, human confirmation.
+AI is woven through three distinct touchpoints rather than bolted on as a single chatbot: it normalizes incoming requirements into the canonical model, it recommends solution options grounded in retrieved organizational knowledge, and it judges finished designs against standards. Each touchpoint produces structured, cited, auditable output — and every LLM interaction is recorded in a persistent reasoning log for traceability and cost tracking. No AI step is permitted to write to the canonical model without provenance and, where the change is consequential, human confirmation.
 
 ## Stakeholders and Personas
 
@@ -54,11 +56,11 @@ ADP serves three architect personas who work at different abstraction levels but
 | Solution architect | C4 L2 (Container) | Containers, integrations, NFRs, trade-offs | Buildability, fit to requirements, option comparison |
 | Technical architect | C4 L3/L4 (Component/Code) | Components, interfaces, technology choices | Correctness, detailed design, technical standards |
 
-Secondary stakeholders include governance and review boards (who consume validation reports and traceability), and downstream delivery teams (who consume the machine-readable design as the contract for what to build).
+Secondary stakeholders include governance and review boards (who consume validation reports, compliance exception lists, and audit exports), and downstream delivery teams (who consume the machine-readable design as the contract for what to build).
 
 ## Architecture Principles
 
-These principles govern ADP itself and are the seed set ADP ships with for evaluating designs built on it. They are stored as typed records (`id`, `statement`, `rationale`, `implications`) so the recommendation and validation subsystems can reference them directly.
+These principles govern ADP itself and are the seed set ADP ships with for evaluating designs built on it. They are stored as typed records so the recommendation and validation subsystems can reference them directly.
 
 | ID | Principle | Implication |
 |---|---|---|
@@ -69,24 +71,33 @@ These principles govern ADP itself and are the seed set ADP ships with for evalu
 | ADP-PR-05 | Fixed visual language | Diagram styling is locked and non-overridable to guarantee consistency |
 | ADP-PR-06 | Human-in-the-loop for consequence | AI proposes; a human confirms before consequential commits |
 | ADP-PR-07 | Traceability end to end | Every component traces to a requirement, principle, and validation verdict |
+| ADP-PR-08 | Every LLM interaction is logged | Token counts, latency, model ID, and prompt context recorded for auditability |
+| ADP-PR-09 | Lifecycle state is mandatory | Designs carry a formal lifecycle status from creation to decommission |
 
 ## Solution Capabilities
 
-The platform's capabilities map directly to the requested behaviors and to the architect personas. Each capability is owned by a subsystem described later in this document.
+The platform's capabilities map to architect personas. Each capability is owned by a subsystem described later in this document.
 
 | Capability | Description | Owning subsystem |
 |---|---|---|
-| Requirements intake | Ingest business requirements and normalize to a canonical model | Requirements Intake |
-| Pattern-grounded recommendation | Recommend solutions using existing patterns, standards, principles | AI Recommendation Engine |
-| Multi-level C4 design | Graphical design at context, container, and component levels | C4 Visual Design |
-| Consistent visual language | Fixed color and shape choices across all diagrams | C4 Visual Design |
-| Automated design validation | Judge designs against standards, patterns, prior solutions | LLM-as-a-Judge |
-| Machine-readable output | Persist and export all artifacts as typed, queryable data | Documentation Model |
-| Traceability | Thread requirements through design to validation | Canonical Data Model |
+| Requirements intake | Ingest text or structured requirements, normalize to canonical model via LLM | Requirements Intake |
+| Pattern-grounded recommendation | Recommend solutions using patterns, standards, principles, prior solutions | AI Recommendation Engine |
+| Multi-level C4 design | Interactive canvas at context, container, and component levels | C4 Visual Design |
+| Consistent visual language | Locked color/shape theme applied at render time; architects cannot override | Locked Theme Renderer |
+| Automated design validation | Judge designs against standards, patterns, prior solutions; fan-out critic model | LLM-as-a-Judge |
+| Knowledge base management | CRUD for patterns, standards, principles with vector embedding and hybrid search | Knowledge Retrieval |
+| CALM export/import | Export designs to Cloud Architecture Language and Mapping (CALM) JSON; import CALM patterns | CALM Integration |
+| Design lifecycle management | Formal lifecycle transitions (draft → proposed → current → deprecated → decommissioned) with date tracking | Lifecycle Management |
+| Element technology tags | Tag C4 elements with structured technology and vendor metadata | Technology Tags |
+| Portfolio analysis | Cross-portfolio aggregation by technology, lifecycle status; dependency search | Portfolio Analysis |
+| Governance reporting | Per-design audit trail aggregation, compliance exception extraction, paginated activity feed, CSV export | Governance Reporting |
+| LLM reasoning log | Persistent log of every LLM interaction with token counts, cost estimates, and span metadata | Reasoning Store |
+| Machine-readable output | Persist and export all artifacts as typed, queryable data; YAML/Markdown bundles to VCS | Documentation Model |
+| Traceability | Thread requirements through design to recommendation to validation verdict | Canonical Data Model |
 
 ## System Context (C4 Level 1)
 
-At the context level, ADP sits between architects and the organizational knowledge it grounds itself in. The diagram below is illustrative; the authoritative version is generated from the diagram-as-code source held in the model.
+At the context level, ADP sits between architects and the organizational knowledge it grounds itself in.
 
 ```mermaid
 C4Context
@@ -95,84 +106,97 @@ C4Context
   Person(reviewer, "Reviewer", "Governance / architecture review board")
   System(adp, "ADP", "AI-assisted architecture design platform")
   System_Ext(kb, "Knowledge Sources", "Patterns, standards, principles, reference architectures")
-  System_Ext(idp, "Identity Provider", "SSO / OIDC")
-  System_Ext(llm, "LLM Provider", "Hosted or self-hosted model endpoints")
-  System_Ext(vcs, "Version Control", "Stores exported machine-readable artifacts")
-  Rel(arch, adp, "Submits requirements, designs solutions")
-  Rel(reviewer, adp, "Reviews validation reports")
-  Rel(adp, kb, "Retrieves grounding knowledge")
-  Rel(adp, llm, "Recommendation and judging inference")
-  Rel(adp, idp, "Authenticates users")
-  Rel(adp, vcs, "Exports designs as code")
+  System_Ext(idp, "Keycloak", "OIDC identity provider; JWT token issuance and JWKS validation")
+  System_Ext(llm, "LLM Provider", "Configurable endpoint: Anthropic Claude or self-hosted model")
+  System_Ext(vcs, "Version Control", "Stores exported machine-readable artifact bundles")
+  Rel(arch, adp, "Submits requirements, designs solutions, reviews governance reports")
+  Rel(reviewer, adp, "Reviews validation reports, compliance exceptions, audit exports")
+  Rel(adp, kb, "Indexes and retrieves grounding knowledge")
+  Rel(adp, llm, "Intake, recommendation, and validation inference")
+  Rel(adp, idp, "Validates Bearer JWT tokens via JWKS endpoint")
+  Rel(adp, vcs, "Exports YAML/Markdown design bundles")
 ```
-
-The platform deliberately depends on external knowledge sources rather than embedding them, so that the organization's living patterns and standards remain the single canonical source and ADP indexes them.
 
 ## Container Architecture (C4 Level 2)
 
-ADP decomposes into a small set of containers behind an API gateway. The recommendation and validation work is orchestrated as agentic workflows rather than single model calls, which keeps each AI step inspectable and individually gate-able.
+ADP is a single deployed service — one FastAPI application hosting all capabilities as routers — backed by PostgreSQL and served with a React SPA. The original architecture anticipated separate intake, recommendation, and validation containers; the implemented architecture deliberately consolidates them into one process to minimize operational complexity while retaining logical separation through Python module boundaries and LangGraph workflow isolation.
 
 ```mermaid
 C4Container
   title Container View - ADP
   Person(arch, "Architect", "")
   System_Boundary(adp, "ADP") {
-    Container(web, "Design Workspace", "TypeScript SPA", "Canvas, forms, recommendation panel")
-    Container(api, "Platform API", "Python / FastAPI", "Auth, model CRUD, orchestration entrypoints")
-    Container(intake, "Requirements Intake Service", "Python", "Normalizes requirements to canonical model")
-    Container(reco, "Recommendation Service", "Python / LangGraph", "Grounded solution recommendation")
-    Container(judge, "Validation Service", "Python / LangGraph", "LLM-as-a-Judge design validation")
-    Container(render, "Diagram & Doc Renderer", "Python", "Structurizr DSL to SVG/PNG, model to docs")
-    ContainerDb(store, "Design Store", "PostgreSQL", "Canonical model, artifacts, audit trail")
-    ContainerDb(vector, "Knowledge Index", "Postgres + pgvector", "Embedded patterns, standards, principles")
+    Container(web, "Design Workspace", "TypeScript / React 18 / React Flow v12", "Canvas, forms, recommendation panel, portfolio, governance")
+    Container(api, "Platform API", "Python 3.12 / FastAPI / uvicorn", "16 REST routers; auth middleware; observability middleware; async AI workflow orchestration")
+    ContainerDb(store, "Design Store", "PostgreSQL 16", "Canonical model, design versions, audit trail, operations, LLM reasoning log, element technology tags")
+    ContainerDb(vector, "Knowledge Index", "PostgreSQL 16 + pgvector", "knowledge_items + knowledge_relationships tables; HNSW embedding index; GIN full-text index")
   }
-  System_Ext(llm, "LLM Provider", "")
+  System_Ext(keycloak, "Keycloak", "OIDC IdP")
+  System_Ext(llm, "LLM Provider", "Anthropic Claude or self-hosted")
   Rel(arch, web, "Uses", "HTTPS")
-  Rel(web, api, "Calls", "JSON/HTTPS")
-  Rel(api, intake, "Normalize requirements")
-  Rel(api, reco, "Request recommendations")
-  Rel(api, judge, "Request validation")
-  Rel(api, render, "Generate views")
-  Rel(api, store, "Reads/writes model")
-  Rel(reco, vector, "Hybrid retrieval")
-  Rel(judge, vector, "Retrieve standards")
-  Rel(reco, llm, "Inference")
-  Rel(judge, llm, "Inference")
+  Rel(web, api, "Calls", "JSON/HTTPS + Bearer JWT")
+  Rel(api, store, "Reads/writes model, audit, operations, reasoning, tags", "asyncpg / SQLAlchemy 2 async")
+  Rel(api, vector, "Hybrid retrieval (vector + keyword)", "asyncpg / pgvector")
+  Rel(api, llm, "Intake, recommendation, validation, judge inference", "HTTPS / httpx")
+  Rel(api, keycloak, "Fetches JWKS; validates RS256 JWT", "HTTPS / httpx")
 ```
 
-The split between `intake`, `reco`, and `judge` as separate services reflects that each is an independent AI workload with its own latency profile, prompt assets, and evaluation rubric, and each can be scaled and audited on its own.
+All AI orchestration (requirements intake, recommendation, LLM-as-judge) runs as in-process LangGraph workflows within the Platform API. Long-running workflows are tracked as `operations` records in PostgreSQL rather than in-memory, giving them crash recovery and cross-request status visibility.
+
+## Platform API — Router Inventory
+
+The Platform API exposes 16 FastAPI routers grouped by domain. All routes are prefixed `/api/v1/`.
+
+| Router prefix | Spec | Purpose |
+|---|---|---|
+| `/designs` | ADP-SPEC-002 | Design CRUD, version history, diff |
+| `/designs/{id}/layout` | ADP-SPEC-009 | Canvas element position persistence |
+| `/designs/{id}/lifecycle` | ADP-SPEC-030 | Lifecycle status transitions and date tracking |
+| `/designs/{id}/render` | ADP-SPEC-010 | PNG diagram generation via CairoSVG |
+| `/designs/{id}/tags` | ADP-SPEC-029 | Element technology tag CRUD |
+| `/designs/{id}/documents` | ADP-SPEC-011 | Human-readable document generation |
+| `/designs/{id}/export` | ADP-SPEC-011 | YAML/Markdown bundle export to VCS |
+| `/designs/{id}/calm` | ADP-SPEC-022 | CALM JSON export; CALM pattern import |
+| `/intake` | ADP-SPEC-006 | Requirements text intake and LLM normalization |
+| `/recommend` | ADP-SPEC-007 | Solution recommendation workflow (LangGraph) |
+| `/knowledge` | ADP-SPEC-005/020 | Knowledge item CRUD with vector indexing |
+| `/portfolio` | ADP-SPEC-031 | Cross-portfolio technology + lifecycle aggregation |
+| `/governance` | ADP-SPEC-032 | Per-design governance status, compliance exceptions, activity feed, CSV export |
+| `/reasoning` | ADP-SPEC-027 | LLM reasoning log queries |
+| `/theme` | ADP-SPEC-010 | Locked C4 theme JSON |
+| `/health` | ADP-SPEC-012 | Liveness check; Prometheus metrics scrape |
+| `/config` | ADP-SPEC-015 | LLM provider endpoint configuration |
+
+Every response carries `X-Trace-ID`, `X-Content-Type-Options`, `X-Frame-Options`, `Cross-Origin-Resource-Policy`, and `Referrer-Policy` headers applied by the observability middleware.
 
 ## Requirements Intake Subsystem
 
-The intake subsystem accepts business requirements in whatever form the organization produces them — uploaded documents, structured forms, or pasted text — and normalizes them into a canonical `Requirement` model. Normalization extracts the requirement statement, classifies it (functional, non-functional, constraint, or driver), assigns a stable traceability ID, and links it to any capabilities or principles it references. Extraction is AI-assisted but every extracted requirement is presented to the architect for confirmation before it enters the model, satisfying the human-in-the-loop principle.
+The intake subsystem accepts requirements as free-text or structured form input and normalizes them into typed `Requirement` model records using an LLM call instrumented with OpenTelemetry spans. Each LLM interaction is recorded in the reasoning log (token count, latency, model ID, prompt excerpt). Extracted proposals are presented to the architect for confirmation before entering the canonical model, satisfying the human-in-the-loop principle.
 
-The normalized requirement is the anchor for traceability. Downstream, every recommended option, every component placed on a diagram, and every validation verdict can be threaded back to the requirements that justify it, which is what lets a reviewer ask "why does this component exist?" and get a machine-answerable response.
+The normalized requirement is the anchor for traceability. Every recommended option, every component placed on a diagram, and every validation verdict threads back to the requirement that justifies it.
 
 ```python
-from enum import Enum
-from pydantic import BaseModel, Field
-
-class RequirementKind(str, Enum):
+class RequirementKind(StrEnum):
     FUNCTIONAL = "functional"
     NON_FUNCTIONAL = "non_functional"
     CONSTRAINT = "constraint"
     DRIVER = "driver"
 
 class Requirement(BaseModel):
-    id: str = Field(..., description="Stable traceability id, e.g. REQ-014")
+    id: RequirementId          # e.g. REQ-014
     statement: str
     kind: RequirementKind
-    source: str = Field(..., description="Origin document or input")
-    capabilities: list[str] = Field(default_factory=list)
-    principles: list[str] = Field(default_factory=list)
+    source: str                # origin document or input
     confirmed_by: str | None = None
 ```
 
+The intake UI (`IntakePage`) renders extracted proposals as cards; the architect accepts or rejects each before it becomes a confirmed `Requirement`. Confirmation triggers an audit entry with origin `human`.
+
 ## Knowledge Base and Pattern Repository
 
-The recommendation and validation subsystems are only as good as the knowledge they are grounded in. ADP maintains an indexed knowledge base assembled from the organization's existing assets: architecture patterns, reference architectures, technical and security standards, architecture principles, and a corpus of prior approved solutions. Each item is stored as a typed record with its full text, structured metadata, and an embedding, enabling hybrid retrieval that combines vector similarity, keyword search, and graph relationships (for example, "patterns that satisfy principle ADP-PR-03").
+The knowledge base stores the organization's patterns, standards, principles, and prior approved solutions as typed `KnowledgeItem` records, each carrying full text, structured metadata, and a sentence-transformer embedding. Hybrid retrieval combines HNSW vector similarity (via pgvector) with GIN-indexed keyword search (`tsvector`), and `KnowledgeRelationship` records capture cross-item links (e.g. "this pattern implements principle ADP-PR-03").
 
-Crucially, the knowledge base is indexed from the organization's canonical sources rather than being a fork of them. When a standard changes upstream, re-indexing keeps ADP's grounding current, and the provenance recorded on every recommendation and verdict points back to the specific knowledge version used.
+Knowledge items are indexed from upstream sources via Git connectors (`gitpython`) parsing Markdown/YAML files with frontmatter. When a standard changes upstream, re-indexing updates embeddings without forking the source.
 
 | Knowledge type | Role in recommendation | Role in validation |
 |---|---|---|
@@ -182,208 +206,320 @@ Crucially, the knowledge base is indexed from the organization's canonical sourc
 | Principles | Ranking and trade-off lens | Conformance target |
 | Prior solutions | Precedent and reuse | Consistency baseline |
 
+The `KnowledgePage` component provides full CRUD: architects can add, edit, and delete knowledge items through the UI, with immediate re-embedding on save.
+
 ## AI Recommendation Engine
 
-The recommendation engine turns confirmed requirements into ranked, justified solution options. It runs as an orchestrated workflow: it retrieves the patterns, standards, principles, and prior solutions relevant to the requirements; it generates a small set of candidate options that compose those building blocks; it performs a trade-off analysis across the options against the relevant non-functional requirements and principles; and it ranks them. Every option carries explicit provenance — which retrieved items it drew on — so an architect can see exactly why a recommendation was made and which standard or pattern backs each part of it.
+The recommendation engine turns confirmed requirements into ranked, justified solution options. It runs as a LangGraph graph inside the Platform API, with individually inspectable steps: retrieve relevant knowledge, generate candidate options, score and rank them, and record reasoning. Every option carries explicit citations — the exact knowledge item IDs it draws on — so an architect can see precisely why a recommendation was made.
 
-The engine recommends; it never silently commits. Accepting a recommendation is an explicit architect action that materializes the chosen option as model elements (containers, components, relationships) with their provenance preserved. Because options are grounded in retrieval rather than free generation, the engine reuses existing organizational solutions by construction rather than reinventing them.
+Accepting a recommendation is an explicit architect action that materializes the chosen option as `Element` and `Relationship` records in the canonical model, with provenance linking each element back to the recommendation ID and the knowledge it cites. Every LLM call within the workflow is recorded in `llm_reasoning_log` with token counts and cost estimates.
+
+The recommendation workflow state is persisted as an `operations` record in PostgreSQL, allowing status polling across requests and crash recovery on server restart. The `ReasoningPanel` UI component surfaces the per-step reasoning trace to the architect.
 
 ```python
 class SolutionOption(BaseModel):
-    id: str
+    id: OptionId               # e.g. OPT-003
     summary: str
-    grounded_on: list[str] = Field(
-        ..., description="IDs of patterns/standards/principles/prior solutions used"
-    )
-    satisfies: list[str] = Field(..., description="Requirement IDs addressed")
-    tradeoffs: dict[str, str] = Field(
-        default_factory=dict, description="NFR or principle -> assessment"
-    )
+    grounded_on: list[str]     # knowledge item IDs cited
+    satisfies: list[str]       # RequirementIds addressed
+    tradeoffs: dict[str, str]  # NFR/principle -> assessment
     rank: int
 ```
 
 ## C4 Visual Design Subsystem
 
-The design canvas lets architects build C4 diagrams at the context, container, and component levels, matching the three personas. The canvas is a view over the canonical model: placing an element on the container diagram creates a typed `Container` record, and drawing a relationship creates a typed `Relationship` record. This means the diagram and the underlying data can never drift, and the same model can be projected to a different C4 level without re-drawing.
+The design canvas is a React Flow (`@xyflow/react` v12) SPA that renders the canonical model as an interactive C4 diagram. Placing an element creates a typed `Element` record; drawing an arrow creates a typed `Relationship` record. Diagram state and the underlying data never drift because the canvas is a projection of the model, not an independent artifact.
 
-Diagrams are persisted as diagram-as-code (Structurizr DSL) generated from the model, which keeps them machine-readable, diffable in version control, and re-renderable. The renderer container produces SVG and PNG outputs on demand from that DSL. Architects manipulate the model through the canvas; they do not hand-author the DSL, but the DSL is always available as an export.
+Canvas layout positions (node coordinates) are persisted separately via `PUT /api/v1/designs/{id}/layout`, keeping layout state out of the canonical model while still surviving browser refreshes. The `InspectionPanel` sidebar provides element property editing, including technology tag management and relationship descriptions.
 
-```text
-workspace {
-  model {
-    arch = person "Architect"
-    adp  = softwareSystem "ADP" {
-      web   = container "Design Workspace"
-      api   = container "Platform API"
-      store = container "Design Store"
-    }
-    arch -> web "Uses"
-    web  -> api "Calls"
-    api  -> store "Reads/writes"
-  }
-  views {
-    container adp { include * autolayout lr }
-    theme default
-  }
-}
-```
+The platform does not use Structurizr DSL. Diagrams are rendered directly from the React canvas for interactive editing and from the locked theme via CairoSVG for static PNG export. Both paths produce the same visual language.
 
-## Fixed Diagram Color Specification
+## Locked Theme Renderer
 
-To guarantee that every diagram across the platform looks consistent regardless of who authored it, ADP enforces a single locked visual theme. Architects cannot override colors, shapes, or fonts; styling is a property of the element's type in the model, applied automatically at render time. The theme is itself a machine-readable artifact, versioned alongside the schema, so a change to the visual language is a deliberate, reviewable event rather than an ad-hoc per-diagram choice.
+Diagram styling is defined in `c4-theme.json`, a machine-readable artifact validated against a JSON Schema generated from the `LockedTheme` Pydantic model. Architects cannot override colors, shapes, or fonts — styling is a property of the element's type, applied automatically.
 
-The palette maps C4 element types to fixed fills, strokes, and text colors chosen for sufficient contrast. Datastores are distinguished by shape (cylinder) in addition to color, so the diagrams remain legible without relying on color alone.
+PNG rendering is performed by CairoSVG (`cairosvg >= 2.7`), which consumes SVG generated from the canonical model and theme. No Java or Structurizr runtime is required. The render endpoint is `POST /api/v1/designs/{id}/render`.
+
+The updated WCAG AA-compliant palette:
 
 | Element type | Fill | Stroke | Text | Shape |
 |---|---|---|---|---|
 | Person / Actor | `#08427B` | `#052E56` | `#FFFFFF` | Person |
 | Software System (in scope) | `#1168BD` | `#0B4884` | `#FFFFFF` | RoundedBox |
 | External System | `#999999` | `#6B6B6B` | `#FFFFFF` | RoundedBox |
-| Container | `#438DD5` | `#2E6295` | `#FFFFFF` | RoundedBox |
+| Container | `#2874A6` | `#1A5276` | `#FFFFFF` | RoundedBox |
 | Component | `#85BBF0` | `#5D9BD8` | `#1A1A1A` | Component |
 | Datastore | `#2E7D32` | `#1B5E20` | `#FFFFFF` | Cylinder |
 | Boundary | none | `#444444` | `#444444` | DashedBox |
 | Relationship | n/a | `#707070` | `#444444` | Solid line |
 | Async relationship | n/a | `#707070` | `#444444` | Dashed line |
 
-This theme is published as a JSON document and is the only styling the renderer will apply. Because styling derives from element type, two architects designing unrelated solutions produce diagrams that are visually identical in language, which is the consistency the platform guarantees.
+The container fill was updated from `#438DD5` to `#2874A6` (contrast ratio ≥ 4.5:1 against white text, meeting WCAG AA). The theme is versioned alongside the schema; a color change is a deliberate, reviewable event.
 
 ## LLM-as-a-Judge Validation Subsystem
 
-Validation evaluates a completed or in-progress design against the organization's standards, patterns, and prior approved solutions, and produces a structured verdict an architect or review board can act on. Rather than a single model call, validation fans out into independent critics, each scoped to one dimension — for example a standards-conformance critic, a principles-alignment critic, a pattern-fit critic, and a consistency-with-prior-solutions critic. Each critic retrieves the specific standards or patterns relevant to the design, scores the design against a fixed rubric, and must cite the exact item it is judging against. An aggregation step combines the critic verdicts into an overall result and applies deterministic gating thresholds.
+Validation evaluates a design against the organization's standards, patterns, and prior approved solutions and produces a structured verdict. The judge runs as a LangGraph fan-out: independent critic nodes each scoped to one dimension (standards conformance, principles alignment, pattern fit, consistency with prior solutions) retrieve relevant knowledge and score the design against a fixed rubric. Each critic must cite the exact knowledge item it is judging against. An aggregation node combines critic verdicts into an overall result.
 
-The judge produces machine-readable verdicts, not prose opinions. Each finding identifies the design element at fault, the standard or principle it violates, a severity, and a rationale citing the retrieved source. Gating is deterministic on top of those scores so that "pass" and "fail" are reproducible rather than at the model's discretion, and a human reviewer can override any verdict with a recorded justification. Verdicts are written to the audit trail and linked to the design version they evaluated, so the validation history of a design is itself queryable.
+Verdicts are machine-readable, not prose opinions. Each `Finding` identifies the design element at fault, the violated standard or principle, a severity, and a citation. Gating is deterministic on critic scores. A human reviewer can override any verdict with a recorded justification. Verdicts are written to the audit trail linked to the design version they evaluated.
 
 ```python
-class Severity(str, Enum):
-    INFO = "info"
-    MINOR = "minor"
-    MAJOR = "major"
-    BLOCKER = "blocker"
-
 class Finding(BaseModel):
+    id: FindingId              # e.g. FND-002
     element_id: str
-    violated: str = Field(..., description="Standard/principle/pattern id")
-    severity: Severity
-    rationale: str
-    citation: str = Field(..., description="Knowledge item + version used")
+    violated: str              # knowledge item ID
+    severity: Literal["info", "minor", "warning", "critical"]
+    summary: str
+    source: str | None         # citation
 
 class Verdict(BaseModel):
+    id: VerdictId              # e.g. VRD-001
     design_version: str
-    score: float = Field(..., ge=0.0, le=1.0)
-    passed: bool
-    findings: list[Finding] = Field(default_factory=list)
+    score: float               # 0.0 – 1.0
+    status: VerdictStatus      # pending / accepted / rejected / deferred
+    findings: list[Finding]
     reviewer_override: str | None = None
 ```
 
+The `ComplianceTab` in the Governance UI surfaces FAIL and ADVISORY findings extracted from design JSONB across all designs, enabling portfolio-level compliance tracking.
+
+## CALM Integration
+
+ADP exports designs to and imports patterns from the Cloud Architecture Language and Mapping (CALM) JSON format. Export (`GET /api/v1/designs/{id}/calm/export`) maps ADP elements and relationships to CALM nodes and edges. Import (`POST /api/v1/designs/{id}/calm/import`) reads a CALM document and creates corresponding elements and relationships in the target design, with each imported element attributed to its CALM source. This provides interoperability with tooling that speaks CALM and allows the knowledge base to be seeded from externally authored CALM pattern libraries.
+
+## Design Lifecycle Management
+
+Every design carries a formal `lifecycle_status` enforced at the database and API layers. Status transitions follow a defined state machine; invalid transitions are rejected at the API with a 422. Five date columns track the history of each transition.
+
+```
+draft → proposed → current → deprecated → decommissioned
+                              ↑
+                         (from current)
+```
+
+| Status | Meaning | Date column |
+|---|---|---|
+| `draft` | Work in progress, not submitted for review | `created_at` |
+| `proposed` | Submitted for architecture review | `proposed_date` |
+| `current` | Approved and live | `current_since` |
+| `deprecated` | Superseded; retained for reference; `review_due` tracks planned removal | `review_due` |
+| `decommissioned` | Formally retired | `retirement_date` |
+
+The `LifecycleTransitionButton` UI component surfaces valid next transitions for the current status. The `designs` table carries `lifecycle_status`, `proposed_date`, `current_since`, `review_due`, and `retirement_date` columns added by Alembic migration 006; the column is B-tree indexed for portfolio queries.
+
+## Element Technology Tags
+
+C4 elements (containers and components) can be tagged with structured technology metadata via `element_technology_tags`. Each tag records the element ID, element name, technology name, and vendor. Tags are indexed for efficient portfolio-level technology queries.
+
+The `TechnologyEditor` sidebar component provides tag CRUD within the inspection panel. Tags are stored in their own table (migration 005) rather than inside the JSONB `content` column, giving them first-class queryability for portfolio analysis.
+
+```python
+class TechnologyMetadata(BaseModel):
+    technology: str | None = None   # e.g. "PostgreSQL"
+    vendor: str | None = None       # e.g. "Amazon Web Services"
+```
+
+## Portfolio Analysis
+
+The portfolio router (`/api/v1/portfolio`) provides four read-only aggregation endpoints that operate across all designs without requiring new database tables — they query the B-tree and GIN indexes already present on `element_technology_tags` and `designs.lifecycle_status`.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /portfolio/technologies` | Technology landscape: distinct technology names ranked by design count |
+| `GET /portfolio/designs` | Filterable design list by technology (ILIKE) and/or lifecycle status |
+| `GET /portfolio/search` | Cross-design keyword search across element names and technology tags |
+| `GET /portfolio/summary` | Header counts: total designs, counts by lifecycle status, overdue review count |
+
+The `PortfolioPage` frontend presents the technology landscape, filterable design list, dependency search, and a "Governance Report" button that opens the `GovernancePage`. Designs with a `review_due` in the past are flagged `overdue_review: true`.
+
+## Governance Reporting
+
+The governance router (`/api/v1/governance`) provides four read-only endpoints that aggregate across `audit_entries`, `designs`, `design_versions.content` (JSONB), `operations`, and `llm_reasoning_log`. No new migrations are required.
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /governance/status` | Per-design summary: last activity, audit count, accepted recommendations, LLM reasoning record count |
+| `GET /governance/exceptions` | FAIL and ADVISORY findings extracted from design JSONB, sorted FAIL-first |
+| `GET /governance/activity` | Paginated audit log filtered by date range (max 90 days), optional action/actor filters |
+| `GET /governance/activity/export` | CSV stream of the same query; `Content-Disposition: attachment` response |
+
+The `GovernancePage` frontend presents three tabs: Design Status, Compliance, and Activity Feed. The Activity Feed includes date range pickers, action/actor filter fields, and a "Download CSV" button.
+
+Dynamic SQL clause building is used throughout the governance router to avoid the asyncpg NULL-typed-parameter and SQLAlchemy `::text` cast incompatibility: filter clauses are only appended to the query when the caller provides a value.
+
+## LLM Reasoning Store
+
+Every LLM call made anywhere in the platform — intake, recommendation, validation, judge — is recorded in `llm_reasoning_log` (migration 004). Each record carries:
+
+- `operation_id` — links to the async operation that triggered the call
+- `step_name` — the LangGraph node or pipeline step
+- `model_id` — the model endpoint called
+- `prompt_tokens`, `completion_tokens`, `total_tokens` — for cost tracking
+- `latency_ms` — wall time of the LLM call
+- `trace_id` — OpenTelemetry trace ID for correlation
+- `created_at`
+
+The `ReasoningPanel` component surfaces the reasoning chain for a completed recommendation, showing the architect how the engine arrived at each option. The governance `/status` endpoint aggregates reasoning record counts per design. The `GET /api/v1/reasoning` endpoint supports querying reasoning records by operation or design.
+
 ## Machine-Readable Documentation Model
 
-Every artifact ADP produces — designs, requirements matrices, recommendation records, validation reports, and the human-readable documents rendered for stakeholders — conforms to a published schema and carries typed metadata. There is no artifact whose primary form is unstructured prose. Human-readable documents like this one are generated as a projection of the model and stamped with front matter that mirrors the model's fields, so the rendered document is as parseable as the data behind it.
+Every artifact ADP produces — designs, requirements matrices, recommendation records, validation reports, and human-readable documents — conforms to a published schema and carries typed metadata. Human-readable documents are generated as projections of the model via the `adp.docs` module and stamped with front matter that mirrors the model's fields.
 
-This is what makes ADP's output usable by other systems: a CI pipeline can gate a merge on a design's validation score, a search index can answer "which solutions use pattern P-12", and a downstream delivery team can consume the design as a contract. Export targets include the canonical JSON/YAML model, the Structurizr DSL for diagrams, rendered SVG/PNG, and generated Markdown documents, all of which are pushed to version control as the durable record.
+Export bundles (`adp.export`) produce YAML/Markdown archives pushed atomically to a configured VCS root. Export requires an `ART-VIII confirmation_id` gate and writes an `ART-IX` audit entry. Export targets: canonical YAML model, rendered Markdown document, and CALM JSON.
 
 ## Canonical Data Model
 
-The canonical model is the single source of truth that every subsystem reads from and writes to. It binds requirements, design elements, recommendations, and verdicts into one traceable graph. The top-level container is the `ArchitectureDescription`, which holds the requirements, the C4 elements and relationships, the recommendation records that justify them, and the validation history.
+The canonical model is the single source of truth. The top-level `ArchitectureDescription` is persisted as JSONB in `design_versions.content`, versioned immutably; the current version pointer lives in the `designs` row. Schema evolution is governed by `SCHEMA_VERSION` in `adp.models` and validated at read/write boundaries.
 
 ```python
-class C4Level(str, Enum):
-    CONTEXT = "context"
-    CONTAINER = "container"
-    COMPONENT = "component"
-
-class Element(BaseModel):
-    id: str
-    name: str
-    level: C4Level
-    element_type: str = Field(..., description="person|system|container|component|datastore")
-    satisfies: list[str] = Field(default_factory=list, description="Requirement ids")
-    provenance: str | None = Field(None, description="Recommendation/option id if AI-derived")
-
-class Relationship(BaseModel):
-    id: str
-    source: str
-    target: str
-    description: str
-    technology: str | None = None
-    asynchronous: bool = False
-
 class ArchitectureDescription(BaseModel):
     id: str
-    version: str
+    version: str                          # e.g. "1.0.0"
+    title: str
+    lifecycle_status: LifecycleStatus     # ADP-SPEC-030
     requirements: list[Requirement]
     elements: list[Element]
     relationships: list[Relationship]
-    recommendations: list[SolutionOption] = Field(default_factory=list)
-    verdicts: list[Verdict] = Field(default_factory=list)
+    recommendations: list[SolutionOption]
+    verdicts: list[Verdict]
+    findings: list[Finding]               # compliance exceptions
 ```
 
-The `satisfies` and `provenance` fields are what carry traceability: any element can be threaded back to the requirements it serves and the recommendation that produced it, and forward to the verdicts that judged it.
+All identifier types are typed string aliases validated by regex (`REQ-\d{3}`, `ELM-\d{3}`, etc.), making cross-entity references checkable at model load time. A generated JSON Schema (`generated/architecture-description.schema.json`) is the machine-readable contract; it is regenerated by `adp-generate` and checked for drift in CI.
 
 ## Data Architecture
 
-ADP separates three data concerns. The canonical model and all design artifacts live in a relational store (PostgreSQL), which gives transactional integrity for the model graph and supports the queries that traceability and reporting depend on. The knowledge index lives in a vector-capable store (PostgreSQL with pgvector) holding embeddings of patterns, standards, principles, and prior solutions alongside their structured metadata, supporting hybrid retrieval. An append-only audit trail records every model mutation, recommendation, and verdict with its origin and timestamp, satisfying the provenance principle and making the platform's behavior reconstructable.
+ADP uses PostgreSQL 16 as its single stateful backing service, serving both the relational model store and the vector knowledge index (via the `pgvector` extension). Six Alembic migrations bring the schema from zero to its current state.
 
-Exported artifacts are pushed to version control, which serves as the durable, diffable record of designs over time and the integration point for downstream consumers. The relational store is the system of record during active design; version control is the system of record for published designs.
+| Migration | Tables added |
+|---|---|
+| 001 | `designs`, `design_versions`, `audit_entries` |
+| 002 | `knowledge_items`, `knowledge_relationships` (HNSW index on `embedding`, GIN on `full_text`) |
+| 003 | `operations` (persistent async workflow state) |
+| 004 | `llm_reasoning_log` |
+| 005 | `element_technology_tags` (B-tree + GIN indexes) |
+| 006 | `lifecycle_status`, `proposed_date`, `current_since`, `review_due`, `retirement_date` columns on `designs` |
+
+The `designs` table is the system of record for active design work. `design_versions` is append-only — no row is ever updated or deleted — making the full version history of every design reconstructable. `audit_entries` is similarly append-only. `operations` rows are expired and cleaned up by a background asyncio task that runs every 10 minutes inside the API process.
+
+Exported artifact bundles in VCS serve as the durable, diffable record of published designs and the integration point for downstream consumers.
+
+## Authentication and Authorisation
+
+Authentication is implemented via `AuthMiddleware` (Starlette middleware) that validates RS256 Bearer JWTs issued by Keycloak. On first request, the middleware fetches the JWKS endpoint; the public key set is cached in-process and refreshed on key-not-found errors. Token validation uses `python-jose[cryptography]`.
+
+`ADP_AUTH_ENABLED` (default: `true`) is the runtime toggle. Setting `ADP_AUTH_ENABLED=false` bypasses validation, which is required for local development without Keycloak and for the real-stack E2E test suite.
+
+Authorisation is role-based, aligned to the architect and reviewer personas, controlling who can confirm requirements, accept recommendations, and override verdicts.
+
+The frontend reads `VITE_AUTH_ENABLED` to decide whether to attach Bearer tokens via the Keycloak JS adapter. When auth is enabled, all API mutations go through `apiMutation()`, which injects the `Authorization: Bearer <token>` header from the Keycloak token store.
+
+Security headers applied to every response: `X-Content-Type-Options: nosniff`, `Cross-Origin-Resource-Policy: same-origin`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`. Unhandled exceptions return a generic 500 body without stack-trace disclosure.
+
+## Observability and Telemetry
+
+Observability is implemented in the `adp.telemetry` package (ADP-SPEC-012):
+
+**Tracing**: Every request carries an `X-Trace-ID` (extracted from the header or generated as a UUID). The trace ID is propagated via a `ContextVar` and injected into all log records by `TraceIdFilter`, so logs from a single request are correlatable without a distributed tracing backend.
+
+**Metrics**: Prometheus metrics are scraped at `GET /api/v1/health/metrics`. Four metrics are emitted:
+- `adp_requests_total` (counter, labels: method, route, status)
+- `adp_request_latency_seconds` (histogram, label: route)
+- `adp_active_requests` (gauge)
+- `adp_errors_total` (counter, label: route)
+
+**AI step spans**: Each LangGraph step uses the `ai_step_span()` context manager to emit an OpenTelemetry span with canonical attribute names from `adp.telemetry.contract`. LLM call metadata (model ID, token counts, latency) is attached as span attributes and simultaneously persisted to `llm_reasoning_log`.
+
+**No-leak gate**: CI enforces `QG-08` — `ADP_LLM_API_KEY` must never appear in any log, span attribute, test output, or source file.
 
 ## Integration and APIs
 
-The Platform API is the single entrypoint, exposing typed REST endpoints for model CRUD, requirements intake, recommendation requests, validation requests, and view generation. All payloads conform to the published schema, and the OpenAPI specification is itself a machine-readable contract that downstream tooling consumes. Outbound integrations are limited and explicit: an identity provider over OIDC for authentication, configurable LLM endpoints (hosted or self-hosted) for inference, the knowledge sources that feed the index, and version control for export.
+The Platform API is the single external entrypoint. All payloads conform to the published JSON Schema. The OpenAPI specification (served by FastAPI at `/openapi.json`) is the machine-readable contract for downstream tooling.
 
-Because the recommendation and validation services are orchestrated workflows, the API exposes them as asynchronous operations with status polling, so long-running multi-step AI work does not block the interactive surface.
+Outbound integrations:
+- **Keycloak** over OIDC/HTTPS: JWKS fetch and JWT validation
+- **LLM provider** over HTTPS: configurable endpoint (Anthropic Claude or self-hosted), set via `ADP_LLM_API_KEY` and `ADP_LLM_BASE_URL`; key is never logged
+- **Knowledge sources** via Git: `gitpython` fetches Markdown/YAML from configured repos for knowledge indexing
+- **Version control** for export bundles: design YAML/Markdown pushed atomically to `ADP_VCS_ROOT`
 
-## Security, Governance and Compliance
-
-Authentication is delegated to the organization's identity provider over OIDC; ADP holds no primary credentials. Authorization is role-based, aligned to the architect and reviewer personas, controlling who can confirm requirements, accept recommendations, and override verdicts. The append-only audit trail and the provenance recorded on every AI-derived change provide the governance evidence that review boards need, and make it possible to answer after the fact who or what introduced any element of a design and on what grounds.
-
-Grounded-AI and human-in-the-loop are governance controls as much as design principles: because the recommendation and validation subsystems must cite retrieved organizational knowledge and cannot commit consequential changes without confirmation, the platform structurally resists ungrounded or unreviewed AI output entering an approved design.
+AI workflows are exposed as asynchronous operations with status polling (`GET /api/v1/recommend/{op_id}`, `GET /api/v1/intake/{op_id}`), so long-running LangGraph workflows do not block the interactive canvas.
 
 ## Non-Functional Requirements
 
-| Category | Target |
-|---|---|
-| Interactive latency | Canvas and model edits respond in well under one second |
-| Recommendation latency | Asynchronous; results typically within tens of seconds |
-| Validation latency | Asynchronous; full fan-out validation within minutes |
-| Availability | Business-hours critical; no hard real-time requirement |
-| Auditability | Every model mutation and AI action recorded immutably |
-| Determinism | Validation gating is deterministic given critic scores |
-| Portability | LLM provider is configurable, including self-hosted |
-| Schema stability | Backward-compatible schema evolution with versioning |
+| Category | Target | Status |
+|---|---|---|
+| Interactive latency | Canvas and model edits respond in well under one second | Met |
+| Recommendation latency | Asynchronous; results within tens of seconds | Met |
+| Validation latency | Asynchronous; full fan-out validation within minutes | Met |
+| Availability | Business-hours critical; no hard real-time requirement | Met |
+| Auditability | Every model mutation and AI action recorded immutably | Met — `audit_entries` + `llm_reasoning_log` |
+| Determinism | Validation gating is deterministic given critic scores | Met |
+| Portability | LLM provider is configurable, including self-hosted | Met — `ADP_LLM_BASE_URL` |
+| Schema stability | Backward-compatible schema evolution with versioning | Met — `SCHEMA_VERSION` + Alembic migrations |
+| Security | No stack-trace disclosure; security headers on all responses; API key never logged | Met |
+| Observability | Prometheus metrics + structured trace-correlated logging | Met |
+| WCAG contrast | Container fill ≥ 4.5:1 contrast ratio against white text | Met — `#2874A6` |
 
-The asynchronous treatment of AI workloads is a deliberate NFR decision: interactive editing must stay fast, while recommendation and validation are allowed to take the time needed to be thorough and well-grounded.
+## Testing Strategy
+
+ADP is tested at three levels:
+
+**Unit and contract tests** (`pytest tests/ --ignore=tests/integration`): Test the canonical data model, store operations, recommendation steps, and API contract shapes without a database. Run in CI on every push.
+
+**Integration tests** (`pytest tests/integration`): Run against a real PostgreSQL container (`testcontainers-python`). Validate store operations, migration state, and end-to-end persistence.
+
+**Real-stack E2E tests** (`npm run test:e2e:flows`): Playwright browser tests that run the full stack — Vite dev server + uvicorn + real PostgreSQL — with no API mocking. Cover design creation, knowledge item lifecycle (create → delete), portfolio and governance navigation, and API smoke checks against all new routers. These tests exposed and drove fixes for three pre-existing production bugs: asyncpg NULL-parameter SQL syntax errors in `governance.py` and `portfolio.py`, and a missing SQLAlchemy Table column definition in `records.py`.
+
+All 18 API E2E tests and 4 browser E2E tests pass against the running system with `ADP_AUTH_ENABLED=false`.
 
 ## Deployment Architecture
 
-ADP is built for containerized deployment. The web workspace, Platform API, the three AI services (intake, recommendation, validation), and the renderer each run as independent containers, with PostgreSQL (model store and vector index) as managed stateful backing services. The AI services scale independently of the interactive tier because their load profile is bursty and latency-tolerant, while the API and web tiers scale for interactive responsiveness. LLM inference is externalized to a configurable endpoint so the same deployment can target a hosted or a self-hosted model without code change.
+ADP is containerized and deployed as two units: the Python FastAPI backend (with static frontend files embedded via `ADP_STATIC_DIR`) and the PostgreSQL 16 database (with pgvector extension). The Vite-built React frontend is served as static files from the same FastAPI process in production, eliminating the need for a separate static file server.
 
-The reference stack is Python-first for all backend and AI services, which aligns the platform with a Python-centric engineering practice and keeps the recommendation and validation orchestration, the schema definitions, and the renderer in one language and one set of typed contracts.
+Environment variables drive all runtime configuration:
+
+| Variable | Purpose |
+|---|---|
+| `ADP_DATABASE_URL` | PostgreSQL connection string (`postgresql+asyncpg://...`) |
+| `ADP_AUTH_ENABLED` | `true` (default) or `false` to bypass JWT validation |
+| `ADP_LLM_API_KEY` | LLM provider API key — never logged or emitted to spans |
+| `ADP_LLM_BASE_URL` | Configurable LLM endpoint (Anthropic or self-hosted) |
+| `ADP_VCS_ROOT` | Local path for export bundle writes |
+| `ADP_STATIC_DIR` | Path to Vite build output (enables frontend serving in Docker) |
 
 ## Technology Stack
 
-The stack below is the reference choice for the high-level architecture; specific versions are pinned in the build, not here. It is deliberately conventional so that the platform's novelty lives in its model and its AI grounding, not in exotic infrastructure.
-
-| Concern | Choice | Rationale |
+| Concern | Choice | Version |
 |---|---|---|
-| Backend / AI services | Python, FastAPI | Typed APIs, strong AI ecosystem, single-language backend |
-| Schema and validation | Pydantic v2 | Typed canonical model shared across services |
-| AI orchestration | LangGraph | Inspectable, gate-able multi-step recommendation and validation |
-| Model store | PostgreSQL | Transactional integrity for the model graph |
-| Knowledge index | PostgreSQL + pgvector | Hybrid retrieval co-located with metadata |
-| Diagrams | Structurizr DSL | Diagram-as-code, machine-readable, themeable, version-controllable |
-| Web workspace | TypeScript SPA | Interactive canvas and recommendation surface |
-| Identity | OIDC via external IdP | No primary credentials held by ADP |
+| Backend | Python + FastAPI + uvicorn | Python 3.12, FastAPI ≥ 0.111, uvicorn ≥ 0.30 |
+| Async ORM | SQLAlchemy (async) + asyncpg | SQLAlchemy 2.x, asyncpg 0.31 |
+| Database | PostgreSQL + pgvector | PostgreSQL 16, pgvector ≥ 0.3 |
+| Schema migration | Alembic | 6 migration files |
+| Schema validation | Pydantic v2 | Shared canonical model |
+| AI orchestration | LangGraph + LangChain Core | LangGraph ≥ 0.2 |
+| LLM client | httpx (async) | ≥ 0.27 |
+| Embeddings | sentence-transformers | ≥ 2.7 (self-hosted, model-agnostic) |
+| JWT validation | python-jose[cryptography] | ≥ 3.3 |
+| CALM export | Built-in CALM JSON serializer | Custom, no external dep |
+| PNG rendering | CairoSVG | ≥ 2.7 (no Java required) |
+| Git connector | GitPython + python-frontmatter | ≥ 3.1 / ≥ 1.1 |
+| Telemetry | OpenTelemetry SDK + prometheus-client | ≥ 1.25 / ≥ 0.17 |
+| Frontend | TypeScript + React 18 + Vite 5 | TypeScript 5.x |
+| C4 canvas | @xyflow/react (React Flow) | v12 |
+| State management | TanStack Query v5 + Zustand v4 | — |
+| E2E testing | Playwright | ≥ 1.47 |
+| Identity provider | Keycloak | External; OIDC/JWKS |
 
 ## Risks, Assumptions and Open Questions
 
-The platform's value depends on the quality and currency of the indexed knowledge base; if patterns and standards are sparse or stale, recommendations and validation degrade, so knowledge curation is a first-class operational concern, not a one-time setup. There is a residual risk that architects over-trust AI recommendations; the grounding, provenance, and human confirmation controls mitigate this but do not eliminate it, and the platform should surface uncertainty rather than present recommendations as settled.
-
-Open questions for the next iteration include how finely the validation rubrics should be configurable per organization, whether the C4 model should extend to a fourth (code) level or stop at component, and how schema evolution is governed once external consumers depend on exported artifacts. These are flagged here rather than resolved, consistent with this being a high-level architecture intended to frame, not foreclose, the detailed design.
+The platform's value depends on the quality and currency of the indexed knowledge base; if patterns and standards are sparse or stale, recommendations and validation degrade. Knowledge curation is a first-class operational concern, not a one-time setup.
 
 | ID | Item | Type | Disposition |
 |---|---|---|---|
-| OQ-01 | Per-org validation rubric configurability | Open question | Defer to detailed design |
-| OQ-02 | Support C4 level 4 (code) | Open question | Defer; component is the current floor |
 | AS-01 | Knowledge sources are curated and kept current | Assumption | Owner: enterprise architecture |
-| RK-01 | Over-trust of AI recommendations | Risk | Mitigated by grounding + human-in-loop |
-| RK-02 | Stale knowledge degrades AI quality | Risk | Mitigated by re-indexing process |
+| AS-02 | Keycloak is available and correctly configured before production deploy | Assumption | Owner: platform ops |
+| RK-01 | Over-trust of AI recommendations | Risk | Mitigated by grounding + human-in-loop + reasoning trace UI |
+| RK-02 | Stale knowledge degrades AI quality | Risk | Mitigated by re-indexing pipeline; `knowledge_items.updated_at` tracked |
+| RK-03 | LLM provider outage blocks intake and recommendation workflows | Risk | Mitigated by configurable provider; self-hosted fallback via `ADP_LLM_BASE_URL` |
+| OQ-01 | Per-org validation rubric configurability | Open question | Defer to detailed design; current rubric is a fixed critic set |
+| OQ-02 | Support C4 level 4 (code) | Open question | Deferred; component is the current floor |
+| OQ-03 | Schema evolution governance for downstream consumers of exported YAML | Open question | `SCHEMA_VERSION` provides backward-compat signal; migration policy TBD |

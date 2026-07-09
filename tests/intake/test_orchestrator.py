@@ -15,11 +15,9 @@ from adp.intake.models import (
     IntakeSubmission,
     ProposalStatus,
     SubmissionMode,
-    VerificationStatus,
 )
 from adp.intake.orchestrator import ExtractionOrchestrator
 from adp.intake.telemetry import IntakeTelemetry
-
 
 # ── Test-only shim: wraps a plain dict as an OperationStore ──────────────────
 

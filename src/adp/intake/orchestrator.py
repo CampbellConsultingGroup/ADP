@@ -63,7 +63,6 @@ class ExtractionOrchestrator:
 
         operation_store is an OperationStore instance (ADP-SPEC-024).
         """
-        from adp.store.operations import OperationStore as _OpStore
 
         op_id = submission.operation_id
         await operation_store.update(op_id, status="running")
@@ -150,6 +149,16 @@ class ExtractionOrchestrator:
                 "citations_present": citations_present,
             })
 
+            # ADP-SPEC-027: write immutable extraction reasoning record (fire-and-forget)
+            _write_extraction_reasoning(
+                operation_id=op_id,
+                model_id=self._llm._model,
+                result_summary=result_summary,
+                prompt_text=submission.text,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
+
         except Exception as exc:
             error_msg = str(exc)
             await operation_store.update(op_id, status="failed", payload_patch={
@@ -220,7 +229,7 @@ class ExtractionOrchestrator:
                 f"Proposal {proposal_id!r} is not pending (status={p_status})"
             )
 
-        draft = proposal.get("draft_statement") if isinstance(proposal, dict) else proposal.draft_statement
+        draft = proposal.get("draft_statement") if isinstance(proposal, dict) else proposal.draft_statement  # noqa: E501
         statement = edited_statement or draft
         if not statement or not statement.strip():
             raise ValueError("Requirement statement must be non-empty (NFR-002)")
@@ -266,10 +275,9 @@ class ExtractionOrchestrator:
             proposals[proposal_id] = {**proposal, **proposal_update}
         else:
             # Legacy path (should not occur in production after ADP-SPEC-024)
-            import dataclasses as _dc
             proposal_dict = {
                 "proposal_id": proposal.proposal_id, "operation_id": proposal.operation_id,
-                "submission_id": proposal.submission_id, "draft_statement": proposal.draft_statement,
+                "submission_id": proposal.submission_id, "draft_statement": proposal.draft_statement,  # noqa: E501
                 "kind": proposal.kind.value, "source_excerpt": proposal.source_excerpt,
                 "verification_status": proposal.verification_status.value,
                 "confidence": proposal.confidence, "status": proposal.status.value,
@@ -316,7 +324,7 @@ class ExtractionOrchestrator:
         else:
             proposals[proposal_id] = {
                 "proposal_id": proposal.proposal_id, "operation_id": proposal.operation_id,
-                "submission_id": proposal.submission_id, "draft_statement": proposal.draft_statement,
+                "submission_id": proposal.submission_id, "draft_statement": proposal.draft_statement,  # noqa: E501
                 "kind": proposal.kind.value, "source_excerpt": proposal.source_excerpt,
                 "verification_status": proposal.verification_status.value,
                 "confidence": proposal.confidence, "status": "rejected",
@@ -354,3 +362,39 @@ class ExtractionOrchestrator:
 def _count_chars(text: str) -> int:
     """Rough token estimate from character count (fallback when usage not in response)."""
     return max(1, len(text) // 4)
+
+
+def _write_extraction_reasoning(
+    operation_id: str,
+    model_id: str,
+    result_summary: str,
+    prompt_text: str,
+    input_tokens: int,
+    output_tokens: int,
+) -> None:
+    """Fire-and-forget write of intake extraction reasoning (ADP-SPEC-027)."""
+    import asyncio as _asyncio
+
+    from adp.store.reasoning import ReasoningRecord, _hash_prompt
+
+    async def _do_write() -> None:
+        try:
+            from adp.api.deps import get_reasoning_store
+            store = await get_reasoning_store()
+            await store.write(ReasoningRecord(
+                operation_id=operation_id,
+                option_id=None,
+                step_name="extract",
+                model_id=model_id,
+                reasoning_text=result_summary,
+                prompt_hash=_hash_prompt(prompt_text),
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            ))
+        except Exception as exc:
+            _logger.debug("intake reasoning write skipped: %s", exc)
+
+    try:
+        _asyncio.create_task(_do_write())
+    except RuntimeError:
+        pass  # No event loop — skip write (e.g. in sync test context)

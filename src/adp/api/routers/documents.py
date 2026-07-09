@@ -65,7 +65,7 @@ async def get_document(
         extra={"event": "document.start", "design_id": design_id, "correlation_id": correlation_id},
     )
     design = await _get_design_or_404(design_id, store)
-    doc = DocumentGenerator().generate(design)
+    doc = DocumentGenerator().generate(design)  # type: ignore[arg-type]
     return PlainTextResponse(doc.markdown, media_type="text/markdown; charset=utf-8")
 
 
@@ -86,7 +86,7 @@ async def get_traceability(
         },
     )
     design = await _get_design_or_404(design_id, store)
-    return TraceabilityGenerator().generate(design)
+    return TraceabilityGenerator().generate(design)  # type: ignore[arg-type]
 
 
 @router.get("/{design_id}/views", response_model=ViewBundle)

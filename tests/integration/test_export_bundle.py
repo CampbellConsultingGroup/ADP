@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from adp.models import ArchitectureDescription, Element
+from adp.models import ArchitectureDescription
 from adp.theme.models import RenderResult
 
 
@@ -19,7 +19,7 @@ def _make_design() -> ArchitectureDescription:
         "created_at": "2026-07-02T00:00:00Z",
         "updated_at": "2026-07-02T00:00:00Z",
         "elements": [
-            {"id": "ELM-001", "name": "API", "kind": "container", "satisfies": [], "provenance": None},
+            {"id": "ELM-001", "name": "API", "kind": "container", "satisfies": [], "provenance": None},  # noqa: E501
         ],
         "requirements": [],
         "relationships": [],
@@ -30,7 +30,7 @@ def _mock_render_result(level: str) -> RenderResult:
     return RenderResult(
         design_id="D-001",
         level=level,  # type: ignore[arg-type]
-        dsl=f"workspace {{ }}",
+        dsl="workspace { }",
         svg="<svg></svg>",
         png_base64="aGVsbG8=",  # base64("hello")
     )
@@ -100,6 +100,7 @@ def test_export_rejects_if_directory_exists(tmp_path, mock_setup):
 def test_export_model_json_contains_audit_entry(tmp_path, mock_setup):
     """The exported model.json must contain an audit entry for the export action."""
     import json as _json
+
     from adp.export.bundle import ExportOrchestrator
 
     mock_store, mock_render, _ = mock_setup

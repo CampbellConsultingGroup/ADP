@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from adp.models import ArchitectureDescription, Element, ElementKind
+from adp.models import ArchitectureDescription, Element
 
 
 def _make_design(elements: list[dict]) -> ArchitectureDescription:  # type: ignore[type-arg]
@@ -33,7 +33,7 @@ def test_design_to_dsl_contains_element_names(mock_theme):
 
     design = _make_design([
         {"id": "ELM-001", "name": "Web App", "kind": "system", "satisfies": [], "provenance": None},
-        {"id": "ELM-002", "name": "API Gateway", "kind": "container", "satisfies": [], "provenance": None},
+        {"id": "ELM-002", "name": "API Gateway", "kind": "container", "satisfies": [], "provenance": None},  # noqa: E501
     ])
     dsl = design_to_dsl(design, mock_theme, "container")
 
@@ -47,18 +47,18 @@ def test_design_to_dsl_is_deterministic(mock_theme):
     from adp.renderer.dsl import design_to_dsl
 
     design = _make_design([
-        {"id": "ELM-001", "name": "Svc A", "kind": "container", "satisfies": [], "provenance": None},
-        {"id": "ELM-002", "name": "Svc B", "kind": "container", "satisfies": [], "provenance": None},
+        {"id": "ELM-001", "name": "Svc A", "kind": "container", "satisfies": [], "provenance": None},  # noqa: E501
+        {"id": "ELM-002", "name": "Svc B", "kind": "container", "satisfies": [], "provenance": None},  # noqa: E501
     ])
-    assert design_to_dsl(design, mock_theme, "container") == design_to_dsl(design, mock_theme, "container")
+    assert design_to_dsl(design, mock_theme, "container") == design_to_dsl(design, mock_theme, "container")  # noqa: E501
 
 
 def test_design_to_dsl_filters_by_level(mock_theme):
     from adp.renderer.dsl import design_to_dsl
 
     design = _make_design([
-        {"id": "ELM-001", "name": "Person A", "kind": "person", "satisfies": [], "provenance": None},
-        {"id": "ELM-002", "name": "Container X", "kind": "container", "satisfies": [], "provenance": None},
+        {"id": "ELM-001", "name": "Person A", "kind": "person", "satisfies": [], "provenance": None},  # noqa: E501
+        {"id": "ELM-002", "name": "Container X", "kind": "container", "satisfies": [], "provenance": None},  # noqa: E501
     ])
     context_dsl = design_to_dsl(design, mock_theme, "context")
     container_dsl = design_to_dsl(design, mock_theme, "container")

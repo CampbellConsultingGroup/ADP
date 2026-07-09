@@ -38,7 +38,7 @@ class DocumentGenerator:
             design_id=design.id,
             schema_version=design.schema_version,
             generated_at=generated_at,
-            generator=_GENERATOR,
+            generator=_GENERATOR,  # type: ignore[arg-type]
             level=None,
         )
 

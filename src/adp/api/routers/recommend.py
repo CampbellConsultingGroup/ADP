@@ -44,7 +44,7 @@ def _option_to_dict(opt: Any) -> dict:
         "trade_offs": [
             {
                 "criterion": t.criterion,
-                "stance": t.stance.value if hasattr(t.stance, "value") else str(t.stance),
+                "stance": str(t.stance.value) if hasattr(t.stance, "value") else str(t.stance),  # type: ignore[arg-type]
                 "rationale": t.rationale,
             }
             for t in (opt.trade_offs or [])
@@ -65,7 +65,7 @@ def _option_to_dict(opt: Any) -> dict:
         "status": opt.status,
         "accepted_by": getattr(opt, "accepted_by", None),
         "accepted_at": (
-            getattr(opt, "accepted_at", None).isoformat()
+            getattr(opt, "accepted_at", None).isoformat()  # type: ignore[union-attr]
             if getattr(opt, "accepted_at", None) else None
         ),
         "knowledge_source": getattr(opt, "knowledge_source", "knowledge_base"),
@@ -288,12 +288,12 @@ def _make_stub_knowledge_retrieval():
 
 def _make_recommend_orchestrator(model: str | None = None):
     """Create RecommendationOrchestrator with stub knowledge retrieval and configured LLM."""
-    from adp.api.routers.config import get_recommendation_model
+    from adp.api.routers.config import get_api_key, get_recommendation_model
     from adp.llm.client import LLMClient
     from adp.recommendation.orchestrator import RecommendationOrchestrator
 
     endpoint = os.environ.get("ADP_LLM_ENDPOINT", "https://api.anthropic.com")
-    api_key = os.environ.get("ADP_LLM_API_KEY", "")
+    api_key = get_api_key()
 
     if not api_key:
         class _StubLLMClient(LLMClient):
@@ -305,10 +305,10 @@ def _make_recommend_orchestrator(model: str | None = None):
             ) -> dict:
                 return {"choices": [], "usage": {}}
 
-        llm = _StubLLMClient(base_url="http://stub", api_key="stub", model="stub")
+        llm = _StubLLMClient(base_url="http://stub", api_key="stub", model="stub")  # type: ignore[assignment]
     else:
         active_model = model or get_recommendation_model()
-        llm = LLMClient(base_url=endpoint, api_key=api_key, model=active_model)
+        llm = LLMClient(base_url=endpoint, api_key=api_key, model=active_model)  # type: ignore[assignment]
 
     knowledge = _make_stub_knowledge_retrieval()
     store_dep = None  # orchestrator gets store via operation args
@@ -331,7 +331,7 @@ def _map_option_to_response(opt: Any) -> SolutionOptionResponse:
         trade_offs=[
             TradeOffEntryResponse(
                 criterion=tf.criterion,
-                stance=tf.stance.value if hasattr(tf.stance, "value") else str(tf.stance),
+                stance=tf.stance.value if hasattr(tf.stance, "value") else str(tf.stance),  # type: ignore[arg-type]
                 rationale=tf.rationale,
             )
             for tf in (opt.trade_offs or [])
@@ -369,7 +369,8 @@ async def _write_knowledge_item(
     """
     try:
         from adp.knowledge.index import KnowledgeIndex
-        from adp.knowledge.schema import KnowledgeItem, KnowledgeItemKind
+        from adp.knowledge.schema import KnowledgeItem
+        from adp.knowledge.schema import KnowledgeType as KnowledgeItemKind
 
         item = KnowledgeItem(
             id=item_id,
@@ -386,7 +387,7 @@ async def _write_knowledge_item(
         from adp.store.store import DesignStore  # type: ignore[attr-defined]
         if isinstance(store, DesignStore):
             async with store._session_factory() as session:
-                idx = KnowledgeIndex()
+                idx = KnowledgeIndex(session_factory=None)  # type: ignore[arg-type]
                 await idx.upsert_item(item, zero_embedding, session)
         # If store is not a real DesignStore (test mock), skip silently
     except Exception as exc:
@@ -419,6 +420,9 @@ async def start_recommendation(
         await store.get(design_id)
     except DesignNotFoundError:
         raise HTTPException(status_code=404, detail=f"Design {design_id!r} not found")
+    except Exception as exc:
+        logger.error("recommend: unexpected store error for design %s: %s", design_id, exc)
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable")
 
     operation_id = str(uuid.uuid4())
     correlation_id = raw_request.headers.get("X-Trace-ID", get_trace_id() or str(uuid.uuid4()))

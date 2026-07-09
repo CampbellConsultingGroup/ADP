@@ -16,12 +16,17 @@ from adp.api.routers import (
     designs,
     documents,
     export_router,
+    governance,
     health,
     intake,
     knowledge,
     layouts,
+    lifecycle,
+    portfolio,
+    reasoning,
     recommend,
     render,
+    tags,
     theme,
 )
 from adp.auth.middleware import AuthMiddleware
@@ -92,15 +97,41 @@ def create_app() -> FastAPI:
     # Must be added before other middleware; no-op when ADP_AUTH_ENABLED=false
     app.add_middleware(AuthMiddleware)
 
+    # ── Security headers (ZAP pentest findings — ADP-SPEC-026) ──────────────────
+    # Applied to every response to prevent MIME sniffing and cross-origin reads.
+    _SECURITY_HEADERS = {
+        "X-Content-Type-Options": "nosniff",
+        "Cross-Origin-Resource-Policy": "same-origin",
+        "X-Frame-Options": "DENY",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+    }
+
+    @app.exception_handler(Exception)
+    async def _unhandled_exception_handler(request: Request, exc: Exception) -> Response:
+        """Catch-all handler: return generic 500 without exposing stack traces."""
+        import logging as _logging
+        _logging.getLogger("adp.api").error(
+            "Unhandled exception on %s %s: %s", request.method, request.url.path, exc,
+            exc_info=True,
+        )
+        resp = Response(
+            content='{"detail":"An unexpected error occurred."}',
+            status_code=500,
+            media_type="application/json",
+        )
+        resp.headers.update(_SECURITY_HEADERS)
+        return resp
+
     @app.middleware("http")
     async def observability_middleware(request: Request, call_next) -> Response:  # type: ignore[type-arg]
-        """Combined observability middleware: trace ID + Prometheus metrics (ADP-SPEC-012).
+        """Combined observability + security headers middleware (ADP-SPEC-012 / ADP-SPEC-026).
 
         Order of operations:
         1. Extract/generate trace ID → set ContextVar (FR-002 / QG-10)
         2. Track active request count (saturation metric)
         3. Time the request, record latency and status (rate/error/duration metrics)
-        4. Return X-Trace-ID header in response
+        4. Inject security headers on every response
+        5. Return X-Trace-ID header in response
         """
         trace_id = request.headers.get("X-Trace-ID") or generate_trace_id()
         set_trace_id(trace_id)
@@ -124,6 +155,7 @@ def create_app() -> FastAPI:
                 ERROR_COUNTER.labels(route=route).inc()
             ACTIVE_REQUESTS.dec()
             response.headers["X-Trace-ID"] = trace_id
+            response.headers.update(_SECURITY_HEADERS)
             return response
 
     app.include_router(designs.router)
@@ -137,6 +169,11 @@ def create_app() -> FastAPI:
     app.include_router(recommend.router)
     app.include_router(knowledge.router)
     app.include_router(calm.router)
+    app.include_router(governance.router)
+    app.include_router(lifecycle.router)
+    app.include_router(portfolio.router)
+    app.include_router(reasoning.router)
+    app.include_router(tags.router)
     app.include_router(config.router)
 
     # Serve Vite-built frontend static files when running in Docker (ADP-SPEC-025)

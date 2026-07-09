@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,11 +19,11 @@ def _make_design(design_id: str = "D-001") -> ArchitectureDescription:
         created_at="2026-07-02T00:00:00Z",
         updated_at="2026-07-02T00:00:00Z",
         elements=[
-            Element.model_validate({"id": "ELM-001", "name": "API Gateway", "kind": "container", "satisfies": ["REQ-001"], "provenance": "OPT-001"}),
-            Element.model_validate({"id": "ELM-002", "name": "User", "kind": "person", "satisfies": [], "provenance": None}),
+            Element.model_validate({"id": "ELM-001", "name": "API Gateway", "kind": "container", "satisfies": ["REQ-001"], "provenance": "OPT-001"}),  # noqa: E501
+            Element.model_validate({"id": "ELM-002", "name": "User", "kind": "person", "satisfies": [], "provenance": None}),  # noqa: E501
         ],
         requirements=[
-            Requirement.model_validate({"id": "REQ-001", "title": "Stateless handling", "description": "Must be stateless."}),
+            Requirement.model_validate({"id": "REQ-001", "title": "Stateless handling", "description": "Must be stateless."}),  # noqa: E501
         ],
         relationships=[],
     )
@@ -34,7 +33,7 @@ def _make_render_result(level: str) -> RenderResult:
     return RenderResult(
         design_id="D-001",
         level=level,  # type: ignore[arg-type]
-        dsl=f"workspace {{ model {{ }} views {{ }} }}",
+        dsl="workspace { model { } views { } }",
         svg="<svg></svg>",
         png_base64="aGVsbG8=",
     )
