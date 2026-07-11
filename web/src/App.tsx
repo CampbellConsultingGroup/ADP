@@ -7,6 +7,7 @@ import RecommendationPage from "./recommend/RecommendationPage";
 import PortfolioPage from "./portfolio/PortfolioPage";
 import GovernancePage from "./governance/GovernancePage";
 import BusinessPage from "./business/BusinessPage";
+import ApplicationPage from "./application/ApplicationPage";
 import type { AppView } from "./shell";
 
 // ADP-SPEC-025: Multi-design support.
@@ -34,6 +35,10 @@ export default function App(): React.ReactElement {
 
   if (view === "business") {
     return <BusinessPage onNavigate={onNavigate} designId={currentDesignId} />;
+  }
+
+  if (view === "applications") {
+    return <ApplicationPage />;
   }
 
   // No design selected → always show the Designs screen
