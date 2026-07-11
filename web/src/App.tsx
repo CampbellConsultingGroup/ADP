@@ -6,6 +6,7 @@ import KnowledgePage from "./knowledge/KnowledgePage";
 import RecommendationPage from "./recommend/RecommendationPage";
 import PortfolioPage from "./portfolio/PortfolioPage";
 import GovernancePage from "./governance/GovernancePage";
+import BusinessPage from "./business/BusinessPage";
 import type { AppView } from "./shell";
 
 // ADP-SPEC-025: Multi-design support.
@@ -22,13 +23,17 @@ export default function App(): React.ReactElement {
     setView("intake");
   };
 
-  // Portfolio and governance views are independent of design selection
+  // Portfolio, governance, and business views are independent of design selection
   if (view === "portfolio") {
     return <PortfolioPage onNavigate={onNavigate} onSelectDesign={onSelectDesign} />;
   }
 
   if (view === "governance") {
     return <GovernancePage onNavigate={onNavigate} onSelectDesign={onSelectDesign} />;
+  }
+
+  if (view === "business") {
+    return <BusinessPage onNavigate={onNavigate} designId={currentDesignId} />;
   }
 
   // No design selected → always show the Designs screen
