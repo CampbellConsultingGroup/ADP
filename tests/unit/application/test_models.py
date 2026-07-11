@@ -6,17 +6,16 @@ import pytest
 from pydantic import ValidationError
 
 from adp.application.models import (
+    ApplicationCapabilityLinkCreate,
+    ApplicationCapabilityLinkUpdate,
     ApplicationCreate,
     ApplicationDomainIntegrationCreate,
     ApplicationIntegrationCreate,
+    ApplicationTechCapLinkCreate,
     ApplicationUpdate,
     TechnicalCapabilityCreate,
     TechnicalCapabilityUpdate,
-    ApplicationCapabilityLinkCreate,
-    ApplicationCapabilityLinkUpdate,
-    ApplicationTechCapLinkCreate,
 )
-
 
 # ── ApplicationCreate ─────────────────────────────────────────────────────────
 

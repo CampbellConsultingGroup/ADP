@@ -7,7 +7,7 @@ Requires Docker (testcontainers). Skipped automatically when Docker is unavailab
 from __future__ import annotations
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 pytestmark = pytest.mark.asyncio
 
@@ -16,6 +16,7 @@ pytestmark = pytest.mark.asyncio
 async def app(db_url: str, db_engine):
     """FastAPI test app wired to the test database (migrations run via db_engine)."""
     import os
+
     from adp.api.app import create_app
 
     os.environ["ADP_DATABASE_URL"] = db_url
@@ -374,9 +375,9 @@ async def test_tech_cap_list_returns_hierarchy(client):
     assert data["total"] >= 2
     levels = [item["level"] for item in data["items"]]
     # Should be ordered by level, so all L1s come before L2s
-    first_l2 = next((i for i, l in enumerate(levels) if l == 2), None)
+    first_l2 = next((i for i, lvl in enumerate(levels) if lvl == 2), None)
     if first_l2 is not None:
-        assert all(l <= 2 for l in levels[:first_l2 + 1])
+        assert all(lvl <= 2 for lvl in levels[:first_l2 + 1])
 
 
 async def test_tech_cap_delete_leaf_204(client):
@@ -599,7 +600,11 @@ async def test_app_domain_integration_create_201(client):
 
     r = await client.post(
         f"/api/v1/applications/{app_id}/domain-integrations",
-        json={"domain_id": domain_id, "integration_type": "primary-support", "direction": "inbound"},
+        json={
+            "domain_id": domain_id,
+            "integration_type": "primary-support",
+            "direction": "inbound",
+        },
     )
     assert r.status_code == 201
     data = r.json()
@@ -701,7 +706,8 @@ async def test_integration_list_by_app_id(client):
     assert r.status_code == 200
     data = r.json()
     assert data["total"] >= 1
-    ids = [item["source_app_id"] for item in data["items"]] + [item["target_app_id"] for item in data["items"]]
+    ids = [item["source_app_id"] for item in data["items"]]
+    ids += [item["target_app_id"] for item in data["items"]]
     assert app_a in ids
 
 

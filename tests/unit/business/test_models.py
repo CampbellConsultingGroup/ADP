@@ -25,7 +25,6 @@ from adp.business.models import (
     ValueStreamStageCreate,
 )
 
-
 # ── BusinessCapabilityCreate ──────────────────────────────────────────────────
 
 class TestBusinessCapabilityCreate:
@@ -194,7 +193,9 @@ class TestBusinessContextResponse:
         resp = BusinessContextResponse(
             design_id="D1",
             capabilities=[CapabilityRef(capability_id="c1", name="Order Processing", level=1)],
-            value_streams=[ValueStreamRef(value_stream_id="v1", name="Order to Cash", stakeholder="Finance")],
+            value_streams=[
+                ValueStreamRef(value_stream_id="v1", name="Order to Cash", stakeholder="Finance")
+            ],
         )
         assert resp.capabilities[0].level == 1
         assert resp.value_streams[0].stakeholder == "Finance"
@@ -231,7 +232,9 @@ class TestBusinessDomainCreate:
             BusinessDomainCreate(name="D", classification="commodity", risk_flags=["PII", ""])
 
     def test_duplicate_risk_flags_deduplicated(self):
-        d = BusinessDomainCreate(name="D", classification="commodity", risk_flags=["PII", "PII", "GDPR"])
+        d = BusinessDomainCreate(
+            name="D", classification="commodity", risk_flags=["PII", "PII", "GDPR"]
+        )
         assert d.risk_flags == ["PII", "GDPR"]
 
     def test_extra_fields_forbidden(self):

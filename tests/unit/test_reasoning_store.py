@@ -13,7 +13,7 @@ import pytest
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from adp.store.reasoning import ReasoningRecord, ReasoningStore, _REASONING_MAX_CHARS, _hash_prompt
+from adp.store.reasoning import _REASONING_MAX_CHARS, ReasoningRecord, ReasoningStore, _hash_prompt
 
 
 @pytest.fixture()

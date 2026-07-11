@@ -103,8 +103,8 @@ def test_patch_lifecycle_date_override_respected(client):
 # ── T010: auto-date does not overwrite existing ───────────────────────────────
 
 def test_patch_lifecycle_auto_date_does_not_overwrite_existing(client):
-    from adp.api.routers import lifecycle as lifecycle_module
     from adp.api.app import create_app
+    from adp.api.routers import lifecycle as lifecycle_module
 
     existing_date = datetime(2025, 6, 1, tzinfo=timezone.utc)
     design = _make_design(lifecycle_status=LifecycleStatus.PROPOSED, proposed_date=existing_date)
@@ -126,8 +126,8 @@ def test_patch_lifecycle_auto_date_does_not_overwrite_existing(client):
 # ── T011: note in audit entry ─────────────────────────────────────────────────
 
 def test_patch_lifecycle_with_note_included_in_audit_entry(client):
-    from adp.api.routers import lifecycle as lifecycle_module
     from adp.api.app import create_app
+    from adp.api.routers import lifecycle as lifecycle_module
 
     design = _make_design(lifecycle_status=LifecycleStatus.CURRENT)
     mock_store = AsyncMock()

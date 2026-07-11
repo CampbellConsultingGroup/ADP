@@ -11,7 +11,7 @@ Requires Docker (testcontainers). Skipped automatically when Docker is unavailab
 from __future__ import annotations
 
 import pytest
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 
 pytestmark = pytest.mark.asyncio
 
@@ -20,6 +20,7 @@ pytestmark = pytest.mark.asyncio
 async def app(db_url: str, db_engine):
     """FastAPI test app wired to the test database (migrations run via db_engine)."""
     import os
+
     from adp.api.app import create_app
 
     # Expose the testcontainer URL so DesignStore and knowledge stores find the DB.
@@ -54,7 +55,10 @@ async def client(app):
 # ── Scenario 1: Full 3-level hierarchy CRUD ───────────────────────────────────
 
 async def test_create_level1_capability(client):
-    r = await client.post("/api/v1/business/capabilities", json={"name": "Customer Engagement", "level": 1})
+    r = await client.post(
+        "/api/v1/business/capabilities",
+        json={"name": "Customer Engagement", "level": 1},
+    )
     assert r.status_code == 201
     data = r.json()
     assert data["name"] == "Customer Engagement"
@@ -68,11 +72,17 @@ async def test_create_3_level_hierarchy(client):
     assert r1.status_code == 201
     l1_id = r1.json()["id"]
 
-    r2 = await client.post("/api/v1/business/capabilities", json={"name": "L2", "level": 2, "parent_id": l1_id})
+    r2 = await client.post(
+        "/api/v1/business/capabilities",
+        json={"name": "L2", "level": 2, "parent_id": l1_id},
+    )
     assert r2.status_code == 201
     l2_id = r2.json()["id"]
 
-    r3 = await client.post("/api/v1/business/capabilities", json={"name": "L3", "level": 3, "parent_id": l2_id})
+    r3 = await client.post(
+        "/api/v1/business/capabilities",
+        json={"name": "L3", "level": 3, "parent_id": l2_id},
+    )
     assert r3.status_code == 201
 
     r_list = await client.get("/api/v1/business/capabilities")
@@ -107,7 +117,10 @@ async def test_delete_leaf_capability(client):
 async def test_delete_capability_with_children_blocked(client):
     r1 = await client.post("/api/v1/business/capabilities", json={"name": "Parent", "level": 1})
     parent_id = r1.json()["id"]
-    await client.post("/api/v1/business/capabilities", json={"name": "Child", "level": 2, "parent_id": parent_id})
+    await client.post(
+        "/api/v1/business/capabilities",
+        json={"name": "Child", "level": 2, "parent_id": parent_id},
+    )
 
     r_del = await client.delete(f"/api/v1/business/capabilities/{parent_id}")
     assert r_del.status_code == 409
@@ -119,10 +132,16 @@ async def test_delete_capability_with_children_blocked(client):
 async def test_create_level2_under_level2_rejected(client):
     r1 = await client.post("/api/v1/business/capabilities", json={"name": "L1", "level": 1})
     l1_id = r1.json()["id"]
-    r2 = await client.post("/api/v1/business/capabilities", json={"name": "L2", "level": 2, "parent_id": l1_id})
+    r2 = await client.post(
+        "/api/v1/business/capabilities",
+        json={"name": "L2", "level": 2, "parent_id": l1_id},
+    )
     l2_id = r2.json()["id"]
 
-    r_bad = await client.post("/api/v1/business/capabilities", json={"name": "Bad", "level": 2, "parent_id": l2_id})
+    r_bad = await client.post(
+        "/api/v1/business/capabilities",
+        json={"name": "Bad", "level": 2, "parent_id": l2_id},
+    )
     assert r_bad.status_code == 422
 
 
@@ -139,7 +158,10 @@ async def test_get_capability_not_found(client):
 # ── Scenario 4: Full value stream lifecycle ───────────────────────────────────
 
 async def test_create_value_stream(client):
-    r = await client.post("/api/v1/business/value-streams", json={"name": "Order to Cash", "stakeholder": "Customer"})
+    r = await client.post(
+        "/api/v1/business/value-streams",
+        json={"name": "Order to Cash", "stakeholder": "Customer"},
+    )
     assert r.status_code == 201
     data = r.json()
     assert data["name"] == "Order to Cash"
@@ -151,14 +173,23 @@ async def test_value_stream_full_lifecycle(client):
     vs_id = r.json()["id"]
 
     # Add stages
-    s1 = await client.post(f"/api/v1/business/value-streams/{vs_id}/stages", json={"name": "Order Capture", "position": 0})
+    s1 = await client.post(
+        f"/api/v1/business/value-streams/{vs_id}/stages",
+        json={"name": "Order Capture", "position": 0},
+    )
     assert s1.status_code == 201
     s1_id = s1.json()["id"]
 
-    s2 = await client.post(f"/api/v1/business/value-streams/{vs_id}/stages", json={"name": "Fulfilment", "position": 1})
+    s2 = await client.post(
+        f"/api/v1/business/value-streams/{vs_id}/stages",
+        json={"name": "Fulfilment", "position": 1},
+    )
     s2_id = s2.json()["id"]
 
-    s3 = await client.post(f"/api/v1/business/value-streams/{vs_id}/stages", json={"name": "Invoicing", "position": 2})
+    s3 = await client.post(
+        f"/api/v1/business/value-streams/{vs_id}/stages",
+        json={"name": "Invoicing", "position": 2},
+    )
     s3_id = s3.json()["id"]
 
     # Get with stages
@@ -205,7 +236,10 @@ async def test_delete_value_stream_cascades_stages(client):
     vs_id = r.json()["id"]
 
     for i, name in enumerate(["Stage A", "Stage B", "Stage C"]):
-        await client.post(f"/api/v1/business/value-streams/{vs_id}/stages", json={"name": name, "position": i})
+        await client.post(
+            f"/api/v1/business/value-streams/{vs_id}/stages",
+            json={"name": name, "position": i},
+        )
 
     r_del = await client.delete(f"/api/v1/business/value-streams/{vs_id}")
     assert r_del.status_code == 204
@@ -235,7 +269,10 @@ async def _create_capability(client, name: str = "Order Processing") -> str:
 
 
 async def _create_value_stream(client, name: str = "Order to Cash") -> str:
-    r = await client.post("/api/v1/business/value-streams", json={"name": name, "stakeholder": "Finance"})
+    r = await client.post(
+        "/api/v1/business/value-streams",
+        json={"name": name, "stakeholder": "Finance"},
+    )
     assert r.status_code == 201, r.text
     return r.json()["id"]
 
@@ -244,7 +281,10 @@ async def test_link_design_to_capability(client):
     cap_id = await _create_capability(client, "Cap Link Test")
     des_id = await _create_design(client, "Design Link Test")
 
-    r = await client.post(f"/api/v1/business/capabilities/{cap_id}/designs", json={"design_id": des_id})
+    r = await client.post(
+        f"/api/v1/business/capabilities/{cap_id}/designs",
+        json={"design_id": des_id},
+    )
     assert r.status_code == 201
     items = r.json()["items"]
     assert any(i["design_id"] == des_id for i in items)
@@ -277,19 +317,28 @@ async def test_duplicate_capability_link_returns_409(client):
     des_id = await _create_design(client, "Design Dup Test")
     await client.post(f"/api/v1/business/capabilities/{cap_id}/designs", json={"design_id": des_id})
 
-    r = await client.post(f"/api/v1/business/capabilities/{cap_id}/designs", json={"design_id": des_id})
+    r = await client.post(
+        f"/api/v1/business/capabilities/{cap_id}/designs",
+        json={"design_id": des_id},
+    )
     assert r.status_code == 409
 
 
 async def test_link_to_nonexistent_capability_returns_404(client):
     des_id = await _create_design(client, "Design 404 Cap Test")
-    r = await client.post("/api/v1/business/capabilities/nonexistent-id/designs", json={"design_id": des_id})
+    r = await client.post(
+        "/api/v1/business/capabilities/nonexistent-id/designs",
+        json={"design_id": des_id},
+    )
     assert r.status_code == 404
 
 
 async def test_link_nonexistent_design_to_capability_returns_404(client):
     cap_id = await _create_capability(client, "Cap 404 Des Test")
-    r = await client.post(f"/api/v1/business/capabilities/{cap_id}/designs", json={"design_id": "nonexistent-design"})
+    r = await client.post(
+        f"/api/v1/business/capabilities/{cap_id}/designs",
+        json={"design_id": "nonexistent-design"},
+    )
     assert r.status_code == 404
 
 
@@ -299,7 +348,10 @@ async def test_link_design_to_value_stream(client):
     vs_id = await _create_value_stream(client, "VS Link Test")
     des_id = await _create_design(client, "Design VS Link Test")
 
-    r = await client.post(f"/api/v1/business/value-streams/{vs_id}/designs", json={"design_id": des_id})
+    r = await client.post(
+        f"/api/v1/business/value-streams/{vs_id}/designs",
+        json={"design_id": des_id},
+    )
     assert r.status_code == 201
     assert any(i["design_id"] == des_id for i in r.json()["items"])
 
@@ -331,13 +383,19 @@ async def test_duplicate_vs_link_returns_409(client):
     des_id = await _create_design(client, "Design VS Dup Test")
     await client.post(f"/api/v1/business/value-streams/{vs_id}/designs", json={"design_id": des_id})
 
-    r = await client.post(f"/api/v1/business/value-streams/{vs_id}/designs", json={"design_id": des_id})
+    r = await client.post(
+        f"/api/v1/business/value-streams/{vs_id}/designs",
+        json={"design_id": des_id},
+    )
     assert r.status_code == 409
 
 
 async def test_link_to_nonexistent_vs_returns_404(client):
     des_id = await _create_design(client, "Design 404 VS Test")
-    r = await client.post("/api/v1/business/value-streams/nonexistent-vs/designs", json={"design_id": des_id})
+    r = await client.post(
+        "/api/v1/business/value-streams/nonexistent-vs/designs",
+        json={"design_id": des_id},
+    )
     assert r.status_code == 404
 
 
@@ -410,7 +468,9 @@ async def test_cascade_delete_vs_removes_link_from_context(client):
 
 # ── ADP-SPEC-035: Domain CRUD helper ─────────────────────────────────────────
 
-async def _create_domain(client, name: str = "Customer", classification: str = "strategic", **kwargs) -> str:
+async def _create_domain(
+    client, name: str = "Customer", classification: str = "strategic", **kwargs
+) -> str:
     payload = {"name": name, "classification": classification, **kwargs}
     r = await client.post("/api/v1/business/domains", json=payload)
     assert r.status_code == 201, r.text

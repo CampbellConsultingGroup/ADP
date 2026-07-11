@@ -5,7 +5,7 @@ T001–T009: GET /governance/status, /exceptions, /activity, /activity/export
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone, timedelta
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -238,7 +238,10 @@ def test_activity_filter_by_action(client_factory):
     session.execute = AsyncMock(side_effect=[count_result, rows_result])
 
     c = client_factory(session)
-    resp = c.get("/api/v1/governance/activity?from_date=2026-06-01&to_date=2026-06-30&action=lifecycle-transition")
+    resp = c.get(
+        "/api/v1/governance/activity"
+        "?from_date=2026-06-01&to_date=2026-06-30&action=lifecycle-transition"
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["entries"] == []
