@@ -30,7 +30,9 @@ def upgrade() -> None:
     op.add_column("designs", sa.Column("proposed_date", sa.DateTime(timezone=True), nullable=True))
     op.add_column("designs", sa.Column("current_since", sa.DateTime(timezone=True), nullable=True))
     op.add_column("designs", sa.Column("review_due", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("designs", sa.Column("retirement_date", sa.DateTime(timezone=True), nullable=True))
+    op.add_column(
+        "designs", sa.Column("retirement_date", sa.DateTime(timezone=True), nullable=True)
+    )
 
     # Partial index for overdue review queries (SC-004)
     op.create_index(

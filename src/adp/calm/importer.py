@@ -39,7 +39,12 @@ def _slugify(name: str) -> str:
 
 
 def _extract_pattern_name(data: dict, fallback: str) -> str:
-    """Best-effort name extraction from a CALM document dict."""
+    """Best-effort name extraction from a CALM document dict.
+
+    Precedence: title > name > $id URL segment > first node's name > fallback.
+    Explicit human-authored fields win over the $id slug (FR-002 read with
+    acceptance scenario 3: $id applies only when no recognisable name exists).
+    """
     # 1. top-level title field (most authoritative — present in CALM pattern schema docs)
     if data.get("title"):
         return str(data["title"])
@@ -83,7 +88,8 @@ def _schema_nodes(data: dict) -> list[dict]:
 
 
 def _schema_relationships(data: dict) -> list[dict]:
-    """Extract relationships from CALM pattern schema format (properties.relationships.prefixItems)."""
+    """Extract relationships from CALM pattern schema format
+    (properties.relationships.prefixItems)."""
     prefix_items = (
         data.get("properties", {})
         .get("relationships", {})

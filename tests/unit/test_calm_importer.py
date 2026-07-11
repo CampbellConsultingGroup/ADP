@@ -46,12 +46,21 @@ def test_parse_calm_document_extracts_name_from_id():
     assert "api-gateway-pattern" in item.title.lower() or "api gateway" in item.title.lower()
 
 
-def test_extract_pattern_name_prefers_dollar_id():
+def test_extract_pattern_name_prefers_explicit_name_over_dollar_id():
+    # Precedence is title > name > $id: an explicit name field beats the URL slug.
     data = {"$id": "https://example.com/my-cool-pattern", "name": "Other Name"}
-    # $id segment "my-cool-pattern" is title-cased to "My Cool Pattern" — check the words
-    result = _extract_pattern_name(data, "fallback")
-    assert "cool" in result.lower()
-    assert result != "Other Name"  # confirmed $id was preferred over name field
+    assert _extract_pattern_name(data, "fallback") == "Other Name"
+
+
+def test_extract_pattern_name_prefers_title_over_name():
+    data = {"title": "Titled Pattern", "name": "Other Name"}
+    assert _extract_pattern_name(data, "fallback") == "Titled Pattern"
+
+
+def test_extract_pattern_name_uses_dollar_id_when_no_title_or_name():
+    data = {"$id": "https://example.com/my-cool-pattern"}
+    # $id segment "my-cool-pattern" is title-cased to "My Cool Pattern"
+    assert _extract_pattern_name(data, "fallback") == "My Cool Pattern"
 
 
 def test_extract_pattern_name_falls_back_to_name_field():

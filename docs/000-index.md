@@ -3,16 +3,21 @@ document: spec-index
 project: AI-Assisted Architecture Design Platform (ADP)
 constitution: ADP-CONST-001
 methodology: spec-driven-development
-version: 1.0.0
-status: draft
-spec_count: 12
+version: 1.1.0
+status: current
+spec_count: 36
 ---
 
 # ADP Specification Set
 
 These are the feature specifications required to build ADP. Each is an independent, buildable unit governed by the project constitution (`ADP-CONST-001`). Specs describe **what** and **why**; the **how** belongs in each spec's downstream plan. Genuine unknowns are tagged `[NEEDS CLARIFICATION]` and MUST be resolved before that spec's plan is approved.
 
-## Specifications
+The set has two generations:
+
+- **Foundational specs (001–012)** — authored up front as this document set (`docs/001-*.md` … `docs/012-*.md`); the dependency table and build waves below describe them.
+- **Delivered feature specs (013–036)** — added iteratively via the Speckit workflow. 013–019 have per-spec documents in `docs/`; from 020 onward the canonical spec lives in `specs/NNN-<slug>/spec.md` (with its plan, tasks, data model, and API contracts alongside). No separate `docs/` rendering is maintained for those.
+
+## Foundational specifications (001–012)
 
 | ID | Title | Depends on |
 |---|---|---|
@@ -29,9 +34,40 @@ These are the feature specifications required to build ADP. Each is an independe
 | ADP-SPEC-011 | Document, View & Export Generation | 001, 010 |
 | ADP-SPEC-012 | Observability & Telemetry | 003 (cross-cutting) |
 
+## Delivered feature specs (013–036)
+
+| ID | Title | Spec location |
+|---|---|---|
+| ADP-SPEC-013 | Playwright End-to-End Test Suite | `docs/013-playwright-e2e.md` |
+| ADP-SPEC-014 | Requirements Intake HTTP API and Web Screen | `docs/014-requirements-intake-ui.md` |
+| ADP-SPEC-015 | Anthropic LLM Integration with Model Selection | `docs/015-anthropic-llm-integration.md` |
+| ADP-SPEC-016 | Intake as Landing Page with Rejected Requirements Section | `docs/016-intake-landing-page.md` |
+| ADP-SPEC-017 | Intake Proposal Status Sync and Rejected Requirements Layout | `docs/017-intake-proposal-status-sync.md` |
+| ADP-SPEC-018 | Architecture Recommendation Screen | `docs/018-recommendation-screen.md` |
+| ADP-SPEC-019 | Recommendation Learning and Knowledge Capture | `docs/019-recommendation-learning.md` |
+| ADP-SPEC-020 | Knowledge Base Management | `specs/020-knowledge-base-crud/spec.md` |
+| ADP-SPEC-021 | CALM Export | `specs/021-calm-export/spec.md` |
+| ADP-SPEC-022 | CALM Pattern Import | `specs/022-calm-pattern-import/spec.md` |
+| ADP-SPEC-023 | Internal Architecture Consolidation | `specs/023-internal-consolidation/spec.md` |
+| ADP-SPEC-024 | Persistent Operation Store | `specs/024-persistent-operations/spec.md` |
+| ADP-SPEC-025 | Multi-Design UI and Production Readiness | `specs/025-multi-design-production/spec.md` |
+| ADP-SPEC-026 | Keycloak Authentication | `specs/026-keycloak-authn/spec.md` |
+| ADP-SPEC-027 | Immutable LLM Reasoning Store | `specs/027-llm-reasoning-store/spec.md` |
+| ADP-SPEC-028 | Recommendation Reasoning Display | `specs/028-recommendation-reasoning-ui/spec.md` |
+| ADP-SPEC-029 | Element Technology Tagging | `specs/029-element-technology-tags/spec.md` |
+| ADP-SPEC-030 | Design Lifecycle Management | `specs/030-design-lifecycle/spec.md` |
+| ADP-SPEC-031 | Portfolio Analysis Screen | `specs/031-portfolio-analysis/spec.md` |
+| ADP-SPEC-032 | Governance Reporting Dashboard | `specs/032-governance-reporting/spec.md` |
+| ADP-SPEC-033 | Business Architecture — Capability Model and Value Streams | `specs/033-business-architecture/spec.md` |
+| ADP-SPEC-034 | Business Architecture Traceability | `specs/034-business-arch-traceability/spec.md` |
+| ADP-SPEC-035 | Business Domain Registry and Stage-Capability Mapping | `specs/035-business-domain-registry/spec.md` |
+| ADP-SPEC-036 | Application Registry | `specs/036-application-registry/spec.md` |
+
+The current implemented state of the whole system is described in `docs/solution-architecture.md`.
+
 ## Build sequence
 
-The dependency graph yields the following waves; specs within a wave may proceed in parallel.
+The dependency graph for the foundational set yields the following waves; specs within a wave may proceed in parallel. Delivered feature specs (013+) were built sequentially on top of these waves.
 
 1. **Wave 0 — Foundation:** ADP-SPEC-001
 2. **Wave 1 — Stores & rendering primitives:** ADP-SPEC-002, ADP-SPEC-010
@@ -64,7 +100,7 @@ Some constitutional articles and quality gates apply to **every** spec and are t
 - **ART-I (Spec-Driven Development)** and **ART-IV (Test-Driven Development)** — process articles binding every feature.
 - **QG-01** (spec/task linkage), **QG-04** (coverage), **QG-06** (SAST), **QG-07** (dependency scan) — universal CI gates run on all changes.
 
-The per-spec front matter lists only the articles and gates a spec engages *distinctively*, so the set stays reviewable without restating universal obligations on all twelve.
+The per-spec front matter lists only the articles and gates a spec engages *distinctively*, so the set stays reviewable without restating universal obligations on every spec.
 
 ## Definition of Done (per spec)
 

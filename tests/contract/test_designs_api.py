@@ -142,8 +142,9 @@ def test_create_design_audit_entry_written(client):
 
 def test_list_designs_filter_by_status(client):
     """T016: GET /designs?status=current returns only current designs."""
-    from adp.models import LifecycleStatus
     from unittest.mock import AsyncMock
+
+    from adp.models import LifecycleStatus
 
     c, mock_store, _ = client
     d1 = _make_design("DSN-001", "Current Design")
@@ -164,8 +165,9 @@ def test_list_designs_filter_by_status(client):
 
 def test_list_designs_no_filter_returns_all(client):
     """T017: GET /designs without status returns all designs."""
-    from adp.models import LifecycleStatus
     from unittest.mock import AsyncMock
+
+    from adp.models import LifecycleStatus
 
     c, mock_store, _ = client
     d1 = _make_design("DSN-001", "Current Design")

@@ -6,13 +6,12 @@ T015–T017 (US2): Free-form tags validation
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
 
-from adp.models import ArchitectureDescription, Element, ElementKind
+from adp.models import ArchitectureDescription
 
 
 def _make_design(design_id: str = "DSN-001") -> ArchitectureDescription:
@@ -23,7 +22,10 @@ def _make_design(design_id: str = "DSN-001") -> ArchitectureDescription:
         "created_at": "2026-07-05T00:00:00Z",
         "updated_at": "2026-07-05T00:00:00Z",
         "elements": [
-            {"id": "ELM-001", "kind": "container", "name": "API Gateway", "description": "Entry point"},
+            {
+                "id": "ELM-001", "kind": "container",
+                "name": "API Gateway", "description": "Entry point",
+            },
         ],
         "relationships": [],
         "requirements": [],

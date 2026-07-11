@@ -6,7 +6,7 @@
 import React from "react";
 import { useAuth } from "../auth/AuthProvider";
 
-export type AppView = "designs" | "intake" | "recommend" | "canvas" | "knowledge" | "portfolio" | "governance";
+export type AppView = "designs" | "intake" | "recommend" | "canvas" | "knowledge" | "portfolio" | "governance" | "business" | "applications";
 
 interface NavBarProps {
   currentView: AppView;
@@ -70,6 +70,40 @@ export default function NavBar({ currentView, onNavigate, designId }: NavBarProp
         }}
       >
         Portfolio
+      </button>
+
+      {/* Business tab — always visible */}
+      <button
+        onClick={() => onNavigate("business")}
+        style={{
+          padding: "12px 16px",
+          background: currentView === "business" ? "rgba(255,255,255,0.2)" : "transparent",
+          color: "#fff",
+          border: "none",
+          borderBottom: currentView === "business" ? "3px solid #fff" : "3px solid transparent",
+          cursor: "pointer",
+          fontSize: 14,
+          fontWeight: currentView === "business" ? 600 : 400,
+        }}
+      >
+        Business
+      </button>
+
+      {/* Applications tab — always visible */}
+      <button
+        onClick={() => onNavigate("applications")}
+        style={{
+          padding: "12px 16px",
+          background: currentView === "applications" ? "rgba(255,255,255,0.2)" : "transparent",
+          color: "#fff",
+          border: "none",
+          borderBottom: currentView === "applications" ? "3px solid #fff" : "3px solid transparent",
+          cursor: "pointer",
+          fontSize: 14,
+          fontWeight: currentView === "applications" ? 600 : 400,
+        }}
+      >
+        Applications
       </button>
 
       {/* Design-scoped tabs — only when a design is open */}

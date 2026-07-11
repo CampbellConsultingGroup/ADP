@@ -30,7 +30,7 @@ def postgres_container():
 
     from testcontainers.postgres import PostgresContainer
 
-    with PostgresContainer("postgres:15") as pg:
+    with PostgresContainer("pgvector/pgvector:pg15") as pg:
         yield pg
 
 

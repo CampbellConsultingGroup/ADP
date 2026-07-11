@@ -6,6 +6,7 @@ import StructuredForm from "./StructuredForm";
 import ProposalsList from "./ProposalsList";
 import RequirementsList from "./RequirementsList";
 import LLMSettings from "./LLMSettings";
+import BusinessContextPanel from "../business/BusinessContextPanel";
 
 interface IntakePageProps {
   designId: string;
@@ -160,6 +161,11 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
 
           {/* Rejected Requirements — below confirmed (FR-003) */}
           <RejectedRequirementsSection proposals={allProposals} />
+
+          {/* Business context — capabilities and value streams linked to this design (ADP-SPEC-034) */}
+          <div style={{ padding: "0 16px 16px" }}>
+            <BusinessContextPanel designId={designId} onNavigate={onNavigate} />
+          </div>
         </div>
       </div>
     </div>

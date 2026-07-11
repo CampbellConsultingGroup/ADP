@@ -276,7 +276,7 @@ async def get_activity_feed(
         ),
         base_params,
     )
-    total = count_result.fetchone().total
+    total = count_result.scalar_one()
 
     result = await session.execute(
         sa.text(

@@ -92,10 +92,15 @@ ignore_errors = true
 testpaths = ["tests"]
 addopts = "--cov=adp --cov-report=term-missing"
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
 
 [tool.coverage.run]
 source = ["adp"]
 branch = true
+# greenlet: SQLAlchemy async bridges to drivers via greenlet switches; without
+# this, coverage silently drops all lines after the first awaited DB call.
+concurrency = ["greenlet", "thread"]
 omit = [
     "src/adp/store/migrations/*",          # Alembic DDL — verified by integration tests
     "src/adp/store/store.py",              # DB-layer — requires Docker

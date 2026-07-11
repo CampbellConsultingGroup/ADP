@@ -57,3 +57,12 @@ web/coverage/
 web/playwright-report/
 web/test-results/
 *.log
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
+
+# Windows NTFS alternate-data-stream artifacts (WSL copies)
+*Zone.Identifier*
