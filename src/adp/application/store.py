@@ -292,20 +292,14 @@ async def update_application(
     updates: dict[str, Any] = {"updated_at": _now()}
     if body.name is not None:
         updates["name"] = body.name.strip()
-    if body.description is not None:
-        updates["description"] = body.description
-    if body.vendor is not None:
-        updates["vendor"] = body.vendor
-    if body.primary_owner is not None:
-        updates["primary_owner"] = body.primary_owner
-    if body.time_classification is not None:
-        updates["time_classification"] = body.time_classification
-    if body.r_strategy is not None:
-        updates["r_strategy"] = body.r_strategy
-    if body.pace_layer is not None:
-        updates["pace_layer"] = body.pace_layer
-    if body.health_score is not None:
-        updates["health_score"] = body.health_score
+    # Nullable fields: an explicitly provided null clears the value;
+    # an omitted field is left unchanged (model_fields_set distinguishes them).
+    for field in (
+        "description", "vendor", "primary_owner", "time_classification",
+        "r_strategy", "pace_layer", "health_score",
+    ):
+        if field in body.model_fields_set:
+            updates[field] = getattr(body, field)
 
     await session.execute(
         _applications.update().where(_applications.c.id == app_id).values(**updates)
@@ -385,7 +379,9 @@ async def update_technical_capability(
     updates: dict[str, Any] = {}
     if body.name is not None:
         updates["name"] = body.name.strip()
-    if body.description is not None:
+    # Nullable fields: an explicitly provided null clears the value;
+    # an omitted field is left unchanged (model_fields_set distinguishes them).
+    if "description" in body.model_fields_set:
         updates["description"] = body.description
 
     if updates:
@@ -837,7 +833,9 @@ async def update_integration(
         return None
 
     updates: dict[str, Any] = {"updated_at": _now()}
-    if body.description is not None:
+    # Nullable fields: an explicitly provided null clears the value;
+    # an omitted field is left unchanged (model_fields_set distinguishes them).
+    if "description" in body.model_fields_set:
         updates["description"] = body.description
 
     await session.execute(

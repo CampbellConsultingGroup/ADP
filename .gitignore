@@ -63,3 +63,6 @@ web/test-results/
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Windows NTFS alternate-data-stream artifacts (WSL copies)
+*Zone.Identifier*

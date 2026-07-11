@@ -123,11 +123,13 @@ async def test_capability_hierarchy_rules(client):
         f"{BASE}/capabilities", json={"name": "Bad", "level": 1, "parent_id": l1["id"]}
     )
     assert resp.status_code == 422
-    # NOTE: omitting parent_id entirely passes (Pydantic skips validators on
-    # defaults); an explicit null is rejected. Gap tracked separately.
     resp = await client.post(
         f"{BASE}/capabilities", json={"name": "Bad", "level": 2, "parent_id": None}
     )
+    assert resp.status_code == 422
+    # omitting parent_id entirely must also be rejected (model_validator runs
+    # regardless of which fields were provided)
+    resp = await client.post(f"{BASE}/capabilities", json={"name": "Bad", "level": 2})
     assert resp.status_code == 422
 
     # unknown parent → store-level 422
@@ -162,6 +164,17 @@ async def test_value_stream_crud(client):
 
     assert (await client.delete(f"{BASE}/value-streams/{vs['id']}")).status_code == 204
     assert (await client.delete(f"{BASE}/value-streams/{vs['id']}")).status_code == 404
+
+
+async def test_value_stream_explicit_null_clears_stakeholder(client):
+    vs = await _mk_vs(client, stakeholder="CFO", description="cash cycle")
+    resp = await client.put(
+        f"{BASE}/value-streams/{vs['id']}", json={"stakeholder": None}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["stakeholder"] is None      # explicit null cleared it
+    assert body["description"] == "cash cycle"  # omitted field unchanged
 
 
 async def test_stage_crud(client):

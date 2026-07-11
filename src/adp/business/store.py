@@ -287,10 +287,12 @@ async def update_capability(
     updates: dict[str, Any] = {"updated_at": _now()}
     if data.name is not None:
         updates["name"] = data.name.strip()
-    if data.description is not None:
-        updates["description"] = data.description
     if data.position is not None:
         updates["position"] = data.position
+    # Nullable fields: an explicitly provided null clears the value;
+    # an omitted field is left unchanged (model_fields_set distinguishes them).
+    if "description" in data.model_fields_set:
+        updates["description"] = data.description
 
     await session.execute(
         _capabilities.update().where(_capabilities.c.id == cap_id).values(**updates)
@@ -381,9 +383,11 @@ async def update_value_stream(
     updates: dict[str, Any] = {"updated_at": _now()}
     if data.name is not None:
         updates["name"] = data.name.strip()
-    if data.description is not None:
+    # Nullable fields: an explicitly provided null clears the value;
+    # an omitted field is left unchanged (model_fields_set distinguishes them).
+    if "description" in data.model_fields_set:
         updates["description"] = data.description
-    if data.stakeholder is not None:
+    if "stakeholder" in data.model_fields_set:
         updates["stakeholder"] = data.stakeholder
 
     await session.execute(
@@ -436,10 +440,12 @@ async def update_stage(
     updates: dict[str, Any] = {}
     if data.name is not None:
         updates["name"] = data.name.strip()
-    if data.description is not None:
-        updates["description"] = data.description
     if data.position is not None:
         updates["position"] = data.position
+    # Nullable fields: an explicitly provided null clears the value;
+    # an omitted field is left unchanged (model_fields_set distinguishes them).
+    if "description" in data.model_fields_set:
+        updates["description"] = data.description
 
     if updates:
         await session.execute(
@@ -799,11 +805,13 @@ async def update_domain(
     updates: dict[str, Any] = {"updated_at": _now()}
     if data.name is not None:
         updates["name"] = data.name.strip()
-    if data.scope_statement is not None:
-        updates["scope_statement"] = data.scope_statement
     if data.classification is not None:
         updates["classification"] = data.classification
-    if data.org_unit is not None:
+    # Nullable fields: an explicitly provided null clears the value;
+    # an omitted field is left unchanged (model_fields_set distinguishes them).
+    if "scope_statement" in data.model_fields_set:
+        updates["scope_statement"] = data.scope_statement
+    if "org_unit" in data.model_fields_set:
         updates["org_unit"] = data.org_unit
     if data.risk_flags is not None:
         updates["risk_flags"] = data.risk_flags

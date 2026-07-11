@@ -125,6 +125,18 @@ async def test_patch_application(client):
     assert body["name"] == app["name"]
 
 
+async def test_patch_application_explicit_null_clears_field(client):
+    app = await _mk_app(client, vendor="Acme", health_score=4)
+    resp = await client.patch(
+        f"/api/v1/applications/{app['id']}",
+        json={"vendor": None},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["vendor"] is None          # explicit null cleared it
+    assert body["health_score"] == 4       # omitted field unchanged
+
+
 async def test_patch_application_404(client):
     resp = await client.patch("/api/v1/applications/nope", json={"health_score": 1})
     assert resp.status_code == 404

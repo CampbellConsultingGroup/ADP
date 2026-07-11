@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 # ── BusinessCapability ────────────────────────────────────────────────────────
 
@@ -46,15 +46,15 @@ class BusinessCapabilityCreate(BaseModel):
             raise ValueError("name must not be blank")
         return v
 
-    @field_validator("parent_id")
-    @classmethod
-    def parent_id_consistency(cls, v: str | None, info: object) -> str | None:
-        level = getattr(info, "data", {}).get("level")
-        if level == 1 and v is not None:
+    @model_validator(mode="after")
+    def parent_id_consistency(self) -> "BusinessCapabilityCreate":
+        # model_validator (not field_validator): must run even when parent_id
+        # is omitted, since field validators skip unset defaults.
+        if self.level == 1 and self.parent_id is not None:
             raise ValueError("parent_id must be null for level-1 capabilities")
-        if level in (2, 3) and v is None:
+        if self.level in (2, 3) and self.parent_id is None:
             raise ValueError("parent_id is required for level-2 and level-3 capabilities")
-        return v
+        return self
 
 
 class BusinessCapabilityUpdate(BaseModel):
