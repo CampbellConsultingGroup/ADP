@@ -8,9 +8,8 @@ const KEY = "adp-theme";
 
 export function getStoredTheme(): ThemeMode {
   const v = (typeof localStorage !== "undefined" && localStorage.getItem(KEY)) as ThemeMode | null;
-  // Default to light until every page interior is migrated to theme tokens;
-  // dark is fully correct for the shell + Overview and available via the toggle.
-  return v === "light" || v === "dark" || v === "system" ? v : "light";
+  // All pages are migrated to theme tokens, so follow the OS preference by default.
+  return v === "light" || v === "dark" || v === "system" ? v : "system";
 }
 
 export function applyTheme(mode: ThemeMode): void {
