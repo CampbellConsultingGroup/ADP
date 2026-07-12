@@ -47,8 +47,8 @@ export default function InspectionPanel({
     <div
       style={{
         width: 300,
-        background: "#fff",
-        border: "1px solid #ddd",
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
         borderRadius: 6,
         padding: 16,
         overflowY: "auto",
@@ -61,22 +61,22 @@ export default function InspectionPanel({
         <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18 }}>✕</button>
       </div>
 
-      <div style={{ fontSize: 12, color: "#666", marginBottom: 12 }}>[{element.kind}]</div>
+      <div style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 12 }}>[{element.kind}]</div>
 
       {element.description && (
-        <p style={{ fontSize: 13, color: "#333", marginBottom: 12 }}>{element.description}</p>
+        <p style={{ fontSize: 13, color: "var(--ink)", marginBottom: 12 }}>{element.description}</p>
       )}
 
       <section>
         <h4 style={{ fontSize: 13, marginBottom: 6 }}>Satisfies:</h4>
         {satisfiedReqs.length === 0 ? (
-          <p style={{ fontSize: 12, color: "#999" }}>No requirements satisfied</p>
+          <p style={{ fontSize: 12, color: "var(--ink-3)" }}>No requirements satisfied</p>
         ) : (
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
             {satisfiedReqs.map(({ id, title }) => (
               <li key={id} style={{ fontSize: 12, marginBottom: 4 }}>
-                <span style={{ color: "#1168BD", fontWeight: 500 }}>{id}</span>
-                {title !== id && <span style={{ color: "#333" }}>: {title}</span>}
+                <span style={{ color: "var(--accent)", fontWeight: 500 }}>{id}</span>
+                {title !== id && <span style={{ color: "var(--ink)" }}>: {title}</span>}
               </li>
             ))}
           </ul>
@@ -84,13 +84,13 @@ export default function InspectionPanel({
       </section>
 
       {/* Technology metadata section (ADP-SPEC-029) */}
-      <section style={{ marginTop: 14, borderTop: "1px solid #F3F4F6", paddingTop: 12 }}>
+      <section style={{ marginTop: 14, borderTop: "1px solid var(--surface-2)", paddingTop: 12 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
           <h4 style={{ fontSize: 13, margin: 0 }}>Technology</h4>
           {!editingTech && (
             <button
               onClick={() => setEditingTech(true)}
-              style={{ background: "none", border: "1px solid #D1D5DB", borderRadius: 3, cursor: "pointer", fontSize: 11, color: "#374151", padding: "2px 8px" }}
+              style={{ background: "none", border: "1px solid var(--border)", borderRadius: 3, cursor: "pointer", fontSize: 11, color: "var(--ink-2)", padding: "2px 8px" }}
             >
               {hasMeta || tags.length > 0 ? "Edit" : "Add"}
             </button>
@@ -112,15 +112,15 @@ export default function InspectionPanel({
               if (!value) return null;
               return (
                 <div key={key} style={{ display: "flex", gap: 6, marginBottom: 4 }}>
-                  <span style={{ fontSize: 11, color: "#9CA3AF", minWidth: 72, flexShrink: 0 }}>{label}</span>
-                  <span style={{ fontSize: 12, color: "#111827" }}>{value}</span>
+                  <span style={{ fontSize: 11, color: "var(--ink-3)", minWidth: 72, flexShrink: 0 }}>{label}</span>
+                  <span style={{ fontSize: 12, color: "var(--ink)" }}>{value}</span>
                 </div>
               );
             })}
             {tags.length > 0 && (
               <div style={{ marginTop: 6, display: "flex", flexWrap: "wrap", gap: 4 }}>
                 {tags.map(tag => (
-                  <span key={tag} style={{ background: "#EDE9FE", color: "#5B21B6", fontSize: 11, padding: "2px 6px", borderRadius: 3 }}>
+                  <span key={tag} style={{ background: "var(--biz-wash)", color: "var(--biz)", fontSize: 11, padding: "2px 6px", borderRadius: 3 }}>
                     {tag}
                   </span>
                 ))}
@@ -128,13 +128,13 @@ export default function InspectionPanel({
             )}
           </div>
         ) : (
-          <p style={{ fontSize: 12, color: "#9CA3AF", fontStyle: "italic" }}>No technology metadata added yet</p>
+          <p style={{ fontSize: 12, color: "var(--ink-3)", fontStyle: "italic" }}>No technology metadata added yet</p>
         )}
       </section>
 
       <section style={{ marginTop: 12 }}>
         <h4 style={{ fontSize: 13, marginBottom: 6 }}>Provenance:</h4>
-        <p style={{ fontSize: 12, color: "#555" }}>{formatProvenance(element.provenance)}</p>
+        <p style={{ fontSize: 12, color: "var(--ink-2)" }}>{formatProvenance(element.provenance)}</p>
       </section>
     </div>
   );

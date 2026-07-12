@@ -69,7 +69,7 @@ export default function Workspace({ designId }: WorkspaceProps): React.ReactElem
   // Header: NavBar + level-selector toolbar
   const header = (
     <>
-      <div style={{ display: "flex", gap: 0, padding: "8px 16px", background: "#f5f5f5", borderBottom: "1px solid #ddd" }}>
+      <div style={{ display: "flex", gap: 0, padding: "8px 16px", background: "var(--surface-2)", borderBottom: "1px solid var(--border)" }}>
         <span style={{ fontWeight: 600, marginRight: 16, alignSelf: "center" }}>
           {design?.title ?? designId}
         </span>
@@ -79,9 +79,9 @@ export default function Workspace({ designId }: WorkspaceProps): React.ReactElem
             onClick={() => setActiveLevel(value)}
             style={{
               padding: "6px 16px",
-              background: activeLevel === value ? "#1168BD" : "#fff",
-              color: activeLevel === value ? "#fff" : "#333",
-              border: "1px solid #ccc",
+              background: activeLevel === value ? "var(--accent)" : "var(--surface)",
+              color: activeLevel === value ? "var(--surface)" : "var(--ink)",
+              border: "1px solid var(--border)",
               cursor: "pointer",
               fontWeight: activeLevel === value ? 600 : 400,
             }}
@@ -93,14 +93,14 @@ export default function Workspace({ designId }: WorkspaceProps): React.ReactElem
           onClick={handleExportCalm}
           disabled={calmExporting}
           title="Export design as CALM JSON (FINOS)"
-          style={{ marginLeft: 12, padding: "5px 12px", background: calmExporting ? "#D1D5DB" : "#065F46", color: "#fff", border: "none", borderRadius: 4, cursor: calmExporting ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 600 }}
+          style={{ marginLeft: 12, padding: "5px 12px", background: calmExporting ? "var(--border)" : "var(--good)", color: "#fff", border: "none", borderRadius: 4, cursor: calmExporting ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 600 }}
         >
           {calmExporting ? "Exporting..." : "Export CALM"}
         </button>
         {calmError && (
-          <div style={{ position: "fixed", bottom: 16, right: 16, background: "#FEE2E2", border: "1px solid #FECACA", borderRadius: 6, padding: "10px 16px", fontSize: 13, color: "#B91C1C", zIndex: 999 }}>
+          <div style={{ position: "fixed", bottom: 16, right: 16, background: "var(--crit-wash)", border: "1px solid var(--crit)", borderRadius: 6, padding: "10px 16px", fontSize: 13, color: "var(--crit)", zIndex: 999 }}>
             {calmError}
-            <button onClick={() => setCalmError(null)} style={{ marginLeft: 10, background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#991B1B" }}>✕</button>
+            <button onClick={() => setCalmError(null)} style={{ marginLeft: 10, background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "var(--crit)" }}>✕</button>
           </div>
         )}
       </div>
@@ -120,7 +120,7 @@ export default function Workspace({ designId }: WorkspaceProps): React.ReactElem
     return (
       <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "sans-serif" }}>
         {header}
-        <div style={{ padding: 32, color: "#c0392b" }}>Failed to load design.</div>
+        <div style={{ padding: 32, color: "var(--crit)" }}>Failed to load design.</div>
       </div>
     );
   }

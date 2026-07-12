@@ -162,7 +162,7 @@ export default function C4Canvas({
   return (
     <div style={{ width: "100%", height: "100%", position: "relative" }}>
       {saving && (
-        <div style={{ position: "absolute", top: 8, right: 8, fontSize: 12, color: "#888", zIndex: 10 }}>
+        <div style={{ position: "absolute", top: 8, right: 8, fontSize: 12, color: "var(--ink-3)", zIndex: 10 }}>
           Saving...
         </div>
       )}
@@ -170,12 +170,12 @@ export default function C4Canvas({
       <div style={{ position: "absolute", top: 8, left: 8, zIndex: 10 }}>
         <button
           onClick={() => setShowAddMenu((v) => !v)}
-          style={{ padding: "6px 14px", cursor: "pointer", background: "#1168BD", color: "#fff", border: "none", borderRadius: 4 }}
+          style={{ padding: "6px 14px", cursor: "pointer", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4 }}
         >
           + Add Element
         </button>
         {showAddMenu && (
-          <div style={{ background: "#fff", border: "1px solid #ccc", borderRadius: 4, padding: 12, marginTop: 4, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4, padding: 12, marginTop: 4, display: "flex", flexDirection: "column", gap: 8 }}>
             <select value={addKind} onChange={(e) => setAddKind(e.target.value as AddKind)}>
               {ADD_ELEMENT_KINDS.map((k) => (
                 <option key={k} value={k}>{k}</option>
@@ -185,10 +185,10 @@ export default function C4Canvas({
               value={addName}
               onChange={(e) => setAddName(e.target.value)}
               placeholder="Element name"
-              style={{ padding: "4px 8px", border: "1px solid #ccc", borderRadius: 4 }}
+              style={{ padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 4 }}
               onKeyDown={(e) => { if (e.key === "Enter") handleAddElement(); }}
             />
-            <button onClick={handleAddElement} style={{ background: "#438DD5", color: "#fff", border: "none", borderRadius: 4, padding: "4px 8px", cursor: "pointer" }}>
+            <button onClick={handleAddElement} style={{ background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, padding: "4px 8px", cursor: "pointer" }}>
               Add
             </button>
           </div>
