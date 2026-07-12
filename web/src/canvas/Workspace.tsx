@@ -3,7 +3,7 @@ import type { C4Level } from "../types";
 import { useDesign, useLayout } from "../api/designs";
 import { useC4Theme } from "../api/theme";
 import { useWorkspaceStore } from "../store/workspace-store";
-import { NavBar, type AppView } from "../shell";
+import type { AppView } from "../shell";
 import C4Canvas from "./C4Canvas";
 import InspectionPanel from "../inspection/InspectionPanel";
 import { ConflictNotificationBanner, subscribeConflict } from "./ConflictNotification";
@@ -19,7 +19,7 @@ const LEVELS: { label: string; value: C4Level }[] = [
   { label: "Component", value: "component" },
 ];
 
-export default function Workspace({ designId, onNavigate }: WorkspaceProps): React.ReactElement {
+export default function Workspace({ designId }: WorkspaceProps): React.ReactElement {
   const { activeLevel, setActiveLevel, selectedElementId, inspectionPanelOpen, setDesignId, clearSelection } =
     useWorkspaceStore();
 
@@ -69,7 +69,6 @@ export default function Workspace({ designId, onNavigate }: WorkspaceProps): Rea
   // Header: NavBar + level-selector toolbar
   const header = (
     <>
-      {onNavigate && <NavBar currentView="canvas" onNavigate={onNavigate} designId={designId} />}
       <div style={{ display: "flex", gap: 0, padding: "8px 16px", background: "#f5f5f5", borderBottom: "1px solid #ddd" }}>
         <span style={{ fontWeight: 600, marginRight: 16, alignSelf: "center" }}>
           {design?.title ?? designId}
@@ -110,7 +109,7 @@ export default function Workspace({ designId, onNavigate }: WorkspaceProps): Rea
 
   if (isLoading) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "sans-serif" }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "sans-serif" }}>
         {header}
         <div style={{ padding: 32 }}>Loading design...</div>
       </div>
@@ -119,7 +118,7 @@ export default function Workspace({ designId, onNavigate }: WorkspaceProps): Rea
 
   if (isError || !design) {
     return (
-      <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "sans-serif" }}>
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "sans-serif" }}>
         {header}
         <div style={{ padding: 32, color: "#c0392b" }}>Failed to load design.</div>
       </div>
@@ -127,7 +126,7 @@ export default function Workspace({ designId, onNavigate }: WorkspaceProps): Rea
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "sans-serif" }}>
       {conflictDesignId && (
         <ConflictNotificationBanner
           designId={conflictDesignId}

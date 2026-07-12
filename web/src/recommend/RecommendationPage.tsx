@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useStartRecommendation, useRecommendStatus } from "../api/recommend";
-import { NavBar, type AppView } from "../shell";
+import type { AppView } from "../shell";
 import RequirementSelector from "./RequirementSelector";
 import OptionCard from "./OptionCard";
 
@@ -24,8 +24,7 @@ export default function RecommendationPage({ designId, onNavigate }: Recommendat
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "Arial, sans-serif" }}>
-      <NavBar currentView="recommend" onNavigate={onNavigate} designId={designId} />
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
 
       {/* Main content */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 900, width: "100%", margin: "0 auto" }}>

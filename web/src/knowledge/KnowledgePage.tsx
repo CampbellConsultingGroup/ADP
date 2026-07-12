@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import type { KnowledgeKind } from "../api/knowledge";
 import { KNOWLEDGE_KINDS, useImportCalmPattern, useKnowledgeItem, useKnowledgeItems } from "../api/knowledge";
-import { NavBar, type AppView } from "../shell";
+import type { AppView } from "../shell";
 import KnowledgeItemForm from "./KnowledgeItemForm";
 import KnowledgeItemRow from "./KnowledgeItemRow";
 
@@ -10,7 +10,7 @@ interface KnowledgePageProps {
   designId?: string | null;
 }
 
-export default function KnowledgePage({ onNavigate, designId = null }: KnowledgePageProps): React.ReactElement {
+export default function KnowledgePage(_props: KnowledgePageProps): React.ReactElement {
   const [kindFilter, setKindFilter] = useState<KnowledgeKind | "">("");
   const [mode, setMode] = useState<"idle" | "create" | "edit" | "import-calm">("idle");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -48,8 +48,7 @@ export default function KnowledgePage({ onNavigate, designId = null }: Knowledge
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "Arial, sans-serif" }}>
-      <NavBar currentView="knowledge" onNavigate={onNavigate} designId={designId} />
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 900, width: "100%", margin: "0 auto" }}>

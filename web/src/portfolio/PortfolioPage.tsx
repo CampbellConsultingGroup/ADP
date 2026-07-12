@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { NavBar, type AppView } from "../shell";
+import type { AppView } from "../shell";
 import { usePortfolioTechnologies, usePortfolioDesigns } from "../api/portfolio";
 import TechnologyLandscape from "./TechnologyLandscape";
 import PortfolioDesignList from "./PortfolioDesignList";
@@ -44,8 +44,7 @@ export default function PortfolioPage({
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <NavBar currentView="portfolio" onNavigate={onNavigate} designId={null} />
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", maxWidth: 1200, margin: "0 auto", width: "100%" }}>
         {/* Summary header */}

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useDesignList, useCreateDesign } from "../api/designs";
-import { NavBar, type AppView } from "../shell";
+import type { AppView } from "../shell";
 import LifecycleTransitionButton from "./LifecycleTransitionButton";
 
 interface DesignsPageProps {
@@ -16,7 +16,7 @@ const LIFECYCLE_COLORS: Record<string, { bg: string; text: string; label: string
   decommissioned: { bg: "#FEE2E2", text: "#991B1B", label: "Decommissioned" },
 };
 
-export default function DesignsPage({ onSelectDesign, onNavigate }: DesignsPageProps): React.ReactElement {
+export default function DesignsPage({ onSelectDesign }: DesignsPageProps): React.ReactElement {
   const [showForm, setShowForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [titleError, setTitleError] = useState("");
@@ -46,8 +46,7 @@ export default function DesignsPage({ onSelectDesign, onNavigate }: DesignsPageP
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "Arial, sans-serif" }}>
-      <NavBar currentView="designs" onNavigate={onNavigate} designId={null} />
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
 
       <div style={{ flex: 1, overflowY: "auto", padding: 24, maxWidth: 800, width: "100%", margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { NavBar, type AppView } from "../shell";
+import type { AppView } from "../shell";
 import CapabilityTree from "./CapabilityTree";
 import ValueStreamList from "./ValueStreamList";
 import ValueStreamDetail from "./ValueStreamDetail";
@@ -13,14 +13,13 @@ interface BusinessPageProps {
   designId?: string | null;
 }
 
-export default function BusinessPage({ onNavigate, designId = null }: BusinessPageProps): React.ReactElement {
+export default function BusinessPage(_props: BusinessPageProps): React.ReactElement {
   const [tab, setTab] = useState<BusinessTab>("capabilities");
   const [selectedVsId, setSelectedVsId] = useState<string | null>(null);
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "Arial, sans-serif" }}>
-      <NavBar currentView="business" onNavigate={onNavigate} designId={designId} />
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
 
       <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 900, width: "100%", margin: "0 auto" }}>
         <div style={{ marginBottom: 20 }}>

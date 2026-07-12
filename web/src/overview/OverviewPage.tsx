@@ -7,7 +7,7 @@
  * from the API through the shared TanStack Query hooks.
  */
 import React from "react";
-import { NavBar, type AppView } from "../shell";
+import type { AppView } from "../shell";
 import { useApplications, useTechCaps, useIntegrations } from "../api/application";
 import { useCapabilities, useValueStreams, useDomains } from "../api/business";
 import { usePortfolioSummary } from "../api/portfolio";
@@ -183,10 +183,8 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
   const draftLen = seg(lc.draft);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <NavBar currentView="overview" onNavigate={onNavigate} designId={null} />
-      <div className="ovw-root">
-        <div className="ovw-content">
+    <div className="ovw-root">
+      <div className="ovw-content">
           <header className="ovw-head">
             <div className="ovw-eyebrow"><span className="sw" /> Portfolio overview</div>
             <h1 className="ovw-h1">Architecture at a glance</h1>
@@ -322,8 +320,7 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
             ))}
           </div>
 
-          <div className="ovw-foot">ADP · Architecture Design Platform — live portfolio overview</div>
-        </div>
+        <div className="ovw-foot">ADP · Architecture Design Platform — live portfolio overview</div>
       </div>
     </div>
   );

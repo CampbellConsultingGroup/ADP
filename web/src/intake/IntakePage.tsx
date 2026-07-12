@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useIntakeStatus, type ProposalResponse } from "../api/intake";
-import { NavBar, type AppView } from "../shell";
+import type { AppView } from "../shell";
 import IntakeTextForm from "./IntakeTextForm";
 import StructuredForm from "./StructuredForm";
 import ProposalsList from "./ProposalsList";
@@ -80,8 +80,7 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "Arial, sans-serif" }}>
-      <NavBar currentView="intake" onNavigate={onNavigate} designId={designId} />
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Left: Tabs + extraction content */}
