@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import type { Application, ApplicationCreate } from "../api/application";
 import { useApplication, useUpdateApplication, useDeleteApplication } from "../api/application";
+import { Button, StatusBadge } from "../ui";
+import { TIME_TONE } from "./ApplicationList";
 import ApplicationForm from "./ApplicationForm";
 import CapabilityLinksEditor from "./CapabilityLinksEditor";
 import TechCapLinkEditor from "./TechCapLinkEditor";
@@ -8,13 +10,6 @@ import StageLinkEditor from "./StageLinkEditor";
 import DomainIntegrationEditor from "./DomainIntegrationEditor";
 import DesignLinkEditor from "./DesignLinkEditor";
 import IntegrationList from "./IntegrationList";
-
-const TIME_BADGE: Record<string, { bg: string; text: string }> = {
-  Invest: { bg: "#d4edda", text: "#155724" },
-  Migrate: { bg: "#fff3cd", text: "#856404" },
-  Eliminate: { bg: "#f8d7da", text: "#721c24" },
-  Tolerate: { bg: "#e2e3e5", text: "#383d41" },
-};
 
 interface Props {
   appId: string;
@@ -31,11 +26,10 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
   const [editing, setEditing] = useState(false);
   const [section, setSection] = useState<Section>("overview");
 
-  if (isLoading) return <div style={{ padding: 24, fontSize: 13, color: "#888" }}>Loading…</div>;
-  if (!app) return <div style={{ padding: 24, fontSize: 13, color: "#888" }}>Not found</div>;
+  if (isLoading) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
+  if (!app) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Not found</div>;
 
   const tc = app.time_classification;
-  const colors = tc ? TIME_BADGE[tc] : null;
 
   const handleSave = async (data: ApplicationCreate) => {
     await updateApp.mutateAsync(data);
@@ -59,12 +53,14 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
 
   const tabStyle = (id: Section): React.CSSProperties => ({
     fontSize: 12,
-    padding: "5px 12px",
-    background: section === id ? "#1168BD" : "#f0f0f0",
-    color: section === id ? "#fff" : "#444",
-    border: "none",
+    padding: "6px 13px",
+    background: section === id ? "var(--accent)" : "var(--surface-2)",
+    color: section === id ? "var(--accent-ink)" : "var(--ink-2)",
+    border: "1px solid " + (section === id ? "var(--accent)" : "var(--border)"),
     cursor: "pointer",
-    borderRadius: 4,
+    borderRadius: 7,
+    fontFamily: "inherit",
+    fontWeight: section === id ? 600 : 500,
   });
 
   if (editing) {
@@ -74,50 +70,43 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
       {/* Header */}
-      <div style={{ padding: "12px 16px", borderBottom: "1px solid #e0e0e0", flexShrink: 0 }}>
+      <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "flex-start", gap: 10 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <h2 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{app.name}</h2>
-              {colors && tc && (
-                <span style={{ fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 10, background: colors.bg, color: colors.text }}>
-                  {tc}
-                </span>
-              )}
-              {app.r_strategy && <span style={{ fontSize: 11, color: "#888" }}>({app.r_strategy})</span>}
+              <h2 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: "var(--ink)" }}>{app.name}</h2>
+              {tc && <StatusBadge tone={TIME_TONE[tc]}>{tc}</StatusBadge>}
+              {app.r_strategy && <span style={{ fontSize: 11, color: "var(--ink-3)" }}>({app.r_strategy})</span>}
             </div>
-            {app.vendor && <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{app.vendor}</div>}
-            {app.primary_owner && <div style={{ fontSize: 12, color: "#888" }}>Owner: {app.primary_owner}</div>}
+            {app.vendor && <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3 }}>{app.vendor}</div>}
+            {app.primary_owner && <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Owner: {app.primary_owner}</div>}
             {app.health_score !== null && (
-              <div style={{ fontSize: 12, marginTop: 2 }}>
-                Health: <span style={{ color: "#555" }}>{"★".repeat(app.health_score)}{"☆".repeat(5 - app.health_score)}</span>
+              <div style={{ fontSize: 12, marginTop: 3, color: "var(--ink-2)" }}>
+                Health: <span style={{ color: "var(--warn)" }}>{"★".repeat(app.health_score)}</span>
+                <span style={{ color: "var(--ink-3)" }}>{"☆".repeat(5 - app.health_score)}</span>
               </div>
             )}
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-            <button onClick={() => setEditing(true)} style={{ fontSize: 11, padding: "4px 10px", background: "#f0f0f0", border: "1px solid #ccc", borderRadius: 4, cursor: "pointer" }}>Edit</button>
-            <button onClick={handleDelete} style={{ fontSize: 11, padding: "4px 10px", background: "#fde8e8", border: "1px solid #f0a0a0", borderRadius: 4, cursor: "pointer", color: "#c00" }}>Delete</button>
+            <Button size="sm" onClick={() => setEditing(true)}>Edit</Button>
+            <Button size="sm" variant="danger" onClick={handleDelete}>Delete</Button>
           </div>
         </div>
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: "flex", gap: 6, padding: "8px 16px", borderBottom: "1px solid #e0e0e0", flexShrink: 0, flexWrap: "wrap" }}>
-        {tabs.map(t => <button key={t.id} style={tabStyle(t.id)} onClick={() => setSection(t.id)}>{t.label}</button>)}
+      <div style={{ display: "flex", gap: 6, padding: "10px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0, flexWrap: "wrap" }}>
+        {tabs.map((t) => <button key={t.id} style={tabStyle(t.id)} onClick={() => setSection(t.id)}>{t.label}</button>)}
       </div>
 
       {/* Content */}
-      <div style={{ flex: 1, overflow: "auto", padding: "14px 16px" }}>
+      <div style={{ flex: 1, overflow: "auto", padding: "16px 18px" }}>
         {section === "overview" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {app.description && <p style={{ margin: 0, fontSize: 13, color: "#444" }}>{app.description}</p>}
-            {app.pace_layer && (
-              <div style={{ fontSize: 12 }}>
-                <strong>Pace Layer:</strong> {app.pace_layer}
-              </div>
-            )}
-            <div style={{ fontSize: 11, color: "#aaa" }}>
-              Created: {new Date(app.created_at).toLocaleDateString()} · Updated: {new Date(app.updated_at).toLocaleDateString()}
+            {app.description && <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>{app.description}</p>}
+            {app.pace_layer && <div style={{ fontSize: 12, color: "var(--ink-2)" }}><strong style={{ color: "var(--ink)" }}>Pace layer:</strong> {app.pace_layer}</div>}
+            <div style={{ fontSize: 11, color: "var(--ink-3)" }}>
+              Created {new Date(app.created_at).toLocaleDateString()} · Updated {new Date(app.updated_at).toLocaleDateString()}
             </div>
           </div>
         )}
@@ -126,7 +115,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
         {section === "stages" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             <StageLinkEditor appId={appId} />
-            <hr style={{ border: "none", borderTop: "1px solid #eee" }} />
+            <hr style={{ border: "none", borderTop: "1px solid var(--border)", width: "100%" }} />
             <DomainIntegrationEditor appId={appId} />
           </div>
         )}
