@@ -6,11 +6,11 @@ interface KnowledgeCitationChipProps {
 }
 
 const KIND_COLORS: Record<string, { bg: string; text: string }> = {
-  principle: { bg: "#EDE9FE", text: "#5B21B6" },
-  pattern: { bg: "#DBEAFE", text: "#1E40AF" },
-  standard: { bg: "#D1FAE5", text: "#065F46" },
-  reference_architecture: { bg: "#FEF3C7", text: "#92400E" },
-  prior_solution: { bg: "#FCE7F3", text: "#9D174D" },
+  principle: { bg: "var(--biz-wash)", text: "var(--biz)" },
+  pattern: { bg: "var(--accent-wash)", text: "var(--accent-2)" },
+  standard: { bg: "var(--good-wash)", text: "var(--good)" },
+  reference_architecture: { bg: "var(--warn-wash)", text: "var(--warn)" },
+  prior_solution: { bg: "var(--surface-2)", text: "var(--biz)" },
 };
 
 const KIND_LABELS: Record<string, string> = {
@@ -32,9 +32,9 @@ export default function KnowledgeCitationChip({ itemId }: KnowledgeCitationChipP
         gap: 4,
         padding: "3px 8px",
         borderRadius: 4,
-        background: "#F3F4F6",
+        background: "var(--surface-2)",
         fontSize: 11,
-        color: "#9CA3AF",
+        color: "var(--ink-3)",
       }}>
         {itemId}
       </span>
@@ -42,7 +42,7 @@ export default function KnowledgeCitationChip({ itemId }: KnowledgeCitationChipP
   }
 
   const kind = item?.kind ?? "principle";
-  const colors = KIND_COLORS[kind] ?? { bg: "#F3F4F6", text: "#374151" };
+  const colors = KIND_COLORS[kind] ?? { bg: "var(--surface-2)", text: "var(--ink-2)" };
   const kindLabel = KIND_LABELS[kind] ?? kind;
 
   return (

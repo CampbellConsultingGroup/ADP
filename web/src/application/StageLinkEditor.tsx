@@ -26,18 +26,18 @@ export default function StageLinkEditor({ appId }: Props) {
 
   return (
     <div>
-      <h4 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "#444" }}>Value Stream Stages</h4>
-      {toast && <div style={{ fontSize: 11, color: "#c00", marginBottom: 6 }}>{toast}</div>}
-      {links?.items.length === 0 && <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>No stages linked.</div>}
+      <h4 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Value Stream Stages</h4>
+      {toast && <div style={{ fontSize: 11, color: "var(--crit)", marginBottom: 6 }}>{toast}</div>}
+      {links?.items.length === 0 && <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 8 }}>No stages linked.</div>}
       {links?.items.map(link => (
         <div key={link.stage_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <span style={{ flex: 1, fontSize: 13 }}>{link.stage_name}</span>
-          <button onClick={() => deleteLink.mutate(link.stage_id)} style={{ fontSize: 11, color: "#c00", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+          <button onClick={() => deleteLink.mutate(link.stage_id)} style={{ fontSize: 11, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}>✕</button>
         </div>
       ))}
       {(streams?.items.length ?? 0) > 0 && (
         <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
-          <select value={selectedStageId} onChange={e => setSelectedStageId(e.target.value)} style={{ flex: 1, fontSize: 12, padding: "4px 6px", border: "1px solid #ccc", borderRadius: 4 }}>
+          <select value={selectedStageId} onChange={e => setSelectedStageId(e.target.value)} style={{ flex: 1, fontSize: 12, padding: "4px 6px", border: "1px solid var(--border)", borderRadius: 4 }}>
             <option value="">— Select stage —</option>
             {streams?.items.map(vs => (
               <optgroup key={vs.id} label={vs.name}>
@@ -45,7 +45,7 @@ export default function StageLinkEditor({ appId }: Props) {
               </optgroup>
             ))}
           </select>
-          <button onClick={handleLink} disabled={!selectedStageId} style={{ fontSize: 12, padding: "4px 10px", background: "#1168BD", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Link</button>
+          <button onClick={handleLink} disabled={!selectedStageId} style={{ fontSize: 12, padding: "4px 10px", background: "var(--accent)", color: "var(--surface)", border: "none", borderRadius: 4, cursor: "pointer" }}>Link</button>
         </div>
       )}
     </div>

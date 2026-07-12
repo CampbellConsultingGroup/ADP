@@ -54,12 +54,12 @@ export default function ValueStreamStageEditor({ vsId, stages }: ValueStreamStag
 
   return (
     <div>
-      <div style={{ fontSize: 12, fontWeight: 600, color: "#374151", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-2)", marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.05em" }}>
         Stages ({stages.length})
       </div>
 
       {stages.length === 0 && (
-        <div style={{ fontSize: 13, color: "#9CA3AF", padding: "12px 0", fontStyle: "italic" }}>
+        <div style={{ fontSize: 13, color: "var(--ink-3)", padding: "12px 0", fontStyle: "italic" }}>
           No stages yet. Add the first stage below.
         </div>
       )}
@@ -67,11 +67,11 @@ export default function ValueStreamStageEditor({ vsId, stages }: ValueStreamStag
       {stages.map((stage, index) => (
         <div
           key={stage.id}
-          style={{ border: "1px solid #E5E7EB", borderRadius: 4, marginBottom: 8, overflow: "hidden" }}
+          style={{ border: "1px solid var(--border)", borderRadius: 4, marginBottom: 8, overflow: "hidden" }}
         >
           {/* Stage header row */}
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "#F9FAFB" }}>
-            <span style={{ fontSize: 11, color: "#9CA3AF", minWidth: 20, textAlign: "right" }}>{index + 1}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "var(--surface-2)" }}>
+            <span style={{ fontSize: 11, color: "var(--ink-3)", minWidth: 20, textAlign: "right" }}>{index + 1}</span>
 
             {editingId === stage.id ? (
               <>
@@ -80,28 +80,28 @@ export default function ValueStreamStageEditor({ vsId, stages }: ValueStreamStag
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") handleSaveEdit(); if (e.key === "Escape") setEditingId(null); }}
-                  style={{ flex: 1, padding: "3px 6px", fontSize: 13, border: "1px solid #93C5FD", borderRadius: 3 }}
+                  style={{ flex: 1, padding: "3px 6px", fontSize: 13, border: "1px solid var(--accent)", borderRadius: 3 }}
                 />
-                <button onClick={handleSaveEdit} style={{ padding: "2px 8px", fontSize: 12, background: "#1168BD", color: "#fff", border: "none", borderRadius: 3, cursor: "pointer" }}>Save</button>
-                <button onClick={() => setEditingId(null)} style={{ padding: "2px 8px", fontSize: 12, background: "#fff", border: "1px solid #D1D5DB", borderRadius: 3, cursor: "pointer" }}>×</button>
+                <button onClick={handleSaveEdit} style={{ padding: "2px 8px", fontSize: 12, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 3, cursor: "pointer" }}>Save</button>
+                <button onClick={() => setEditingId(null)} style={{ padding: "2px 8px", fontSize: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 3, cursor: "pointer" }}>×</button>
               </>
             ) : (
               <>
-                <span style={{ flex: 1, fontSize: 13, color: "#111827" }}>{stage.name}</span>
+                <span style={{ flex: 1, fontSize: 13, color: "var(--ink)" }}>{stage.name}</span>
                 <button onClick={() => startEdit(stage)} title="Edit" style={btnStyle}>✎</button>
                 <button onClick={() => handleMoveUp(index)} disabled={index === 0} title="Move up" style={{ ...btnStyle, opacity: index === 0 ? 0.3 : 1 }}>↑</button>
                 <button onClick={() => handleMoveDown(index)} disabled={index === stages.length - 1} title="Move down" style={{ ...btnStyle, opacity: index === stages.length - 1 ? 0.3 : 1 }}>↓</button>
                 <button
                   onClick={() => deleteStage.mutate(stage.id)}
                   title="Delete stage"
-                  style={{ ...btnStyle, color: "#B91C1C" }}
+                  style={{ ...btnStyle, color: "var(--crit)" }}
                 >×</button>
               </>
             )}
           </div>
 
           {/* Stage capabilities (ADP-SPEC-035) */}
-          <div style={{ padding: "6px 12px 10px 12px", borderTop: "1px solid #F3F4F6" }}>
+          <div style={{ padding: "6px 12px 10px 12px", borderTop: "1px solid var(--surface-2)" }}>
             <StageCapsEditor vsId={vsId} stageId={stage.id} />
           </div>
         </div>
@@ -114,17 +114,17 @@ export default function ValueStreamStageEditor({ vsId, stages }: ValueStreamStag
             value={addingName}
             onChange={(e) => setAddingName(e.target.value)}
             placeholder="Stage name"
-            style={{ flex: 1, padding: "5px 8px", fontSize: 13, border: "1px solid #D1D5DB", borderRadius: 4 }}
+            style={{ flex: 1, padding: "5px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 4 }}
           />
-          <button type="submit" disabled={!addingName.trim() || addStage.isPending} style={{ padding: "5px 10px", fontSize: 13, background: "#1168BD", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>
+          <button type="submit" disabled={!addingName.trim() || addStage.isPending} style={{ padding: "5px 10px", fontSize: 13, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>
             {addStage.isPending ? "…" : "Add"}
           </button>
-          <button type="button" onClick={() => { setShowAdd(false); setAddingName(""); }} style={{ padding: "5px 10px", fontSize: 13, background: "#fff", border: "1px solid #D1D5DB", borderRadius: 4, cursor: "pointer" }}>
+          <button type="button" onClick={() => { setShowAdd(false); setAddingName(""); }} style={{ padding: "5px 10px", fontSize: 13, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer" }}>
             Cancel
           </button>
         </form>
       ) : (
-        <button onClick={() => setShowAdd(true)} style={{ marginTop: 8, padding: "5px 12px", fontSize: 13, background: "#fff", border: "1px dashed #D1D5DB", borderRadius: 4, cursor: "pointer", color: "#6B7280" }}>
+        <button onClick={() => setShowAdd(true)} style={{ marginTop: 8, padding: "5px 12px", fontSize: 13, background: "var(--surface)", border: "1px dashed var(--border)", borderRadius: 4, cursor: "pointer", color: "var(--ink-3)" }}>
           + Add Stage
         </button>
       )}
@@ -139,5 +139,5 @@ const btnStyle: React.CSSProperties = {
   border: "none",
   borderRadius: 3,
   cursor: "pointer",
-  color: "#374151",
+  color: "var(--ink-2)",
 };

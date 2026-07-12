@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { NavBar, type AppView } from "../shell";
+import type { AppView } from "../shell";
+import { Button } from "../ui";
 import DesignStatusTab from "./DesignStatusTab";
 import ComplianceTab from "./ComplianceTab";
 import ActivityFeedTab from "./ActivityFeedTab";
@@ -24,34 +25,19 @@ export default function GovernancePage({
   const [activeTab, setActiveTab] = useState<TabId>("status");
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
-      <NavBar currentView="governance" onNavigate={onNavigate} designId={null} />
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
 
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", maxWidth: 1200, margin: "0 auto", width: "100%" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
-          <button
-            onClick={() => onNavigate("portfolio")}
-            style={{
-              padding: "4px 10px",
-              borderRadius: 6,
-              border: "1px solid #D1D5DB",
-              backgroundColor: "#fff",
-              color: "#374151",
-              fontSize: 13,
-              cursor: "pointer",
-              marginRight: 16,
-            }}
-          >
-            ← Portfolio
-          </button>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "#111827" }}>
+          <Button size="sm" onClick={() => onNavigate("portfolio")} style={{ marginRight: 16 }}>← Portfolio</Button>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
             Governance Report
           </h2>
         </div>
 
         {/* Tab bar */}
-        <div style={{ display: "flex", borderBottom: "2px solid #E5E7EB", marginBottom: 20 }}>
+        <div style={{ display: "flex", borderBottom: "2px solid var(--border)", marginBottom: 20 }}>
           {TABS.map(({ id, label }) => (
             <button
               key={id}
@@ -59,9 +45,9 @@ export default function GovernancePage({
               style={{
                 padding: "8px 20px",
                 border: "none",
-                borderBottom: activeTab === id ? "2px solid #1D4ED8" : "2px solid transparent",
+                borderBottom: activeTab === id ? "2px solid var(--accent)" : "2px solid transparent",
                 backgroundColor: "transparent",
-                color: activeTab === id ? "#1D4ED8" : "#6B7280",
+                color: activeTab === id ? "var(--accent)" : "var(--ink-3)",
                 fontSize: 14,
                 fontWeight: activeTab === id ? 600 : 400,
                 cursor: "pointer",

@@ -29,17 +29,17 @@ function TechCapNode({ cap, children, allCaps, depth }: NodeProps) {
     <div style={{ marginLeft: depth * 14 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 0" }}>
         {children.length > 0 && (
-          <button onClick={() => setExpanded(e => !e)} style={{ fontSize: 10, background: "none", border: "none", cursor: "pointer", color: "#888", padding: 0, minWidth: 12 }}>
+          <button onClick={() => setExpanded(e => !e)} style={{ fontSize: 10, background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: 0, minWidth: 12 }}>
             {expanded ? "▾" : "▸"}
           </button>
         )}
         {children.length === 0 && <span style={{ minWidth: 12 }} />}
         <span style={{ fontSize: 13, flex: 1 }}>{cap.name}</span>
-        <span style={{ fontSize: 10, color: "#aaa" }}>L{cap.level}</span>
+        <span style={{ fontSize: 10, color: "var(--ink-3)" }}>L{cap.level}</span>
         {cap.level < 3 && (
-          <button onClick={() => setAdding(a => !a)} style={{ fontSize: 10, color: "#1168BD", background: "none", border: "none", cursor: "pointer" }}>+ child</button>
+          <button onClick={() => setAdding(a => !a)} style={{ fontSize: 10, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>+ child</button>
         )}
-        <button onClick={handleDelete} style={{ fontSize: 10, color: "#c00", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+        <button onClick={handleDelete} style={{ fontSize: 10, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}>✕</button>
       </div>
       {adding && (
         <div style={{ marginLeft: 14 }}>
@@ -72,8 +72,8 @@ export default function TechCapTree({ caps }: Props) {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#444" }}>Technical Capabilities</h4>
-        <button onClick={() => setAddingRoot(a => !a)} style={{ fontSize: 11, color: "#1168BD", background: "none", border: "1px solid #1168BD", borderRadius: 4, padding: "2px 8px", cursor: "pointer" }}>
+        <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Technical Capabilities</h4>
+        <button onClick={() => setAddingRoot(a => !a)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "1px solid var(--accent)", borderRadius: 4, padding: "2px 8px", cursor: "pointer" }}>
           + Root
         </button>
       </div>
@@ -85,7 +85,7 @@ export default function TechCapTree({ caps }: Props) {
         />
       )}
       {roots.length === 0 && !addingRoot && (
-        <div style={{ fontSize: 12, color: "#888" }}>No technical capabilities defined.</div>
+        <div style={{ fontSize: 12, color: "var(--ink-3)" }}>No technical capabilities defined.</div>
       )}
       {roots.map(root => (
         <TechCapNode

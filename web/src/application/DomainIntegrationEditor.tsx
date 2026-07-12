@@ -29,19 +29,19 @@ export default function DomainIntegrationEditor({ appId }: Props) {
     }
   };
 
-  const field: React.CSSProperties = { fontSize: 12, padding: "4px 6px", border: "1px solid #ccc", borderRadius: 4 };
+  const field: React.CSSProperties = { fontSize: 12, padding: "4px 6px", border: "1px solid var(--border)", borderRadius: 4 };
 
   return (
     <div>
-      <h4 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "#444" }}>Domain Integrations</h4>
-      {toast && <div style={{ fontSize: 11, color: "#c00", marginBottom: 6 }}>{toast}</div>}
-      {integrations?.items.length === 0 && <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>No domain integrations.</div>}
+      <h4 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Domain Integrations</h4>
+      {toast && <div style={{ fontSize: 11, color: "var(--crit)", marginBottom: 6 }}>{toast}</div>}
+      {integrations?.items.length === 0 && <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 8 }}>No domain integrations.</div>}
       {integrations?.items.map(item => (
         <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <span style={{ fontSize: 13 }}>{DIR_ICON[item.direction]}</span>
           <span style={{ flex: 1, fontSize: 13 }}>{item.domain_name ?? "External"}</span>
-          <span style={{ fontSize: 11, color: "#888" }}>{item.integration_type}</span>
-          <button onClick={() => deleteIntegration.mutate(item.id)} style={{ fontSize: 11, color: "#c00", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+          <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{item.integration_type}</span>
+          <button onClick={() => deleteIntegration.mutate(item.id)} style={{ fontSize: 11, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}>✕</button>
         </div>
       ))}
       <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -53,7 +53,7 @@ export default function DomainIntegrationEditor({ appId }: Props) {
         <select value={direction} onChange={e => setDirection(e.target.value as IntegrationDir)} style={field}>
           {DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
-        <button onClick={handleCreate} style={{ fontSize: 12, padding: "4px 10px", background: "#1168BD", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Add</button>
+        <button onClick={handleCreate} style={{ fontSize: 12, padding: "4px 10px", background: "var(--accent)", color: "var(--surface)", border: "none", borderRadius: 4, cursor: "pointer" }}>Add</button>
       </div>
     </div>
   );

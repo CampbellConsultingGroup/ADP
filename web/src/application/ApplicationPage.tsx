@@ -21,9 +21,9 @@ function ApplicationPageInner() {
   const handleDeleted = () => setSelectedId(null);
 
   return (
-    <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
+    <div style={{ display: "flex", height: "100%", overflow: "hidden", background: "var(--surface)" }}>
       {/* Sidebar */}
-      <div style={{ width: 260, borderRight: "1px solid #e0e0e0", overflow: "auto", flexShrink: 0 }}>
+      <div style={{ width: 260, borderRight: "1px solid var(--border)", overflow: "auto", flexShrink: 0 }}>
         <ApplicationList
           apps={apps}
           selectedId={selectedId}
@@ -50,8 +50,8 @@ function ApplicationPageInner() {
           />
         )}
         {!showCreate && !selectedId && (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#aaa", fontSize: 14 }}>
-            Select an application or click "+ Add Application"
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "var(--ink-3)", fontSize: 14 }}>
+            Select an application or click “Add” to create one
           </div>
         )}
       </div>
@@ -62,14 +62,9 @@ function ApplicationPageInner() {
 export default function ApplicationPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ padding: "10px 16px", borderBottom: "1px solid #e0e0e0", display: "flex", alignItems: "center", gap: 10 }}>
-        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Application Registry</h1>
-      </div>
-      <div style={{ flex: 1, overflow: "hidden" }}>
-        <Suspense fallback={<div style={{ padding: 24, color: "#888" }}>Loading…</div>}>
-          <ApplicationPageInner />
-        </Suspense>
-      </div>
+      <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-3)" }}>Loading…</div>}>
+        <ApplicationPageInner />
+      </Suspense>
     </div>
   );
 }

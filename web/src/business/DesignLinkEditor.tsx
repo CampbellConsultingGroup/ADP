@@ -152,7 +152,7 @@ export default function DesignLinkEditor({ entityType, entityId }: Props): React
         </button>
       </div>
       {linkError && (
-        <p style={{ color: "var(--error, #c0392b)", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>
+        <p style={{ color: "var(--error, var(--crit))", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>
           {linkError}
         </p>
       )}

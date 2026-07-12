@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useStartRecommendation, useRecommendStatus } from "../api/recommend";
-import { NavBar, type AppView } from "../shell";
+import type { AppView } from "../shell";
 import RequirementSelector from "./RequirementSelector";
 import OptionCard from "./OptionCard";
 
@@ -24,13 +24,12 @@ export default function RecommendationPage({ designId, onNavigate }: Recommendat
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100vh", fontFamily: "Arial, sans-serif" }}>
-      <NavBar currentView="recommend" onNavigate={onNavigate} designId={designId} />
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
 
       {/* Main content */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 900, width: "100%", margin: "0 auto" }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: "#111827", marginBottom: 4 }}>Architecture Recommendations</h2>
-        <p style={{ fontSize: 13, color: "#6B7280", marginBottom: 20 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--ink)", marginBottom: 4 }}>Architecture Recommendations</h2>
+        <p style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 20 }}>
           Claude will analyse your requirements and suggest ranked architectural options grounded in your organisation's knowledge base.
         </p>
 
@@ -39,25 +38,25 @@ export default function RecommendationPage({ designId, onNavigate }: Recommendat
 
         {/* Status indicators */}
         {operationId && status === "running" && (
-          <div style={{ marginTop: 16, padding: 14, background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 6, fontSize: 13, color: "#1D4ED8" }}>
+          <div style={{ marginTop: 16, padding: 14, background: "var(--accent-wash)", border: "1px solid var(--accent)", borderRadius: 6, fontSize: 13, color: "var(--accent)" }}>
             ⏳ Claude is analysing your requirements and generating options...
           </div>
         )}
         {operationId && status === "failed" && (
-          <div style={{ marginTop: 16, padding: 14, background: "#FEE2E2", border: "1px solid #FECACA", borderRadius: 6, fontSize: 13, color: "#B91C1C" }}>
+          <div style={{ marginTop: 16, padding: 14, background: "var(--crit-wash)", border: "1px solid var(--crit)", borderRadius: 6, fontSize: 13, color: "var(--crit)" }}>
             ✗ Generation failed: {statusData?.error_description ?? "Unknown error"}. Check LLM configuration.
           </div>
         )}
 
         {/* Options */}
         {operationId && status === "completed" && options.length === 0 && (
-          <div style={{ marginTop: 16, padding: 14, background: "#FEF9C3", border: "1px solid #FDE68A", borderRadius: 6, fontSize: 13, color: "#92400E" }}>
+          <div style={{ marginTop: 16, padding: 14, background: "var(--warn-wash)", border: "1px solid var(--warn)", borderRadius: 6, fontSize: 13, color: "var(--warn)" }}>
             No options were generated. This may be because the knowledge base is empty (all options would be advisory) or the LLM did not return structured output. Try again or check LLM settings.
           </div>
         )}
         {operationId && status === "completed" && options.length > 0 && (
           <div style={{ marginTop: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 14 }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink-2)", marginBottom: 14 }}>
               {statusData?.result_summary} — ranked by fit with your requirements
             </div>
             {options.map((opt) => (

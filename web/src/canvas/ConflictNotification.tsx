@@ -25,7 +25,7 @@ export function ConflictNotificationBanner({
         top: 16,
         left: "50%",
         transform: "translateX(-50%)",
-        background: "#c0392b",
+        background: "var(--crit)",
         color: "#fff",
         padding: "12px 24px",
         borderRadius: 6,
@@ -36,10 +36,10 @@ export function ConflictNotificationBanner({
       }}
     >
       <span>Design updated by another user. Your change was not saved.</span>
-      <button onClick={handleReload} style={{ background: "#fff", color: "#c0392b", border: "none", borderRadius: 4, padding: "4px 10px", cursor: "pointer" }}>
+      <button onClick={handleReload} style={{ background: "var(--surface)", color: "var(--crit)", border: "none", borderRadius: 4, padding: "4px 10px", cursor: "pointer" }}>
         Reload
       </button>
-      <button onClick={onDismiss} style={{ background: "transparent", color: "#fff", border: "1px solid #fff", borderRadius: 4, padding: "4px 10px", cursor: "pointer" }}>
+      <button onClick={onDismiss} style={{ background: "transparent", color: "#fff", border: "1px solid var(--surface)", borderRadius: 4, padding: "4px 10px", cursor: "pointer" }}>
         Dismiss
       </button>
     </div>

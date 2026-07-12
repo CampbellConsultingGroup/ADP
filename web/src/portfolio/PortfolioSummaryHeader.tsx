@@ -1,17 +1,12 @@
 import React from "react";
 import { usePortfolioSummary } from "../api/portfolio";
-
-const STATUS_CHIPS: { key: string; label: string; bg: string; text: string }[] = [
-  { key: "draft",          label: "Draft",          bg: "#F3F4F6", text: "#374151" },
-  { key: "proposed",       label: "Proposed",       bg: "#DBEAFE", text: "#1E40AF" },
-  { key: "current",        label: "Current",        bg: "#D1FAE5", text: "#065F46" },
-  { key: "deprecated",     label: "Deprecated",     bg: "#FEF3C7", text: "#92400E" },
-  { key: "decommissioned", label: "Decommissioned", bg: "#FEE2E2", text: "#991B1B" },
-];
+import { LIFECYCLE_TONE, LIFECYCLE_LABEL } from "./lifecycle";
 
 interface PortfolioSummaryHeaderProps {
   onStatusSelect: (status: string | null) => void;
 }
+
+const ORDER = ["draft", "proposed", "current", "deprecated", "decommissioned"];
 
 export default function PortfolioSummaryHeader({
   onStatusSelect,
@@ -20,25 +15,9 @@ export default function PortfolioSummaryHeader({
 
   if (isLoading) {
     return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          padding: "12px 0",
-        }}
-      >
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0" }}>
         {[1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            style={{
-              width: 80,
-              height: 32,
-              borderRadius: 8,
-              backgroundColor: "#E5E7EB",
-              animation: "pulse 1.5s infinite",
-            }}
-          />
+          <div key={i} style={{ width: 80, height: 32, borderRadius: 8, background: "var(--surface-3)" }} />
         ))}
       </div>
     );
@@ -49,64 +28,35 @@ export default function PortfolioSummaryHeader({
   return (
     <div
       style={{
-        display: "flex",
-        alignItems: "center",
-        flexWrap: "wrap",
-        gap: 10,
-        padding: "12px 0",
-        borderBottom: "1px solid #E5E7EB",
-        marginBottom: 16,
+        display: "flex", alignItems: "center", flexWrap: "wrap", gap: 8,
+        padding: "12px 0", borderBottom: "1px solid var(--border)", marginBottom: 16,
       }}
     >
-      {/* Total */}
-      <span style={{ fontSize: 14, fontWeight: 700, color: "#111827", marginRight: 4 }}>
+      <span style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)", marginRight: 4 }}>
         {data.total_designs} designs
       </span>
 
-      {/* Status chips */}
-      {STATUS_CHIPS.map(({ key, label, bg, text }) => {
+      {ORDER.map((key) => {
         const count = data.by_status[key] ?? 0;
         if (count === 0) return null;
         return (
           <button
             key={key}
             onClick={() => onStatusSelect(key)}
-            title={`Filter by ${label}`}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 4,
-              padding: "3px 10px",
-              borderRadius: 12,
-              border: "none",
-              backgroundColor: bg,
-              color: text,
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: "pointer",
-            }}
+            title={`Filter by ${LIFECYCLE_LABEL[key]}`}
+            className={`ui-badge ${LIFECYCLE_TONE[key]}`}
+            style={{ cursor: "pointer", fontFamily: "var(--font)", fontWeight: 600 }}
           >
-            {label}: {count}
+            <span className="b-dot" />
+            {LIFECYCLE_LABEL[key]}: {count}
           </button>
         );
       })}
 
-      {/* Overdue badge */}
       {data.overdue_review_count > 0 && (
-        <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 4,
-            padding: "3px 10px",
-            borderRadius: 12,
-            backgroundColor: "#FEF3C7",
-            color: "#92400E",
-            fontSize: 12,
-            fontWeight: 600,
-          }}
-        >
-          ⚠ {data.overdue_review_count} overdue review{data.overdue_review_count !== 1 ? "s" : ""}
+        <span className="ui-badge warn">
+          <span className="b-dot" />
+          {data.overdue_review_count} overdue review{data.overdue_review_count !== 1 ? "s" : ""}
         </span>
       )}
     </div>

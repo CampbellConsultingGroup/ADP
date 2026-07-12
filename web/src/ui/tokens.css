@@ -1,0 +1,74 @@
+/* ADP design tokens — global. Light + dark, driven by prefers-color-scheme
+   and overridable via data-theme on <html>. Import once (main.tsx). */
+:root {
+  color-scheme: light dark;
+  --bg: #eef1f6;
+  --surface: #ffffff;
+  --surface-2: #f5f7fb;
+  --surface-3: #eef2f8;
+  --border: #dce2ec;
+  --border-strong: #c6cfdd;
+  --ink: #141c26;
+  --ink-2: #47566a;
+  --ink-3: #7c8aa0;
+  --accent: #2874A6;
+  --accent-2: #1c587f;
+  --accent-ink: #ffffff;
+  --accent-wash: #2874a614;
+  --biz: #7a5cf0; --biz-wash: #7a5cf01a;
+  --ent: #2874A6; --ent-wash: #2874a61a;
+  --sol: #128fa8; --sol-wash: #128fa81c;
+  --tec: #a4712a; --tec-wash: #a4712a1c;
+  --good: #1f9d6b; --good-wash: #1f9d6b1c;
+  --warn: #d68a15; --warn-wash: #d68a151f;
+  --crit: #d8434a; --crit-wash: #d8434a1c;
+  --shadow-sm: 0 1px 2px rgba(20,28,38,.05), 0 1px 1px rgba(20,28,38,.04);
+  --shadow-md: 0 2px 4px rgba(20,28,38,.05), 0 12px 28px rgba(20,28,38,.09);
+  --radius-sm: 8px; --radius: 12px; --radius-lg: 16px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 24px; --space-6: 32px;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", "Cascadia Code", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0a0f16; --surface: #111926; --surface-2: #0e1620; --surface-3: #172231;
+    --border: #223145; --border-strong: #304563;
+    --ink: #e6ecf5; --ink-2: #9fb0c6; --ink-3: #6d7f97;
+    --accent: #4aa3d8; --accent-2: #7cc0e8; --accent-ink: #06131d; --accent-wash: #4aa3d824;
+    --biz: #9b83f5; --biz-wash: #9b83f524;
+    --ent: #4aa3d8; --ent-wash: #4aa3d824;
+    --sol: #3bc0d8; --sol-wash: #3bc0d824;
+    --tec: #cf9a4a; --tec-wash: #cf9a4a24;
+    --good: #34c98a; --good-wash: #34c98a24;
+    --warn: #ecab3f; --warn-wash: #ecab3f26;
+    --crit: #f0656b; --crit-wash: #f0656b24;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.3);
+    --shadow-md: 0 2px 4px rgba(0,0,0,.3), 0 14px 34px rgba(0,0,0,.42);
+  }
+}
+:root[data-theme="light"] {
+  --bg:#eef1f6;--surface:#fff;--surface-2:#f5f7fb;--surface-3:#eef2f8;--border:#dce2ec;--border-strong:#c6cfdd;
+  --ink:#141c26;--ink-2:#47566a;--ink-3:#7c8aa0;--accent:#2874A6;--accent-2:#1c587f;--accent-ink:#fff;--accent-wash:#2874a614;
+  --biz:#7a5cf0;--biz-wash:#7a5cf01a;--ent:#2874A6;--ent-wash:#2874a61a;--sol:#128fa8;--sol-wash:#128fa81c;--tec:#a4712a;--tec-wash:#a4712a1c;
+  --good:#1f9d6b;--good-wash:#1f9d6b1c;--warn:#d68a15;--warn-wash:#d68a151f;--crit:#d8434a;--crit-wash:#d8434a1c;
+  --shadow-sm:0 1px 2px rgba(20,28,38,.05),0 1px 1px rgba(20,28,38,.04);
+  --shadow-md:0 2px 4px rgba(20,28,38,.05),0 12px 28px rgba(20,28,38,.09);
+}
+:root[data-theme="dark"] {
+  --bg:#0a0f16;--surface:#111926;--surface-2:#0e1620;--surface-3:#172231;--border:#223145;--border-strong:#304563;
+  --ink:#e6ecf5;--ink-2:#9fb0c6;--ink-3:#6d7f97;--accent:#4aa3d8;--accent-2:#7cc0e8;--accent-ink:#06131d;--accent-wash:#4aa3d824;
+  --biz:#9b83f5;--biz-wash:#9b83f524;--ent:#4aa3d8;--ent-wash:#4aa3d824;--sol:#3bc0d8;--sol-wash:#3bc0d824;--tec:#cf9a4a;--tec-wash:#cf9a4a24;
+  --good:#34c98a;--good-wash:#34c98a24;--warn:#ecab3f;--warn-wash:#ecab3f26;--crit:#f0656b;--crit-wash:#f0656b24;
+  --shadow-sm:0 1px 2px rgba(0,0,0,.3);--shadow-md:0 2px 4px rgba(0,0,0,.3),0 14px 34px rgba(0,0,0,.42);
+}
+
+/* Base document styling so the app ground follows the theme. */
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}

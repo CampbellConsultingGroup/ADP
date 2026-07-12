@@ -70,14 +70,16 @@ export default function TechnologyEditor({
     padding: "5px 8px",
     fontSize: 12,
     borderRadius: 4,
-    border: `1px solid ${errors[field] ? "#DC2626" : "#D1D5DB"}`,
+    border: `1px solid ${errors[field] ? "var(--crit)" : "var(--border)"}`,
+    background: "var(--surface)",
+    color: "var(--ink)",
     boxSizing: "border-box",
     fontFamily: "inherit",
     marginBottom: 2,
   });
 
-  const labelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: "#6B7280", marginBottom: 2, display: "block" };
-  const errorStyle: React.CSSProperties = { fontSize: 11, color: "#DC2626", marginBottom: 6 };
+  const labelStyle: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: "var(--ink-3)", marginBottom: 2, display: "block" };
+  const errorStyle: React.CSSProperties = { fontSize: 11, color: "var(--crit)", marginBottom: 6 };
 
   return (
     <div style={{ marginTop: 8 }}>
@@ -115,9 +117,9 @@ export default function TechnologyEditor({
         <label style={labelStyle}>Tags</label>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
           {tags.map(tag => (
-            <span key={tag} style={{ background: "#EDE9FE", color: "#5B21B6", fontSize: 11, padding: "2px 6px", borderRadius: 3, display: "flex", alignItems: "center", gap: 4 }}>
+            <span key={tag} style={{ background: "var(--biz-wash)", color: "var(--biz)", fontSize: 11, padding: "2px 6px", borderRadius: 3, display: "flex", alignItems: "center", gap: 4 }}>
               {tag}
-              <button onClick={() => removeTag(tag)} style={{ background: "none", border: "none", cursor: "pointer", color: "#5B21B6", fontSize: 11, padding: 0, lineHeight: 1 }}>✕</button>
+              <button onClick={() => removeTag(tag)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--biz)", fontSize: 11, padding: 0, lineHeight: 1 }}>✕</button>
             </span>
           ))}
         </div>
@@ -130,27 +132,27 @@ export default function TechnologyEditor({
             placeholder="Type tag + Enter"
             maxLength={51}
           />
-          <button onClick={addTag} style={{ padding: "5px 10px", background: "#EDE9FE", color: "#5B21B6", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 11 }}>Add</button>
+          <button onClick={addTag} style={{ padding: "5px 10px", background: "var(--biz-wash)", color: "var(--biz)", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 11 }}>Add</button>
         </div>
         {errors.tags && <div style={errorStyle}>{errors.tags}</div>}
       </div>
 
       {mutation.isError && (
-        <div style={{ fontSize: 12, color: "#DC2626", marginBottom: 8 }}>{mutation.error?.message}</div>
+        <div style={{ fontSize: 12, color: "var(--crit)", marginBottom: 8 }}>{mutation.error?.message}</div>
       )}
 
       <div style={{ display: "flex", gap: 6 }}>
         <button
           onClick={handleSave}
           disabled={mutation.isPending}
-          style={{ flex: 1, padding: "6px 0", background: mutation.isPending ? "#D1D5DB" : "#1168BD", color: "#fff", border: "none", borderRadius: 4, cursor: mutation.isPending ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 600 }}
+          style={{ flex: 1, padding: "6px 0", background: mutation.isPending ? "var(--border)" : "var(--accent)", color: "#fff", border: "none", borderRadius: 4, cursor: mutation.isPending ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 600 }}
         >
           {mutation.isPending ? "Saving…" : "Save"}
         </button>
         <button
           onClick={onDone}
           disabled={mutation.isPending}
-          style={{ flex: 1, padding: "6px 0", background: "#fff", color: "#374151", border: "1px solid #D1D5DB", borderRadius: 4, cursor: "pointer", fontSize: 12 }}
+          style={{ flex: 1, padding: "6px 0", background: "var(--surface)", color: "var(--ink-2)", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", fontSize: 12 }}
         >
           Cancel
         </button>

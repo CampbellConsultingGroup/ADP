@@ -4,6 +4,7 @@
  */
 import React, { useState } from "react";
 import { useTransitionLifecycle } from "../api/designs";
+import { Button } from "../ui";
 
 interface LifecycleTransitionButtonProps {
   designId: string;
@@ -53,63 +54,48 @@ export default function LifecycleTransitionButton({
 
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{ padding: "4px 10px", background: "#fff", color: "#374151", border: "1px solid #D1D5DB", borderRadius: 4, cursor: "pointer", fontSize: 12 }}
-      >
-        Transition ▾
-      </button>
+      <Button size="sm" onClick={() => setOpen((o) => !o)}>Transition ▾</Button>
 
       {open && !pending && (
-        <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 2, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", zIndex: 100, minWidth: 180 }}>
-          {transitions.map(t => (
-            <button
-              key={t.value}
-              onClick={() => { setPending(t.value); }}
-              style={{ display: "block", width: "100%", padding: "8px 14px", textAlign: "left", background: "none", border: "none", cursor: "pointer", fontSize: 13, color: "#111827" }}
-            >
+        <div className="ui-menu" style={{ right: 0, top: "100%", marginTop: 4, minWidth: 180 }}>
+          {transitions.map((t) => (
+            <button key={t.value} className="ui-menu-item" onClick={() => setPending(t.value)}>
               {t.label}
             </button>
           ))}
-          <button onClick={() => setOpen(false)} style={{ display: "block", width: "100%", padding: "6px 14px", textAlign: "left", background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#9CA3AF" }}>
-            Cancel
-          </button>
+          <button className="ui-menu-item muted" onClick={() => setOpen(false)}>Cancel</button>
         </div>
       )}
 
       {pending && (
-        <div style={{ position: "absolute", right: 0, top: "100%", marginTop: 2, background: "#fff", border: "1px solid #E5E7EB", borderRadius: 6, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", zIndex: 100, width: 260, padding: 14 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: "#111827" }}>
-            Transition to <span style={{ color: "#1168BD" }}>{pending}</span>
+        <div className="ui-menu" style={{ right: 0, top: "100%", marginTop: 4, width: 260, padding: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: "var(--ink)" }}>
+            Transition to <span style={{ color: "var(--accent)" }}>{pending}</span>
           </div>
 
-          {(DATE_FIELDS[pending] ?? []).map(df => (
+          {(DATE_FIELDS[pending] ?? []).map((df) => (
             <div key={df.key} style={{ marginBottom: 8 }}>
-              <label style={{ fontSize: 11, color: "#6B7280", display: "block", marginBottom: 3 }}>{df.label}</label>
-              <input type="date" value={dateValue} onChange={e => setDateValue(e.target.value)}
-                style={{ width: "100%", padding: "5px 8px", fontSize: 12, borderRadius: 4, border: "1px solid #D1D5DB", boxSizing: "border-box" }} />
+              <label className="ui-label">{df.label}</label>
+              <input type="date" className="ui-input" value={dateValue} onChange={(e) => setDateValue(e.target.value)} />
             </div>
           ))}
 
           <div style={{ marginBottom: 10 }}>
-            <label style={{ fontSize: 11, color: "#6B7280", display: "block", marginBottom: 3 }}>Note (optional, max 500 chars)</label>
-            <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} maxLength={500}
-              style={{ width: "100%", padding: "5px 8px", fontSize: 12, borderRadius: 4, border: "1px solid #D1D5DB", resize: "vertical", boxSizing: "border-box", fontFamily: "inherit" }} />
+            <label className="ui-label">Note (optional, max 500 chars)</label>
+            <textarea className="ui-textarea" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} />
           </div>
 
           {mutation.isError && (
-            <div style={{ fontSize: 12, color: "#DC2626", marginBottom: 8 }}>{mutation.error?.message}</div>
+            <div style={{ fontSize: 12, color: "var(--crit)", marginBottom: 8 }}>{mutation.error?.message}</div>
           )}
 
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={handleConfirm} disabled={mutation.isPending}
-              style={{ flex: 1, padding: "6px 0", background: mutation.isPending ? "#D1D5DB" : "#1168BD", color: "#fff", border: "none", borderRadius: 4, cursor: mutation.isPending ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 600 }}>
+            <Button variant="primary" size="sm" style={{ flex: 1 }} onClick={handleConfirm} disabled={mutation.isPending}>
               {mutation.isPending ? "Saving…" : "Confirm"}
-            </button>
-            <button onClick={() => { setPending(null); setNote(""); setDateValue(""); }}
-              style={{ flex: 1, padding: "6px 0", background: "#fff", color: "#374151", border: "1px solid #D1D5DB", borderRadius: 4, cursor: "pointer", fontSize: 12 }}>
+            </Button>
+            <Button size="sm" style={{ flex: 1 }} onClick={() => { setPending(null); setNote(""); setDateValue(""); }}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}

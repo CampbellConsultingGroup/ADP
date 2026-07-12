@@ -47,7 +47,7 @@ export default function DomainForm({ initial = {}, onSubmit, onCancel, isLoading
 
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      {error && <div style={{ color: "red", fontSize: 13 }}>{error}</div>}
+      {error && <div style={{ color: "var(--crit)", fontSize: 13 }}>{error}</div>}
       <label style={{ fontSize: 13 }}>
         Name *
         <input
