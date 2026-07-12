@@ -18,16 +18,7 @@ export default function TechnologyLandscape({
     return (
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
         {[1, 2, 3, 4, 5].map((i) => (
-          <div
-            key={i}
-            style={{
-              width: 100,
-              height: 32,
-              borderRadius: 16,
-              backgroundColor: "#E5E7EB",
-              animation: "pulse 1.5s infinite",
-            }}
-          />
+          <div key={i} style={{ width: 100, height: 32, borderRadius: 16, background: "var(--surface-3)" }} />
         ))}
       </div>
     );
@@ -35,7 +26,7 @@ export default function TechnologyLandscape({
 
   if (technologies.length === 0) {
     return (
-      <p style={{ color: "#6B7280", fontSize: 14 }}>
+      <p style={{ color: "var(--ink-3)", fontSize: 14 }}>
         No technology tags recorded yet. Tag elements via the Inspection Panel.
       </p>
     );
@@ -49,33 +40,21 @@ export default function TechnologyLandscape({
           <button
             key={t.technology}
             onClick={() => onSelect(isActive ? null : t.technology)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "4px 12px",
-              borderRadius: 16,
-              border: isActive ? "2px solid #1D4ED8" : "1.5px solid #D1D5DB",
-              backgroundColor: isActive ? "#DBEAFE" : "#F9FAFB",
-              color: isActive ? "#1E40AF" : "#374151",
-              cursor: "pointer",
-              fontSize: 13,
-              fontWeight: isActive ? 600 : 400,
-              transition: "all 0.15s",
-            }}
             aria-pressed={isActive}
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 12px", borderRadius: 16,
+              border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
+              background: isActive ? "var(--accent-wash)" : "var(--surface-2)",
+              color: isActive ? "var(--accent-2)" : "var(--ink-2)",
+              cursor: "pointer", fontSize: 13, fontWeight: isActive ? 600 : 400, fontFamily: "var(--font)",
+              transition: "all .15s",
+            }}
           >
             {t.technology}
             <span
               style={{
-                backgroundColor: isActive ? "#1D4ED8" : "#9CA3AF",
-                color: "#fff",
-                borderRadius: 10,
-                padding: "0 6px",
-                fontSize: 11,
-                fontWeight: 700,
-                minWidth: 20,
-                textAlign: "center",
+                background: isActive ? "var(--accent)" : "var(--ink-3)", color: "#fff", borderRadius: 10,
+                padding: "0 6px", fontSize: 11, fontWeight: 700, minWidth: 20, textAlign: "center",
               }}
             >
               {t.design_count}

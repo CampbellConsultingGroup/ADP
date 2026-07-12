@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import type { AppView } from "../shell";
 import { usePortfolioTechnologies, usePortfolioDesigns } from "../api/portfolio";
+import { Button } from "../ui";
 import TechnologyLandscape from "./TechnologyLandscape";
 import PortfolioDesignList from "./PortfolioDesignList";
 import DependencySearch from "./DependencySearch";
@@ -51,57 +52,29 @@ export default function PortfolioPage({
         <PortfolioSummaryHeader onStatusSelect={handleStatusSelect} />
 
         {/* Filter bar */}
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
           <select
+            className="ui-select"
             value={activeStatus}
             onChange={(e) => setActiveStatus(e.target.value)}
-            style={{
-              padding: "6px 10px",
-              borderRadius: 8,
-              border: "1px solid #D1D5DB",
-              fontSize: 14,
-              color: "#374151",
-            }}
             aria-label="Filter by lifecycle status"
           >
             {LIFECYCLE_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
+              <option key={o.value} value={o.value}>{o.label}</option>
             ))}
           </select>
 
-          <button
+          <Button
+            variant={searchMode ? "primary" : "default"}
+            icon={searchMode ? undefined : "search"}
             onClick={() => setSearchMode(!searchMode)}
-            style={{
-              padding: "6px 14px",
-              borderRadius: 8,
-              border: "1px solid #D1D5DB",
-              backgroundColor: searchMode ? "#EDE9FE" : "#fff",
-              color: searchMode ? "#5B21B6" : "#374151",
-              fontSize: 14,
-              cursor: "pointer",
-              fontWeight: searchMode ? 600 : 400,
-            }}
           >
             {searchMode ? "← Browse" : "Search"}
-          </button>
+          </Button>
 
-          <button
-            onClick={() => onNavigate("governance")}
-            style={{
-              marginLeft: "auto",
-              padding: "6px 14px",
-              borderRadius: 8,
-              border: "1px solid #D1D5DB",
-              backgroundColor: "#fff",
-              color: "#374151",
-              fontSize: 14,
-              cursor: "pointer",
-            }}
-          >
+          <Button icon="shield" style={{ marginLeft: "auto" }} onClick={() => onNavigate("governance")}>
             Governance Report
-          </button>
+          </Button>
         </div>
 
         {searchMode ? (
@@ -112,7 +85,7 @@ export default function PortfolioPage({
           <>
             {/* Technology landscape */}
             <div style={{ marginBottom: 20 }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 10 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginBottom: 10 }}>
                 Technologies
               </h3>
               <TechnologyLandscape
@@ -125,7 +98,7 @@ export default function PortfolioPage({
 
             {/* Design list */}
             <div>
-              <h3 style={{ fontSize: 14, fontWeight: 600, color: "#374151", marginBottom: 10 }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginBottom: 10 }}>
                 Designs
                 {(activeTechnology || activeStatus) && (
                   <button
@@ -133,7 +106,7 @@ export default function PortfolioPage({
                     style={{
                       marginLeft: 8,
                       fontSize: 12,
-                      color: "#6B7280",
+                      color: "var(--ink-3)",
                       background: "none",
                       border: "none",
                       cursor: "pointer",
