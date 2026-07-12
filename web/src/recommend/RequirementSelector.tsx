@@ -8,10 +8,10 @@ interface RequirementSelectorProps {
 }
 
 const KIND_COLORS: Record<RequirementKind, string> = {
-  functional: "#1D4ED8",
-  non_functional: "#6B21A8",
-  constraint: "#C2410C",
-  driver: "#166534",
+  functional: "var(--accent)",
+  non_functional: "var(--biz)",
+  constraint: "var(--tec)",
+  driver: "var(--good)",
 };
 
 export default function RequirementSelector({ designId, onSubmit, isPending }: RequirementSelectorProps): React.ReactElement {
@@ -28,7 +28,7 @@ export default function RequirementSelector({ designId, onSubmit, isPending }: R
 
   if (requirements.length === 0) {
     return (
-      <div style={{ padding: 16, background: "#FEF9C3", borderRadius: 6, border: "1px solid #FDE68A", fontSize: 13, color: "#92400E" }}>
+      <div style={{ padding: 16, background: "var(--warn-wash)", borderRadius: 6, border: "1px solid var(--warn)", fontSize: 13, color: "var(--warn)" }}>
         No confirmed requirements yet. <strong>Add requirements via the Intake screen</strong> to get recommendations.
       </div>
     );
@@ -44,8 +44,8 @@ export default function RequirementSelector({ designId, onSubmit, isPending }: R
   };
 
   return (
-    <div style={{ marginBottom: 16, padding: 14, background: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 8 }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 10 }}>
+    <div style={{ marginBottom: 16, padding: 14, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8 }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)", marginBottom: 10 }}>
         Requirements to include ({selected.size}/{requirements.length} selected)
       </div>
       {requirements.map((req) => (
@@ -56,10 +56,10 @@ export default function RequirementSelector({ designId, onSubmit, isPending }: R
             onChange={() => toggle(req.id)}
             style={{ flexShrink: 0 }}
           />
-          <span style={{ background: KIND_COLORS[req.kind as RequirementKind] ?? "#6B7280", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 5px", borderRadius: 3 }}>
+          <span style={{ background: KIND_COLORS[req.kind as RequirementKind] ?? "var(--ink-3)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 5px", borderRadius: 3 }}>
             {req.id}
           </span>
-          <span style={{ fontSize: 13, color: "#374151" }}>{req.title}</span>
+          <span style={{ fontSize: 13, color: "var(--ink-2)" }}>{req.title}</span>
         </label>
       ))}
       <button
@@ -67,7 +67,7 @@ export default function RequirementSelector({ designId, onSubmit, isPending }: R
         onClick={() => onSubmit(Array.from(selected))}
         style={{
           marginTop: 10, padding: "8px 18px",
-          background: selected.size > 0 && !isPending ? "#1168BD" : "#D1D5DB",
+          background: selected.size > 0 && !isPending ? "var(--accent)" : "var(--border)",
           color: "#fff", border: "none", borderRadius: 4,
           cursor: selected.size > 0 && !isPending ? "pointer" : "not-allowed",
           fontSize: 14, fontWeight: 600,

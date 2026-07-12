@@ -44,10 +44,10 @@ export default function ReasoningPanel({ option, operationId }: ReasoningPanelPr
   const isRequirementsOnly = option.knowledge_source === "requirements_only";
 
   return (
-    <div style={{ marginBottom: 14, borderTop: "1px solid #F3F4F6", paddingTop: 12 }}>
+    <div style={{ marginBottom: 14, borderTop: "1px solid var(--surface-2)", paddingTop: 12 }}>
       {/* Toggle button */}
       {noRecords ? (
-        <span style={{ fontSize: 12, color: "#9CA3AF", fontStyle: "italic" }}>
+        <span style={{ fontSize: 12, color: "var(--ink-3)", fontStyle: "italic" }}>
           No reasoning recorded for this option
         </span>
       ) : (
@@ -55,9 +55,9 @@ export default function ReasoningPanel({ option, operationId }: ReasoningPanelPr
           onClick={() => setExpanded((e) => !e)}
           style={{
             padding: "5px 12px",
-            background: expanded ? "#EFF6FF" : "#fff",
-            color: expanded ? "#1E40AF" : "#6B7280",
-            border: `1px solid ${expanded ? "#BFDBFE" : "#D1D5DB"}`,
+            background: expanded ? "var(--accent-wash)" : "var(--surface)",
+            color: expanded ? "var(--accent-2)" : "var(--ink-3)",
+            border: `1px solid ${expanded ? "var(--accent)" : "var(--border)"}`,
             borderRadius: 4,
             cursor: "pointer",
             fontSize: 12,
@@ -70,13 +70,13 @@ export default function ReasoningPanel({ option, operationId }: ReasoningPanelPr
 
       {/* Panel content */}
       {expanded && (
-        <div style={{ marginTop: 12, padding: 16, background: "#FAFAFA", border: "1px solid #E5E7EB", borderRadius: 8 }}>
+        <div style={{ marginTop: 12, padding: 16, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8 }}>
 
           {/* Loading skeleton */}
           {isLoading && (
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[80, 60, 90, 50].map((w, i) => (
-                <div key={i} style={{ height: 12, width: `${w}%`, background: "#E5E7EB", borderRadius: 4, animation: "pulse 1.5s infinite" }} />
+                <div key={i} style={{ height: 12, width: `${w}%`, background: "var(--border)", borderRadius: 4, animation: "pulse 1.5s infinite" }} />
               ))}
             </div>
           )}
@@ -85,20 +85,20 @@ export default function ReasoningPanel({ option, operationId }: ReasoningPanelPr
           {generateRecord && (
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                   Generation Reasoning
                 </span>
-                <span style={{ fontSize: 11, background: "#E0E7FF", color: "#3730A3", padding: "1px 6px", borderRadius: 3 }}>
+                <span style={{ fontSize: 11, background: "var(--accent-wash)", color: "var(--accent-2)", padding: "1px 6px", borderRadius: 3 }}>
                   {generateRecord.model_id}
                 </span>
-                <span style={{ fontSize: 11, color: "#9CA3AF" }}>
+                <span style={{ fontSize: 11, color: "var(--ink-3)" }}>
                   {_relativeTime(generateRecord.created_at)}
                 </span>
               </div>
-              <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>
+              <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>
                 {generateRecord.reasoning_text}
               </p>
-              <div style={{ marginTop: 6, fontSize: 11, color: "#9CA3AF" }}>
+              <div style={{ marginTop: 6, fontSize: 11, color: "var(--ink-3)" }}>
                 {generateRecord.input_tokens + generateRecord.output_tokens} tokens
               </div>
             </div>
@@ -106,15 +106,15 @@ export default function ReasoningPanel({ option, operationId }: ReasoningPanelPr
 
           {/* Section 2: Trade-off analysis */}
           {tradeoffRecord && (
-            <div style={{ marginBottom: 16, paddingTop: generateRecord ? 12 : 0, borderTop: generateRecord ? "1px solid #E5E7EB" : "none" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+            <div style={{ marginBottom: 16, paddingTop: generateRecord ? 12 : 0, borderTop: generateRecord ? "1px solid var(--border)" : "none" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
                 Trade-off Analysis
               </div>
-              <p style={{ fontSize: 13, color: "#374151", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>
+              <p style={{ fontSize: 13, color: "var(--ink-2)", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>
                 {tradeoffRecord.reasoning_text}
               </p>
               {tradeoffRecord.truncated && (
-                <div style={{ marginTop: 6, fontSize: 11, color: "#F59E0B", fontStyle: "italic" }}>
+                <div style={{ marginTop: 6, fontSize: 11, color: "var(--warn)", fontStyle: "italic" }}>
                   [Truncated at 100,000 characters]
                 </div>
               )}
@@ -122,12 +122,12 @@ export default function ReasoningPanel({ option, operationId }: ReasoningPanelPr
           )}
 
           {/* Section 3: Knowledge citations */}
-          <div style={{ paddingTop: (generateRecord || tradeoffRecord) ? 12 : 0, borderTop: (generateRecord || tradeoffRecord) ? "1px solid #E5E7EB" : "none" }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
+          <div style={{ paddingTop: (generateRecord || tradeoffRecord) ? 12 : 0, borderTop: (generateRecord || tradeoffRecord) ? "1px solid var(--border)" : "none" }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-2)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>
               Knowledge Citations
             </div>
             {isRequirementsOnly ? (
-              <div style={{ fontSize: 12, color: "#1E40AF", background: "#EFF6FF", padding: "6px 10px", borderRadius: 5 }}>
+              <div style={{ fontSize: 12, color: "var(--accent-2)", background: "var(--accent-wash)", padding: "6px 10px", borderRadius: 5 }}>
                 ℹ Generated from requirements — no prior knowledge base entries were available.
               </div>
             ) : option.grounded_on.length > 0 ? (
@@ -137,7 +137,7 @@ export default function ReasoningPanel({ option, operationId }: ReasoningPanelPr
                 ))}
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: "#9CA3AF", fontStyle: "italic" }}>
+              <div style={{ fontSize: 12, color: "var(--ink-3)", fontStyle: "italic" }}>
                 No knowledge citations for this option
               </div>
             )}
@@ -145,7 +145,7 @@ export default function ReasoningPanel({ option, operationId }: ReasoningPanelPr
 
           {/* No records loaded but not loading */}
           {hasRecords === false && !isLoading && records.length === 0 && (
-            <div style={{ fontSize: 12, color: "#9CA3AF", textAlign: "center", padding: "8px 0" }}>
+            <div style={{ fontSize: 12, color: "var(--ink-3)", textAlign: "center", padding: "8px 0" }}>
               Reasoning records not yet available
             </div>
           )}
