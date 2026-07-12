@@ -49,8 +49,8 @@ export default function CapabilityTree(): React.ReactElement {
   const { data, isLoading, error } = useCapabilities();
   const [showRootForm, setShowRootForm] = useState(false);
 
-  if (isLoading) return <div style={{ padding: 20, color: "#6B7280", fontSize: 14 }}>Loading capabilities…</div>;
-  if (error) return <div style={{ padding: 14, background: "#FEE2E2", borderRadius: 6, fontSize: 13, color: "#B91C1C" }}>Failed to load capabilities: {error.message}</div>;
+  if (isLoading) return <div style={{ padding: 20, color: "var(--ink-3)", fontSize: 14 }}>Loading capabilities…</div>;
+  if (error) return <div style={{ padding: 14, background: "var(--crit-wash)", borderRadius: 6, fontSize: 13, color: "var(--crit)" }}>Failed to load capabilities: {error.message}</div>;
 
   const items = data?.items ?? [];
   const tree = buildTree(items);
@@ -58,12 +58,12 @@ export default function CapabilityTree(): React.ReactElement {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <span style={{ fontSize: 13, color: "#6B7280" }}>
+        <span style={{ fontSize: 13, color: "var(--ink-3)" }}>
           {items.length} capability{items.length !== 1 ? "ies" : "y"} across all levels
         </span>
         <button
           onClick={() => setShowRootForm(!showRootForm)}
-          style={{ padding: "6px 14px", background: "#1168BD", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+          style={{ padding: "6px 14px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600 }}
         >
           + Add Strategic Capability
         </button>
@@ -79,7 +79,7 @@ export default function CapabilityTree(): React.ReactElement {
       )}
 
       {tree.length === 0 && !showRootForm && (
-        <div style={{ padding: 40, textAlign: "center", color: "#6B7280", fontSize: 14, border: "2px dashed #E5E7EB", borderRadius: 8 }}>
+        <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 14, border: "2px dashed var(--border)", borderRadius: 8 }}>
           The capability model is empty. Click "Add Strategic Capability" to create the first Level 1 capability.
         </div>
       )}

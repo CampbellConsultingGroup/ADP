@@ -21,7 +21,7 @@ export default function DomainDetail({ domainId, onBack }: DomainDetailProps) {
   const [assignError, setAssignError] = useState<string | null>(null);
 
   if (isLoading) return <div style={{ padding: 16 }}>Loading…</div>;
-  if (error || !domain) return <div style={{ padding: 16, color: "red" }}>Domain not found</div>;
+  if (error || !domain) return <div style={{ padding: 16, color: "var(--crit)" }}>Domain not found</div>;
 
   const assignedIds = new Set(domain.capabilities.map((c) => c.capability_id));
   const l1Caps = (allCaps?.items ?? []).filter((c) => c.level === 1);
@@ -51,7 +51,7 @@ export default function DomainDetail({ domainId, onBack }: DomainDetailProps) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
             <div>
               <h3 style={{ margin: "0 0 4px 0", fontSize: 16 }}>{domain.name}</h3>
-              <div style={{ fontSize: 12, color: "#666" }}>
+              <div style={{ fontSize: 12, color: "var(--ink-2)" }}>
                 {domain.classification}
                 {domain.org_unit ? ` · ${domain.org_unit}` : ""}
               </div>
@@ -61,7 +61,7 @@ export default function DomainDetail({ domainId, onBack }: DomainDetailProps) {
             </button>
           </div>
           {domain.scope_statement && (
-            <div style={{ fontSize: 13, marginTop: 8, color: "#444" }}>{domain.scope_statement}</div>
+            <div style={{ fontSize: 13, marginTop: 8, color: "var(--ink-2)" }}>{domain.scope_statement}</div>
           )}
           {domain.risk_flags.length > 0 && (
             <div style={{ marginTop: 6, display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -69,8 +69,8 @@ export default function DomainDetail({ domainId, onBack }: DomainDetailProps) {
                 <span
                   key={f}
                   style={{
-                    background: "#fff3e0",
-                    color: "#e65100",
+                    background: "var(--warn-wash)",
+                    color: "var(--warn)",
                     padding: "1px 6px",
                     borderRadius: 8,
                     fontSize: 11,
@@ -89,11 +89,11 @@ export default function DomainDetail({ domainId, onBack }: DomainDetailProps) {
       </h4>
 
       {assignError && (
-        <div style={{ color: "red", fontSize: 12, marginBottom: 8 }}>{assignError}</div>
+        <div style={{ color: "var(--crit)", fontSize: 12, marginBottom: 8 }}>{assignError}</div>
       )}
 
       {domain.capabilities.length === 0 && (
-        <div style={{ fontSize: 13, color: "#888", marginBottom: 8 }}>None yet.</div>
+        <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 8 }}>None yet.</div>
       )}
 
       {domain.capabilities.map((cap) => (
@@ -109,7 +109,7 @@ export default function DomainDetail({ domainId, onBack }: DomainDetailProps) {
 
       {unassigned.length > 0 && (
         <>
-          <div style={{ fontSize: 12, color: "#888", margin: "10px 0 6px 0" }}>
+          <div style={{ fontSize: 12, color: "var(--ink-3)", margin: "10px 0 6px 0" }}>
             Unassigned L1 capabilities
           </div>
           {unassigned.map((cap) => (
@@ -158,7 +158,7 @@ function CapabilityRow({
         alignItems: "center",
         padding: "5px 8px",
         borderRadius: 4,
-        background: assigned ? "#e8f5e9" : "#f5f5f5",
+        background: assigned ? "var(--good-wash)" : "var(--surface-2)",
         marginBottom: 4,
       }}
     >

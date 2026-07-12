@@ -16,7 +16,7 @@ export default function BusinessContextPanel({ designId, onNavigate }: Props): R
   if (isLoading) {
     return (
       <div style={panelStyle}>
-        <p style={{ fontSize: "0.85rem", color: "var(--text-secondary, #6B7280)", margin: 0 }}>
+        <p style={{ fontSize: "0.85rem", color: "var(--text-secondary, var(--ink-3))", margin: 0 }}>
           Loading business context…
         </p>
       </div>
@@ -30,13 +30,13 @@ export default function BusinessContextPanel({ designId, onNavigate }: Props): R
 
   return (
     <div style={panelStyle}>
-      <h4 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "#111827" }}>
+      <h4 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
         Business Architecture
       </h4>
 
       {isEmpty ? (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-          <p style={{ fontSize: 12, color: "#6B7280", margin: 0 }}>
+          <p style={{ fontSize: 12, color: "var(--ink-3)", margin: 0 }}>
             No business entities linked to this design.
           </p>
           <button
@@ -50,14 +50,14 @@ export default function BusinessContextPanel({ designId, onNavigate }: Props): R
         <>
           {hasCapabilities && (
             <div style={{ marginBottom: 8 }}>
-              <p style={{ fontSize: 11, fontWeight: 600, color: "#047857", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: "var(--good)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Capabilities
               </p>
               <ul style={{ margin: 0, padding: "0 0 0 14px" }}>
                 {data!.capabilities.map((c) => (
-                  <li key={c.capability_id} style={{ fontSize: 12, color: "#374151", marginBottom: 2 }}>
+                  <li key={c.capability_id} style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 2 }}>
                     {c.name}{" "}
-                    <span style={{ color: "#9CA3AF", fontSize: 11 }}>L{c.level}</span>
+                    <span style={{ color: "var(--ink-3)", fontSize: 11 }}>L{c.level}</span>
                   </li>
                 ))}
               </ul>
@@ -65,15 +65,15 @@ export default function BusinessContextPanel({ designId, onNavigate }: Props): R
           )}
           {hasValueStreams && (
             <div style={{ marginBottom: 8 }}>
-              <p style={{ fontSize: 11, fontWeight: 600, color: "#1168BD", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              <p style={{ fontSize: 11, fontWeight: 600, color: "var(--accent)", margin: "0 0 4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 Value Streams
               </p>
               <ul style={{ margin: 0, padding: "0 0 0 14px" }}>
                 {data!.value_streams.map((v) => (
-                  <li key={v.value_stream_id} style={{ fontSize: 12, color: "#374151", marginBottom: 2 }}>
+                  <li key={v.value_stream_id} style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 2 }}>
                     {v.name}
                     {v.stakeholder && (
-                      <span style={{ color: "#9CA3AF", fontSize: 11 }}> · {v.stakeholder}</span>
+                      <span style={{ color: "var(--ink-3)", fontSize: 11 }}> · {v.stakeholder}</span>
                     )}
                   </li>
                 ))}
@@ -91,8 +91,8 @@ export default function BusinessContextPanel({ designId, onNavigate }: Props): R
 
 const panelStyle: React.CSSProperties = {
   padding: "12px 14px",
-  background: "#F0FDF4",
-  border: "1px solid #BBF7D0",
+  background: "var(--good-wash)",
+  border: "1px solid var(--good)",
   borderRadius: 6,
   marginTop: 12,
 };
@@ -102,7 +102,7 @@ const linkBtn: React.CSSProperties = {
   border: "none",
   cursor: "pointer",
   fontSize: 12,
-  color: "#1168BD",
+  color: "var(--accent)",
   padding: 0,
   textDecoration: "underline",
 };

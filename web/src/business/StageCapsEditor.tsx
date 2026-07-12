@@ -33,16 +33,16 @@ export default function StageCapsEditor({ vsId, stageId }: StageCapsEditorProps)
     });
   }
 
-  if (isLoading) return <div style={{ fontSize: 12, color: "#888", padding: "4px 0" }}>Loading…</div>;
+  if (isLoading) return <div style={{ fontSize: 12, color: "var(--ink-3)", padding: "4px 0" }}>Loading…</div>;
 
   return (
     <div style={{ marginTop: 8 }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: "#6B7280", marginBottom: 4 }}>
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)", marginBottom: 4 }}>
         Capabilities
       </div>
 
       {(linked?.items ?? []).length === 0 && (
-        <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 6 }}>None linked yet</div>
+        <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 6 }}>None linked yet</div>
       )}
 
       {(linked?.items ?? []).map((item) => (
@@ -54,7 +54,7 @@ export default function StageCapsEditor({ vsId, stageId }: StageCapsEditorProps)
             alignItems: "center",
             fontSize: 12,
             padding: "3px 6px",
-            background: "#f0fdf4",
+            background: "var(--good-wash)",
             borderRadius: 4,
             marginBottom: 3,
           }}
@@ -62,7 +62,7 @@ export default function StageCapsEditor({ vsId, stageId }: StageCapsEditorProps)
           <span>
             {item.name}
             {item.domain_name && (
-              <span style={{ marginLeft: 5, color: "#0d47a1", fontSize: 10 }}>
+              <span style={{ marginLeft: 5, color: "var(--accent-2)", fontSize: 10 }}>
                 [{item.domain_name}]
               </span>
             )}
@@ -70,7 +70,7 @@ export default function StageCapsEditor({ vsId, stageId }: StageCapsEditorProps)
           <button
             onClick={() => unlinkMutation.mutate(item.capability_id)}
             disabled={unlinkMutation.isPending}
-            style={{ fontSize: 10, color: "#c62828", background: "none", border: "none", cursor: "pointer" }}
+            style={{ fontSize: 10, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}
           >
             ✕
           </button>
@@ -78,7 +78,7 @@ export default function StageCapsEditor({ vsId, stageId }: StageCapsEditorProps)
       ))}
 
       {linkError && (
-        <div style={{ fontSize: 11, color: "red", marginBottom: 4 }}>{linkError}</div>
+        <div style={{ fontSize: 11, color: "var(--crit)", marginBottom: 4 }}>{linkError}</div>
       )}
 
       {available.length > 0 && (
