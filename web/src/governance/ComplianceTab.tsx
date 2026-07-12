@@ -1,6 +1,7 @@
 import React from "react";
 import { useComplianceExceptions } from "../api/governance";
 import type { AppView } from "../shell";
+import { Button, StatusBadge } from "../ui";
 
 interface ComplianceTabProps {
   onSelectDesign: (id: string) => void;
@@ -17,7 +18,7 @@ export default function ComplianceTab({
     return (
       <div>
         {[1, 2].map((i) => (
-          <div key={i} style={{ height: 64, backgroundColor: "#F3F4F6", borderRadius: 8, marginBottom: 8, animation: "pulse 1.5s infinite" }} />
+          <div key={i} style={{ height: 64, backgroundColor: "var(--surface-2)", borderRadius: 8, marginBottom: 8, animation: "pulse 1.5s infinite" }} />
         ))}
       </div>
     );
@@ -28,7 +29,7 @@ export default function ComplianceTab({
   if (exceptions.length === 0) {
     return (
       <div style={{ padding: "24px 0", textAlign: "center" }}>
-        <p style={{ color: "#059669", fontWeight: 600, fontSize: 15 }}>
+        <p style={{ color: "var(--good)", fontWeight: 600, fontSize: 15 }}>
           ✓ No compliance exceptions — all designs are clean.
         </p>
       </div>
@@ -46,36 +47,25 @@ export default function ComplianceTab({
             gap: 12,
             padding: "12px 14px",
             borderRadius: 8,
-            border: "1px solid #E5E7EB",
+            border: "1px solid var(--border)",
             marginBottom: 8,
-            backgroundColor: "#fff",
+            backgroundColor: "var(--surface)",
           }}
         >
           {/* Severity badge */}
-          <span
-            style={{
-              padding: "3px 10px",
-              borderRadius: 12,
-              backgroundColor: ex.severity === "FAIL" ? "#FEE2E2" : "#FEF3C7",
-              color: ex.severity === "FAIL" ? "#991B1B" : "#92400E",
-              fontSize: 12,
-              fontWeight: 700,
-              whiteSpace: "nowrap",
-              flexShrink: 0,
-            }}
-          >
-            {ex.severity}
-          </span>
+          <div style={{ flexShrink: 0 }}>
+            <StatusBadge tone={ex.severity === "FAIL" ? "crit" : "warn"}>{ex.severity}</StatusBadge>
+          </div>
 
           {/* Main content */}
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 500, fontSize: 14, color: "#111827", marginBottom: 2 }}>
+            <div style={{ fontWeight: 500, fontSize: 14, color: "var(--ink)", marginBottom: 2 }}>
               {ex.finding_summary}
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, color: "#6B7280" }}>{ex.title}</span>
+              <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{ex.title}</span>
               {ex.source && (
-                <span style={{ fontSize: 11, color: "#9CA3AF", fontFamily: "monospace" }}>
+                <span style={{ fontSize: 11, color: "var(--ink-3)", fontFamily: "monospace" }}>
                   {ex.source}
                 </span>
               )}
@@ -83,21 +73,7 @@ export default function ComplianceTab({
           </div>
 
           {/* Open button */}
-          <button
-            onClick={() => { onSelectDesign(ex.design_id); onNavigate("intake"); }}
-            style={{
-              padding: "4px 10px",
-              borderRadius: 6,
-              border: "1px solid #D1D5DB",
-              backgroundColor: "#fff",
-              fontSize: 12,
-              cursor: "pointer",
-              color: "#374151",
-              flexShrink: 0,
-            }}
-          >
-            Open
-          </button>
+          <Button size="sm" style={{ flexShrink: 0 }} onClick={() => { onSelectDesign(ex.design_id); onNavigate("intake"); }}>Open</Button>
         </div>
       ))}
     </div>

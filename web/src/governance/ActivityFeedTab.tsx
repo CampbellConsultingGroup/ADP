@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useActivityFeed, downloadActivityCSV } from "../api/governance";
+import { Button, StatusBadge } from "../ui";
 
 const ACTION_TYPES = [
   { value: "", label: "All Actions" },
@@ -35,12 +36,7 @@ export default function ActivityFeedTab(): React.ReactElement {
   const rangeValid = daysDiff >= 0 && daysDiff <= 90;
 
   const { data, isLoading } = useActivityFeed(
-    fromDate,
-    toDate,
-    actionFilter || undefined,
-    actorFilter || undefined,
-    page,
-    rangeValid,
+    fromDate, toDate, actionFilter || undefined, actorFilter || undefined, page, rangeValid,
   );
 
   const handleApply = () => {
@@ -59,130 +55,66 @@ export default function ActivityFeedTab(): React.ReactElement {
       {/* Filter controls */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16, alignItems: "flex-end" }}>
         <div>
-          <label style={{ display: "block", fontSize: 12, color: "#6B7280", marginBottom: 3 }}>From</label>
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => { setFromDate(e.target.value); setRangeError(""); }}
-            style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 14 }}
-          />
+          <label className="ui-label">From</label>
+          <input type="date" className="ui-input" value={fromDate}
+            onChange={(e) => { setFromDate(e.target.value); setRangeError(""); }} />
         </div>
         <div>
-          <label style={{ display: "block", fontSize: 12, color: "#6B7280", marginBottom: 3 }}>To</label>
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => { setToDate(e.target.value); setRangeError(""); }}
-            style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 14 }}
-          />
+          <label className="ui-label">To</label>
+          <input type="date" className="ui-input" value={toDate}
+            onChange={(e) => { setToDate(e.target.value); setRangeError(""); }} />
         </div>
         <div>
-          <label style={{ display: "block", fontSize: 12, color: "#6B7280", marginBottom: 3 }}>Action</label>
-          <select
-            value={actionFilter}
-            onChange={(e) => setActionFilter(e.target.value)}
-            style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 14 }}
-          >
-            {ACTION_TYPES.map((a) => (
-              <option key={a.value} value={a.value}>{a.label}</option>
-            ))}
+          <label className="ui-label">Action</label>
+          <select className="ui-select" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
+            {ACTION_TYPES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
           </select>
         </div>
         <div>
-          <label style={{ display: "block", fontSize: 12, color: "#6B7280", marginBottom: 3 }}>Actor</label>
-          <input
-            type="text"
-            value={actorFilter}
-            onChange={(e) => setActorFilter(e.target.value)}
-            placeholder="username"
-            style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid #D1D5DB", fontSize: 14, width: 120 }}
-          />
+          <label className="ui-label">Actor</label>
+          <input type="text" className="ui-input" style={{ width: 130 }} value={actorFilter}
+            onChange={(e) => setActorFilter(e.target.value)} placeholder="username" />
         </div>
-        <button
-          onClick={handleApply}
-          style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid #D1D5DB", backgroundColor: "#fff", fontSize: 14, cursor: "pointer" }}
-        >
-          Apply
-        </button>
-        <button
-          onClick={() => downloadActivityCSV(fromDate, toDate, actionFilter || undefined, actorFilter || undefined)}
-          disabled={!rangeValid}
-          style={{
-            padding: "6px 14px", borderRadius: 6, border: "1px solid #D1D5DB",
-            backgroundColor: rangeValid ? "#fff" : "#F3F4F6",
-            color: rangeValid ? "#374151" : "#9CA3AF",
-            fontSize: 14, cursor: rangeValid ? "pointer" : "not-allowed",
-          }}
-        >
+        <Button onClick={handleApply}>Apply</Button>
+        <Button icon="doc" disabled={!rangeValid}
+          onClick={() => downloadActivityCSV(fromDate, toDate, actionFilter || undefined, actorFilter || undefined)}>
           Export CSV
-        </button>
+        </Button>
       </div>
 
-      {rangeError && (
-        <p style={{ color: "#DC2626", fontSize: 13, marginBottom: 12 }}>{rangeError}</p>
-      )}
+      {rangeError && <p style={{ color: "var(--crit)", fontSize: 13, marginBottom: 12 }}>{rangeError}</p>}
 
-      {/* Entry list */}
-      {isLoading && <p style={{ color: "#6B7280", fontSize: 13 }}>Loading…</p>}
-
+      {isLoading && <p style={{ color: "var(--ink-3)", fontSize: 13 }}>Loading…</p>}
       {!isLoading && rangeValid && (data?.entries ?? []).length === 0 && (
-        <p style={{ color: "#6B7280", fontSize: 14 }}>No activity in this date range.</p>
+        <p style={{ color: "var(--ink-3)", fontSize: 14 }}>No activity in this date range.</p>
       )}
 
       {(data?.entries ?? []).map((entry) => (
         <div
           key={entry.id}
           style={{
-            display: "flex",
-            gap: 12,
-            padding: "10px 12px",
-            borderRadius: 8,
-            border: "1px solid #E5E7EB",
-            marginBottom: 6,
-            backgroundColor: "#fff",
-            alignItems: "flex-start",
+            display: "flex", gap: 12, padding: "10px 12px", borderRadius: 8,
+            border: "1px solid var(--border)", marginBottom: 6, background: "var(--surface)", alignItems: "flex-start",
           }}
         >
-          <span style={{ fontSize: 11, color: "#9CA3AF", whiteSpace: "nowrap", paddingTop: 2 }}>
+          <span style={{ fontSize: 11, color: "var(--ink-3)", whiteSpace: "nowrap", paddingTop: 4, fontFamily: "var(--mono)" }}>
             {new Date(entry.timestamp).toLocaleString()}
           </span>
-          <span
-            style={{
-              padding: "2px 8px", borderRadius: 10,
-              backgroundColor: "#EDE9FE", color: "#5B21B6",
-              fontSize: 11, fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0,
-            }}
-          >
-            {entry.action}
-          </span>
+          <div style={{ flexShrink: 0 }}><StatusBadge tone="info">{entry.action}</StatusBadge></div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 13, color: "#111827" }}>{entry.summary}</span>
-            <span style={{ fontSize: 12, color: "#6B7280", marginLeft: 8 }}>{entry.design_title}</span>
+            <span style={{ fontSize: 13, color: "var(--ink)" }}>{entry.summary}</span>
+            <span style={{ fontSize: 12, color: "var(--ink-3)", marginLeft: 8 }}>{entry.design_title}</span>
           </div>
-          <span style={{ fontSize: 12, color: "#9CA3AF", whiteSpace: "nowrap" }}>{entry.actor}</span>
+          <span style={{ fontSize: 12, color: "var(--ink-3)", whiteSpace: "nowrap" }}>{entry.actor}</span>
         </div>
       ))}
 
       {/* Pagination */}
       {totalPages > 1 && (
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
-          <button
-            onClick={() => setPage(Math.max(1, page - 1))}
-            disabled={page <= 1}
-            style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #D1D5DB", backgroundColor: "#fff", fontSize: 13, cursor: page <= 1 ? "not-allowed" : "pointer", color: page <= 1 ? "#9CA3AF" : "#374151" }}
-          >
-            Prev
-          </button>
-          <span style={{ fontSize: 13, color: "#6B7280" }}>
-            Page {page} of {totalPages}
-          </span>
-          <button
-            onClick={() => setPage(Math.min(totalPages, page + 1))}
-            disabled={page >= totalPages}
-            style={{ padding: "4px 12px", borderRadius: 6, border: "1px solid #D1D5DB", backgroundColor: "#fff", fontSize: 13, cursor: page >= totalPages ? "not-allowed" : "pointer", color: page >= totalPages ? "#9CA3AF" : "#374151" }}
-          >
-            Next
-          </button>
+          <Button size="sm" onClick={() => setPage(Math.max(1, page - 1))} disabled={page <= 1}>Prev</Button>
+          <span style={{ fontSize: 13, color: "var(--ink-3)" }}>Page {page} of {totalPages}</span>
+          <Button size="sm" onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page >= totalPages}>Next</Button>
         </div>
       )}
     </div>
