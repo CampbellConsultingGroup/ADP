@@ -6,7 +6,7 @@
 import React from "react";
 import { useAuth } from "../auth/AuthProvider";
 
-export type AppView = "designs" | "intake" | "recommend" | "canvas" | "knowledge" | "portfolio" | "governance" | "business" | "applications";
+export type AppView = "overview" | "designs" | "intake" | "recommend" | "canvas" | "knowledge" | "portfolio" | "governance" | "business" | "applications";
 
 interface NavBarProps {
   currentView: AppView;
@@ -37,6 +37,23 @@ export default function NavBar({ currentView, onNavigate, designId }: NavBarProp
     }}>
       {/* Wordmark */}
       <span style={{ fontWeight: 700, fontSize: 15, marginRight: 12, padding: "12px 0" }}>ADP</span>
+
+      {/* Overview tab — always visible, the landing dashboard */}
+      <button
+        onClick={() => onNavigate("overview")}
+        style={{
+          padding: "12px 16px",
+          background: currentView === "overview" ? "rgba(255,255,255,0.2)" : "transparent",
+          color: "#fff",
+          border: "none",
+          borderBottom: currentView === "overview" ? "3px solid #fff" : "3px solid transparent",
+          cursor: "pointer",
+          fontSize: 14,
+          fontWeight: currentView === "overview" ? 600 : 400,
+        }}
+      >
+        Overview
+      </button>
 
       {/* Designs tab — always visible */}
       <button

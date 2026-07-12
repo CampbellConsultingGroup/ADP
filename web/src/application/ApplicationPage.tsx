@@ -1,6 +1,7 @@
 import { Suspense, useState } from "react";
 import { useApplications, useCreateApplication } from "../api/application";
 import type { ApplicationCreate } from "../api/application";
+import { NavBar, type AppView } from "../shell";
 import ApplicationList from "./ApplicationList";
 import ApplicationDetail from "./ApplicationDetail";
 import ApplicationForm from "./ApplicationForm";
@@ -59,9 +60,10 @@ function ApplicationPageInner() {
   );
 }
 
-export default function ApplicationPage() {
+export default function ApplicationPage({ onNavigate }: { onNavigate?: (view: AppView) => void } = {}) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100vh" }}>
+      {onNavigate && <NavBar currentView="applications" onNavigate={onNavigate} designId={null} />}
       <div style={{ padding: "10px 16px", borderBottom: "1px solid #e0e0e0", display: "flex", alignItems: "center", gap: 10 }}>
         <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700 }}>Application Registry</h1>
       </div>

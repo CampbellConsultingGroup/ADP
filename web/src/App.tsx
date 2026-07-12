@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import OverviewPage from "./overview/OverviewPage";
 import DesignsPage from "./designs/DesignsPage";
 import Workspace from "./canvas/Workspace";
 import IntakePage from "./intake/IntakePage";
@@ -12,9 +13,9 @@ import type { AppView } from "./shell";
 
 // ADP-SPEC-025: Multi-design support.
 // currentDesignId is null until the user selects or creates a design.
-// Initial view is "designs" (the landing page).
+// Initial view is "overview" (the landing dashboard).
 export default function App(): React.ReactElement {
-  const [view, setView] = useState<AppView>("designs");
+  const [view, setView] = useState<AppView>("overview");
   const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
 
   const onNavigate = (nextView: AppView) => setView(nextView);
@@ -23,6 +24,11 @@ export default function App(): React.ReactElement {
     setCurrentDesignId(id);
     setView("intake");
   };
+
+  // Overview dashboard is the landing page, independent of design selection
+  if (view === "overview") {
+    return <OverviewPage onNavigate={onNavigate} />;
+  }
 
   // Portfolio, governance, and business views are independent of design selection
   if (view === "portfolio") {
@@ -38,7 +44,7 @@ export default function App(): React.ReactElement {
   }
 
   if (view === "applications") {
-    return <ApplicationPage />;
+    return <ApplicationPage onNavigate={onNavigate} />;
   }
 
   // No design selected → always show the Designs screen
