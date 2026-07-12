@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Button } from "../ui";
 import type {
   KnowledgeItemDetail,
   KnowledgeItemCreateRequest,
@@ -105,11 +106,11 @@ export default function KnowledgeItemForm({ existing, onDone, onCancel }: Knowle
 
   const field = (label: string, key: keyof typeof EMPTY_FORM, element: React.ReactNode) => (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 4 }}>
+      <label style={{ display: "block", fontSize: 13, fontWeight: 600, color: "var(--ink-2)", marginBottom: 4 }}>
         {label}
       </label>
       {element}
-      {errors[key] && <div style={{ fontSize: 12, color: "#DC2626", marginTop: 3 }}>{errors[key]}</div>}
+      {errors[key] && <div style={{ fontSize: 12, color: "var(--crit)", marginTop: 3 }}>{errors[key]}</div>}
     </div>
   );
 
@@ -118,13 +119,13 @@ export default function KnowledgeItemForm({ existing, onDone, onCancel }: Knowle
     padding: "7px 10px",
     fontSize: 13,
     borderRadius: 5,
-    border: `1px solid ${hasError ? "#DC2626" : "#D1D5DB"}`,
+    border: `1px solid ${hasError ? "var(--crit)" : "var(--border)"}`,
     boxSizing: "border-box",
     fontFamily: "inherit",
   });
 
   return (
-    <div style={{ background: "#F8FAFC", border: "1px solid #E5E7EB", borderRadius: 8, padding: 20, marginBottom: 16 }}>
+    <div style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 20, marginBottom: 16 }}>
       <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 700 }}>
         {isEdit ? `Edit: ${existing!.title}` : "Add Knowledge Item"}
       </h3>
@@ -163,20 +164,14 @@ export default function KnowledgeItemForm({ existing, onDone, onCancel }: Knowle
       )}
 
       {mutationError && (
-        <div style={{ marginBottom: 12, padding: 10, background: "#FEE2E2", border: "1px solid #FECACA", borderRadius: 5, fontSize: 13, color: "#B91C1C" }}>
-          {mutationError.message}
-        </div>
+        <div className="ui-alert crit" style={{ marginBottom: 12 }}>{mutationError.message}</div>
       )}
 
       <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-        <button onClick={onCancel} disabled={isPending}
-          style={{ padding: "8px 18px", background: "#fff", color: "#374151", border: "1px solid #D1D5DB", borderRadius: 4, cursor: "pointer", fontSize: 14 }}>
-          Cancel
-        </button>
-        <button onClick={handleSubmit} disabled={isPending}
-          style={{ padding: "8px 18px", background: isPending ? "#D1D5DB" : "#1168BD", color: "#fff", border: "none", borderRadius: 4, cursor: isPending ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 600 }}>
-          {isPending ? "Saving..." : isEdit ? "Save Changes" : "Add Item"}
-        </button>
+        <Button onClick={onCancel} disabled={isPending}>Cancel</Button>
+        <Button variant="primary" onClick={handleSubmit} disabled={isPending}>
+          {isPending ? "Saving…" : isEdit ? "Save Changes" : "Add Item"}
+        </Button>
       </div>
     </div>
   );
