@@ -35,13 +35,13 @@ export default function IntakeTextForm({ designId, onOperationCreated }: IntakeT
   return (
     <div>
       <textarea
+        className="ui-textarea"
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Paste requirements, user stories, or notes... (minimum 20 characters)"
+        placeholder="Paste requirements, user stories, or notes… (minimum 20 characters)"
         rows={8}
-        style={{ width: "100%", padding: 10, fontSize: 13, border: "1px solid #ccc", borderRadius: 4, resize: "vertical", boxSizing: "border-box" }}
       />
-      {tooShort && <div style={{ fontSize: 12, color: "#c0392b", marginTop: 4 }}>Text must be at least 20 characters.</div>}
+      {tooShort && <div style={{ fontSize: 12, color: "var(--crit)", marginTop: 4 }}>Text must be at least 20 characters.</div>}
 
       {/* Model selector + Extract button row */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
@@ -51,8 +51,8 @@ export default function IntakeTextForm({ designId, onOperationCreated }: IntakeT
           title={!hasApiKey ? "Set ADP_LLM_API_KEY to enable extraction" : undefined}
           style={{
             padding: "8px 18px",
-            background: canSubmit && hasApiKey ? "#1168BD" : "#ccc",
-            color: "#fff",
+            background: canSubmit && hasApiKey ? "var(--accent)" : "var(--border)",
+            color: "var(--surface)",
             border: "none",
             borderRadius: 4,
             cursor: canSubmit && hasApiKey ? "pointer" : "not-allowed",
@@ -66,11 +66,11 @@ export default function IntakeTextForm({ designId, onOperationCreated }: IntakeT
         <ModelSelector purpose="extraction" value={selectedModel} onChange={setSelectedModel} />
       </div>
 
-      <div style={{ marginTop: 8, padding: "7px 10px", background: "#FEF9C3", border: "1px solid #FDE68A", borderRadius: 4, fontSize: 12, color: "#92400E" }}>
+      <div className="ui-alert warn" style={{ marginTop: 8, fontSize: 12 }}>
         ⚠ Source text is not stored after extraction
       </div>
 
-      {submit.isError && <div style={{ marginTop: 8, color: "#c0392b", fontSize: 13 }}>Extraction failed. Check the server logs.</div>}
+      {submit.isError && <div style={{ marginTop: 8, color: "var(--crit)", fontSize: 13 }}>Extraction failed. Check the server logs.</div>}
     </div>
   );
 }

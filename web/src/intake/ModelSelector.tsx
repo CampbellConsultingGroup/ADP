@@ -10,16 +10,16 @@ interface ModelSelectorProps {
 }
 
 const TIER_BADGE: Record<string, string> = {
-  lite: "#6B7280",
-  standard: "#1D4ED8",
-  premium: "#7C3AED",
+  lite: "var(--ink-3)",
+  standard: "var(--accent)",
+  premium: "var(--biz)",
 };
 
 export default function ModelSelector({ purpose, value, onChange }: ModelSelectorProps): React.ReactElement {
   const { data: modelsData, isLoading } = useAvailableModels();
   const { data: config } = useLLMConfig();
 
-  if (isLoading) return <span style={{ fontSize: 12, color: "#888" }}>Loading models...</span>;
+  if (isLoading) return <span style={{ fontSize: 12, color: "var(--ink-3)" }}>Loading models...</span>;
 
   const models = (modelsData?.models ?? []).filter(
     (m: ModelInfo) => m.recommended_for.includes(purpose)
@@ -27,7 +27,7 @@ export default function ModelSelector({ purpose, value, onChange }: ModelSelecto
 
   if (!config?.api_key_configured) {
     return (
-      <span style={{ fontSize: 12, color: "#c0392b" }}>
+      <span style={{ fontSize: 12, color: "var(--crit)" }}>
         ⚠ ADP_LLM_API_KEY not set
       </span>
     );
@@ -35,13 +35,13 @@ export default function ModelSelector({ purpose, value, onChange }: ModelSelecto
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-      <label style={{ fontSize: 12, color: "#555", whiteSpace: "nowrap" }}>
+      <label style={{ fontSize: 12, color: "var(--ink-2)", whiteSpace: "nowrap" }}>
         Model:
       </label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        style={{ fontSize: 12, padding: "3px 6px", border: "1px solid #ccc", borderRadius: 4 }}
+        style={{ fontSize: 12, padding: "3px 6px", border: "1px solid var(--border)", borderRadius: 4, background: "var(--surface)", color: "var(--ink)" }}
       >
         {(modelsData?.models ?? []).map((m: ModelInfo) => (
           <option key={m.id} value={m.id}>
@@ -56,8 +56,8 @@ export default function ModelSelector({ purpose, value, onChange }: ModelSelecto
             fontWeight: "bold",
             padding: "1px 5px",
             borderRadius: 3,
-            background: TIER_BADGE[models.find((m: ModelInfo) => m.id === value)?.tier ?? "standard"] ?? "#888",
-            color: "#fff",
+            background: TIER_BADGE[models.find((m: ModelInfo) => m.id === value)?.tier ?? "standard"] ?? "var(--ink-3)",
+            color: "var(--surface)",
           }}
         >
           {models.find((m: ModelInfo) => m.id === value)?.tier ?? ""}

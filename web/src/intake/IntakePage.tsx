@@ -7,6 +7,7 @@ import ProposalsList from "./ProposalsList";
 import RequirementsList from "./RequirementsList";
 import LLMSettings from "./LLMSettings";
 import BusinessContextPanel from "../business/BusinessContextPanel";
+import { Button } from "../ui";
 
 interface IntakePageProps {
   designId: string;
@@ -16,10 +17,10 @@ interface IntakePageProps {
 type Tab = "bulk" | "form" | "settings";
 
 const KIND_COLORS: Record<string, string> = {
-  functional: "#1D4ED8",
-  non_functional: "#6B21A8",
-  constraint: "#C2410C",
-  driver: "#166534",
+  functional: "var(--accent)",
+  non_functional: "var(--biz)",
+  constraint: "var(--tec)",
+  driver: "var(--good)",
 };
 
 /** Rejected Requirements section — renders in the right sidebar below Confirmed Requirements (FR-003, FR-004). */
@@ -29,19 +30,19 @@ function RejectedRequirementsSection({ proposals }: { proposals: ProposalRespons
 
   return (
     <div>
-      <div style={{ padding: "12px 16px", borderBottom: "1px solid #E5E7EB", fontWeight: 600, fontSize: 14, color: "#6B7280", display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontWeight: 600, fontSize: 14, color: "var(--ink-3)", display: "flex", alignItems: "center", gap: 6 }}>
         <span>✕</span> Rejected Requirements ({rejected.length})
       </div>
       <div>
         {rejected.map((p) => (
           <div
             key={p.proposal_id}
-            style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", borderBottom: "1px solid #F3F4F6", opacity: 0.6 }}
+            style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--surface-2)", opacity: 0.6 }}
           >
             <span
               style={{
                 flexShrink: 0,
-                background: KIND_COLORS[p.kind] ?? "#6B7280",
+                background: KIND_COLORS[p.kind] ?? "var(--ink-3)",
                 color: "#fff",
                 fontSize: 10,
                 fontWeight: "bold",
@@ -52,7 +53,7 @@ function RejectedRequirementsSection({ proposals }: { proposals: ProposalRespons
             >
               {p.kind.replace("_", " ")}
             </span>
-            <span style={{ fontSize: 12, color: "#6B7280", textDecoration: "line-through" }}>
+            <span style={{ fontSize: 12, color: "var(--ink-3)", textDecoration: "line-through" }}>
               {p.draft_statement}
             </span>
           </div>
@@ -85,7 +86,7 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Left: Tabs + extraction content */}
         <div style={{ flex: 2, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ display: "flex", gap: 0, borderBottom: "2px solid #E5E7EB", flexShrink: 0, background: "#fff" }}>
+          <div style={{ display: "flex", gap: 0, borderBottom: "2px solid var(--border)", flexShrink: 0, background: "var(--surface)" }}>
             {TABS.map((tab) => (
               <button
                 key={tab.id}
@@ -93,8 +94,8 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
                 style={{
                   padding: "10px 20px", background: "none", border: "none", cursor: "pointer",
                   fontSize: 13, fontWeight: activeTab === tab.id ? 600 : 400,
-                  color: activeTab === tab.id ? "#1168BD" : "#6B7280",
-                  borderBottom: activeTab === tab.id ? "2px solid #1168BD" : "2px solid transparent",
+                  color: activeTab === tab.id ? "var(--accent)" : "var(--ink-3)",
+                  borderBottom: activeTab === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
                   marginBottom: -2,
                 }}
               >
@@ -109,22 +110,22 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
                 <IntakeTextForm designId={designId} onOperationCreated={setOperationId} />
 
                 {operationId && status === "running" && (
-                  <div style={{ marginTop: 16, color: "#1168BD", fontSize: 13 }}>⏳ Extracting requirements...</div>
+                  <div style={{ marginTop: 16, color: "var(--accent)", fontSize: 13 }}>⏳ Extracting requirements...</div>
                 )}
                 {operationId && status === "failed" && (
-                  <div style={{ marginTop: 16, padding: 10, background: "#FEE2E2", borderRadius: 4, color: "#B91C1C", fontSize: 13 }}>
+                  <div className="ui-alert crit" style={{ marginTop: 16 }}>
                     Extraction failed: {statusData?.error_description ?? "Unknown error"}. Check ⚙ LLM Settings.
                   </div>
                 )}
                 {noLlm && (
-                  <div style={{ marginTop: 16, padding: 12, background: "#FEF9C3", border: "1px solid #FDE68A", borderRadius: 6 }}>
-                    <p style={{ margin: "0 0 6px", fontWeight: 600, fontSize: 13, color: "#92400E" }}>No requirements extracted</p>
-                    <p style={{ margin: "0 0 8px", fontSize: 13, color: "#78350F" }}>
-                      Make sure <code style={{ background: "#FDE68A", padding: "1px 4px", borderRadius: 3 }}>ADP_LLM_API_KEY</code> is set or use the Structured Form.
+                  <div className="ui-alert warn" style={{ marginTop: 16 }}>
+                    <p style={{ margin: "0 0 6px", fontWeight: 600, fontSize: 13 }}>No requirements extracted</p>
+                    <p style={{ margin: "0 0 10px", fontSize: 13 }}>
+                      Make sure <code style={{ background: "var(--warn-wash)", padding: "1px 4px", borderRadius: 3, fontFamily: "var(--mono)" }}>ADP_LLM_API_KEY</code> is set or use the Structured Form.
                     </p>
                     <div style={{ display: "flex", gap: 8 }}>
-                      <button onClick={() => setActiveTab("settings")} style={{ padding: "6px 14px", background: "#92400E", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13 }}>⚙ LLM Settings</button>
-                      <button onClick={() => setActiveTab("form")} style={{ padding: "6px 14px", background: "#166534", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13 }}>Use Structured Form →</button>
+                      <Button size="sm" onClick={() => setActiveTab("settings")}>⚙ LLM Settings</Button>
+                      <Button size="sm" variant="primary" onClick={() => setActiveTab("form")}>Use Structured Form →</Button>
                     </div>
                   </div>
                 )}
@@ -138,7 +139,7 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
 
                 {/* Show empty state when all proposals have been actioned */}
                 {operationId && status === "completed" && allProposals.length > 0 && pendingProposals.length === 0 && (
-                  <div style={{ marginTop: 16, padding: 12, background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 6, fontSize: 13, color: "#166534" }}>
+                  <div className="ui-alert good" style={{ marginTop: 16 }}>
                     ✓ All proposals have been reviewed. See the sidebar for results.
                   </div>
                 )}
@@ -151,9 +152,9 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
         </div>
 
         {/* Right sidebar: Confirmed then Rejected (FR-003, FR-004) */}
-        <div style={{ flex: 1, borderLeft: "1px solid #E5E7EB", overflowY: "auto", background: "#FAFAFA" }}>
+        <div style={{ flex: 1, borderLeft: "1px solid var(--border)", overflowY: "auto", background: "var(--surface-2)" }}>
           {/* Confirmed Requirements */}
-          <div style={{ padding: "12px 16px", borderBottom: "1px solid #E5E7EB", fontWeight: 600, fontSize: 14, color: "#166534", display: "flex", alignItems: "center", gap: 6 }}>
+          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontWeight: 600, fontSize: 14, color: "var(--good)", display: "flex", alignItems: "center", gap: 6 }}>
             <span>✓</span> Confirmed Requirements
           </div>
           <RequirementsList designId={designId} />

@@ -129,5 +129,6 @@
 .ui-alert.crit { background: var(--crit-wash); color: var(--crit); border-color: color-mix(in srgb, var(--crit) 35%, var(--border)); }
 .ui-alert.info { background: var(--accent-wash); color: var(--accent-2); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
 .ui-alert.good { background: var(--good-wash); color: var(--good); border-color: color-mix(in srgb, var(--good) 35%, var(--border)); }
+.ui-alert.warn { background: var(--warn-wash); color: var(--warn); border-color: color-mix(in srgb, var(--warn) 35%, var(--border)); }
 
 @media (prefers-reduced-motion: reduce) { .shell *, .ui-btn, .ui-card { transition: none !important; } }

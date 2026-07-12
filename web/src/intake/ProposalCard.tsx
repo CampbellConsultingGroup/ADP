@@ -1,17 +1,14 @@
 import React, { useState } from "react";
 import type { ProposalResponse, RequirementKind } from "../api/intake";
 import { useConfirmProposal, useRejectProposal } from "../api/intake";
+import { Button } from "../ui";
+import { KIND_HUE, kindLabel } from "./kinds";
 
 interface ProposalCardProps {
   proposal: ProposalResponse;
   designId: string;
   operationId: string;
 }
-
-const KIND_COLORS: Record<RequirementKind, string> = {
-  functional: "#1168BD", non_functional: "#6B21A8",
-  constraint: "#C2410C", driver: "#166534",
-};
 
 export default function ProposalCard({ proposal, designId, operationId }: ProposalCardProps): React.ReactElement {
   const [editing, setEditing] = useState(false);
@@ -23,69 +20,55 @@ export default function ProposalCard({ proposal, designId, operationId }: Propos
   const isPending = confirm.isPending || reject.isPending;
 
   return (
-    <div style={{ border: "1px solid #e0e0e0", borderRadius: 6, padding: 12, marginBottom: 10, opacity: isActioned ? 0.6 : 1 }}>
-      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
-        <span style={{ background: KIND_COLORS[proposal.kind as RequirementKind] ?? "#888", color: "#fff", fontSize: 10, fontWeight: "bold", padding: "2px 6px", borderRadius: 3 }}>
-          {proposal.kind.replace("_", " ")}
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 12, marginBottom: 10, background: "var(--surface)", opacity: isActioned ? 0.6 : 1 }}>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8, alignItems: "center" }}>
+        <span style={{ background: KIND_HUE[proposal.kind as RequirementKind] ?? "var(--ink-3)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4 }}>
+          {kindLabel(proposal.kind)}
         </span>
-        <span style={{ fontSize: 11, color: "#888" }}>{Math.round(proposal.confidence * 100)}% confidence</span>
-        {isActioned && <span style={{ fontSize: 11, color: "#555", fontWeight: "bold" }}>{proposal.status.toUpperCase()}</span>}
+        <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{Math.round(proposal.confidence * 100)}% confidence</span>
+        {isActioned && <span style={{ fontSize: 11, color: "var(--ink-2)", fontWeight: 700 }}>{proposal.status.toUpperCase()}</span>}
       </div>
 
       {editing ? (
         <textarea
           aria-label="Edit requirement statement"
+          className="ui-textarea"
           value={editedText}
           onChange={(e) => setEditedText(e.target.value)}
-          style={{ width: "100%", padding: 6, fontSize: 13, border: "1px solid #ccc", borderRadius: 4, resize: "vertical", minHeight: 60 }}
+          style={{ minHeight: 60 }}
         />
       ) : (
-        <div style={{ fontSize: 13, color: "#222", marginBottom: 8 }}>{proposal.draft_statement}</div>
+        <div style={{ fontSize: 13, color: "var(--ink)", marginBottom: 8 }}>{proposal.draft_statement}</div>
       )}
 
       {/* Source excerpt — SC-005: ALWAYS visible, never hidden */}
-      <blockquote role="blockquote" style={{ margin: "8px 0", padding: "6px 10px", background: "#f5f5f5", borderLeft: "3px solid #ccc", fontSize: 12, color: "#666", fontStyle: "italic" }}>
-        Source: "{proposal.source_excerpt}"
+      <blockquote role="blockquote" style={{ margin: "8px 0", padding: "6px 10px", background: "var(--surface-2)", borderLeft: "3px solid var(--border-strong)", fontSize: 12, color: "var(--ink-2)", fontStyle: "italic" }}>
+        Source: “{proposal.source_excerpt}”
       </blockquote>
 
       {!isActioned && (
-        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-          <button
-            disabled={isPending}
-            onClick={() => confirm.mutate({ proposalId: proposal.proposal_id, editedStatement: null })}
-            style={{ padding: "5px 12px", background: "#1168BD", color: "#fff", border: "none", borderRadius: 4, cursor: isPending ? "not-allowed" : "pointer", fontSize: 13 }}
-          >
-            {confirm.isPending ? "..." : "Confirm"}
-          </button>
+        <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center" }}>
+          <Button variant="primary" size="sm" disabled={isPending}
+            onClick={() => confirm.mutate({ proposalId: proposal.proposal_id, editedStatement: null })}>
+            {confirm.isPending ? "…" : "Confirm"}
+          </Button>
           {!editing ? (
-            <button
-              disabled={isPending}
-              onClick={() => setEditing(true)}
-              style={{ padding: "5px 12px", background: "#fff", color: "#1168BD", border: "1px solid #1168BD", borderRadius: 4, cursor: isPending ? "not-allowed" : "pointer", fontSize: 13 }}
-            >
-              Edit & Confirm
-            </button>
+            <Button size="sm" disabled={isPending} onClick={() => setEditing(true)}>Edit &amp; Confirm</Button>
           ) : (
-            <button
-              disabled={isPending || !editedText.trim()}
-              onClick={() => confirm.mutate({ proposalId: proposal.proposal_id, editedStatement: editedText.trim() })}
-              style={{ padding: "5px 12px", background: "#1168BD", color: "#fff", border: "none", borderRadius: 4, cursor: isPending ? "not-allowed" : "pointer", fontSize: 13 }}
-            >
+            <Button variant="primary" size="sm" disabled={isPending || !editedText.trim()}
+              onClick={() => confirm.mutate({ proposalId: proposal.proposal_id, editedStatement: editedText.trim() })}>
               Confirm Edit
-            </button>
+            </Button>
           )}
-          <button
-            disabled={isPending}
-            onClick={() => reject.mutate({ proposalId: proposal.proposal_id })}
-            style={{ padding: "5px 12px", background: "#fff", color: "#c0392b", border: "1px solid #c0392b", borderRadius: 4, cursor: isPending ? "not-allowed" : "pointer", fontSize: 13 }}
-          >
+          <Button variant="danger" size="sm" disabled={isPending}
+            onClick={() => reject.mutate({ proposalId: proposal.proposal_id })}>
             Reject
-          </button>
-          {editing && <button onClick={() => setEditing(false)} style={{ padding: "5px 8px", background: "none", border: "none", color: "#888", cursor: "pointer", fontSize: 12 }}>Cancel</button>}
+          </Button>
+          {editing && <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>}
         </div>
       )}
       {(confirm.isError || reject.isError) && (
-        <div style={{ marginTop: 6, fontSize: 12, color: "#c0392b" }}>
+        <div style={{ marginTop: 6, fontSize: 12, color: "var(--crit)" }}>
           {String((confirm.error || reject.error)?.message ?? "Action failed")}
         </div>
       )}
