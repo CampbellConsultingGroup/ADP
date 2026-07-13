@@ -230,6 +230,10 @@ Accepting a recommendation is an explicit architect action that materializes the
 
 The recommendation workflow state is persisted as an `operations` record in PostgreSQL, allowing status polling across requests and crash recovery on server restart. The `ReasoningPanel` UI component surfaces the per-step reasoning trace to the architect.
 
+The engine also draws on the organisation's own **application landscape** (ADP-SPEC-007 registry grounding): a `reuse` pipeline node ranks the application registry against the requirements and offers matching applications to the generation step as reuse candidates, so an option can prefer reusing an existing application over a net-new build. Reuse ids returned by the model are validated against the offered pool — a hallucinated application id is discarded.
+
+**Feedback loop (ADP-SPEC-019).** Accepting or rejecting an option writes a durable knowledge item (`accepted_recommendation` / `rejected_recommendation`, with the architect's reason and provenance) that is retrieved on subsequent runs for similar requirements. The loop is closed on both sides of the pipeline: the generation prompt labels retrieved decisions as ACCEPTED PATTERN (prefer) or REJECTED PATTERN (avoid), and the deterministic ranking step consumes the signal via a bounded `history_score` — an option that cites a previously accepted decision is boosted, one citing a rejected decision is penalised. Over time the platform's recommendations align with the decisions the organisation has actually made.
+
 ```python
 class SolutionOption(BaseModel):
     id: OptionId               # e.g. OPT-003

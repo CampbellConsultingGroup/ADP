@@ -62,6 +62,7 @@ def _option_to_dict(opt: Any) -> dict:
         "coverage_score": getattr(opt, "coverage_score", 0.0),
         "principle_score": getattr(opt, "principle_score", 0.0),
         "tradeoff_score": getattr(opt, "tradeoff_score", 0.0),
+        "history_score": getattr(opt, "history_score", 0.0),
         "status": opt.status,
         "accepted_by": getattr(opt, "accepted_by", None),
         "accepted_at": (
@@ -135,6 +136,7 @@ def _dict_to_option(d: dict) -> Any:
         coverage_score=d.get("coverage_score", 0.0),
         principle_score=d.get("principle_score", 0.0),
         tradeoff_score=d.get("tradeoff_score", 0.0),
+        history_score=d.get("history_score", 0.0),
         status=d.get("status", "pending"),
         accepted_by=d.get("accepted_by"),
         accepted_at=accepted_at,
