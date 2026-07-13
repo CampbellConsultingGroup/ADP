@@ -1,0 +1,56 @@
+# Golden cases for the LLM-as-Judge deterministic gate (adp.validation.gate.gate).
+# Each case labels a set of findings and the pass/fail/indeterminate the gate
+# must produce. Default thresholds: max_critical=0, max_major=3, max_minor=10.
+
+- id: clean-design-passes
+  kind: judge
+  findings: []
+  expected_status: pass
+
+- id: single-critical-fails
+  kind: judge
+  findings:
+    - {severity: critical, description: "hardcoded secret in container config"}
+  expected_status: fail
+
+- id: majors-within-threshold-pass
+  kind: judge
+  findings:
+    - {severity: major}
+    - {severity: major}
+    - {severity: major}
+  expected_status: pass
+
+- id: majors-over-threshold-fail
+  kind: judge
+  findings:
+    - {severity: major}
+    - {severity: major}
+    - {severity: major}
+    - {severity: major}
+  expected_status: fail
+
+- id: advisory-never-blocks
+  kind: judge
+  findings:
+    - {severity: advisory}
+    - {severity: advisory}
+    - {severity: advisory}
+    - {severity: advisory}
+    - {severity: advisory}
+  expected_status: pass
+
+- id: minors-over-threshold-fail
+  kind: judge
+  thresholds: {max_minor: 2}
+  findings:
+    - {severity: minor}
+    - {severity: minor}
+    - {severity: minor}
+  expected_status: fail
+
+- id: critics-did-not-run-is-indeterminate
+  kind: judge
+  critics_ran: false
+  findings: []
+  expected_status: indeterminate

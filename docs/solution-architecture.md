@@ -547,6 +547,8 @@ ADP is tested at three levels:
 
 All 18 API E2E tests and 4 browser E2E tests pass against the running system with `ADP_AUTH_ENABLED=false`.
 
+**AI-quality eval harness** (`adp-eval` / `pytest tests/eval`): Because the platform gates real work on two AI decision surfaces — the LLM-as-Judge verdict and recommendation grounding — those surfaces are themselves evaluated against a golden fixture set (`evals/`). The harness in `adp.eval` drives the *real* product code — the deterministic `adp.validation.gate.gate` and `adp.recommendation.steps.validate_citations_step` — rather than reimplementing it, so it is a regression guard on the decision logic: judge cases assert the pass/fail/indeterminate a labeled finding set must produce, and grounding cases assert that valid citations are retained while unresolvable ones correctly mark an option advisory (scored by citation precision/recall). It requires no live LLM, runs in CI via the test suite (and can be run standalone as a gate with `adp-eval --gate`), and the same scorer can be pointed at live-LLM pipeline output to measure model quality directly.
+
 ## Deployment Architecture
 
 ADP is containerized and deployed as two units: the Python FastAPI backend (with static frontend files embedded via `ADP_STATIC_DIR`) and the PostgreSQL 16 database (with pgvector extension). The Vite-built React frontend is served as static files from the same FastAPI process in production, eliminating the need for a separate static file server.
