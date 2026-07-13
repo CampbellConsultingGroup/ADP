@@ -25,6 +25,17 @@ export interface ProposedElement {
   satisfies: string[];
 }
 
+// ADP-SPEC-007: an existing application this option proposes to reuse.
+export interface ReuseCandidate {
+  app_id: string;
+  name: string;
+  description?: string | null;
+  capabilities: string[];
+  time_classification?: string | null;
+  r_strategy?: string | null;
+  relevance: number;
+}
+
 export interface SolutionOption {
   option_id: string;
   rank: number;
@@ -38,6 +49,7 @@ export interface SolutionOption {
   ranking_score: number;
   status: OptionStatus;
   knowledge_source: string;  // ADP-SPEC-019: "knowledge_base" | "requirements_only"
+  reuse_candidates?: ReuseCandidate[];  // ADP-SPEC-007: existing apps to reuse
 }
 
 export interface RecommendStatusResponse {

@@ -113,6 +113,31 @@ export default function OptionCard({ option, designId, operationId, onAcceptSucc
           </div>
         )}
 
+        {/* Reuse candidates (ADP-SPEC-007): existing apps this option can reuse */}
+        {option.reuse_candidates && option.reuse_candidates.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--ink-3)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              Reuse Existing Applications
+            </div>
+            {option.reuse_candidates.map((rc) => (
+              <div key={rc.app_id} style={{ display: "flex", alignItems: "flex-start", gap: 8, marginBottom: 6, padding: "6px 8px", background: "var(--biz-wash)", border: "1px solid var(--biz)", borderRadius: 6 }}>
+                <span style={{ background: "var(--biz)", color: "#fff", fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 3, flexShrink: 0, marginTop: 1 }}>♻ REUSE</span>
+                <div style={{ flex: 1 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>{rc.name}</span>
+                  {rc.time_classification && (
+                    <span style={{ fontSize: 10, color: "var(--ink-3)", marginLeft: 8, textTransform: "uppercase", letterSpacing: "0.04em" }}>{rc.time_classification}</span>
+                  )}
+                  {rc.capabilities.length > 0 && (
+                    <span style={{ fontSize: 12, color: "var(--ink-3)", marginLeft: 8 }}>
+                      provides: {rc.capabilities.slice(0, 4).join(", ")}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Reasoning panel (ADP-SPEC-028) */}
         <ReasoningPanel
           option={option}
