@@ -17,6 +17,7 @@ from adp.recommendation.models import (
     ProposedElement,
     RecommendationState,
     RecommendationStep,
+    ReuseCandidate,
     SolutionOption,
     TradeOffEntry,
     TradeOffStance,
@@ -32,6 +33,7 @@ from adp.recommendation.prompts import (
 if TYPE_CHECKING:
     from adp.knowledge import KnowledgeRetrieval
     from adp.llm.client import LLMClient
+    from adp.recommendation.reuse import ReuseProvider
     from adp.recommendation.telemetry import RecommendationTelemetry
 
 _logger = logging.getLogger("adp.recommendation")
@@ -216,6 +218,49 @@ async def retrieve_step(
     return {**state, "retrieved_knowledge": merged}
 
 
+def _reuse_summary(candidates: list[ReuseCandidate]) -> str:
+    if not candidates:
+        return "(no existing applications matched)"
+    lines = []
+    for c in candidates:
+        caps = ", ".join(c.capabilities[:5]) or "—"
+        disp = f"[{c.app_id}] {c.name}"
+        if c.time_classification:
+            disp += f" ({c.time_classification})"
+        excerpt = (c.description or "")[:100].replace("\n", " ")
+        lines.append(f"{disp} — provides: {caps}. {excerpt}".rstrip())
+    return "\n".join(lines)
+
+
+async def reuse_step(
+    state: RecommendationState,
+    *,
+    reuse_provider: "ReuseProvider | None",
+    telemetry: "RecommendationTelemetry",
+) -> RecommendationState:
+    """Step 1b: Find existing applications relevant to the requirements so the
+    generation step can prefer reuse (ADP-SPEC-007 registry grounding).
+    """
+    start = time.perf_counter()
+    requirements = state.get("requirements", [])
+    candidates: list[ReuseCandidate] = []
+    if reuse_provider is not None:
+        try:
+            candidates = await reuse_provider.find_candidates(requirements, limit=5)
+        except Exception as exc:
+            _logger.warning("Reuse candidate retrieval failed: %s", exc)
+
+    latency = (time.perf_counter() - start) * 1000
+    telemetry.emit_step_span(RecommendationStep(
+        operation_id=state["operation_id"],
+        step_name="reuse",
+        correlation_id=state.get("correlation_id"),
+        retrieved_knowledge_refs=[f"app:{c.app_id}" for c in candidates],
+        latency_ms=latency,
+    ))
+    return {**state, "reuse_candidates": candidates}
+
+
 async def generate_step(
     state: RecommendationState,
     *,
@@ -235,6 +280,11 @@ async def generate_step(
     knowledge_summary = _knowledge_summary(retrieved)
     req_ids = [getattr(r, "id", str(i)) for i, r in enumerate(requirements)]
 
+    # ADP-SPEC-007: existing applications the option may reuse, keyed by app_id.
+    reuse_candidates: list[ReuseCandidate] = state.get("reuse_candidates", [])
+    reuse_pool = {c.app_id: c for c in reuse_candidates}
+    has_reuse = bool(reuse_candidates)
+
     # ADP-SPEC-019: use requirements-only prompt when KB is empty
     has_knowledge = bool(retrieved)
     if has_knowledge:
@@ -242,7 +292,8 @@ async def generate_step(
     else:
         system = GENERATION_SYSTEM_PROMPT_NO_KB.format(option_count=option_count)
     user = generation_user_prompt(
-        req_list, knowledge_summary, option_count, has_knowledge=has_knowledge
+        req_list, knowledge_summary, option_count, has_knowledge=has_knowledge,
+        reuse_summary=_reuse_summary(reuse_candidates), has_reuse=has_reuse,
     )
 
     input_tokens = 0
@@ -284,6 +335,14 @@ async def generate_step(
                 for cid in item.get("grounded_on", [])
             ]
 
+            # ADP-SPEC-007: keep only reuse refs the LLM was actually offered —
+            # never trust a hallucinated application id.
+            option_reuse = [
+                reuse_pool[str(aid)]
+                for aid in item.get("reuse_candidates", [])
+                if str(aid) in reuse_pool
+            ]
+
             candidates.append(SolutionOption(
                 option_id=str(uuid.uuid4()),
                 operation_id=state["operation_id"],
@@ -294,6 +353,7 @@ async def generate_step(
                 proposed_elements=elements,
                 advisory=False,
                 knowledge_source="knowledge_base" if has_knowledge else "requirements_only",
+                reuse_candidates=option_reuse,
             ))
 
     except Exception as exc:

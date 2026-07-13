@@ -13,6 +13,11 @@ For each option return a JSON object with:
 - "satisfies": list of requirement ids this option addresses
 - "proposed_elements": list of elements this option would materialize, each with:
     "name", "kind" (one of: person, system, container, component), "description", "satisfies"
+- "reuse_candidates": list of application IDs (drawn ONLY from the EXISTING APPLICATIONS \
+list, if provided) this option would reuse; [] if none apply
+
+Prefer reusing an existing application when it already provides a required capability, \
+rather than proposing a net-new build; say so in the rationale when you do.
 
 Return ONLY: {{"options": [...]}}. Options must use different approaches.
 Each option MUST cite at least one knowledge item from the provided list.
@@ -33,6 +38,11 @@ For each option return a JSON object with:
 - "satisfies": list of requirement ids this option addresses
 - "proposed_elements": list of elements this option would materialize, each with:
     "name", "kind" (one of: person, system, container, component), "description", "satisfies"
+- "reuse_candidates": list of application IDs (drawn ONLY from the EXISTING APPLICATIONS \
+list, if provided) this option would reuse; [] if none apply
+
+Prefer reusing an existing application when it already provides a required capability, \
+rather than proposing a net-new build; say so in the rationale when you do.
 
 Return ONLY: {{"options": [...]}}. Options must use different approaches.
 Provide practical, implementable architectural patterns.
@@ -45,22 +55,30 @@ def generation_user_prompt(
     knowledge_summary: str,
     option_count: int,
     has_knowledge: bool = True,
+    reuse_summary: str = "",
+    has_reuse: bool = False,
 ) -> str:
     """Build the generation user prompt.
 
     ADP-SPEC-019: when has_knowledge=False, omit the citation instruction and
     substitute a clear "no KB available" notice so the LLM does not hallucinate IDs.
+    ADP-SPEC-007: when has_reuse=True, list existing applications the option may reuse.
     """
+    reuse_block = (
+        f"EXISTING APPLICATIONS YOU MAY REUSE:\n{reuse_summary}\n\n" if has_reuse else ""
+    )
     if has_knowledge:
         return (
             f"REQUIREMENTS:\n{requirements_list}\n\n"
             f"RELEVANT KNOWLEDGE:\n{knowledge_summary}\n\n"
+            f"{reuse_block}"
             f"Generate {option_count} distinct solution options that address these requirements."
         )
     return (
         f"REQUIREMENTS:\n{requirements_list}\n\n"
         "NO PRIOR KNOWLEDGE BASE ENTRIES AVAILABLE — generate options based on the "
         f"requirements alone using general architectural expertise.\n\n"
+        f"{reuse_block}"
         f"Generate {option_count} distinct solution options that address these requirements."
     )
 

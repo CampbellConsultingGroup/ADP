@@ -16,6 +16,7 @@ from adp.recommendation.steps import (
     generate_step,
     rank_step,
     retrieve_step,
+    reuse_step,
     validate_citations_step,
 )
 from adp.recommendation.telemetry import RecommendationTelemetry
@@ -24,6 +25,7 @@ if TYPE_CHECKING:
     from adp.knowledge import KnowledgeRetrieval
     from adp.llm.client import LLMClient
     from adp.models import Element
+    from adp.recommendation.reuse import ReuseProvider
     from adp.store import DesignStore
 
 _logger = logging.getLogger("adp.recommendation")
@@ -40,6 +42,7 @@ class RecommendationOrchestrator:
         option_count: int = 3,
         ranking_weights: tuple[float, float, float] = (0.4, 0.3, 0.3),
         telemetry: RecommendationTelemetry | None = None,
+        reuse_provider: "ReuseProvider | None" = None,
     ) -> None:
         self._llm = llm
         self._knowledge = knowledge_retrieval
@@ -47,6 +50,7 @@ class RecommendationOrchestrator:
         self._option_count = option_count
         self._ranking_weights = ranking_weights
         self._telemetry = telemetry or RecommendationTelemetry()
+        self._reuse_provider = reuse_provider
         self._graph = self._build_graph()
 
     def _build_graph(self) -> Any:
@@ -58,9 +62,13 @@ class RecommendationOrchestrator:
         llm = self._llm
         oc = self._option_count
         rw = self._ranking_weights
+        rp = self._reuse_provider
 
         async def _retrieve(state: RecommendationState) -> RecommendationState:
             return await retrieve_step(state, knowledge_retrieval=kr, telemetry=t)
+
+        async def _reuse(state: RecommendationState) -> RecommendationState:
+            return await reuse_step(state, reuse_provider=rp, telemetry=t)
 
         async def _generate(state: RecommendationState) -> RecommendationState:
             return await generate_step(state, llm=llm, telemetry=t, option_count=oc)
@@ -78,13 +86,15 @@ class RecommendationOrchestrator:
 
         graph = StateGraph(RecommendationState)
         graph.add_node("retrieve", _retrieve)
+        graph.add_node("reuse", _reuse)
         graph.add_node("generate", _generate)
         graph.add_node("analyze_tradeoffs", _tradeoffs)
         graph.add_node("rank", _rank)
         graph.add_node("validate_citations", _validate)
 
         graph.set_entry_point("retrieve")
-        graph.add_edge("retrieve", "generate")
+        graph.add_edge("retrieve", "reuse")
+        graph.add_edge("reuse", "generate")
         graph.add_edge("generate", "analyze_tradeoffs")
         graph.add_edge("analyze_tradeoffs", "rank")
         graph.add_edge("rank", "validate_citations")
@@ -122,6 +132,7 @@ class RecommendationOrchestrator:
                 "requirement_ids": requirement_ids,
                 "requirements": requirements,
                 "retrieved_knowledge": [],
+                "reuse_candidates": [],
                 "candidate_options": [],
                 "ranked_options": [],
                 "validated_options": [],
