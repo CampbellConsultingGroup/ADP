@@ -117,15 +117,15 @@ A team lead follows the `RUNBOOK.md` to deploy ADP on a Linux server with Docker
 - **FR-003**: The existing `GET /api/v1/designs/{id}` endpoint is unchanged.
 - **FR-004**: `POST /api/v1/designs` MUST write an ART-IX audit entry `action: "design-created"` to the new design.
 
-**Navigation Consolidation (FR-005 to FR-006)**
+**Navigation Consolidation (FR-005 to FR-006)** — ⚠️ **Superseded by ADP-SPEC-037.** The top `NavBar` was replaced by a left-rail application shell; the shipped navigation model is now governed by ADP-SPEC-037 (FR-001–FR-005).
 
-- **FR-005**: A shared `web/src/shell/NavBar.tsx` component MUST be created, accepting `currentView: AppView` and `onNavigate: (view: AppView) => void` as props. It renders the ADP wordmark and all navigation tabs.
-- **FR-006**: `IntakePage`, `RecommendationPage`, `KnowledgePage`, and `Workspace` MUST remove their local `NAV_ITEMS` arrays and inline navigation JSX, replacing them with `<NavBar currentView="intake" onNavigate={onNavigate} />`.
+- **FR-005** *(superseded by ADP-SPEC-037 FR-001, FR-005)*: A shared `web/src/shell/NavBar.tsx` component MUST be created, accepting `currentView: AppView` and `onNavigate: (view: AppView) => void` as props. It renders the ADP wordmark and all navigation tabs.
+- **FR-006** *(superseded by ADP-SPEC-037 FR-002)*: `IntakePage`, `RecommendationPage`, `KnowledgePage`, and `Workspace` MUST remove their local `NAV_ITEMS` arrays and inline navigation JSX, replacing them with `<NavBar currentView="intake" onNavigate={onNavigate} />`.
 
-**Designs Screen (FR-007 to FR-009)**
+**Designs Screen (FR-007 to FR-009)** — ⚠️ **FR-007/FR-008 partially superseded by ADP-SPEC-037.** The Designs screen still exists and is reachable, but it is no longer the landing view; Overview is now the default (ADP-SPEC-037 FR-006, FR-010).
 
-- **FR-007**: A `web/src/designs/DesignsPage.tsx` component MUST be created as the application landing page (replaces the current default of Intake). It shows a list of designs, a "New Design" button, and an empty state.
-- **FR-008**: `App.tsx` MUST set initial view to `"designs"` when no design is selected. `AppView` type MUST include `"designs"`. Once a design is selected, `currentDesignId` state is set and subsequent navigation within that design uses the existing four views.
+- **FR-007** *(landing-page role superseded by ADP-SPEC-037 FR-006; the Designs screen itself is retained per ADP-SPEC-037 FR-010)*: A `web/src/designs/DesignsPage.tsx` component MUST be created as the application landing page (replaces the current default of Intake). It shows a list of designs, a "New Design" button, and an empty state.
+- **FR-008** *(default-view role superseded by ADP-SPEC-037 FR-006)*: `App.tsx` MUST set initial view to `"designs"` when no design is selected. `AppView` type MUST include `"designs"`. Once a design is selected, `currentDesignId` state is set and subsequent navigation within that design uses the existing four views.
 - **FR-009**: The `App.tsx` hardcoded `"DESIGN-001"` fallback MUST be removed. `designId` MUST be `null` until the user selects or creates a design.
 
 **Production Deployment (FR-010 to FR-013)**
