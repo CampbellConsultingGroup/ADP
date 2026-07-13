@@ -26,7 +26,7 @@ The migration introduced a shared web **design system** (`web/src/ui`: tokens, p
 |---|---|---|
 | ART-I Spec-Driven | ✓ PASS (retrospective) | This spec + plan restore traceability for shipped UI; supersession of ADP-SPEC-025 FR-005–008 recorded in both specs and `docs/000-index.md` |
 | ART-II Model is Source of Truth | ✓ PASS | Chrome-only re-skin; Overview renders no fabricated figures — all KPIs fetched live (FR-007) |
-| ART-IV TDD | ⚠ PARTIAL (retrospective) | Component/E2E coverage exists for the shell, migrated screens, and locked-theme isolation, but was not authored strictly test-first for this ratifying spec; see [Test Coverage](#test-coverage-fr--tests) and the follow-up in Open Risks |
+| ART-IV TDD | ✓ PASS | Dedicated component tests added for the shell (`web/tests/component/app-shell.test.tsx`) and Overview (`web/tests/component/overview-page.test.tsx`) asserting FR-001–004, FR-006, FR-007, FR-009; broader shell behavior also covered by E2E. See [Test Coverage](#test-coverage-fr--tests) |
 | ART-V Security | ✓ PASS | No new endpoint, data, or trust boundary; only new client state is a validated `localStorage` theme key |
 | ART-XII Locked Visual Theme | ✓ PASS | App design system governs chrome only; C4 diagram theme (`/api/v1/theme/c4`, `c4-theme.json`) unchanged — asserted by `web/tests/unit/c4-theme.test.ts` (FR-018) |
 | ART-XIII Typed Contracts | ✓ PASS | `AppView` union + typed nav/theme models; no `any` in the shell/primitives |
@@ -96,6 +96,8 @@ web/src/shell/NavBar.tsx            ← REMOVED (was ADP-SPEC-025 FR-005/006)
 
 | Area | Tests |
 |---|---|
+| Shell: grouped nav, active state, design-scoped group, single handler (FR-001–004) | `web/tests/component/app-shell.test.tsx` |
+| Overview: default landing, live KPIs, error + empty states, tile navigation (FR-006–009) | `web/tests/component/overview-page.test.tsx` |
 | Shell navigation between views (Designs → design context → Knowledge/Canvas etc.) | `web/tests/e2e/flows.spec.ts`, `web/tests/e2e/workspace.spec.ts` |
 | Migrated registry screens render via design system | `web/tests/component/business-registry.test.tsx`, `application-registry.test.tsx` |
 | Canvas chrome / inspection panel | `web/tests/component/C4Canvas.test.tsx`, `InspectionPanel.test.tsx` |
@@ -131,5 +133,5 @@ Records the same supersession captured in [spec.md](spec.md) and cross-linked fr
 
 ## Open Risks / Follow-ups
 
-- **ART-IV (test-first) is retrospective here.** Coverage exists but was not authored test-first against this spec. Follow-up (optional): add explicit shell/Overview component tests asserting FR-002 (single nav source), FR-006 (default view), and FR-009 (Overview error/empty states) to convert PARTIAL → PASS.
-- **`docs/solution-architecture.md`** should gain a short "web design system + application shell" note so the implemented-state doc matches the shipped UI.
+- ✅ **Done** — Dedicated shell/Overview component tests added (`web/tests/component/app-shell.test.tsx`, `overview-page.test.tsx`) covering FR-001–004, FR-006, FR-007, FR-009. This also surfaced and fixed three stale registry-test assertions left over from the design-system migration (classification badge label; the "Add" button rename in `ApplicationList`).
+- ✅ **Done** — `docs/solution-architecture.md` gained a "Web Application Shell and Design System" section plus a frontend-testing note, so the implemented-state doc matches the shipped UI.

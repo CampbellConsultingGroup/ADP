@@ -145,6 +145,14 @@ C4Container
 
 All AI orchestration (requirements intake, recommendation, LLM-as-judge) runs as in-process LangGraph workflows within the Platform API. Long-running workflows are tracked as `operations` records in PostgreSQL rather than in-memory, giving them crash recovery and cross-request status visibility.
 
+## Web Application Shell and Design System
+
+The React SPA (ADP-SPEC-037) presents every screen inside a single persistent application shell — a left navigation rail plus a top bar — rendered once at the `App` level, with page components mounted in the scrollable content area. The rail groups destinations into **Workspace** (Overview, Designs), **Architecture** (Business, Applications, Portfolio, Governance, Knowledge), and a per-design **Design** group (Intake, Recommendations, Canvas) that appears only when a design is selected. Navigation destinations are defined once — as `NavDef[]` arrays in `web/src/ui/AppShell.tsx` — and no screen declares its own navigation, replacing the earlier per-page `NavBar` (ADP-SPEC-025 FR-005–008, now superseded).
+
+The landing view is a live **Overview** dashboard that fetches portfolio KPIs from existing endpoints (portfolio summary, applications, integrations, capabilities, value streams, domains, knowledge) and links into each domain. It holds no hard-coded figures and degrades to error and empty states on query failure.
+
+All screens are built from a shared design system in `web/src/ui`: design tokens (`tokens.css` — spacing, radius, elevation, surface/ink/border, accent, semantic, and per-domain hues) and primitives (`Card`, `Panel`, `Button`, `StatusBadge`, `PageHeader`, `KpiTile`). Theming supports light, dark, and system modes, defaulting to the operating-system preference and persisting the user's choice. The application design system governs chrome only; the locked C4 diagram theme (ADP-SPEC-010, ART-XII) is unchanged and remains the sole authority for rendered diagram styling.
+
 ## Platform API — Router Inventory
 
 The Platform API exposes 20 FastAPI routers grouped by domain. All routes are prefixed `/api/v1/`.
@@ -532,6 +540,8 @@ ADP is tested at three levels:
 **Unit and contract tests** (`pytest tests/ --ignore=tests/integration`): Test the canonical data model, store operations, recommendation steps, and API contract shapes without a database. Run in CI on every push.
 
 **Integration tests** (`pytest tests/integration`): Run against a real PostgreSQL container (`testcontainers-python`). Validate store operations, migration state, and end-to-end persistence.
+
+**Frontend unit and component tests** (`npm run test:run`): Vitest + Testing Library render components in jsdom with `fetch` stubbed via a route table. Cover the C4 canvas, business and application registries, and — for ADP-SPEC-037 — the application shell (grouped navigation, active state, design-scoped group) and the Overview dashboard (live KPIs, error and empty states).
 
 **Real-stack E2E tests** (`npm run test:e2e:flows`): Playwright browser tests that run the full stack — Vite dev server + uvicorn + real PostgreSQL — with no API mocking. Cover design creation, knowledge item lifecycle (create → delete), portfolio and governance navigation, and API smoke checks against all new routers. These tests exposed and drove fixes for three pre-existing production bugs: asyncpg NULL-parameter SQL syntax errors in `governance.py` and `portfolio.py`, and a missing SQLAlchemy Table column definition in `records.py`.
 

@@ -138,7 +138,7 @@ describe("DomainList", () => {
     renderWithQuery(<DomainList onSelect={onSelect} />);
 
     const row = await screen.findByText("Finance");
-    expect(screen.getByText("strategic")).toBeDefined();
+    expect(screen.getByText("Strategic")).toBeDefined();
     expect(screen.getByText(/2 L1 capabilities/)).toBeDefined();
     fireEvent.click(row);
     expect(onSelect).toHaveBeenCalledWith("dom-1");
