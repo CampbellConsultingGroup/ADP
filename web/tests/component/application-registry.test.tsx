@@ -141,7 +141,7 @@ describe("ApplicationList", () => {
 
     fireEvent.click(screen.getByText("Ledger"));
     expect(onSelect).toHaveBeenCalledWith("app-2");
-    fireEvent.click(screen.getByRole("button", { name: "+ Add Application" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(onAdd).toHaveBeenCalled();
   });
 });
@@ -342,7 +342,7 @@ describe("ApplicationPage", () => {
     renderWithQuery(<ApplicationPage />);
 
     expect(await screen.findByText("CRM")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "+ Add Application" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(await screen.findByText("New Application")).toBeDefined();
   });
 });
