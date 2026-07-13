@@ -73,6 +73,8 @@ class SolutionOption:
     coverage_score: float = 0.0
     principle_score: float = 0.0
     tradeoff_score: float = 0.0
+    # ADP-SPEC-019 feedback loop: +/- signal from cited past accept/reject decisions
+    history_score: float = 0.0
     status: str = "pending"
     accepted_by: str | None = None
     accepted_at: datetime | None = None

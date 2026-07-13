@@ -38,6 +38,10 @@ if TYPE_CHECKING:
 
 _logger = logging.getLogger("adp.recommendation")
 
+# ADP-SPEC-019 feedback loop: weight of the historical accept/reject signal in
+# ranking. Small by design — it nudges, it does not override coverage/fit.
+HISTORY_WEIGHT = 0.15
+
 
 # ── Reasoning write helpers (ADP-SPEC-027) ────────────────────────────────────
 
@@ -164,13 +168,37 @@ def _is_quality_requirement(description: str) -> bool:
     return any(kw in description.lower() for kw in _QUALITY_KEYWORDS)
 
 
+def _decision_type(item: Any) -> str | None:
+    """Return 'accepted' / 'rejected' for a past-decision knowledge item, else None.
+
+    Accept/reject decisions are written to the KB with metadata.item_type of
+    'accepted_recommendation' / 'rejected_recommendation' (ADP-SPEC-019 capture).
+    """
+    item_type = (getattr(item, "metadata", None) or {}).get("item_type")
+    if item_type == "accepted_recommendation":
+        return "accepted"
+    if item_type == "rejected_recommendation":
+        return "rejected"
+    return None
+
+
 def _knowledge_summary(entries: list[Any]) -> str:
     lines = []
     for e in entries:
         item = e.item
         excerpt = (item.full_text or "")[:120].replace("\n", " ")
+        # ADP-SPEC-019 feedback loop: label past decisions so the model prefers
+        # accepted patterns and avoids rejected ones (rather than treating a
+        # rejected anti-pattern as a reusable pattern).
+        decision = _decision_type(item)
+        if decision == "accepted":
+            label = "ACCEPTED PATTERN (prefer)"
+        elif decision == "rejected":
+            label = "REJECTED PATTERN (avoid)"
+        else:
+            label = str(item.kind)
         lines.append(f"[{e.citation.item_id}@{e.citation.item_version}] "
-                     f"{item.kind}: \"{item.title}\" — {excerpt}")
+                     f"{label}: \"{item.title}\" — {excerpt}")
     return "\n".join(lines) or "(no knowledge items retrieved)"
 
 
@@ -514,6 +542,13 @@ def rank_step(
         if getattr(e.item, "kind", "") == "principle"
     }
 
+    # ADP-SPEC-019 feedback loop: classify retrieved past-decision items so an
+    # option that cites an accepted pattern is boosted and one citing a rejected
+    # pattern is penalised — this is how historical accept/reject signal closes
+    # the loop into ranking.
+    accepted_ids = {e.citation.item_id for e in retrieved if _decision_type(e.item) == "accepted"}
+    rejected_ids = {e.citation.item_id for e in retrieved if _decision_type(e.item) == "rejected"}
+
     for option in candidates:
         # Coverage score: fraction of input requirements in option.satisfies
         covered = len(set(option.satisfies) & req_ids)
@@ -534,11 +569,23 @@ def rank_step(
         else:
             option.tradeoff_score = 0.5  # neutral when no trade-offs assessed
 
-        option.ranking_score = (
+        # History score: net signal from cited past decisions, in [-1, 1].
+        cited = {ref.item_id for ref in option.grounded_on}
+        accepted_hits = len(cited & accepted_ids)
+        rejected_hits = len(cited & rejected_ids)
+        total_decisions = accepted_hits + rejected_hits
+        option.history_score = (
+            (accepted_hits - rejected_hits) / total_decisions if total_decisions else 0.0
+        )
+
+        base = (
             w_req * option.coverage_score
             + w_principle * option.principle_score
             + w_tradeoff * option.tradeoff_score
         )
+        # Additive adjustment (kept out of the 3-tuple weight arity); clamp to [0, 1].
+        adjusted = base + HISTORY_WEIGHT * option.history_score
+        option.ranking_score = max(0.0, min(1.0, adjusted))
 
     sorted_candidates = sorted(candidates, key=lambda o: o.ranking_score, reverse=True)
     for i, opt in enumerate(sorted_candidates, 1):

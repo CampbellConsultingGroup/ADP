@@ -19,6 +19,10 @@ list, if provided) this option would reuse; [] if none apply
 Prefer reusing an existing application when it already provides a required capability, \
 rather than proposing a net-new build; say so in the rationale when you do.
 
+Some knowledge items are labelled ACCEPTED PATTERN (a past decision an architect \
+approved — prefer approaches consistent with these) or REJECTED PATTERN (a past \
+decision an architect rejected — avoid approaches similar to these).
+
 Return ONLY: {{"options": [...]}}. Options must use different approaches.
 Each option MUST cite at least one knowledge item from the provided list.
 Truncate to exactly {option_count} options.\
