@@ -179,19 +179,20 @@ async def test_citations_present_false_when_all_advisory() -> None:
 
 
 @pytest.mark.asyncio
-async def test_five_spans_emitted_per_job() -> None:
-    """Exactly 5 step spans are emitted per recommendation job."""
+async def test_six_spans_emitted_per_job() -> None:
+    """Exactly 6 step spans are emitted per recommendation job (incl. reuse)."""
     orch, mock_telemetry, _ = _make_orchestrator()
     operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", ["REQ-001"], operation_store, "corr-001")
 
     step_names = {call.args[0].step_name for call in mock_telemetry.emit_step_span.call_args_list}
     assert "retrieve" in step_names
+    assert "reuse" in step_names
     assert "generate" in step_names
     assert "analyze_tradeoffs" in step_names
     assert "rank" in step_names
     assert "validate_citations" in step_names
-    assert mock_telemetry.emit_step_span.call_count == 5
+    assert mock_telemetry.emit_step_span.call_count == 6
 
 
 @pytest.mark.asyncio

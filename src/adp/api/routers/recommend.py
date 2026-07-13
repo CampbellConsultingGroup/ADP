@@ -69,6 +69,18 @@ def _option_to_dict(opt: Any) -> dict:
             if getattr(opt, "accepted_at", None) else None
         ),
         "knowledge_source": getattr(opt, "knowledge_source", "knowledge_base"),
+        "reuse_candidates": [
+            {
+                "app_id": c.app_id,
+                "name": c.name,
+                "description": c.description,
+                "capabilities": list(c.capabilities or []),
+                "time_classification": c.time_classification,
+                "r_strategy": c.r_strategy,
+                "relevance": c.relevance,
+            }
+            for c in (getattr(opt, "reuse_candidates", None) or [])
+        ],
     }
 
 
@@ -80,6 +92,7 @@ def _dict_to_option(d: dict) -> Any:
     from adp.models import ElementKind
     from adp.recommendation.models import (
         ProposedElement,
+        ReuseCandidate,
         SolutionOption,
         TradeOffEntry,
         TradeOffStance,
@@ -126,6 +139,18 @@ def _dict_to_option(d: dict) -> Any:
         accepted_by=d.get("accepted_by"),
         accepted_at=accepted_at,
         knowledge_source=d.get("knowledge_source", "knowledge_base"),
+        reuse_candidates=[
+            ReuseCandidate(
+                app_id=c["app_id"],
+                name=c["name"],
+                description=c.get("description"),
+                capabilities=c.get("capabilities", []),
+                time_classification=c.get("time_classification"),
+                r_strategy=c.get("r_strategy"),
+                relevance=c.get("relevance", 0.0),
+            )
+            for c in d.get("reuse_candidates", [])
+        ],
     )
     return opt
 
@@ -163,6 +188,18 @@ class ProposedElementResponse(BaseModel):
     satisfies: list[str]
 
 
+class ReuseCandidateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    app_id: str
+    name: str
+    description: str | None = None
+    capabilities: list[str] = []
+    time_classification: str | None = None
+    r_strategy: str | None = None
+    relevance: float = 0.0
+
+
 class SolutionOptionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -179,6 +216,8 @@ class SolutionOptionResponse(BaseModel):
     status: str
     # ADP-SPEC-019: "knowledge_base" or "requirements_only"
     knowledge_source: str = "knowledge_base"
+    # ADP-SPEC-007: existing applications this option proposes to reuse
+    reuse_candidates: list[ReuseCandidateResponse] = []
 
 
 class RecommendStatusResponse(BaseModel):
@@ -312,10 +351,22 @@ def _make_recommend_orchestrator(model: str | None = None):
 
     knowledge = _make_stub_knowledge_retrieval()
     store_dep = None  # orchestrator gets store via operation args
+
+    # ADP-SPEC-007: ground recommendations in the existing application landscape.
+    # Query failures degrade gracefully to no candidates inside reuse_step.
+    reuse_provider = None
+    try:
+        from adp.application.store import _get_session_factory
+        from adp.recommendation.reuse import ApplicationReuseProvider
+        reuse_provider = ApplicationReuseProvider(_get_session_factory())
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("reuse provider unavailable: %s", exc)
+
     return RecommendationOrchestrator(
         llm=llm,
         knowledge_retrieval=knowledge,
         design_store=store_dep,  # type: ignore[arg-type]
+        reuse_provider=reuse_provider,
     )
 
 
@@ -352,6 +403,18 @@ def _map_option_to_response(opt: Any) -> SolutionOptionResponse:
         ranking_score=float(opt.ranking_score or 0.0),
         status=str(opt.status or "pending"),
         knowledge_source=getattr(opt, "knowledge_source", "knowledge_base"),
+        reuse_candidates=[
+            ReuseCandidateResponse(
+                app_id=c.app_id,
+                name=c.name,
+                description=c.description,
+                capabilities=list(c.capabilities or []),
+                time_classification=c.time_classification,
+                r_strategy=c.r_strategy,
+                relevance=c.relevance,
+            )
+            for c in (getattr(opt, "reuse_candidates", None) or [])
+        ],
     )
 
 

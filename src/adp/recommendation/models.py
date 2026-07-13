@@ -40,6 +40,22 @@ class ProposedElement:
 
 
 @dataclass
+class ReuseCandidate:
+    """An existing application the org already runs that is relevant to the
+    requirements — offered to the recommender so options can prefer reuse over
+    net-new build (ADP-SPEC-007 registry grounding).
+    """
+
+    app_id: str
+    name: str
+    description: str | None = None
+    capabilities: list[str] = field(default_factory=list)
+    time_classification: str | None = None
+    r_strategy: str | None = None
+    relevance: float = 0.0
+
+
+@dataclass
 class SolutionOption:
     """Primary output of the recommendation pipeline. Stored transiently (TTL 24h)."""
 
@@ -62,6 +78,9 @@ class SolutionOption:
     accepted_at: datetime | None = None
     # ADP-SPEC-019: "knowledge_base" when KB had entries; "requirements_only" when KB was empty
     knowledge_source: str = "knowledge_base"
+    # ADP-SPEC-007 registry grounding: existing applications this option proposes
+    # to reuse (validated against the offered candidate pool — never hallucinated).
+    reuse_candidates: list[ReuseCandidate] = field(default_factory=list)
 
 
 @dataclass
@@ -89,6 +108,7 @@ class RecommendationState(TypedDict, total=False):
     requirement_ids: list[str]
     requirements: list[Any]  # list[Requirement] — typed loosely to avoid circular
     retrieved_knowledge: list[Any]  # list[RetrievalResultEntry]
+    reuse_candidates: list[Any]  # list[ReuseCandidate] — existing apps to reuse
     candidate_options: list[SolutionOption]
     ranked_options: list[SolutionOption]
     validated_options: list[SolutionOption]
