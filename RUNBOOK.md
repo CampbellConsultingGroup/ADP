@@ -59,8 +59,17 @@ cd /home/jmuir/projects/ADP
 export ADP_DATABASE_URL="postgresql+asyncpg://adp_user:adp_pass@127.0.0.1:5432/adp"
 export ADP_LLM_ENDPOINT="https://api.anthropic.com"
 export ADP_LLM_API_KEY="sk-..."   # Never logged; never in spans
+export ADP_LLM_MODEL="claude-sonnet-4-6"   # Optional default model
+# Optional — enable Keycloak OIDC auth (ADP-SPEC-026):
+# export ADP_AUTH_ENABLED=true
+# export ADP_KEYCLOAK_ISSUER="http://127.0.0.1:8080/realms/ADPRealm"
+# export ADP_KEYCLOAK_CLIENT_ID="adp-frontend"
 uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 ```
+
+When `ADP_AUTH_ENABLED=true`, every `/api/v1/*` route requires a valid Keycloak
+bearer token; roles on the token drive RBAC. Leave it unset (or `false`) for
+local development without a Keycloak instance.
 
 ### Web canvas (development)
 
@@ -100,6 +109,12 @@ alembic current
 ```bash
 alembic history
 ```
+
+Migration chain (as of ADP-SPEC-036): `001` initial schema → `002` knowledge →
+`003` operations → `004` LLM reasoning log → `005` element technology tags →
+`006` design lifecycle → `007` business architecture → `008` business
+traceability → `009` business domain registry → `010` application registry
+(`head`).
 
 ### Rollback one step
 
@@ -257,6 +272,66 @@ Current baseline theme version: `1.0.1` (container fill `#2874A6`, WCAG AA compl
 
 ---
 
+## Portfolio & governance reporting
+
+Portfolio analysis (ADP-SPEC-031) and governance reporting (ADP-SPEC-032) read
+directly from the design store, technology tags, lifecycle status, and audit
+trail — no separate ingestion step is required.
+
+```bash
+# Technology footprint across the portfolio
+curl "http://localhost:8001/api/v1/portfolio/technologies" | python3 -m json.tool
+
+# Portfolio summary (counts by lifecycle, technology, etc.)
+curl "http://localhost:8001/api/v1/portfolio/summary" | python3 -m json.tool
+
+# Governance dashboard status
+curl "http://localhost:8001/api/v1/governance/status" | python3 -m json.tool
+
+# Export governance activity as CSV
+curl "http://localhost:8001/api/v1/governance/activity/export" > governance-activity.csv
+```
+
+---
+
+## Business architecture & application registry
+
+Capabilities, value streams, domains (ADP-SPEC-033/034/035) and the application
+registry (ADP-SPEC-036) live in dedicated relational tables (migrations 007–010),
+linked to designs via join tables for traceability.
+
+```bash
+# Capability model
+curl "http://localhost:8001/api/v1/business/capabilities" | python3 -m json.tool
+
+# Designs realizing a capability (traceability)
+curl "http://localhost:8001/api/v1/business/capabilities/CAP-001/designs" | python3 -m json.tool
+
+# Full business context for a design
+curl "http://localhost:8001/api/v1/business/designs/DESIGN-001/context" | python3 -m json.tool
+
+# Application registry
+curl "http://localhost:8001/api/v1/applications" | python3 -m json.tool
+```
+
+If these tables are empty or missing, confirm migrations are applied:
+
+```bash
+alembic current   # should report 010 (head)
+```
+
+---
+
+## CALM export
+
+Export a design as a FINOS CALM document (ADP-SPEC-021):
+
+```bash
+curl "http://localhost:8001/api/v1/designs/DESIGN-001/export/calm" > design-001.calm.json
+```
+
+---
+
 ## Running tests
 
 ```bash
@@ -285,7 +360,7 @@ cd web && ADP_API_URL=http://localhost:8001 npm run test:e2e:api
 cd web && ADP_API_URL=http://localhost:8001 ADP_WEB_URL=http://localhost:5173 npm run test:e2e
 ```
 
-Current test count: **335 Python** (unit + contract) + **23 TypeScript** (Vitest) + **22 Playwright E2E** (all passing).
+Current test count: **574 Python** unit + contract + **132 Python** integration (706 total across 72 files) + **~59 TypeScript** (Vitest) + **45 Playwright E2E** (all passing).
 
 ---
 

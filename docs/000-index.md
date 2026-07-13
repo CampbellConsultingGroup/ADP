@@ -5,7 +5,7 @@ constitution: ADP-CONST-001
 methodology: spec-driven-development
 version: 1.1.0
 status: current
-spec_count: 36
+spec_count: 37
 ---
 
 # ADP Specification Set
@@ -15,7 +15,7 @@ These are the feature specifications required to build ADP. Each is an independe
 The set has two generations:
 
 - **Foundational specs (001–012)** — authored up front as this document set (`docs/001-*.md` … `docs/012-*.md`); the dependency table and build waves below describe them.
-- **Delivered feature specs (013–036)** — added iteratively via the Speckit workflow. 013–019 have per-spec documents in `docs/`; from 020 onward the canonical spec lives in `specs/NNN-<slug>/spec.md` (with its plan, tasks, data model, and API contracts alongside). No separate `docs/` rendering is maintained for those.
+- **Delivered feature specs (013–037)** — added iteratively via the Speckit workflow. 013–019 have per-spec documents in `docs/`; from 020 onward the canonical spec lives in `specs/NNN-<slug>/spec.md` (with its plan, tasks, data model, and API contracts alongside). No separate `docs/` rendering is maintained for those.
 
 ## Foundational specifications (001–012)
 
@@ -34,7 +34,7 @@ The set has two generations:
 | ADP-SPEC-011 | Document, View & Export Generation | 001, 010 |
 | ADP-SPEC-012 | Observability & Telemetry | 003 (cross-cutting) |
 
-## Delivered feature specs (013–036)
+## Delivered feature specs (013–037)
 
 | ID | Title | Spec location |
 |---|---|---|
@@ -50,7 +50,7 @@ The set has two generations:
 | ADP-SPEC-022 | CALM Pattern Import | `specs/022-calm-pattern-import/spec.md` |
 | ADP-SPEC-023 | Internal Architecture Consolidation | `specs/023-internal-consolidation/spec.md` |
 | ADP-SPEC-024 | Persistent Operation Store | `specs/024-persistent-operations/spec.md` |
-| ADP-SPEC-025 | Multi-Design UI and Production Readiness | `specs/025-multi-design-production/spec.md` |
+| ADP-SPEC-025 | Multi-Design UI and Production Readiness (FR-005–008 superseded by 037) | `specs/025-multi-design-production/spec.md` |
 | ADP-SPEC-026 | Keycloak Authentication | `specs/026-keycloak-authn/spec.md` |
 | ADP-SPEC-027 | Immutable LLM Reasoning Store | `specs/027-llm-reasoning-store/spec.md` |
 | ADP-SPEC-028 | Recommendation Reasoning Display | `specs/028-recommendation-reasoning-ui/spec.md` |
@@ -62,6 +62,7 @@ The set has two generations:
 | ADP-SPEC-034 | Business Architecture Traceability | `specs/034-business-arch-traceability/spec.md` |
 | ADP-SPEC-035 | Business Domain Registry and Stage-Capability Mapping | `specs/035-business-domain-registry/spec.md` |
 | ADP-SPEC-036 | Application Registry | `specs/036-application-registry/spec.md` |
+| ADP-SPEC-037 | Design System, Application Shell & Overview Landing (supersedes 025 FR-005–008) | `specs/037-design-system-shell/spec.md` |
 
 The current implemented state of the whole system is described in `docs/solution-architecture.md`.
 
