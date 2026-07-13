@@ -13,7 +13,13 @@ from adp.authz.roles import ActionType, PersonaRole
 
 _logger = logging.getLogger("adp.authz")
 
-PERMISSIONS_VERSION = "1.0.0"
+# Changelog:
+#   1.0.0 — initial matrix (ADP-SPEC-004).
+#   1.1.0 — added WRITE_BUSINESS_ARCH, WRITE_APPLICATION (granted to the three
+#           architect roles) and MANAGE_CONFIG (enterprise-only) so the newer
+#           business-architecture, application-registry, and config routers are
+#           covered by action-based enforcement (ADP-SPEC-004 amendment).
+PERMISSIONS_VERSION = "1.1.0"
 
 # ── Permission table ─────────────────────────────────────────────────────────
 # Maps each PersonaRole to the frozenset of ActionTypes it may perform.
@@ -29,6 +35,8 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.OVERRIDE_VERDICT,
         ActionType.ADD_FINDING,
         ActionType.EXPORT_DESIGN,
+        ActionType.WRITE_BUSINESS_ARCH,
+        ActionType.WRITE_APPLICATION,
     }),
     PersonaRole.TECHNICAL_ARCHITECT: frozenset({
         ActionType.READ_DESIGN,
@@ -36,6 +44,8 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.SUBMIT_AI_OPERATION,
         ActionType.CONFIRM_RECOMMENDATION,
         ActionType.ADD_FINDING,
+        ActionType.WRITE_BUSINESS_ARCH,
+        ActionType.WRITE_APPLICATION,
     }),
     PersonaRole.REVIEWER: frozenset({
         ActionType.READ_DESIGN,

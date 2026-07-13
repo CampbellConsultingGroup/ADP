@@ -24,3 +24,6 @@ class ActionType(StrEnum):
     AMEND_STANDARD = "amend_standard"
     MANAGE_ROLES = "manage_roles"
     EXPORT_DESIGN = "export_design"
+    WRITE_BUSINESS_ARCH = "write_business_arch"
+    WRITE_APPLICATION = "write_application"
+    MANAGE_CONFIG = "manage_config"

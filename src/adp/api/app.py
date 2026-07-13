@@ -8,7 +8,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, Request, Response
 
 from adp.api.routers import (
     calm,
@@ -31,6 +31,7 @@ from adp.api.routers import (
 )
 from adp.application.router import applications_router, integrations_router, tech_caps_router
 from adp.auth.middleware import AuthMiddleware
+from adp.authz.enforcement import enforce_route_permission
 from adp.business import router as business_router_module
 from adp.telemetry.context import TraceIdFilter, generate_trace_id, set_trace_id
 from adp.telemetry.metrics import ACTIVE_REQUESTS, ERROR_COUNTER, REQUEST_COUNTER, REQUEST_LATENCY
@@ -93,6 +94,8 @@ def create_app() -> FastAPI:
         docs_url=None,
         redoc_url=None,
         lifespan=_lifespan,
+        # Action-based authorization for every mutating route (ADP-SPEC-004).
+        dependencies=[Depends(enforce_route_permission)],
     )
 
     # Auth middleware — validates Bearer tokens for all /api/v1/ routes (ADP-SPEC-026)

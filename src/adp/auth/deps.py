@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Request
 
 from adp.auth.models import UNAUTHENTICATED_USER, AuthenticatedUser
-from adp.authz.roles import PersonaRole
 
 
 def get_current_user(request: Request) -> AuthenticatedUser:
@@ -16,41 +15,7 @@ def get_current_user(request: Request) -> AuthenticatedUser:
     return getattr(request.state, "user", UNAUTHENTICATED_USER)
 
 
-def require_role(minimum_role: PersonaRole):
-    """Return a FastAPI dependency that enforces a minimum PersonaRole.
-
-    Usage:
-        dependencies=[Depends(require_role(PersonaRole.SOLUTION_ARCHITECT))]
-    """
-    _PRIVILEGE_ORDER = [
-        PersonaRole.ENTERPRISE_ARCHITECT,
-        PersonaRole.SOLUTION_ARCHITECT,
-        PersonaRole.TECHNICAL_ARCHITECT,
-        PersonaRole.REVIEWER,
-    ]
-
-    def _check(
-        user: AuthenticatedUser = Depends(get_current_user),
-    ) -> AuthenticatedUser:
-        user_idx = (
-            _PRIVILEGE_ORDER.index(user.role)
-            if user.role in _PRIVILEGE_ORDER
-            else len(_PRIVILEGE_ORDER)
-        )
-        req_idx = (
-            _PRIVILEGE_ORDER.index(minimum_role)
-            if minimum_role in _PRIVILEGE_ORDER
-            else len(_PRIVILEGE_ORDER)
-        )
-
-        if user_idx > req_idx:
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    f"Insufficient privileges. Required: {minimum_role.value}, "
-                    f"your role: {user.role.value}"
-                ),
-            )
-        return user
-
-    return Depends(_check)
+# NOTE: a linear ``require_role`` dependency was removed in the ADP-SPEC-004
+# enforcement work. The permission model is action-based, not a role hierarchy
+# (a REVIEWER may OVERRIDE_VERDICT but not WRITE_DESIGN), so authorization is
+# enforced per-route via ``adp.authz.enforcement.enforce_route_permission``.

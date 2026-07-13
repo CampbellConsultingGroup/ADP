@@ -483,7 +483,7 @@ Authentication is implemented via `AuthMiddleware` (Starlette middleware) that v
 
 `ADP_AUTH_ENABLED` (default: `true`) is the runtime toggle. Setting `ADP_AUTH_ENABLED=false` bypasses validation, which is required for local development without Keycloak and for the real-stack E2E test suite.
 
-Authorisation is role-based, aligned to the architect and reviewer personas, controlling who can confirm requirements, accept recommendations, and override verdicts.
+Authorisation is **action-based**, not a linear role hierarchy: the `PERMISSION_GRANTS` table (`adp.authz.permissions`, version 1.1.0) maps each `PersonaRole` to the set of `ActionType`s it may perform — so a reviewer may `OVERRIDE_VERDICT` yet not `WRITE_DESIGN`. Enforcement is wired at the HTTP layer by a single application-level FastAPI dependency (`adp.authz.enforcement.enforce_route_permission`) installed on the app: every mutating route resolves to a required `ActionType` (via an explicit design/intake/recommend map plus prefix rules for the business, application, and knowledge routers) and a caller lacking that grant is refused with `403` before the endpoint runs. Safe methods (GET/HEAD/OPTIONS) are never gated. A completeness test fails CI if any mutating route ships without a mapped action, keeping the policy exhaustive. When `ADP_AUTH_ENABLED=false`, the caller is the `ENTERPRISE_ARCHITECT` sentinel (all actions), so local development and the auth-disabled E2E suite are unaffected.
 
 The frontend reads `VITE_AUTH_ENABLED` to decide whether to attach Bearer tokens via the Keycloak JS adapter. When auth is enabled, all API mutations go through `apiMutation()`, which injects the `Authorization: Bearer <token>` header from the Keycloak token store.
 
