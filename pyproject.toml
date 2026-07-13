@@ -55,6 +55,7 @@ dev = [
 
 [project.scripts]
 adp-generate = "adp.generate:main"
+adp-eval = "adp.eval.__main__:main"
 adp-reindex = "adp.knowledge.indexer:main"
 adp-import-calm = "adp.calm.importer:cli"
 

@@ -101,6 +101,21 @@ _EXPECTED: dict[tuple[PersonaRole, ActionType], bool] = {
     (PersonaRole.SOLUTION_ARCHITECT, ActionType.EXPORT_DESIGN): True,
     (PersonaRole.TECHNICAL_ARCHITECT, ActionType.EXPORT_DESIGN): False,
     (PersonaRole.REVIEWER, ActionType.EXPORT_DESIGN): False,
+    # write_business_arch: the three architect roles author it; reviewer cannot (v1.1.0)
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.WRITE_BUSINESS_ARCH): True,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.WRITE_BUSINESS_ARCH): True,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.WRITE_BUSINESS_ARCH): True,
+    (PersonaRole.REVIEWER, ActionType.WRITE_BUSINESS_ARCH): False,
+    # write_application: the three architect roles author it; reviewer cannot (v1.1.0)
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.WRITE_APPLICATION): True,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.WRITE_APPLICATION): True,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.WRITE_APPLICATION): True,
+    (PersonaRole.REVIEWER, ActionType.WRITE_APPLICATION): False,
+    # manage_config: enterprise architect only (v1.1.0)
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.MANAGE_CONFIG): True,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.MANAGE_CONFIG): False,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.MANAGE_CONFIG): False,
+    (PersonaRole.REVIEWER, ActionType.MANAGE_CONFIG): False,
 }
 
 
@@ -152,8 +167,8 @@ def test_require_action_logs_warning_on_denial(caplog: pytest.LogCaptureFixture)
 
 
 def test_permissions_version_constant() -> None:
-    """PERMISSIONS_VERSION exists and is 1.0.0 — any permission change must bump it."""
-    assert PERMISSIONS_VERSION == "1.0.0"
+    """PERMISSIONS_VERSION exists and is 1.1.0 — any permission change must bump it."""
+    assert PERMISSIONS_VERSION == "1.1.0"
 
 
 # ── US3: Per-action confirmation requirements ────────────────────────────────
@@ -168,6 +183,9 @@ _CONFIRMATION_EXPECTED: dict[ActionType, bool] = {
     ActionType.AMEND_STANDARD: True,
     ActionType.MANAGE_ROLES: True,
     ActionType.EXPORT_DESIGN: True,
+    ActionType.WRITE_BUSINESS_ARCH: False,
+    ActionType.WRITE_APPLICATION: False,
+    ActionType.MANAGE_CONFIG: False,
 }
 
 

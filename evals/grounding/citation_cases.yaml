@@ -1,0 +1,40 @@
+# Golden cases for recommendation grounding (adp.recommendation.steps.validate_citations_step).
+# knowledge_index maps the item_ids that exist in the knowledge base to a version.
+# An option is expected advisory when it has no citations or any unresolvable one.
+
+- id: all-citations-valid
+  kind: grounding
+  knowledge_index: {KB-001: "1", KB-002: "1", KB-003: "2"}
+  options:
+    - option_id: OPT-001
+      grounded_on: [KB-001, KB-002]
+      expected_advisory: false
+      expected_citations: [KB-001, KB-002]
+
+- id: unresolvable-citation-marks-advisory
+  kind: grounding
+  knowledge_index: {KB-001: "1"}
+  options:
+    - option_id: OPT-001
+      grounded_on: [KB-001, KB-999]
+      expected_advisory: true
+
+- id: no-citations-is-advisory
+  kind: grounding
+  knowledge_index: {KB-001: "1"}
+  options:
+    - option_id: OPT-001
+      grounded_on: []
+      expected_advisory: true
+
+- id: mixed-options
+  kind: grounding
+  knowledge_index: {KB-010: "1", KB-011: "1"}
+  options:
+    - option_id: OPT-001
+      grounded_on: [KB-010, KB-011]
+      expected_advisory: false
+      expected_citations: [KB-010, KB-011]
+    - option_id: OPT-002
+      grounded_on: [KB-010, KB-404]
+      expected_advisory: true

@@ -483,7 +483,7 @@ Authentication is implemented via `AuthMiddleware` (Starlette middleware) that v
 
 `ADP_AUTH_ENABLED` (default: `true`) is the runtime toggle. Setting `ADP_AUTH_ENABLED=false` bypasses validation, which is required for local development without Keycloak and for the real-stack E2E test suite.
 
-Authorisation is role-based, aligned to the architect and reviewer personas, controlling who can confirm requirements, accept recommendations, and override verdicts.
+Authorisation is **action-based**, not a linear role hierarchy: the `PERMISSION_GRANTS` table (`adp.authz.permissions`, version 1.1.0) maps each `PersonaRole` to the set of `ActionType`s it may perform — so a reviewer may `OVERRIDE_VERDICT` yet not `WRITE_DESIGN`. Enforcement is wired at the HTTP layer by a single application-level FastAPI dependency (`adp.authz.enforcement.enforce_route_permission`) installed on the app: every mutating route resolves to a required `ActionType` (via an explicit design/intake/recommend map plus prefix rules for the business, application, and knowledge routers) and a caller lacking that grant is refused with `403` before the endpoint runs. Safe methods (GET/HEAD/OPTIONS) are never gated. A completeness test fails CI if any mutating route ships without a mapped action, keeping the policy exhaustive. When `ADP_AUTH_ENABLED=false`, the caller is the `ENTERPRISE_ARCHITECT` sentinel (all actions), so local development and the auth-disabled E2E suite are unaffected.
 
 The frontend reads `VITE_AUTH_ENABLED` to decide whether to attach Bearer tokens via the Keycloak JS adapter. When auth is enabled, all API mutations go through `apiMutation()`, which injects the `Authorization: Bearer <token>` header from the Keycloak token store.
 
@@ -546,6 +546,8 @@ ADP is tested at three levels:
 **Real-stack E2E tests** (`npm run test:e2e:flows`): Playwright browser tests that run the full stack — Vite dev server + uvicorn + real PostgreSQL — with no API mocking. Cover design creation, knowledge item lifecycle (create → delete), portfolio and governance navigation, and API smoke checks against all new routers. These tests exposed and drove fixes for three pre-existing production bugs: asyncpg NULL-parameter SQL syntax errors in `governance.py` and `portfolio.py`, and a missing SQLAlchemy Table column definition in `records.py`.
 
 All 18 API E2E tests and 4 browser E2E tests pass against the running system with `ADP_AUTH_ENABLED=false`.
+
+**AI-quality eval harness** (`adp-eval` / `pytest tests/eval`): Because the platform gates real work on two AI decision surfaces — the LLM-as-Judge verdict and recommendation grounding — those surfaces are themselves evaluated against a golden fixture set (`evals/`). The harness in `adp.eval` drives the *real* product code — the deterministic `adp.validation.gate.gate` and `adp.recommendation.steps.validate_citations_step` — rather than reimplementing it, so it is a regression guard on the decision logic: judge cases assert the pass/fail/indeterminate a labeled finding set must produce, and grounding cases assert that valid citations are retained while unresolvable ones correctly mark an option advisory (scored by citation precision/recall). It requires no live LLM, runs in CI via the test suite (and can be run standalone as a gate with `adp-eval --gate`), and the same scorer can be pointed at live-LLM pipeline output to measure model quality directly.
 
 ## Deployment Architecture
 
