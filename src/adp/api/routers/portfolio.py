@@ -144,7 +144,7 @@ async def get_portfolio_designs(
             {where}
             ORDER BY d.title
             LIMIT :limit OFFSET :offset
-            """
+            """  # nosec B608 - filter clauses are hardcoded; values bound as params
         ),
         {**filter_params, "limit": page_size, "offset": offset},
     )

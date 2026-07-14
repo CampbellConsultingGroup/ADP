@@ -218,7 +218,7 @@ async def export_activity_csv(
             JOIN designs d ON d.id = ae.design_id
             WHERE ae.timestamp BETWEEN :from_dt AND :to_dt{filter_sql}
             ORDER BY ae.timestamp DESC
-            """
+            """  # nosec B608 - action/actor clauses are hardcoded; values bound as params
         ),
         params,
     )
@@ -272,7 +272,7 @@ async def get_activity_feed(
             SELECT COUNT(*) AS total
             FROM audit_entries ae
             WHERE ae.timestamp BETWEEN :from_dt AND :to_dt{filter_sql}
-            """
+            """  # nosec B608 - action/actor clauses are hardcoded; values bound as params
         ),
         base_params,
     )
@@ -289,7 +289,7 @@ async def get_activity_feed(
             WHERE ae.timestamp BETWEEN :from_dt AND :to_dt{filter_sql}
             ORDER BY ae.timestamp DESC
             LIMIT :limit OFFSET :offset
-            """
+            """  # nosec B608 - action/actor clauses are hardcoded; values bound as params
         ),
         {**base_params, "limit": page_size, "offset": offset},
     )
