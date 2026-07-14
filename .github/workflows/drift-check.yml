@@ -80,7 +80,9 @@ jobs:
 
     services:
       postgres:
-        image: postgres:16-alpine
+        # pgvector image (not plain postgres) so migration 002's
+        # `CREATE EXTENSION vector` succeeds.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_DB: adp
           POSTGRES_USER: adp_user
