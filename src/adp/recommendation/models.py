@@ -109,6 +109,9 @@ class RecommendationState(TypedDict, total=False):
     design_id: str
     requirement_ids: list[str]
     requirements: list[Any]  # list[Requirement] — typed loosely to avoid circular
+    # ADP-SPEC intake framing (from the design) — inputs to generation.
+    business_problem: str | None
+    desired_outcome: str | None
     retrieved_knowledge: list[Any]  # list[RetrievalResultEntry]
     reuse_candidates: list[Any]  # list[ReuseCandidate] — existing apps to reuse
     candidate_options: list[SolutionOption]
