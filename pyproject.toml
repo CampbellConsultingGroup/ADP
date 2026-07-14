@@ -46,6 +46,7 @@ dev = [
     "pytest==9.0.3",
     "pytest-cov==7.1.0",
     "pytest-asyncio==1.3.0",
+    "aiosqlite>=0.20",  # async SQLite driver for DB-backed contract/unit tests
     "testcontainers[postgres]>=4.0",
     "ruff==0.15.20",
     "mypy==2.1.0",
