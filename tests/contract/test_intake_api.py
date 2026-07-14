@@ -96,6 +96,51 @@ def test_submit_intake_bulk_text_returns_202(client):
     assert body["design_id"] == "D-001"
 
 
+def test_submit_intake_persists_business_problem_and_outcome(client):
+    """ADP-SPEC intake framing is persisted to the canonical model via the store."""
+    c, mock_store, _ = client
+    resp = c.post("/api/v1/designs/D-001/intake", json={
+        "mode": "bulk_text",
+        "text": "The system must handle 10,000 concurrent users without degradation.",
+        "business_problem": "Checkout latency loses sales at peak.",
+        "desired_outcome": "Sub-second checkout at 10k concurrent users.",
+    })
+    assert resp.status_code == 202
+    mock_store.save.assert_awaited_once()
+    saved = mock_store.save.call_args.args[0]
+    assert saved.business_problem == "Checkout latency loses sales at peak."
+    assert saved.desired_outcome == "Sub-second checkout at 10k concurrent users."
+
+
+def test_submit_intake_framing_only_completes_without_extraction(client):
+    """Framing with no known-requirements text persists and completes (no extraction)."""
+    c, mock_store, mock_op_store = client
+    resp = c.post("/api/v1/designs/D-001/intake", json={
+        "mode": "bulk_text",
+        "business_problem": "Manual reporting is slow.",
+        "desired_outcome": "Self-serve analytics.",
+    })
+    assert resp.status_code == 202
+    assert resp.json()["status"] == "completed"
+    mock_store.save.assert_awaited_once()
+    # The operation is marked completed rather than left pending for extraction.
+    assert any(
+        call.kwargs.get("status") == "completed"
+        for call in mock_op_store.update.await_args_list
+    )
+
+
+def test_submit_intake_without_framing_does_not_save(client):
+    """Existing bulk_text callers (no framing) don't trigger a design save."""
+    c, mock_store, _ = client
+    resp = c.post("/api/v1/designs/D-001/intake", json={
+        "mode": "bulk_text",
+        "text": "The system must handle 10,000 concurrent users without degradation.",
+    })
+    assert resp.status_code == 202
+    mock_store.save.assert_not_awaited()
+
+
 def test_get_intake_status_returns_200(client):
     from unittest.mock import AsyncMock
     c, _, op_store = client

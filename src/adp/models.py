@@ -15,7 +15,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 # ── Schema version ──────────────────────────────────────────────────────────
 
-SCHEMA_VERSION = "1.0.0"
+# 1.1.0 — added ArchitectureDescription.business_problem + desired_outcome
+#         (additive, Optional; backward-compatible with 1.0.0 designs).
+SCHEMA_VERSION = "1.1.0"
 
 # ── Identifier type aliases ──────────────────────────────────────────────────
 
@@ -174,6 +176,10 @@ class ArchitectureDescription(_BaseModel):
     id: str = Field(min_length=1)
     title: str = Field(min_length=1, max_length=200)
     description: str | None = None
+    # ADP-SPEC intake framing (persisted; inputs to recommendation). Optional for
+    # backward compatibility with designs created before schema 1.1.0.
+    business_problem: str | None = None
+    desired_outcome: str | None = None
     requirements: list[Requirement] = Field(default_factory=list)
     elements: list[Element] = Field(default_factory=list)
     relationships: list[Relationship] = Field(default_factory=list)

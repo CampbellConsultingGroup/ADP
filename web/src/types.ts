@@ -41,6 +41,8 @@ export interface ArchitectureDescription {
   id: string;
   schema_version: string;
   title: string;
+  business_problem?: string | null;
+  desired_outcome?: string | null;
   elements: Element[];
   relationships: Relationship[];
   requirements?: Requirement[];

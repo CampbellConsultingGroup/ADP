@@ -28,12 +28,17 @@ class DesignImporter:
             raise ValueError(f"Invalid JSON: {exc}") from exc
 
         found_version = data.get("schema_version", "<missing>")
-        if found_version != SCHEMA_VERSION:
+        # Same-major versions are import-compatible: minor bumps are additive
+        # (new Optional fields), so a 1.0.0 bundle loads cleanly into 1.1.0.
+        # A different major implies a breaking change and is rejected.
+        found_major = str(found_version).split(".", 1)[0]
+        current_major = SCHEMA_VERSION.split(".", 1)[0]
+        if found_major != current_major:
             raise ValueError(
                 f"Schema version {found_version!r} is not supported; "
                 f"current: {SCHEMA_VERSION!r}. "
-                "Re-export from an ADP instance running the current version, "
-                "or wait for a v2 migration."
+                "Re-export from an ADP instance running a compatible major version, "
+                "or wait for a migration."
             )
 
         # Pydantic raises ValidationError on schema violations

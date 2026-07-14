@@ -139,3 +139,25 @@ def test_schema_version_must_be_semver() -> None:
             created_at=_NOW,
             updated_at=_NOW,
         )
+
+
+def test_intake_framing_defaults_none_and_round_trips():
+    """business_problem/desired_outcome default to None (backward compat) and
+    survive the model_dump -> model_validate round-trip the DesignStore relies on."""
+    # Backward compatibility: a design without the new fields loads fine.
+    legacy = ArchitectureDescription(
+        schema_version="1.0.0", id="D-001", title="T", created_at=_NOW, updated_at=_NOW,
+    )
+    assert legacy.business_problem is None
+    assert legacy.desired_outcome is None
+
+    # Round-trip (mirrors how the store serializes to / loads from JSONB).
+    described = ArchitectureDescription(
+        schema_version="1.1.0", id="D-002", title="T",
+        business_problem="Peak-hour checkout latency loses sales.",
+        desired_outcome="Sub-second checkout at 10k concurrent users.",
+        created_at=_NOW, updated_at=_NOW,
+    )
+    reloaded = ArchitectureDescription.model_validate(described.model_dump(mode="json"))
+    assert reloaded.business_problem == "Peak-hour checkout latency loses sales."
+    assert reloaded.desired_outcome == "Sub-second checkout at 10k concurrent users."

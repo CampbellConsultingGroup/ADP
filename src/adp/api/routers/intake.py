@@ -11,7 +11,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
@@ -34,26 +34,28 @@ class IntakeSubmitRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     mode: Literal["bulk_text", "structured_form"]
-    text: str
+    # Known-requirements free-text. Optional: empty means no requirements to
+    # extract (the caller may be submitting only the framing fields below).
+    text: str = ""
     kind: RequirementKind | None = None
     # Optional model override — if not provided, uses the globally configured extraction model
     model: str | None = None
+    # ADP-SPEC intake framing — persisted to the canonical model (inputs to
+    # recommendation). Required in the UI; optional here so existing bulk_text /
+    # structured_form callers are unaffected.
+    business_problem: str | None = None
+    desired_outcome: str | None = None
 
-    @field_validator("text")
-    @classmethod
-    def _validate_text_length(cls, v: str, info: Any) -> str:
-        # Avoid wasting an LLM call on trivially short text
-        mode = (info.data or {}).get("mode", "bulk_text")
-        if mode == "bulk_text" and len(v) < 20:
+    @model_validator(mode="after")
+    def _validate(self) -> "IntakeSubmitRequest":
+        if self.mode == "structured_form" and self.kind is None:
+            raise ValueError("kind is required when mode is 'structured_form'")
+        # Avoid wasting an LLM call on trivially short text; empty is allowed
+        # (no known requirements) and simply skips extraction.
+        if self.mode == "bulk_text" and self.text and len(self.text) < 20:
             raise ValueError(
                 "text is too short for extraction (minimum 20 characters for bulk_text mode)"
             )
-        return v
-
-    @model_validator(mode="after")
-    def _require_kind_for_structured(self) -> "IntakeSubmitRequest":
-        if self.mode == "structured_form" and self.kind is None:
-            raise ValueError("kind is required when mode is 'structured_form'")
         return self
 
 
@@ -247,13 +249,24 @@ async def submit_intake(
     """
     from adp.store.store import DesignNotFoundError  # type: ignore[attr-defined]
     try:
-        await store.get(design_id)
+        design = await store.get(design_id)
     except DesignNotFoundError:
         raise HTTPException(status_code=404, detail=f"Design {design_id!r} not found")
 
+    actor = _get_actor(raw_request)
+
+    # ADP-SPEC: persist intake framing to the canonical model. Round-trips via
+    # DesignStore (a new immutable design version). Raw source text is NOT stored.
+    if request.business_problem is not None or request.desired_outcome is not None:
+        if request.business_problem is not None:
+            design.business_problem = request.business_problem
+        if request.desired_outcome is not None:
+            design.desired_outcome = request.desired_outcome
+        design.updated_at = datetime.now(timezone.utc)
+        await store.save(design, actor=actor)
+
     operation_id = str(uuid.uuid4())
     correlation_id = raw_request.headers.get("X-Trace-ID", get_trace_id() or str(uuid.uuid4()))
-    actor = _get_actor(raw_request)
 
     await op_store.create(operation_id, "intake", design_id, actor, {
         "proposals": {},
@@ -262,17 +275,28 @@ async def submit_intake(
         "error_description": None,
     })
 
-    submission = IntakeSubmission(
-        submission_id=str(uuid.uuid4()),
-        mode=SubmissionMode(request.mode),
-        text=request.text,
-        submitted_by=actor,
-        submitted_at=datetime.now(timezone.utc),
-        operation_id=operation_id,
-    )
-
-    orchestrator = _make_orchestrator(model=request.model)
-    background_tasks.add_task(orchestrator.run, submission, op_store)
+    # Extraction only runs when there is known-requirements text to extract.
+    has_text = bool(request.text and request.text.strip())
+    if has_text:
+        submission = IntakeSubmission(
+            submission_id=str(uuid.uuid4()),
+            mode=SubmissionMode(request.mode),
+            text=request.text,
+            submitted_by=actor,
+            submitted_at=datetime.now(timezone.utc),
+            operation_id=operation_id,
+        )
+        orchestrator = _make_orchestrator(model=request.model)
+        background_tasks.add_task(orchestrator.run, submission, op_store)
+        op_status = "pending"
+    else:
+        # Nothing to extract — the caller submitted only framing fields.
+        await op_store.update(
+            operation_id,
+            status="completed",
+            payload_patch={"result_summary": "No known requirements provided; framing saved."},
+        )
+        op_status = "completed"
 
     logger.info(
         "intake.submit",
@@ -282,6 +306,7 @@ async def submit_intake(
             "operation_id": operation_id,
             "mode": request.mode,
             "correlation_id": correlation_id,
+            "extraction": has_text,
         },
     )
 
@@ -289,7 +314,7 @@ async def submit_intake(
         operation_id=operation_id,
         design_id=design_id,
         mode=request.mode,
-        status="pending",
+        status=op_status,
     )
 
 
