@@ -26,6 +26,7 @@ from adp.api.routers import (
     reasoning,
     recommend,
     render,
+    search,
     tags,
     theme,
 )
@@ -181,6 +182,7 @@ def create_app() -> FastAPI:
     app.include_router(tags.router)
     app.include_router(config.router)
     app.include_router(business_router_module.router)
+    app.include_router(search.router)
     app.include_router(applications_router)
     app.include_router(tech_caps_router)
     app.include_router(integrations_router)

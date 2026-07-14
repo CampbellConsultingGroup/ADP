@@ -49,6 +49,12 @@ from adp.application.models import (
     TechnicalCapabilityCreate,
     TechnicalCapabilityUpdate,
 )
+from adp.search import (
+    ENTITY_TECHNICAL_CAPABILITY,
+    build_text,
+    index_entity,
+    unindex_entity,
+)
 
 # ── Table definitions (SQLAlchemy Core — no ORM mapper) ──────────────────────
 
@@ -366,6 +372,9 @@ async def create_technical_capability(
         level=level,
         created_at=now,
     )
+    await index_entity(
+        ENTITY_TECHNICAL_CAPABILITY, tc_id, build_text(body.name, body.description), session
+    )
     return tc
 
 
@@ -388,7 +397,13 @@ async def update_technical_capability(
         await session.execute(
             _tech_caps.update().where(_tech_caps.c.id == tc_id).values(**updates)
         )
-    return await get_technical_capability(tc_id, session)
+    refreshed = await get_technical_capability(tc_id, session)
+    if refreshed is not None:
+        await index_entity(
+            ENTITY_TECHNICAL_CAPABILITY, tc_id,
+            build_text(refreshed.name, refreshed.description), session,
+        )
+    return refreshed
 
 
 async def delete_technical_capability(tc_id: str, session: AsyncSession) -> bool:
@@ -405,7 +420,10 @@ async def delete_technical_capability(tc_id: str, session: AsyncSession) -> bool
     result = await session.execute(
         _tech_caps.delete().where(_tech_caps.c.id == tc_id)
     )
-    return _rowcount(result) > 0
+    deleted = _rowcount(result) > 0
+    if deleted:
+        await unindex_entity(ENTITY_TECHNICAL_CAPABILITY, tc_id, session)
+    return deleted
 
 
 # ── Application–Business Capability Links (US2) ───────────────────────────────

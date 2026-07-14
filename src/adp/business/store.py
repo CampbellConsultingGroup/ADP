@@ -45,6 +45,12 @@ from adp.business.models import (
     ValueStreamStageUpdate,
     ValueStreamUpdate,
 )
+from adp.search import (
+    ENTITY_BUSINESS_CAPABILITY,
+    build_text,
+    index_entity,
+    unindex_entity,
+)
 
 # ── Table definitions (SQLAlchemy Core — no ORM mapper needed) ────────────────
 
@@ -265,6 +271,9 @@ async def create_capability(
             updated_at=now,
         )
     )
+    await index_entity(
+        ENTITY_BUSINESS_CAPABILITY, cap_id, build_text(data.name, data.description), session
+    )
     return BusinessCapability(
         id=cap_id,
         name=data.name.strip(),
@@ -298,6 +307,11 @@ async def update_capability(
         _capabilities.update().where(_capabilities.c.id == cap_id).values(**updates)
     )
     refreshed = await get_capability(cap_id, session)
+    if refreshed is not None:
+        await index_entity(
+            ENTITY_BUSINESS_CAPABILITY, cap_id,
+            build_text(refreshed.name, refreshed.description), session,
+        )
     return refreshed
 
 
@@ -315,7 +329,10 @@ async def delete_capability(cap_id: str, session: AsyncSession) -> bool:
     result2 = await session.execute(
         _capabilities.delete().where(_capabilities.c.id == cap_id)
     )
-    return _rowcount(result2) > 0
+    deleted = _rowcount(result2) > 0
+    if deleted:
+        await unindex_entity(ENTITY_BUSINESS_CAPABILITY, cap_id, session)
+    return deleted
 
 
 # ── Value Stream CRUD ─────────────────────────────────────────────────────────
