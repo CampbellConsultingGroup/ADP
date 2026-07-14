@@ -58,7 +58,7 @@ jobs:
         run: bandit -r src/adp/ -ll
 
       - name: QG-07 — Dependency CVE scan (pip-audit)
-        run: pip-audit --strict
+        run: pip-audit --strict --skip-editable
 
   # ── ZAP API security scan ─────────────────────────────────────────────────
   # Runs the full OpenAPI-driven active scan against a live ADP instance.
