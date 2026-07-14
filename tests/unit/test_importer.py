@@ -51,6 +51,21 @@ def test_import_wrong_schema_version_rejected():
         DesignImporter().import_from_json(json.dumps(data))
 
 
+def test_import_older_minor_version_accepted():
+    """Same-major, older-minor bundles import cleanly (additive fields). A 1.0.0
+    bundle (no business_problem/desired_outcome) loads into the current schema."""
+    from adp.export.importer import DesignImporter
+
+    data = _make_valid_dict()
+    data["schema_version"] = "1.0.0"  # older minor than current (1.1.0), same major
+
+    reimported = DesignImporter().import_from_json(json.dumps(data))
+
+    assert reimported.id == "D-001"
+    assert reimported.business_problem is None
+    assert reimported.desired_outcome is None
+
+
 def test_import_malformed_json_rejected():
     from adp.export.importer import DesignImporter
 

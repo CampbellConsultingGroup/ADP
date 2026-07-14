@@ -35,4 +35,4 @@ def test_schema_has_required_top_level_fields(schema: dict) -> None:  # type: ig
     assert "$id" in schema
     assert "title" in schema
     assert "schema_version" in schema
-    assert schema["schema_version"] == "1.0.0"
+    assert schema["schema_version"] == "1.1.0"

@@ -10,9 +10,12 @@ export type RequirementKind = "functional" | "non_functional" | "constraint" | "
 
 export interface IntakeSubmitRequest {
   mode: IntakeMode;
-  text: string;
+  text?: string;  // known-requirements free-text; optional (empty => no extraction)
   kind?: RequirementKind;
   model?: string;  // optional model override; uses server-configured default if omitted
+  // ADP-SPEC intake framing — persisted to the canonical model; required in the UI.
+  business_problem?: string;
+  desired_outcome?: string;
 }
 
 export interface IntakeSubmitResponse {

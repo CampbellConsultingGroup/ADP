@@ -1,0 +1,5 @@
+# Generated JSON schemas are emitted with LF by `adp-generate`. Pin LF so the
+# QG-02 drift gate (`adp-generate --check`) is deterministic across platforms
+# (WSL/Windows) and CRLF checkouts don't produce spurious drift.
+generated/*.json text eol=lf
+src/adp/theme/c4-theme.schema.json text eol=lf

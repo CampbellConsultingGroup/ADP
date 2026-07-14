@@ -322,6 +322,8 @@ async def generate_step(
     user = generation_user_prompt(
         req_list, knowledge_summary, option_count, has_knowledge=has_knowledge,
         reuse_summary=_reuse_summary(reuse_candidates), has_reuse=has_reuse,
+        business_problem=state.get("business_problem"),
+        desired_outcome=state.get("desired_outcome"),
     )
 
     input_tokens = 0

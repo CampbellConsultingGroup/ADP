@@ -61,29 +61,43 @@ def generation_user_prompt(
     has_knowledge: bool = True,
     reuse_summary: str = "",
     has_reuse: bool = False,
+    business_problem: str | None = None,
+    desired_outcome: str | None = None,
 ) -> str:
     """Build the generation user prompt.
 
     ADP-SPEC-019: when has_knowledge=False, omit the citation instruction and
     substitute a clear "no KB available" notice so the LLM does not hallucinate IDs.
     ADP-SPEC-007: when has_reuse=True, list existing applications the option may reuse.
+    ADP-SPEC intake framing: business problem + desired outcome frame the options.
     """
     reuse_block = (
         f"EXISTING APPLICATIONS YOU MAY REUSE:\n{reuse_summary}\n\n" if has_reuse else ""
     )
+    framing_parts = []
+    if business_problem and business_problem.strip():
+        framing_parts.append(f"BUSINESS PROBLEM:\n{business_problem.strip()}")
+    if desired_outcome and desired_outcome.strip():
+        framing_parts.append(f"DESIRED OUTCOME:\n{desired_outcome.strip()}")
+    framing_block = ("\n\n".join(framing_parts) + "\n\n") if framing_parts else ""
+
     if has_knowledge:
         return (
+            f"{framing_block}"
             f"REQUIREMENTS:\n{requirements_list}\n\n"
             f"RELEVANT KNOWLEDGE:\n{knowledge_summary}\n\n"
             f"{reuse_block}"
-            f"Generate {option_count} distinct solution options that address these requirements."
+            f"Generate {option_count} distinct solution options that solve the business "
+            "problem, achieve the desired outcome, and address these requirements."
         )
     return (
+        f"{framing_block}"
         f"REQUIREMENTS:\n{requirements_list}\n\n"
         "NO PRIOR KNOWLEDGE BASE ENTRIES AVAILABLE — generate options based on the "
         f"requirements alone using general architectural expertise.\n\n"
         f"{reuse_block}"
-        f"Generate {option_count} distinct solution options that address these requirements."
+        f"Generate {option_count} distinct solution options that solve the business "
+        "problem, achieve the desired outcome, and address these requirements."
     )
 
 

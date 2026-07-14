@@ -66,16 +66,20 @@ function RejectedRequirementsSection({ proposals }: { proposals: ProposalRespons
 export default function IntakePage({ designId, onNavigate }: IntakePageProps): React.ReactElement {
   const [activeTab, setActiveTab] = useState<Tab>("bulk");
   const [operationId, setOperationId] = useState<string | null>(null);
+  const [extractionRequested, setExtractionRequested] = useState(false);
   const { data: statusData } = useIntakeStatus(designId, operationId);
 
   const status = statusData?.status;
   const allProposals = statusData?.proposals ?? [];
   // Only show pending proposals in the review panel (FR-002); confirmed/rejected are removed
   const pendingProposals = allProposals.filter((p) => p.status === "pending");
-  const noLlm = status === "completed" && allProposals.length === 0;
+  // "nothing extracted" only applies when extraction was actually requested.
+  const noLlm = status === "completed" && allProposals.length === 0 && extractionRequested;
+  // framing-only submit (no Known Requirements) completes with no proposals.
+  const framingSaved = status === "completed" && allProposals.length === 0 && !extractionRequested;
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: "bulk", label: "Bulk Text" },
+    { id: "bulk", label: "Guided Intake" },
     { id: "form", label: "Structured Form" },
     { id: "settings", label: "⚙ LLM Settings" },
   ];
@@ -107,10 +111,21 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
             {activeTab === "bulk" && (
               <div>
-                <IntakeTextForm designId={designId} onOperationCreated={setOperationId} />
+                <IntakeTextForm
+                  designId={designId}
+                  onOperationCreated={(opId, extraction) => {
+                    setOperationId(opId);
+                    setExtractionRequested(extraction);
+                  }}
+                />
 
                 {operationId && status === "running" && (
                   <div style={{ marginTop: 16, color: "var(--accent)", fontSize: 13 }}>⏳ Extracting requirements...</div>
+                )}
+                {framingSaved && (
+                  <div className="ui-alert good" style={{ marginTop: 16 }}>
+                    ✓ Intake saved — business problem and desired outcome recorded. Add Known Requirements above to extract typed requirements.
+                  </div>
                 )}
                 {operationId && status === "failed" && (
                   <div className="ui-alert crit" style={{ marginTop: 16 }}>

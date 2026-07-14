@@ -131,6 +131,8 @@ class RecommendationOrchestrator:
                 "design_id": design_id,
                 "requirement_ids": requirement_ids,
                 "requirements": requirements,
+                "business_problem": design.business_problem,
+                "desired_outcome": design.desired_outcome,
                 "retrieved_knowledge": [],
                 "reuse_candidates": [],
                 "candidate_options": [],
