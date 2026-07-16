@@ -143,7 +143,12 @@ jobs:
         run: docker pull ghcr.io/zaproxy/zaproxy:stable
 
       - name: Create ZAP report directory
-        run: mkdir -p zap-reports
+        # World-writable so the ZAP container (runs as uid 1000) can write the
+        # report into the mounted volume — otherwise zap-api-scan.py aborts with
+        # "Permission denied: /zap/wrk/zap-report.html" and exits 3.
+        run: |
+          mkdir -p zap-reports
+          chmod 777 zap-reports
 
       - name: Run ZAP API scan
         # --network host lets ZAP reach localhost:8001 directly on Linux runners
@@ -165,9 +170,10 @@ jobs:
               2>&1 | tee zap-output.txt
           ZAP_EXIT=${PIPESTATUS[0]}
           echo "ZAP exit code: $ZAP_EXIT"
-          # Exit code 2 = warnings only → pass; 3 = failures → fail
-          if [ "$ZAP_EXIT" -eq 3 ]; then
-            echo "::error::ZAP found FAIL-threshold security issues — see zap-report.html"
+          # zap-api-scan.py exit codes: 0 = clean, 2 = warnings only (pass, via -I).
+          # 1 = FAIL-threshold alert(s); 3 = scan could not complete. Both are failures.
+          if [ "$ZAP_EXIT" -eq 1 ] || [ "$ZAP_EXIT" -eq 3 ]; then
+            echo "::error::ZAP found FAIL-threshold issues or could not complete — see zap-report.html"
             exit 1
           fi
 
