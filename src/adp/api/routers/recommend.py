@@ -482,12 +482,25 @@ async def start_recommendation(
     from adp.store.store import DesignNotFoundError  # type: ignore[attr-defined]
 
     try:
-        await store.get(design_id)
+        design = await store.get(design_id)
     except DesignNotFoundError:
         raise HTTPException(status_code=404, detail=f"Design {design_id!r} not found")
     except Exception as exc:
         logger.error("recommend: unexpected store error for design %s: %s", design_id, exc)
         raise HTTPException(status_code=503, detail="Service temporarily unavailable")
+
+    # Reject requirement IDs that don't exist on the design. The pipeline otherwise
+    # drops unknown IDs silently (r.id in req_id_set), producing a vacuous run with
+    # no requirements. Failing fast gives callers a clear error and makes the
+    # endpoint differentiate valid vs. invalid input deterministically — which also
+    # clears a ZAP boolean-blind SQLi false positive on requirement_ids (ADP-7z1).
+    known_ids = {r.id for r in design.requirements}
+    unknown_ids = [rid for rid in request.requirement_ids if rid not in known_ids]
+    if unknown_ids:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unknown requirement IDs for design {design_id!r}: {unknown_ids}",
+        )
 
     operation_id = str(uuid.uuid4())
     correlation_id = raw_request.headers.get("X-Trace-ID", get_trace_id() or str(uuid.uuid4()))
