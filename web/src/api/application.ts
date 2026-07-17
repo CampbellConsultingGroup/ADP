@@ -19,6 +19,8 @@ export interface Application {
   r_strategy: RStrategy | null;
   pace_layer: PaceLayer | null;
   health_score: number | null;
+  business_value: number | null;
+  business_criticality: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -32,12 +34,32 @@ export interface ApplicationCreate {
   r_strategy?: RStrategy | null;
   pace_layer?: PaceLayer | null;
   health_score?: number | null;
+  business_value?: number | null;
+  business_criticality?: number | null;
 }
 
 export interface ApplicationUpdate extends Partial<ApplicationCreate> {}
 
 export interface ApplicationListResponse {
   items: Application[];
+  total: number;
+}
+
+// ── Rationalization (APM US1) ─────────────────────────────────────────────────
+
+export type Quadrant = "tolerate" | "invest" | "migrate" | "eliminate";
+
+export interface RationalizationEntry {
+  app_id: string;
+  name: string;
+  business_value: number | null;
+  health_score: number | null;
+  quadrant: Quadrant | null;
+}
+
+export interface RationalizationResponse {
+  assessed: RationalizationEntry[];
+  unassessed: RationalizationEntry[];
   total: number;
 }
 
@@ -139,12 +161,22 @@ export function useApplication(id: string) {
   });
 }
 
+export function useRationalization() {
+  return useQuery<RationalizationResponse>({
+    queryKey: ["rationalization"],
+    queryFn: () => apiFetch(`${API}/applications/rationalization`),
+  });
+}
+
 export function useCreateApplication() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: ApplicationCreate) =>
       apiFetch<Application>(`${API}/applications`, { method: "POST", body: JSON.stringify(body) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["applications"] });
+      qc.invalidateQueries({ queryKey: ["rationalization"] });
+    },
   });
 }
 
@@ -156,6 +188,7 @@ export function useUpdateApplication(id: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["applications"] });
       qc.invalidateQueries({ queryKey: ["applications", id] });
+      qc.invalidateQueries({ queryKey: ["rationalization"] });
     },
   });
 }

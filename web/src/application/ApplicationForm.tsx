@@ -21,16 +21,20 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
   const [rStrategy, setRStrategy] = useState<string>(initial?.r_strategy ?? "");
   const [pace, setPace] = useState<string>(initial?.pace_layer ?? "");
   const [health, setHealth] = useState<string>(initial?.health_score?.toString() ?? "");
+  const [bizValue, setBizValue] = useState<string>(initial?.business_value?.toString() ?? "");
+  const [bizCrit, setBizCrit] = useState<string>(initial?.business_criticality?.toString() ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) { setError("Name is required"); return; }
     const healthNum = health ? parseInt(health, 10) : null;
-    if (healthNum !== null && (healthNum < 1 || healthNum > 5)) {
-      setError("Health score must be 1–5");
-      return;
-    }
+    const bvNum = bizValue ? parseInt(bizValue, 10) : null;
+    const bcNum = bizCrit ? parseInt(bizCrit, 10) : null;
+    const outOfRange = (v: number | null) => v !== null && (v < 1 || v > 5);
+    if (outOfRange(healthNum)) { setError("Health score must be 1–5"); return; }
+    if (outOfRange(bvNum)) { setError("Business value must be 1–5"); return; }
+    if (outOfRange(bcNum)) { setError("Business criticality must be 1–5"); return; }
     setError(null);
     try {
       await onSave({
@@ -42,6 +46,8 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
         r_strategy: (rStrategy || null) as ApplicationCreate["r_strategy"],
         pace_layer: (pace || null) as ApplicationCreate["pace_layer"],
         health_score: healthNum,
+        business_value: bvNum,
+        business_criticality: bcNum,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -91,6 +97,14 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
 
       <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Health Score (1–5)
         <input style={field} type="number" min={1} max={5} value={health} onChange={e => setHealth(e.target.value)} placeholder="1–5" />
+      </label>
+
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Business Value (1–5)
+        <input style={field} type="number" min={1} max={5} value={bizValue} onChange={e => setBizValue(e.target.value)} placeholder="1–5" />
+      </label>
+
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Business Criticality (1–5)
+        <input style={field} type="number" min={1} max={5} value={bizCrit} onChange={e => setBizCrit(e.target.value)} placeholder="1–5" />
       </label>
 
       <div style={{ display: "flex", gap: 8 }}>
