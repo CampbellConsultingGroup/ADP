@@ -102,3 +102,50 @@ def test_reviewer_reads_are_open(app: FastAPI) -> None:
     """Safe methods are never gated — a reviewer is not 403'd on a GET."""
     resp = _client_as(app, PersonaRole.REVIEWER).get("/api/v1/knowledge")
     assert resp.status_code != 403
+
+
+# ── APM US3: sensitive risk & compliance reads ARE gated (the exception) ──────
+
+def test_reviewer_denied_risk_read(app: FastAPI) -> None:
+    """Risk fields are sensitive: a reviewer (no READ_APPLICATION_RISK) is 403'd."""
+    resp = _client_as(app, PersonaRole.REVIEWER).get("/api/v1/applications/X/risk")
+    assert resp.status_code == 403
+
+
+def test_reviewer_denied_out_of_support(app: FastAPI) -> None:
+    resp = _client_as(app, PersonaRole.REVIEWER).get(
+        "/api/v1/applications/risk/out-of-support"
+    )
+    assert resp.status_code == 403
+
+
+def test_reviewer_denied_risk_write(app: FastAPI) -> None:
+    """WRITE_APPLICATION_RISK overrides the /applications prefix (WRITE_APPLICATION)."""
+    resp = _client_as(app, PersonaRole.REVIEWER).put("/api/v1/applications/X/risk", json={})
+    assert resp.status_code == 403
+
+
+def test_risk_write_route_maps_to_sensitive_action() -> None:
+    from adp.authz.roles import ActionType
+    assert (
+        required_action_for("PUT", "/api/v1/applications/{app_id}/risk")
+        == ActionType.WRITE_APPLICATION_RISK
+    )
+
+
+def test_risk_action_grant_matrix() -> None:
+    from adp.authz.permissions import is_permitted
+    from adp.authz.roles import ActionType
+    assert is_permitted(PersonaRole.SOLUTION_ARCHITECT, ActionType.READ_APPLICATION_RISK)
+    assert is_permitted(PersonaRole.TECHNICAL_ARCHITECT, ActionType.WRITE_APPLICATION_RISK)
+    assert is_permitted(PersonaRole.ENTERPRISE_ARCHITECT, ActionType.READ_APPLICATION_RISK)
+    assert not is_permitted(PersonaRole.REVIEWER, ActionType.READ_APPLICATION_RISK)
+    assert not is_permitted(PersonaRole.REVIEWER, ActionType.WRITE_APPLICATION_RISK)
+
+
+async def test_risk_read_gate_allows_permitted_role() -> None:
+    """A permitted role passes the read-gate dependency without raising."""
+    from adp.authz.enforcement import require_action_dep
+    from adp.authz.roles import ActionType
+    dep = require_action_dep(ActionType.READ_APPLICATION_RISK)
+    await dep(user=_user(PersonaRole.SOLUTION_ARCHITECT))  # must not raise

@@ -69,6 +69,8 @@ _EXPLICIT_ROUTE_ACTIONS: dict[tuple[str, str], ActionType] = {
     ("POST", "/api/v1/designs/{design_id}/export"): ActionType.EXPORT_DESIGN,
     # Render produces a view (PNG) of the model — a read, not a mutation
     ("POST", "/api/v1/designs/{design_id}/render"): ActionType.READ_DESIGN,
+    # APM risk & compliance write (sensitive) — overrides the /applications prefix
+    ("PUT", "/api/v1/applications/{app_id}/risk"): ActionType.WRITE_APPLICATION_RISK,
     # LLM provider configuration is an admin action
     ("PUT", "/api/v1/config/llm"): ActionType.MANAGE_CONFIG,
 }
@@ -145,3 +147,26 @@ async def enforce_route_permission(
             status_code=403,
             detail=f"Role '{user.role.value}' is not permitted to {action.value}.",
         )
+
+
+def require_action_dep(action: ActionType):
+    """Build a FastAPI dependency that 403s unless the caller holds ``action``.
+
+    Use this to gate sensitive *reads*: the app-level enforcer intentionally
+    exempts safe methods (GET/HEAD/OPTIONS), so read authorization must be
+    attached per-route via ``dependencies=[Depends(require_action_dep(...))]``.
+    Under auth-disabled dev/test the caller is ENTERPRISE_ARCHITECT (holds every
+    action), so those environments are unaffected.
+    """
+
+    async def _dep(user: AuthenticatedUser = Depends(get_current_user)) -> None:
+        if not is_permitted(user.role, action):
+            _logger.warning(
+                "permission_denied role=%s action=%s (sensitive read)", user.role, action
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=f"Role '{user.role.value}' is not permitted to {action.value}.",
+            )
+
+    return _dep

@@ -15,6 +15,7 @@ ART-IX (SHOULD): structured logging used for all mutations.
 from __future__ import annotations
 
 import logging
+from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -39,6 +40,8 @@ from adp.application.models import (
     ApplicationIntegrationListResponse,
     ApplicationIntegrationUpdate,
     ApplicationListResponse,
+    ApplicationRisk,
+    ApplicationRiskUpdate,
     ApplicationStageLink,
     ApplicationStageLinkCreate,
     ApplicationStageLinksResponse,
@@ -50,6 +53,7 @@ from adp.application.models import (
     DuplicateAppDesignLinkError,
     DuplicateAppStageLinkError,
     DuplicateAppTechCapLinkError,
+    OutOfSupportResponse,
     RationalizationResponse,
     TechCapDepthError,
     TechCapHasChildrenError,
@@ -58,6 +62,8 @@ from adp.application.models import (
     TechnicalCapabilityCreate,
     TechnicalCapabilityUpdate,
 )
+from adp.authz.enforcement import require_action_dep
+from adp.authz.roles import ActionType
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +88,11 @@ async def _get_session():
     factory = astore._get_session_factory()
     async with factory() as session:
         yield session
+
+
+# Sensitive-read gate (APM US3): risk & compliance fields are not open to every
+# reader. The app-level enforcer exempts GETs, so gate these reads per-route.
+_require_risk_read = require_action_dep(ActionType.READ_APPLICATION_RISK)
 
 
 # ── Applications CRUD ─────────────────────────────────────────────────────────
@@ -155,6 +166,47 @@ async def delete_application(
     await session.commit()
     actor = _get_actor(request)
     logger.info("application.delete id=%s actor=%s", app_id, actor)
+
+
+# ── Application Risk & Compliance (APM US3, sensitive) ────────────────────────
+
+@applications_router.get(
+    "/risk/out-of-support",
+    response_model=OutOfSupportResponse,
+    dependencies=[Depends(_require_risk_read)],
+)
+async def list_out_of_support(session: AsyncSession = Depends(_get_session)):
+    """Applications whose end-of-support date is in the past."""
+    return await astore.list_out_of_support(session, date.today())
+
+
+@applications_router.get(
+    "/{app_id}/risk",
+    response_model=ApplicationRisk,
+    dependencies=[Depends(_require_risk_read)],
+)
+async def get_application_risk(app_id: str, session: AsyncSession = Depends(_get_session)):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    risk = await astore.get_application_risk(app_id, session)
+    return risk or ApplicationRisk()
+
+
+@applications_router.put("/{app_id}/risk", response_model=ApplicationRisk)
+async def put_application_risk(
+    app_id: str,
+    body: ApplicationRiskUpdate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    risk = await astore.upsert_application_risk(app_id, body, session)
+    await session.commit()
+    logger.info("application.risk.update id=%s actor=%s", app_id, _get_actor(request))
+    return risk
 
 
 # ── Application–Business Capability Links ─────────────────────────────────────
