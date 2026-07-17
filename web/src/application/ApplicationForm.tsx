@@ -11,6 +11,7 @@ interface Props {
 const TIME_OPTIONS = ["", "Tolerate", "Invest", "Migrate", "Eliminate"] as const;
 const R_OPTIONS = ["", "Rehost", "Replatform", "Repurchase", "Refactor", "Retire", "Retain", "Relocate"] as const;
 const PACE_OPTIONS = ["", "Record", "Differentiation", "Innovation"] as const;
+const LIFECYCLE_OPTIONS = ["planned", "active", "sunset", "retired"] as const;
 
 export default function ApplicationForm({ initial, onSave, onCancel, saving }: Props) {
   const [name, setName] = useState(initial?.name ?? "");
@@ -23,6 +24,10 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
   const [health, setHealth] = useState<string>(initial?.health_score?.toString() ?? "");
   const [bizValue, setBizValue] = useState<string>(initial?.business_value?.toString() ?? "");
   const [bizCrit, setBizCrit] = useState<string>(initial?.business_criticality?.toString() ?? "");
+  const [bizUnit, setBizUnit] = useState<string>(initial?.owning_business_unit ?? "");
+  const [bizOwner, setBizOwner] = useState<string>(initial?.business_owner ?? "");
+  const [techOwner, setTechOwner] = useState<string>(initial?.technical_owner ?? "");
+  const [lifecycle, setLifecycle] = useState<string>(initial?.lifecycle_status ?? "active");
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -48,6 +53,10 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
         health_score: healthNum,
         business_value: bvNum,
         business_criticality: bcNum,
+        owning_business_unit: bizUnit || null,
+        business_owner: bizOwner || null,
+        technical_owner: techOwner || null,
+        lifecycle_status: (lifecycle || "active") as ApplicationCreate["lifecycle_status"],
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -105,6 +114,24 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
 
       <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Business Criticality (1–5)
         <input style={field} type="number" min={1} max={5} value={bizCrit} onChange={e => setBizCrit(e.target.value)} placeholder="1–5" />
+      </label>
+
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Owning Business Unit
+        <input style={field} value={bizUnit} onChange={e => setBizUnit(e.target.value)} />
+      </label>
+
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Business Owner
+        <input style={field} value={bizOwner} onChange={e => setBizOwner(e.target.value)} />
+      </label>
+
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Technical Owner
+        <input style={field} value={techOwner} onChange={e => setTechOwner(e.target.value)} />
+      </label>
+
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Lifecycle Status
+        <select style={field} value={lifecycle} onChange={e => setLifecycle(e.target.value)}>
+          {LIFECYCLE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+        </select>
       </label>
 
       <div style={{ display: "flex", gap: 8 }}>

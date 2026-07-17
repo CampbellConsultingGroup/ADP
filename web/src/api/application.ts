@@ -8,6 +8,7 @@ export type PaceLayer = "Record" | "Differentiation" | "Innovation";
 export type UsageType = "provides" | "consumes";
 export type IntegrationDir = "inbound" | "outbound" | "bidirectional";
 export type AppIntegrationType = "API" | "event" | "file" | "database" | "messaging" | "other";
+export type LifecycleStatus = "planned" | "active" | "sunset" | "retired";
 
 export interface Application {
   id: string;
@@ -21,6 +22,10 @@ export interface Application {
   health_score: number | null;
   business_value: number | null;
   business_criticality: number | null;
+  owning_business_unit: string | null;
+  business_owner: string | null;
+  technical_owner: string | null;
+  lifecycle_status: LifecycleStatus;
   created_at: string;
   updated_at: string;
 }
@@ -36,6 +41,10 @@ export interface ApplicationCreate {
   health_score?: number | null;
   business_value?: number | null;
   business_criticality?: number | null;
+  owning_business_unit?: string | null;
+  business_owner?: string | null;
+  technical_owner?: string | null;
+  lifecycle_status?: LifecycleStatus;
 }
 
 export interface ApplicationUpdate extends Partial<ApplicationCreate> {}

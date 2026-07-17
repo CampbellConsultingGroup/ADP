@@ -30,6 +30,7 @@ const APP: Application = {
   primary_owner: "jane", time_classification: "Invest", r_strategy: "Refactor",
   pace_layer: "Differentiation", health_score: 4,
   business_value: null, business_criticality: null,
+  owning_business_unit: null, business_owner: null, technical_owner: null, lifecycle_status: "active",
   created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
 };
 

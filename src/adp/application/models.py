@@ -22,6 +22,9 @@ AppIntegrationType = Literal["API", "event", "file", "database", "messaging", "o
 Score15 = Annotated[int, Field(ge=1, le=5)]
 Quadrant = Literal["tolerate", "invest", "migrate", "eliminate"]
 
+# ADP-SPEC-038 (APM US2): explicit application lifecycle state.
+LifecycleStatus = Literal["planned", "active", "sunset", "retired"]
+
 # ── Error classes ─────────────────────────────────────────────────────────────
 
 
@@ -65,6 +68,10 @@ class Application(BaseModel):
     health_score: Annotated[int, Field(ge=1, le=5)] | None
     business_value: Score15 | None = None
     business_criticality: Score15 | None = None
+    owning_business_unit: str | None = None
+    business_owner: str | None = None
+    technical_owner: str | None = None
+    lifecycle_status: LifecycleStatus = "active"
     created_at: datetime
     updated_at: datetime
 
@@ -81,6 +88,10 @@ class ApplicationCreate(BaseModel):
     health_score: Annotated[int, Field(ge=1, le=5)] | None = None
     business_value: Score15 | None = None
     business_criticality: Score15 | None = None
+    owning_business_unit: str | None = None
+    business_owner: str | None = None
+    technical_owner: str | None = None
+    lifecycle_status: LifecycleStatus = "active"
 
     @field_validator("name")
     @classmethod
@@ -102,6 +113,10 @@ class ApplicationUpdate(BaseModel):
     health_score: Annotated[int, Field(ge=1, le=5)] | None = None
     business_value: Score15 | None = None
     business_criticality: Score15 | None = None
+    owning_business_unit: str | None = None
+    business_owner: str | None = None
+    technical_owner: str | None = None
+    lifecycle_status: LifecycleStatus | None = None
 
     @field_validator("name")
     @classmethod

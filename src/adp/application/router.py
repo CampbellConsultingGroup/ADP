@@ -87,8 +87,14 @@ async def _get_session():
 # ── Applications CRUD ─────────────────────────────────────────────────────────
 
 @applications_router.get("", response_model=ApplicationListResponse)
-async def list_applications(session: AsyncSession = Depends(_get_session)):
-    return await astore.list_applications(session)
+async def list_applications(
+    business_unit: Optional[str] = Query(default=None),
+    lifecycle_status: Optional[str] = Query(default=None),
+    session: AsyncSession = Depends(_get_session),
+):
+    return await astore.list_applications(
+        session, business_unit=business_unit, lifecycle_status=lifecycle_status
+    )
 
 
 @applications_router.post("", response_model=Application, status_code=status.HTTP_201_CREATED)
