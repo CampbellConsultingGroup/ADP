@@ -122,6 +122,23 @@ def test_recommend_empty_requirement_ids_returns_422(client):
     assert resp.status_code == 422
 
 
+def test_recommend_unknown_requirement_ids_returns_422(client):
+    """Requirement IDs not present on the design are rejected (ADP-7z1).
+
+    The design fixture has only REQ-001; a bogus ID must 422 rather than kick off
+    a vacuous run. Also closes a ZAP boolean-blind SQLi false positive.
+    """
+    c, _, op_store = client
+    resp = c.post(
+        "/api/v1/designs/D-001/recommend",
+        json={"requirement_ids": ["REQ-001", "REQ-DOES-NOT-EXIST"]},
+    )
+    assert resp.status_code == 422
+    assert "REQ-DOES-NOT-EXIST" in resp.json()["detail"]
+    # No operation should have been created for a rejected request.
+    op_store.create.assert_not_called()
+
+
 def test_recommend_status_nonexistent_operation_returns_404(client):
     c, _, _ = client
     resp = c.get("/api/v1/designs/D-001/recommend/nonexistent-id-xyz")
