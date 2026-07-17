@@ -10,6 +10,7 @@ import StageLinkEditor from "./StageLinkEditor";
 import DomainIntegrationEditor from "./DomainIntegrationEditor";
 import DesignLinkEditor from "./DesignLinkEditor";
 import IntegrationList from "./IntegrationList";
+import RiskPanel from "./RiskPanel";
 
 interface Props {
   appId: string;
@@ -17,7 +18,7 @@ interface Props {
   onDeleted: () => void;
 }
 
-type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs";
+type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs" | "risk";
 
 export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) {
   const { data: app, isLoading } = useApplication(appId);
@@ -49,6 +50,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
     { id: "stages", label: "Stages" },
     { id: "integrations", label: "Integrations" },
     { id: "designs", label: "Designs" },
+    { id: "risk", label: "Risk & Compliance" },
   ];
 
   const tabStyle = (id: Section): React.CSSProperties => ({
@@ -121,6 +123,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
         )}
         {section === "integrations" && <IntegrationList apps={allApps} filterAppId={appId} />}
         {section === "designs" && <DesignLinkEditor appId={appId} />}
+        {section === "risk" && <RiskPanel appId={appId} />}
       </div>
     </div>
   );

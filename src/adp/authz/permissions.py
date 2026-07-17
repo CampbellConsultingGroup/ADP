@@ -19,7 +19,11 @@ _logger = logging.getLogger("adp.authz")
 #           architect roles) and MANAGE_CONFIG (enterprise-only) so the newer
 #           business-architecture, application-registry, and config routers are
 #           covered by action-based enforcement (ADP-SPEC-004 amendment).
-PERMISSIONS_VERSION = "1.1.0"
+#   1.2.0 — added READ_APPLICATION_RISK / WRITE_APPLICATION_RISK (solution &
+#           technical architects; enterprise via all-actions) to gate the
+#           sensitive application risk & compliance register (ADP-SPEC-038 US3).
+#           Reviewers do NOT hold these — risk data is not open to every reader.
+PERMISSIONS_VERSION = "1.2.0"
 
 # ── Permission table ─────────────────────────────────────────────────────────
 # Maps each PersonaRole to the frozenset of ActionTypes it may perform.
@@ -37,6 +41,8 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.EXPORT_DESIGN,
         ActionType.WRITE_BUSINESS_ARCH,
         ActionType.WRITE_APPLICATION,
+        ActionType.READ_APPLICATION_RISK,
+        ActionType.WRITE_APPLICATION_RISK,
     }),
     PersonaRole.TECHNICAL_ARCHITECT: frozenset({
         ActionType.READ_DESIGN,
@@ -46,6 +52,8 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.ADD_FINDING,
         ActionType.WRITE_BUSINESS_ARCH,
         ActionType.WRITE_APPLICATION,
+        ActionType.READ_APPLICATION_RISK,
+        ActionType.WRITE_APPLICATION_RISK,
     }),
     PersonaRole.REVIEWER: frozenset({
         ActionType.READ_DESIGN,

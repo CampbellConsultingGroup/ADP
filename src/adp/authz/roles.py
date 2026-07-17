@@ -27,3 +27,6 @@ class ActionType(StrEnum):
     WRITE_BUSINESS_ARCH = "write_business_arch"
     WRITE_APPLICATION = "write_application"
     MANAGE_CONFIG = "manage_config"
+    # ADP-SPEC-038 (APM US3): sensitive application risk & compliance data.
+    READ_APPLICATION_RISK = "read_application_risk"
+    WRITE_APPLICATION_RISK = "write_application_risk"

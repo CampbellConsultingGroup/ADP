@@ -7,7 +7,7 @@ All functions accept an AsyncSession and are called from the router inside
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, cast
 
 import sqlalchemy as sa
@@ -31,6 +31,8 @@ from adp.application.models import (
     ApplicationIntegrationListResponse,
     ApplicationIntegrationUpdate,
     ApplicationListResponse,
+    ApplicationRisk,
+    ApplicationRiskUpdate,
     ApplicationStageLink,
     ApplicationStageLinkCreate,
     ApplicationStageLinksResponse,
@@ -42,6 +44,8 @@ from adp.application.models import (
     DuplicateAppDesignLinkError,
     DuplicateAppStageLinkError,
     DuplicateAppTechCapLinkError,
+    OutOfSupportEntry,
+    OutOfSupportResponse,
     RationalizationResponse,
     TechCapDepthError,
     TechCapHasChildrenError,
@@ -176,6 +180,21 @@ _designs = sa.Table(
     "designs",
     _metadata,
     sa.Column("id", sa.Text(), primary_key=True),
+)
+
+# APM US3: risk & compliance register (1:1 with applications; cascade-deletes)
+_application_risk = sa.Table(
+    "application_risk",
+    _metadata,
+    sa.Column("app_id", sa.String(36), primary_key=True),
+    sa.Column("security_posture", sa.Text()),
+    sa.Column("vulnerability_status", sa.Text()),
+    sa.Column("data_classification", sa.Text()),
+    sa.Column("regulatory_tags", sa.JSON(), nullable=False),
+    sa.Column("dr_bc_status", sa.Text()),
+    sa.Column("end_of_life_date", sa.Date()),
+    sa.Column("end_of_support_date", sa.Date()),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
 
 # ── Session factory ───────────────────────────────────────────────────────────
@@ -367,6 +386,85 @@ async def fetch_rationalization(session: AsyncSession) -> RationalizationRespons
         ).order_by(_applications.c.name)
     )
     return build_projection([dict(row) for row in result.mappings().all()])
+
+
+# ── Application Risk & Compliance CRUD (US3) ──────────────────────────────────
+
+
+def _row_to_risk(row: Any) -> ApplicationRisk:
+    return ApplicationRisk(
+        security_posture=row.security_posture,
+        vulnerability_status=row.vulnerability_status,
+        data_classification=row.data_classification,
+        regulatory_tags=list(row.regulatory_tags or []),
+        dr_bc_status=row.dr_bc_status,
+        end_of_life_date=row.end_of_life_date,
+        end_of_support_date=row.end_of_support_date,
+        updated_at=row.updated_at,
+    )
+
+
+async def get_application_risk(app_id: str, session: AsyncSession) -> ApplicationRisk | None:
+    result = await session.execute(
+        sa.select(_application_risk).where(_application_risk.c.app_id == app_id)
+    )
+    row = result.mappings().first()
+    return _row_to_risk(row) if row else None
+
+
+async def upsert_application_risk(
+    app_id: str, body: ApplicationRiskUpdate, session: AsyncSession
+) -> ApplicationRisk:
+    values: dict[str, Any] = {
+        "security_posture": body.security_posture,
+        "vulnerability_status": body.vulnerability_status,
+        "data_classification": body.data_classification,
+        "regulatory_tags": list(body.regulatory_tags),
+        "dr_bc_status": body.dr_bc_status,
+        "end_of_life_date": body.end_of_life_date,
+        "end_of_support_date": body.end_of_support_date,
+        "updated_at": _now(),
+    }
+    exists = (
+        await session.execute(
+            sa.select(_application_risk.c.app_id).where(_application_risk.c.app_id == app_id)
+        )
+    ).first() is not None
+    if exists:
+        await session.execute(
+            _application_risk.update()
+            .where(_application_risk.c.app_id == app_id)
+            .values(**values)
+        )
+    else:
+        await session.execute(_application_risk.insert().values(app_id=app_id, **values))
+    risk = await get_application_risk(app_id, session)
+    assert risk is not None  # just upserted
+    return risk
+
+
+async def list_out_of_support(session: AsyncSession, today: date) -> OutOfSupportResponse:
+    stmt = (
+        sa.select(
+            _application_risk.c.app_id,
+            _applications.c.name,
+            _application_risk.c.end_of_support_date,
+        )
+        .join(_applications, _applications.c.id == _application_risk.c.app_id)
+        .where(
+            _application_risk.c.end_of_support_date.is_not(None),
+            _application_risk.c.end_of_support_date < today,
+        )
+        .order_by(_applications.c.name)
+    )
+    result = await session.execute(stmt)
+    items = [
+        OutOfSupportEntry(
+            app_id=r.app_id, name=r.name, end_of_support_date=r.end_of_support_date
+        )
+        for r in result.mappings().all()
+    ]
+    return OutOfSupportResponse(items=items, total=len(items))
 
 
 # ── Technical Capability CRUD (US3) ──────────────────────────────────────────

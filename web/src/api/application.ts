@@ -72,6 +72,37 @@ export interface RationalizationResponse {
   total: number;
 }
 
+// ── Risk & compliance (APM US3, sensitive) ────────────────────────────────────
+
+export type DataClassification = "public" | "internal" | "confidential" | "restricted";
+export type SecurityPosture = "strong" | "adequate" | "weak" | "unknown";
+export type VulnerabilityStatus = "none_known" | "open_low" | "open_high" | "critical";
+export type DrBcStatus = "tested" | "documented" | "none";
+
+export interface ApplicationRisk {
+  security_posture: SecurityPosture | null;
+  vulnerability_status: VulnerabilityStatus | null;
+  data_classification: DataClassification | null;
+  regulatory_tags: string[];
+  dr_bc_status: DrBcStatus | null;
+  end_of_life_date: string | null;
+  end_of_support_date: string | null;
+  updated_at: string | null;
+}
+
+export type ApplicationRiskUpdate = Omit<ApplicationRisk, "updated_at">;
+
+export interface OutOfSupportEntry {
+  app_id: string;
+  name: string;
+  end_of_support_date: string;
+}
+
+export interface OutOfSupportResponse {
+  items: OutOfSupportEntry[];
+  total: number;
+}
+
 export interface TechnicalCapability {
   id: string;
   name: string;
@@ -174,6 +205,36 @@ export function useRationalization() {
   return useQuery<RationalizationResponse>({
     queryKey: ["rationalization"],
     queryFn: () => apiFetch(`${API}/applications/rationalization`),
+  });
+}
+
+export function useApplicationRisk(appId: string) {
+  return useQuery<ApplicationRisk>({
+    queryKey: ["applications", appId, "risk"],
+    queryFn: () => apiFetch(`${API}/applications/${appId}/risk`),
+    enabled: !!appId,
+    // Sensitive data: don't cache/refetch aggressively for a reader who lacks access.
+    retry: false,
+  });
+}
+
+export function useUpdateApplicationRisk(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ApplicationRiskUpdate) =>
+      apiFetch<ApplicationRisk>(`${API}/applications/${appId}/risk`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "risk"] }),
+  });
+}
+
+export function useOutOfSupport() {
+  return useQuery<OutOfSupportResponse>({
+    queryKey: ["applications", "risk", "out-of-support"],
+    queryFn: () => apiFetch(`${API}/applications/risk/out-of-support`),
+    retry: false,
   });
 }
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -151,6 +151,44 @@ class RationalizationResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     assessed: list[RationalizationEntry]
     unassessed: list[RationalizationEntry]
+    total: int
+
+
+# ── Risk & compliance (APM US3) ───────────────────────────────────────────────
+
+DataClassification = Literal["public", "internal", "confidential", "restricted"]
+SecurityPosture = Literal["strong", "adequate", "weak", "unknown"]
+VulnerabilityStatus = Literal["none_known", "open_low", "open_high", "critical"]
+DrBcStatus = Literal["tested", "documented", "none"]
+
+
+class ApplicationRiskUpdate(BaseModel):
+    """Upsert body for an application's risk & compliance record."""
+    model_config = ConfigDict(extra="forbid")
+    security_posture: SecurityPosture | None = None
+    vulnerability_status: VulnerabilityStatus | None = None
+    data_classification: DataClassification | None = None
+    regulatory_tags: list[str] = Field(default_factory=list)
+    dr_bc_status: DrBcStatus | None = None
+    end_of_life_date: date | None = None
+    end_of_support_date: date | None = None
+
+
+class ApplicationRisk(ApplicationRiskUpdate):
+    """Read model — the stored risk record (updated_at set once persisted)."""
+    updated_at: datetime | None = None
+
+
+class OutOfSupportEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    app_id: str
+    name: str
+    end_of_support_date: date
+
+
+class OutOfSupportResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[OutOfSupportEntry]
     total: int
 
 
