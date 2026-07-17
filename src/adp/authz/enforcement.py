@@ -71,6 +71,8 @@ _EXPLICIT_ROUTE_ACTIONS: dict[tuple[str, str], ActionType] = {
     ("POST", "/api/v1/designs/{design_id}/render"): ActionType.READ_DESIGN,
     # APM risk & compliance write (sensitive) — overrides the /applications prefix
     ("PUT", "/api/v1/applications/{app_id}/risk"): ActionType.WRITE_APPLICATION_RISK,
+    # APM cost/TCO write (sensitive) — overrides the /applications prefix
+    ("PUT", "/api/v1/applications/{app_id}/cost"): ActionType.WRITE_APPLICATION_COST,
     # LLM provider configuration is an admin action
     ("PUT", "/api/v1/config/llm"): ActionType.MANAGE_CONFIG,
 }

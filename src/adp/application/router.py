@@ -28,6 +28,8 @@ from adp.application.models import (
     ApplicationCapabilityLinkCreate,
     ApplicationCapabilityLinksResponse,
     ApplicationCapabilityLinkUpdate,
+    ApplicationCost,
+    ApplicationCostUpdate,
     ApplicationCreate,
     ApplicationDesignLink,
     ApplicationDesignLinkCreate,
@@ -49,6 +51,7 @@ from adp.application.models import (
     ApplicationTechCapLinkCreate,
     ApplicationTechCapLinksResponse,
     ApplicationUpdate,
+    CostRollupResponse,
     DuplicateAppCapLinkError,
     DuplicateAppDesignLinkError,
     DuplicateAppStageLinkError,
@@ -93,6 +96,7 @@ async def _get_session():
 # Sensitive-read gate (APM US3): risk & compliance fields are not open to every
 # reader. The app-level enforcer exempts GETs, so gate these reads per-route.
 _require_risk_read = require_action_dep(ActionType.READ_APPLICATION_RISK)
+_require_cost_read = require_action_dep(ActionType.READ_APPLICATION_COST)
 
 
 # ── Applications CRUD ─────────────────────────────────────────────────────────
@@ -207,6 +211,49 @@ async def put_application_risk(
     await session.commit()
     logger.info("application.risk.update id=%s actor=%s", app_id, _get_actor(request))
     return risk
+
+
+# ── Application Cost / TCO (APM US4, sensitive) ───────────────────────────────
+
+@applications_router.get(
+    "/cost/rollup",
+    response_model=CostRollupResponse,
+    dependencies=[Depends(_require_cost_read)],
+)
+async def get_cost_rollup(session: AsyncSession = Depends(_get_session)):
+    """TCO rolled up by owning business unit. Sensitive aggregate — same gate as
+    the per-application read, so it cannot leak cost data around the field-level
+    permission (FR-013)."""
+    return await astore.rollup_cost_by_business_unit(session)
+
+
+@applications_router.get(
+    "/{app_id}/cost",
+    response_model=ApplicationCost,
+    dependencies=[Depends(_require_cost_read)],
+)
+async def get_application_cost(app_id: str, session: AsyncSession = Depends(_get_session)):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    cost = await astore.get_application_cost(app_id, session)
+    return cost or ApplicationCost()
+
+
+@applications_router.put("/{app_id}/cost", response_model=ApplicationCost)
+async def put_application_cost(
+    app_id: str,
+    body: ApplicationCostUpdate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    cost = await astore.upsert_application_cost(app_id, body, session)
+    await session.commit()
+    logger.info("application.cost.update id=%s actor=%s", app_id, _get_actor(request))
+    return cost
 
 
 # ── Application–Business Capability Links ─────────────────────────────────────

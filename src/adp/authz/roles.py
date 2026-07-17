@@ -30,3 +30,6 @@ class ActionType(StrEnum):
     # ADP-SPEC-038 (APM US3): sensitive application risk & compliance data.
     READ_APPLICATION_RISK = "read_application_risk"
     WRITE_APPLICATION_RISK = "write_application_risk"
+    # ADP-SPEC-038 (APM US4): sensitive application cost (TCO) data.
+    READ_APPLICATION_COST = "read_application_cost"
+    WRITE_APPLICATION_COST = "write_application_cost"

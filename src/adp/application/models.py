@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator, model_validator
 
 # ── Enum literals ─────────────────────────────────────────────────────────────
 
@@ -190,6 +191,101 @@ class OutOfSupportResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[OutOfSupportEntry]
     total: int
+
+
+# ── Total Cost of Ownership (APM US4, ADP-9x6) ────────────────────────────────
+# NUMERIC/Decimal only — money must never use binary floating point.
+
+TCO_BUCKET_NAMES: tuple[str, ...] = (
+    "acquisition", "implementation", "training", "operational",
+    "maintenance", "upgrades", "risk_downtime", "end_of_life",
+)
+# run = ongoing cost of operating what exists; change = cost of acquiring/altering it.
+_RUN_BUCKETS = ("operational", "maintenance", "risk_downtime")
+_CHANGE_BUCKETS = ("acquisition", "implementation", "upgrades")
+
+
+class CostBucket(BaseModel):
+    """One TCO bucket: a one-time amount plus an ongoing annual amount."""
+    model_config = ConfigDict(extra="forbid")
+    one_time: Decimal = Decimal("0")
+    annual: Decimal = Decimal("0")
+
+    @field_validator("one_time", "annual")
+    @classmethod
+    def not_negative(cls, v: Decimal) -> Decimal:
+        if v < 0:
+            raise ValueError("cost amounts must not be negative")
+        return v
+
+
+class ApplicationCostUpdate(BaseModel):
+    """Upsert body for an application's TCO record. Full replace, like risk."""
+    model_config = ConfigDict(extra="forbid")
+    currency: str = "USD"
+    horizon_years: Annotated[int, Field(gt=0)] = 5
+    acquisition: CostBucket = Field(default_factory=CostBucket)
+    implementation: CostBucket = Field(default_factory=CostBucket)
+    training: CostBucket = Field(default_factory=CostBucket)
+    operational: CostBucket = Field(default_factory=CostBucket)
+    maintenance: CostBucket = Field(default_factory=CostBucket)
+    upgrades: CostBucket = Field(default_factory=CostBucket)
+    risk_downtime: CostBucket = Field(default_factory=CostBucket)
+    end_of_life: CostBucket = Field(default_factory=CostBucket)
+
+    @field_validator("currency")
+    @classmethod
+    def currency_is_iso4217_shape(cls, v: str) -> str:
+        if len(v) != 3 or not v.isalpha():
+            raise ValueError("currency must be a 3-letter ISO-4217 code")
+        return v.upper()
+
+    def _bucket_totals(self) -> tuple[Decimal, Decimal]:
+        one_time = sum((getattr(self, n).one_time for n in TCO_BUCKET_NAMES), Decimal("0"))
+        annual = sum((getattr(self, n).annual for n in TCO_BUCKET_NAMES), Decimal("0"))
+        return one_time, annual
+
+
+class ApplicationCost(ApplicationCostUpdate):
+    """Read model — TCO and run-vs-change are derived on read, never stored."""
+    updated_at: datetime | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def tco(self) -> Decimal:
+        """TCO = Σ(one_time) + Σ(annual) × horizon_years."""
+        one_time, annual = self._bucket_totals()
+        return one_time + annual * self.horizon_years
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def run_total(self) -> Decimal:
+        """Ongoing operate-what-exists cost over the horizon (one-time + annual×years)."""
+        return self._group_total(_RUN_BUCKETS)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def change_total(self) -> Decimal:
+        """Acquire/alter cost over the horizon (one-time + annual×years)."""
+        return self._group_total(_CHANGE_BUCKETS)
+
+    def _group_total(self, names: tuple[str, ...]) -> Decimal:
+        one_time = sum((getattr(self, n).one_time for n in names), Decimal("0"))
+        annual = sum((getattr(self, n).annual for n in names), Decimal("0"))
+        return one_time + annual * self.horizon_years
+
+
+class BusinessUnitCostRollup(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    business_unit: str | None
+    app_count: int
+    tco: Decimal
+
+
+class CostRollupResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[BusinessUnitCostRollup]
+    total_tco: Decimal
 
 
 # ── Technical Capability models ───────────────────────────────────────────────
