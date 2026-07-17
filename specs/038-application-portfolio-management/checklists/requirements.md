@@ -17,10 +17,10 @@
 - [x] Success criteria are measurable and technology-agnostic
 - [x] User stories are independently testable and prioritized (P1–P8)
 - [x] Edge cases enumerated (unassessed vs. worst score, money precision, sensitive-field aggregates, deletion cascade)
-- [ ] All `[NEEDS CLARIFICATION]` resolved — **3 open**, to be settled in `/speckit.clarify`:
-  - FR-019: business-value/criticality scale (composite vs. separate value+criticality; 1–5 vs. High/Med/Low)
-  - FR-020: TCO bucket shape (lump-per-bucket vs. one-time + annual over horizon) — carried from ADP-9x6
-  - FR-021: quality/performance metrics — manual-only in v1 vs. ops-tool ingestion in scope
+- [x] All `[NEEDS CLARIFICATION]` resolved — **3 resolved** in the 2026-07-16 clarification session:
+  - FR-019: **separate** `business_value` + `business_criticality`, both **1–5** (TIME axis = business_value)
+  - FR-020: **one-time + annual** per bucket; TCO = Σ(one-time) + Σ(annual) × horizon
+  - FR-021: **manual entry only** in v1; ops ingestion deferred
 
 ## Constitutional Alignment
 

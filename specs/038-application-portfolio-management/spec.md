@@ -32,23 +32,31 @@
 
 **Residual risk**: APM data is only as trustworthy as manual entry; stale risk/EOL data can mislead decisions. Accepted at this threat level because the audit trail makes staleness attributable and the review-due mechanism (mirroring design lifecycle) surfaces aging records. Quantitative quality/performance metrics remain manual/absent in v1 (ingestion deferred), so those signals are advisory.
 
+## Clarifications
+
+### Session 2026-07-16
+
+- **Q: How is the business-value / criticality dimension modeled?** → **A:** Two separate 1–5 scores — `business_value` (strategic worth / revenue contribution) and `business_criticality` (operational importance / blast radius); NULL = not assessed. The TIME quadrant's value axis uses `business_value`. 1–5 chosen for consistency with the existing scores (health_score, fit_score, maturity).
+- **Q: How are TCO cost buckets stored?** → **A:** Each bucket carries a one-time amount and an annual amount; TCO = Σ(one-time) + Σ(annual) × horizon_years (e.g. $5k/yr × 5 + setup). Amounts are `Decimal`/NUMERIC with an ISO-4217 currency.
+- **Q: Quality & performance metrics scope for v1?** → **A:** Manual entry only in v1; automated ingestion from monitoring/ITSM tooling is a separate future feature.
+
 ## User Scenarios & Testing *(mandatory)*
 
 > Each story is an independently shippable slice: it adds its category's attributes, typed contracts, migration, audit, authz, and a read surface, and delivers standalone value. Stories are ordered by **rationalization value**, not by the taxonomy's listing order.
 
 ### User Story 1 - Plot the estate on the business-value × technical-health quadrant (Priority: P1)
 
-A portfolio analyst wants to see every application placed on the classic TIME rationalization plot (Tolerate / Invest / Migrate / Eliminate) so they can drive rationalization decisions. The technical-health axis already exists (`applications.health_score`); the missing half is a **business-value / criticality** score *on the application*. This story adds that score and delivers the quadrant view.
+A portfolio analyst wants to see every application placed on the classic TIME rationalization plot (Tolerate / Invest / Migrate / Eliminate) so they can drive rationalization decisions. The technical-health axis already exists (`applications.health_score`); the missing half is a **business_value** score *on the application* (with **business_criticality** captured alongside). This story adds those scores and delivers the quadrant view.
 
-**Why this priority**: This is the single highest-leverage addition — one new scored axis turns data ADP *already* holds (health_score, time_classification, dependency graph) into a working rationalization view. It is the MVP: shippable alone, and it de-risks the whole epic by proving the scoring + view pattern.
+**Why this priority**: This is the single highest-leverage addition — one new scored axis (`business_value`) turns data ADP *already* holds (health_score, time_classification, dependency graph) into a working rationalization view. It is the MVP: shippable alone, and it de-risks the whole epic by proving the scoring + view pattern.
 
-**Independent Test**: Score a set of applications for business value/criticality, then retrieve the rationalization projection and confirm each application lands in the correct TIME quadrant from (business_value × health_score); verify an unscored application is reported as "unplaced" rather than defaulting.
+**Independent Test**: Score a set of applications for business value (and criticality), then retrieve the rationalization projection and confirm each application lands in the correct TIME quadrant from (business_value × health_score); verify an unscored application is reported as "unplaced" rather than defaulting.
 
 **Acceptance Scenarios**:
 
 1. **Given** an application with a health_score and a business_value score, **When** the analyst opens the rationalization view, **Then** the application appears in the quadrant computed from both axes.
 2. **Given** an application with no business_value score, **When** the view is rendered, **Then** it is listed as "not yet assessed" and excluded from quadrant placement (never silently defaulted to a quadrant).
-3. **Given** a business_value score is changed, **When** the update is saved, **Then** an audit entry records actor + old/new value and the quadrant placement updates.
+3. **Given** a business_value or business_criticality score is changed, **When** the update is saved, **Then** an audit entry records actor + old/new value and the quadrant placement updates.
 
 ### User Story 2 - Complete application identity & ownership basics (Priority: P2)
 
@@ -84,11 +92,11 @@ A portfolio owner captures TCO across the eight cost buckets (per **ADP-9x6**), 
 
 **Why this priority**: Cost completes the value story once identity (BU) exists to allocate against. Depends on US2 for BU allocation. TCO is already partly scoped (ADP-9x6).
 
-**Independent Test**: Enter per-bucket costs (as Decimal, with ISO-4217 currency) on applications in two business units; retrieve the per-BU cost rollup and the run-vs-change ratio and confirm the arithmetic.
+**Independent Test**: Enter per-bucket one-time and annual costs (as Decimal, with ISO-4217 currency) on applications in two business units; retrieve the per-BU cost rollup and the run-vs-change ratio and confirm the arithmetic, including a horizon change re-deriving TCO without re-entry.
 
 **Acceptance Scenarios**:
 
-1. **Given** an application, **When** costs are entered across the eight buckets with a currency and horizon, **Then** TCO = the sum of the buckets and round-trips as `Decimal` (never float).
+1. **Given** an application, **When** one-time and annual costs are entered across the eight buckets with a currency and horizon, **Then** TCO = Σ(one-time) + Σ(annual) × horizon and round-trips as `Decimal` (never float).
 2. **Given** applications allocated to business units, **When** the cost-by-BU rollup is requested, **Then** totals aggregate correctly per unit.
 3. **Given** bucket costs, **When** the run-vs-change ratio is computed, **Then** run (operational + maintenance + support) vs change (acquisition + implementation + upgrades) is reported.
 
@@ -134,7 +142,7 @@ A governance lead records vendor **contract details and renewal dates**, **SLAs*
 
 ### User Story 8 - Quality & performance signals (Priority: P8)
 
-A service owner records or reviews reliability/uptime, incident history, user satisfaction, performance metrics, and support-ticket volume as advisory quality signals.
+A service owner records or reviews reliability/uptime, incident history, user satisfaction, performance metrics, and support-ticket volume as advisory quality signals (manual entry in v1).
 
 **Why this priority**: Valuable context but typically fed from ops tooling; lowest priority because v1 captures manual/point-in-time values only (automated ingestion is deferred).
 
@@ -147,8 +155,8 @@ A service owner records or reviews reliability/uptime, incident history, user sa
 
 ### Edge Cases
 
-- **Unassessed vs. worst score**: an unscored business_value/criticality or maturity must read as "not assessed" (NULL), never silently as the lowest active rating — placement/rollups must exclude, not default.
-- **Money edge cases**: mixed currencies across applications when rolling up per BU (v1 assumes a single reporting currency — see Assumptions); negative or zero costs; extremely large figures (NUMERIC precision).
+- **Unassessed vs. worst score**: an unscored business_value/business_criticality or maturity must read as "not assessed" (NULL), never silently as the lowest active rating (1) — placement/rollups must exclude, not default.
+- **Money edge cases**: mixed currencies across applications when rolling up per BU (v1 assumes a single reporting currency — see Assumptions); negative or zero costs; extremely large figures (NUMERIC precision); a zero or negative horizon.
 - **Sensitive-field authz on aggregates**: a cost/risk rollup must not leak per-application sensitive values to a user who lacks the field-level permission.
 - **Lifecycle/roadmap conflicts**: `time_classification` = Eliminate while lifecycle_status = active with no retirement date — surfaced as a data-quality warning, not blocked.
 - **Deletion**: deleting an application must cascade its APM child records (cost, risk, governance, quality) and links, and audit the cascade.
@@ -158,17 +166,17 @@ A service owner records or reviews reliability/uptime, incident history, user sa
 
 ### Functional Requirements
 
-- **FR-001**: System MUST add a business-value/criticality score to the application entity, distinct from the existing hierarchy/classification fields, with an explicit "not assessed" state (NULL) separate from the lowest active value.
-- **FR-002**: System MUST provide a read-only rationalization projection that places each *assessed* application in a TIME quadrant computed from (business_value × health_score), and MUST list unassessed applications separately.
+- **FR-001**: System MUST add two distinct 1–5 scores to the application entity — `business_value` (strategic worth / revenue contribution) and `business_criticality` (operational importance / blast radius) — each with an explicit "not assessed" state (NULL) separate from the lowest active value (1).
+- **FR-002**: System MUST provide a read-only rationalization projection that places each *assessed* application in a TIME quadrant computed from (`business_value` × `health_score`), and MUST list unassessed applications separately.
 - **FR-003**: System MUST extend application identity with owning business unit, distinct business owner and technical owner, and an explicit lifecycle status (planned / active / sunset / retired).
 - **FR-004**: System MUST allow recording, per application, of risk & compliance attributes: security posture, vulnerability status, data classification/sensitivity, regulatory tags (multi-valued), DR/BC status, and end-of-life / end-of-support dates.
 - **FR-005**: System MUST flag applications whose end-of-support date is in the past (out-of-support) and MUST support a "renewing/expiring soon" query window.
-- **FR-006**: System MUST capture Total Cost of Ownership across the eight cost buckets per ADP-9x6, storing all monetary values as decimal (NUMERIC), never floating point, with an ISO-4217 currency and an analysis horizon; TCO MUST be derivable as the sum of the buckets.
+- **FR-006**: System MUST capture Total Cost of Ownership across the eight cost buckets per ADP-9x6, each bucket carrying a one-time and an annual component, storing all monetary values as decimal (NUMERIC), never floating point, with an ISO-4217 currency and an analysis horizon (years); TCO MUST be derivable as Σ(one-time) + Σ(annual) × horizon.
 - **FR-007**: System MUST support cost allocation by business unit and a run-vs-change spend ratio derived from the cost buckets.
 - **FR-008**: System MUST capture technical-fit attributes: hosting model, architecture pattern, and technical-debt flags.
 - **FR-009**: System MUST support transformation initiatives as first-class records and many-to-many links between applications and initiatives, with each application surfacing its planned disposition.
 - **FR-010**: System MUST capture ownership & governance attributes: vendor contract details, renewal dates, SLAs, stakeholder roles (business sponsor, IT owner), and decision rights.
-- **FR-011**: System MUST capture quality & performance signals (reliability/uptime, incident history, user satisfaction, performance metrics, support-ticket volume) as advisory values that do not override `health_score` in v1.
+- **FR-011**: System MUST capture quality & performance signals (reliability/uptime, incident history, user satisfaction, performance metrics, support-ticket volume) as **manually-entered** advisory values in v1 that do not override `health_score`; automated ingestion is out of scope for v1.
 - **FR-012**: System MUST write an `AuditEntry` (actor, action, affected entity, before/after summary) for every create/update/delete of any APM attribute (ART-IX).
 - **FR-013**: System MUST gate APM reads and writes by action-based permissions (ADP-SPEC-004); sensitive categories (cost, risk & compliance, governance) MUST require a permission distinct from general application read, and aggregates MUST NOT leak sensitive per-application values to unauthorized users.
 - **FR-014**: All APM boundary payloads MUST be typed (Pydantic v2, `extra="forbid"`), and all new entities/enums MUST emit to JSON Schema via the generator (ART-III/ART-XIII).
@@ -176,17 +184,17 @@ A service owner records or reviews reliability/uptime, incident history, user sa
 - **FR-016**: Deleting an application MUST cascade and audit removal of its APM child records and links.
 - **FR-017**: System MUST publish a versioned APM data dictionary mapping each attribute to its APM category and definition (ART-XVI).
 - **FR-018**: System MUST reconcile with existing feeders rather than duplicate them: strategic relevance (ADP-33v) and maturity (ADP-4ga) on capabilities, and the capability gap analysis (ADP-zg3.4), feed Business fit; technology stack/version continues to come from `element_technology_tags`; app-to-app dependencies from `application_integrations`.
-- **FR-019**: System MUST express the business-value/criticality dimension as a bounded, ordinal, labelled scale [NEEDS CLARIFICATION: single composite score, or separate "business value" and "business criticality" dimensions? and what scale — 1–5, or High/Medium/Low?].
-- **FR-020**: TCO bucket structure MUST support the given example (a recurring annual cost projected over a horizon) [NEEDS CLARIFICATION: store one lump amount per bucket over the horizon, or split one-time vs. annual components and compute over the horizon? — carried from ADP-9x6].
-- **FR-021**: Quality & performance metrics MUST be captured [NEEDS CLARIFICATION: manual entry only in v1, or is ingestion from an external ops/monitoring source in scope?].
+- **FR-019**: The `business_value` and `business_criticality` dimensions MUST each be a 1–5 ordinal scale with labelled levels, consistent with the existing 1–5 scores (health_score, fit_score, maturity); the TIME quadrant's value axis uses `business_value`. *(Resolved 2026-07-16.)*
+- **FR-020**: Each TCO bucket MUST store a one-time amount and an annual amount, so a horizon change re-derives TCO without re-entry (e.g. $5k/yr × 5 years + setup). *(Resolved 2026-07-16.)*
+- **FR-021**: Quality & performance metrics MUST be captured via manual entry in v1; ingestion from an external ops/monitoring source is out of scope for v1. *(Resolved 2026-07-16.)*
 
 ### Key Entities *(include if feature involves data)*
 
-- **Application (extended)**: the APM unit. Gains business_value/criticality, owning business unit, business owner, technical owner, lifecycle status, hosting model, architecture pattern, tech-debt flags. Retains existing vendor, primary_owner, time_classification (TIME), r_strategy, pace_layer, health_score.
-- **ApplicationCost (TCO)**: per-application cost across the eight buckets; currency (ISO-4217), analysis horizon; amounts as decimal. Enables per-BU allocation and run-vs-change. (Scoped by ADP-9x6.)
+- **Application (extended)**: the APM unit. Gains `business_value` (1–5), `business_criticality` (1–5), owning business unit, business owner, technical owner, lifecycle status, hosting model, architecture pattern, tech-debt flags. Retains existing vendor, primary_owner, time_classification (TIME), r_strategy, pace_layer, health_score.
+- **ApplicationCost (TCO)**: per-application cost across the eight buckets, each with a one-time and an annual amount; currency (ISO-4217), analysis horizon (years); amounts as decimal. TCO = Σ(one-time) + Σ(annual) × horizon. Enables per-BU allocation and run-vs-change. (Scoped by ADP-9x6.)
 - **ApplicationRisk**: security posture, vulnerability status, data classification, regulatory tags (multi-valued), DR/BC status, EOL/EOS dates.
 - **ApplicationGovernance / Contract**: vendor contract terms, renewal date, SLA, stakeholder roles, decision rights.
-- **ApplicationQualityMetric**: advisory reliability/uptime, incidents, satisfaction, performance, ticket volume.
+- **ApplicationQualityMetric**: advisory reliability/uptime, incidents, satisfaction, performance, ticket volume (manual in v1).
 - **TransformationInitiative**: a named change program; many-to-many with applications, each link carrying a planned disposition.
 - **RationalizationProjection**: a derived, read-only view placing assessed applications on the business-value × technical-health (TIME) quadrant. Not stored — computed.
 - **AuditEntry (existing)**: reused for all APM writes (ART-IX).
@@ -196,11 +204,11 @@ A service owner records or reviews reliability/uptime, incident history, user sa
 ### Measurable Outcomes
 
 - **SC-001**: An analyst can retrieve a rationalization projection that places 100% of *assessed* applications into a TIME quadrant, with unassessed applications reported separately (never mis-placed).
-- **SC-002**: Adding the business-value/criticality score requires exactly one new scored dimension on the application — no other data entry — to make the quadrant usable, demonstrating the "one field completes TIME" goal.
+- **SC-002**: Adding the `business_value` score requires exactly one new scored dimension on the application — no other data entry — to make the quadrant usable, demonstrating the "one field completes TIME" goal.
 - **SC-003**: For any application, an authorized user can view its complete APM record spanning all eight categories, and each populated attribute is attributable to an actor and time via the audit trail.
 - **SC-004**: A user lacking sensitive-category permission can never read cost, risk/compliance, or contract values — verified for both direct reads and aggregate/rollup endpoints.
 - **SC-005**: The system surfaces every application that is out-of-support (EOS date in the past) and every contract renewing within the configured window.
-- **SC-006**: Per-business-unit cost rollups and the run-vs-change ratio reconcile exactly to the sum of the underlying application cost buckets.
+- **SC-006**: Per-business-unit cost rollups and the run-vs-change ratio reconcile exactly to the sum of the underlying application cost buckets, and re-deriving TCO after a horizon change requires no cost re-entry.
 - **SC-007**: 100% of monetary values persist and round-trip as decimal with no floating-point representation error.
 - **SC-008**: Every APM schema change has a verified reversible migration and zero schema-drift-check failures in CI.
 
