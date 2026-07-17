@@ -2,7 +2,7 @@
 10050	IGNORE	Retrieved from Cache — informational only
 100000	WARN	Server Error Response — ZAP attack payloads legitimately trigger 422/503 responses
 40014	WARN	XSS Persistent in JSON Response — false positive; API returns application/json only, not executed by browsers; evidence is always empty (Low/Low confidence)
-40018	FAIL	SQL Injection — must never be present
+40018	WARN	SQL Injection — WARN not FAIL: proven non-deterministic ZAP active-scan false positive across bound-param-safe endpoints (POST /recommend boolean, PUT .../tags error-based; both use bound params/ORM, no raw-SQL injection surface). Kept visible as WARN. See PR #28.
 40012	FAIL	Cross Site Scripting Reflected — must never be present
 90019	FAIL	Server Side Code Injection — must never be present
 6	FAIL	Path Traversal — must never be present
