@@ -50,6 +50,7 @@ from adp.application.models import (
     DuplicateAppDesignLinkError,
     DuplicateAppStageLinkError,
     DuplicateAppTechCapLinkError,
+    RationalizationResponse,
     TechCapDepthError,
     TechCapHasChildrenError,
     TechCapListResponse,
@@ -101,6 +102,15 @@ async def create_application(
     actor = _get_actor(request)
     logger.info("application.create id=%s name=%r actor=%s", app.id, app.name, actor)
     return app
+
+
+@applications_router.get("/rationalization", response_model=RationalizationResponse)
+async def get_rationalization(session: AsyncSession = Depends(_get_session)):
+    """TIME rationalization projection: business_value × health_score (APM US1).
+
+    Registered before ``/{app_id}`` so the literal path is not shadowed.
+    """
+    return await astore.fetch_rationalization(session)
 
 
 @applications_router.get("/{app_id}", response_model=Application)

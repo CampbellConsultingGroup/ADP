@@ -18,6 +18,10 @@ UsageType = Literal["provides", "consumes"]
 IntegrationDir = Literal["inbound", "outbound", "bidirectional"]
 AppIntegrationType = Literal["API", "event", "file", "database", "messaging", "other"]
 
+# ADP-SPEC-038 (APM US1): 1–5 assessment scores and the TIME rationalization quadrant.
+Score15 = Annotated[int, Field(ge=1, le=5)]
+Quadrant = Literal["tolerate", "invest", "migrate", "eliminate"]
+
 # ── Error classes ─────────────────────────────────────────────────────────────
 
 
@@ -59,6 +63,8 @@ class Application(BaseModel):
     r_strategy: RStrategy | None
     pace_layer: PaceLayer | None
     health_score: Annotated[int, Field(ge=1, le=5)] | None
+    business_value: Score15 | None = None
+    business_criticality: Score15 | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -73,6 +79,8 @@ class ApplicationCreate(BaseModel):
     r_strategy: RStrategy | None = None
     pace_layer: PaceLayer | None = None
     health_score: Annotated[int, Field(ge=1, le=5)] | None = None
+    business_value: Score15 | None = None
+    business_criticality: Score15 | None = None
 
     @field_validator("name")
     @classmethod
@@ -92,6 +100,8 @@ class ApplicationUpdate(BaseModel):
     r_strategy: RStrategy | None = None
     pace_layer: PaceLayer | None = None
     health_score: Annotated[int, Field(ge=1, le=5)] | None = None
+    business_value: Score15 | None = None
+    business_criticality: Score15 | None = None
 
     @field_validator("name")
     @classmethod
@@ -104,6 +114,28 @@ class ApplicationUpdate(BaseModel):
 class ApplicationListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[Application]
+    total: int
+
+
+# ── Rationalization (APM US1) ─────────────────────────────────────────────────
+
+
+class RationalizationEntry(BaseModel):
+    """One application placed (or not) on the business-value × technical-health plot."""
+    model_config = ConfigDict(extra="forbid")
+    app_id: str
+    name: str
+    business_value: int | None
+    health_score: int | None
+    # None when the app is unassessed (missing business_value and/or health_score).
+    quadrant: Quadrant | None
+
+
+class RationalizationResponse(BaseModel):
+    """TIME rationalization projection: assessed apps placed, unassessed listed apart."""
+    model_config = ConfigDict(extra="forbid")
+    assessed: list[RationalizationEntry]
+    unassessed: list[RationalizationEntry]
     total: int
 
 
