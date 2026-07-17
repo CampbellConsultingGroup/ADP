@@ -42,6 +42,7 @@ from adp.application.models import (
     DuplicateAppDesignLinkError,
     DuplicateAppStageLinkError,
     DuplicateAppTechCapLinkError,
+    RationalizationResponse,
     TechCapDepthError,
     TechCapHasChildrenError,
     TechCapListResponse,
@@ -72,6 +73,12 @@ _applications = sa.Table(
     sa.Column("r_strategy", sa.Text()),
     sa.Column("pace_layer", sa.Text()),
     sa.Column("health_score", sa.Integer()),
+    sa.Column("business_value", sa.SmallInteger()),
+    sa.Column("business_criticality", sa.SmallInteger()),
+    sa.Column("owning_business_unit", sa.String(255)),
+    sa.Column("business_owner", sa.String(255)),
+    sa.Column("technical_owner", sa.String(255)),
+    sa.Column("lifecycle_status", sa.Text(), nullable=False, server_default="active"),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
@@ -214,6 +221,12 @@ def _row_to_application(row: Any) -> Application:
         r_strategy=row.r_strategy,
         pace_layer=row.pace_layer,
         health_score=row.health_score,
+        business_value=row.business_value,
+        business_criticality=row.business_criticality,
+        owning_business_unit=row.owning_business_unit,
+        business_owner=row.business_owner,
+        technical_owner=row.technical_owner,
+        lifecycle_status=row.lifecycle_status,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -238,10 +251,17 @@ def _is_duplicate_error(exc: Exception) -> bool:
 # ── Application CRUD (US1) ────────────────────────────────────────────────────
 
 
-async def list_applications(session: AsyncSession) -> ApplicationListResponse:
-    result = await session.execute(
-        sa.select(_applications).order_by(_applications.c.name)
-    )
+async def list_applications(
+    session: AsyncSession,
+    business_unit: str | None = None,
+    lifecycle_status: str | None = None,
+) -> ApplicationListResponse:
+    stmt = sa.select(_applications)
+    if business_unit is not None:
+        stmt = stmt.where(_applications.c.owning_business_unit == business_unit)
+    if lifecycle_status is not None:
+        stmt = stmt.where(_applications.c.lifecycle_status == lifecycle_status)
+    result = await session.execute(stmt.order_by(_applications.c.name))
     items = [_row_to_application(row) for row in result.mappings().all()]
     return ApplicationListResponse(items=items, total=len(items))
 
@@ -268,6 +288,12 @@ async def create_application(body: ApplicationCreate, session: AsyncSession) -> 
             r_strategy=body.r_strategy,
             pace_layer=body.pace_layer,
             health_score=body.health_score,
+            business_value=body.business_value,
+            business_criticality=body.business_criticality,
+            owning_business_unit=body.owning_business_unit,
+            business_owner=body.business_owner,
+            technical_owner=body.technical_owner,
+            lifecycle_status=body.lifecycle_status,
             created_at=now,
             updated_at=now,
         )
@@ -282,6 +308,12 @@ async def create_application(body: ApplicationCreate, session: AsyncSession) -> 
         r_strategy=body.r_strategy,
         pace_layer=body.pace_layer,
         health_score=body.health_score,
+        business_value=body.business_value,
+        business_criticality=body.business_criticality,
+        owning_business_unit=body.owning_business_unit,
+        business_owner=body.business_owner,
+        technical_owner=body.technical_owner,
+        lifecycle_status=body.lifecycle_status,
         created_at=now,
         updated_at=now,
     )
@@ -303,6 +335,8 @@ async def update_application(
     for field in (
         "description", "vendor", "primary_owner", "time_classification",
         "r_strategy", "pace_layer", "health_score",
+        "business_value", "business_criticality",
+        "owning_business_unit", "business_owner", "technical_owner", "lifecycle_status",
     ):
         if field in body.model_fields_set:
             updates[field] = getattr(body, field)
@@ -318,6 +352,21 @@ async def delete_application(app_id: str, session: AsyncSession) -> bool:
         _applications.delete().where(_applications.c.id == app_id)
     )
     return _rowcount(result) > 0
+
+
+async def fetch_rationalization(session: AsyncSession) -> RationalizationResponse:
+    """Build the TIME rationalization projection over all applications (APM US1)."""
+    from adp.application.rationalization import build_projection
+
+    result = await session.execute(
+        sa.select(
+            _applications.c.id,
+            _applications.c.name,
+            _applications.c.business_value,
+            _applications.c.health_score,
+        ).order_by(_applications.c.name)
+    )
+    return build_projection([dict(row) for row in result.mappings().all()])
 
 
 # ── Technical Capability CRUD (US3) ──────────────────────────────────────────

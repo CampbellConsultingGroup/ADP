@@ -29,6 +29,8 @@ const APP: Application = {
   id: "app-1", name: "CRM", description: "Customer platform", vendor: "Acme",
   primary_owner: "jane", time_classification: "Invest", r_strategy: "Refactor",
   pace_layer: "Differentiation", health_score: 4,
+  business_value: null, business_criticality: null,
+  owning_business_unit: null, business_owner: null, technical_owner: null, lifecycle_status: "active",
   created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
 };
 
@@ -60,7 +62,7 @@ describe("ApplicationForm", () => {
     renderWithQuery(<ApplicationForm onSave={onSave} onCancel={vi.fn()} />);
 
     fireEvent.change(screen.getByPlaceholderText("My Application"), { target: { value: "X" } });
-    const health = screen.getByPlaceholderText("1–5");
+    const health = screen.getByLabelText(/Health Score/);
     fireEvent.change(health, { target: { value: "9" } });
     // jsdom (like browsers) blocks click-submit on rangeOverflow, so dispatch
     // submit directly to exercise the component's own validation branch.

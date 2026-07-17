@@ -1,9 +1,10 @@
-import { Suspense, useState } from "react";
+import { Suspense, useState, type CSSProperties } from "react";
 import { useApplications, useCreateApplication } from "../api/application";
 import type { ApplicationCreate } from "../api/application";
 import ApplicationList from "./ApplicationList";
 import ApplicationDetail from "./ApplicationDetail";
 import ApplicationForm from "./ApplicationForm";
+import RationalizationView from "./RationalizationView";
 
 function ApplicationPageInner() {
   const { data } = useApplications();
@@ -59,12 +60,39 @@ function ApplicationPageInner() {
   );
 }
 
+function tabStyle(active: boolean): CSSProperties {
+  return {
+    padding: "6px 14px",
+    fontSize: 13,
+    border: "1px solid var(--border)",
+    borderRadius: 6,
+    background: active ? "var(--accent, #2874A6)" : "var(--surface)",
+    color: active ? "#fff" : "var(--ink-2)",
+    cursor: "pointer",
+  };
+}
+
 export default function ApplicationPage() {
+  const [view, setView] = useState<"registry" | "rationalization">("registry");
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-3)" }}>Loading…</div>}>
-        <ApplicationPageInner />
-      </Suspense>
+      <div style={{ display: "flex", gap: 8, padding: "10px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+        <button type="button" style={tabStyle(view === "registry")} aria-pressed={view === "registry"} onClick={() => setView("registry")}>
+          Registry
+        </button>
+        <button type="button" style={tabStyle(view === "rationalization")} aria-pressed={view === "rationalization"} onClick={() => setView("rationalization")}>
+          Rationalization
+        </button>
+      </div>
+      <div style={{ flex: 1, overflow: "hidden" }}>
+        {view === "registry" ? (
+          <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-3)" }}>Loading…</div>}>
+            <ApplicationPageInner />
+          </Suspense>
+        ) : (
+          <RationalizationView />
+        )}
+      </div>
     </div>
   );
 }

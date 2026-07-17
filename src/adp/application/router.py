@@ -50,6 +50,7 @@ from adp.application.models import (
     DuplicateAppDesignLinkError,
     DuplicateAppStageLinkError,
     DuplicateAppTechCapLinkError,
+    RationalizationResponse,
     TechCapDepthError,
     TechCapHasChildrenError,
     TechCapListResponse,
@@ -86,8 +87,14 @@ async def _get_session():
 # ── Applications CRUD ─────────────────────────────────────────────────────────
 
 @applications_router.get("", response_model=ApplicationListResponse)
-async def list_applications(session: AsyncSession = Depends(_get_session)):
-    return await astore.list_applications(session)
+async def list_applications(
+    business_unit: Optional[str] = Query(default=None),
+    lifecycle_status: Optional[str] = Query(default=None),
+    session: AsyncSession = Depends(_get_session),
+):
+    return await astore.list_applications(
+        session, business_unit=business_unit, lifecycle_status=lifecycle_status
+    )
 
 
 @applications_router.post("", response_model=Application, status_code=status.HTTP_201_CREATED)
@@ -101,6 +108,15 @@ async def create_application(
     actor = _get_actor(request)
     logger.info("application.create id=%s name=%r actor=%s", app.id, app.name, actor)
     return app
+
+
+@applications_router.get("/rationalization", response_model=RationalizationResponse)
+async def get_rationalization(session: AsyncSession = Depends(_get_session)):
+    """TIME rationalization projection: business_value × health_score (APM US1).
+
+    Registered before ``/{app_id}`` so the literal path is not shadowed.
+    """
+    return await astore.fetch_rationalization(session)
 
 
 @applications_router.get("/{app_id}", response_model=Application)
