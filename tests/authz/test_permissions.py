@@ -126,6 +126,15 @@ _EXPECTED: dict[tuple[PersonaRole, ActionType], bool] = {
     (PersonaRole.SOLUTION_ARCHITECT, ActionType.WRITE_APPLICATION_RISK): True,
     (PersonaRole.TECHNICAL_ARCHITECT, ActionType.WRITE_APPLICATION_RISK): True,
     (PersonaRole.REVIEWER, ActionType.WRITE_APPLICATION_RISK): False,
+    # read/write_application_cost: same grant shape as risk — sensitive TCO data (v1.3.0)
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.READ_APPLICATION_COST): True,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.READ_APPLICATION_COST): True,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.READ_APPLICATION_COST): True,
+    (PersonaRole.REVIEWER, ActionType.READ_APPLICATION_COST): False,
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.WRITE_APPLICATION_COST): True,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.WRITE_APPLICATION_COST): True,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.WRITE_APPLICATION_COST): True,
+    (PersonaRole.REVIEWER, ActionType.WRITE_APPLICATION_COST): False,
 }
 
 
@@ -177,8 +186,8 @@ def test_require_action_logs_warning_on_denial(caplog: pytest.LogCaptureFixture)
 
 
 def test_permissions_version_constant() -> None:
-    """PERMISSIONS_VERSION exists and is 1.2.0 — any permission change must bump it."""
-    assert PERMISSIONS_VERSION == "1.2.0"
+    """PERMISSIONS_VERSION exists and is 1.3.0 — any permission change must bump it."""
+    assert PERMISSIONS_VERSION == "1.3.0"
 
 
 # ── US3: Per-action confirmation requirements ────────────────────────────────
@@ -198,6 +207,8 @@ _CONFIRMATION_EXPECTED: dict[ActionType, bool] = {
     ActionType.MANAGE_CONFIG: False,
     ActionType.READ_APPLICATION_RISK: False,
     ActionType.WRITE_APPLICATION_RISK: False,
+    ActionType.READ_APPLICATION_COST: False,
+    ActionType.WRITE_APPLICATION_COST: False,
 }
 
 

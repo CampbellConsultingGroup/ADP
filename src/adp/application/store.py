@@ -8,17 +8,21 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Any, cast
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from adp.application.models import (
+    TCO_BUCKET_NAMES,
     Application,
     ApplicationCapabilityLink,
     ApplicationCapabilityLinkCreate,
     ApplicationCapabilityLinksResponse,
     ApplicationCapabilityLinkUpdate,
+    ApplicationCost,
+    ApplicationCostUpdate,
     ApplicationCreate,
     ApplicationDesignLink,
     ApplicationDesignLinkCreate,
@@ -40,6 +44,9 @@ from adp.application.models import (
     ApplicationTechCapLinkCreate,
     ApplicationTechCapLinksResponse,
     ApplicationUpdate,
+    BusinessUnitCostRollup,
+    CostBucket,
+    CostRollupResponse,
     DuplicateAppCapLinkError,
     DuplicateAppDesignLinkError,
     DuplicateAppStageLinkError,
@@ -196,6 +203,23 @@ _application_risk = sa.Table(
     sa.Column("end_of_support_date", sa.Date()),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
+
+# APM US4: Total Cost of Ownership (1:1 with applications; cascade-deletes)
+_cost_columns: list[sa.Column] = [
+    sa.Column("app_id", sa.String(36), primary_key=True),
+    sa.Column("currency", sa.CHAR(3), nullable=False, server_default="USD"),
+    sa.Column("horizon_years", sa.SmallInteger(), nullable=False, server_default="5"),
+]
+for _bucket in TCO_BUCKET_NAMES:
+    _cost_columns.append(
+        sa.Column(f"{_bucket}_one_time", sa.Numeric(14, 2), nullable=False, server_default="0")
+    )
+    _cost_columns.append(
+        sa.Column(f"{_bucket}_annual", sa.Numeric(14, 2), nullable=False, server_default="0")
+    )
+_cost_columns.append(sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False))
+
+_application_cost = sa.Table("application_cost", _metadata, *_cost_columns)
 
 # ── Session factory ───────────────────────────────────────────────────────────
 
@@ -465,6 +489,87 @@ async def list_out_of_support(session: AsyncSession, today: date) -> OutOfSuppor
         for r in result.mappings().all()
     ]
     return OutOfSupportResponse(items=items, total=len(items))
+
+
+# ── Application Cost / TCO CRUD (US4, ADP-9x6) ────────────────────────────────
+
+
+def _row_to_cost(row: Any) -> ApplicationCost:
+    buckets = {
+        name: CostBucket(one_time=row[f"{name}_one_time"], annual=row[f"{name}_annual"])
+        for name in TCO_BUCKET_NAMES
+    }
+    return ApplicationCost(
+        currency=row["currency"],
+        horizon_years=row["horizon_years"],
+        updated_at=row["updated_at"],
+        **buckets,
+    )
+
+
+async def get_application_cost(app_id: str, session: AsyncSession) -> ApplicationCost | None:
+    result = await session.execute(
+        sa.select(_application_cost).where(_application_cost.c.app_id == app_id)
+    )
+    row = result.mappings().first()
+    return _row_to_cost(row) if row else None
+
+
+async def upsert_application_cost(
+    app_id: str, body: ApplicationCostUpdate, session: AsyncSession
+) -> ApplicationCost:
+    values: dict[str, Any] = {
+        "currency": body.currency,
+        "horizon_years": body.horizon_years,
+        "updated_at": _now(),
+    }
+    for name in TCO_BUCKET_NAMES:
+        bucket = getattr(body, name)
+        values[f"{name}_one_time"] = bucket.one_time
+        values[f"{name}_annual"] = bucket.annual
+
+    exists = (
+        await session.execute(
+            sa.select(_application_cost.c.app_id).where(_application_cost.c.app_id == app_id)
+        )
+    ).first() is not None
+    if exists:
+        await session.execute(
+            _application_cost.update()
+            .where(_application_cost.c.app_id == app_id)
+            .values(**values)
+        )
+    else:
+        await session.execute(_application_cost.insert().values(app_id=app_id, **values))
+    cost = await get_application_cost(app_id, session)
+    assert cost is not None  # just upserted
+    return cost
+
+
+async def rollup_cost_by_business_unit(session: AsyncSession) -> CostRollupResponse:
+    """TCO per business unit, computed in Python (TCO is derived, not stored)."""
+    stmt = sa.select(_applications.c.owning_business_unit, _application_cost).select_from(
+        _application_cost.join(_applications, _applications.c.id == _application_cost.c.app_id)
+    )
+    result = await session.execute(stmt)
+
+    bu_totals: dict[str | None, list[Any]] = {}
+    grand_total = Decimal("0")
+    for row in result.mappings().all():
+        cost = _row_to_cost(row)
+        bu = row["owning_business_unit"]
+        entry = bu_totals.setdefault(bu, [Decimal("0"), 0])
+        entry[0] += cost.tco
+        entry[1] += 1
+        grand_total += cost.tco
+
+    items = [
+        BusinessUnitCostRollup(business_unit=bu, app_count=count, tco=total)
+        for bu, (total, count) in sorted(
+            bu_totals.items(), key=lambda kv: (kv[0] is None, kv[0] or "")
+        )
+    ]
+    return CostRollupResponse(items=items, total_tco=grand_total)
 
 
 # ── Technical Capability CRUD (US3) ──────────────────────────────────────────

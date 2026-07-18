@@ -103,6 +103,46 @@ export interface OutOfSupportResponse {
   total: number;
 }
 
+// ── Total Cost of Ownership (APM US4, ADP-9x6, sensitive) ────────────────────
+// Money is Decimal on the backend and serializes as a string — never parse it
+// back into a JS number except for display formatting.
+
+export interface CostBucket {
+  one_time: string;
+  annual: string;
+}
+
+export const TCO_BUCKET_KEYS = [
+  "acquisition", "implementation", "training", "operational",
+  "maintenance", "upgrades", "risk_downtime", "end_of_life",
+] as const;
+export type TcoBucketKey = (typeof TCO_BUCKET_KEYS)[number];
+
+export type CostBuckets = { [K in TcoBucketKey]: CostBucket };
+
+export interface ApplicationCostUpdate extends CostBuckets {
+  currency: string;
+  horizon_years: number;
+}
+
+export interface ApplicationCost extends ApplicationCostUpdate {
+  updated_at: string | null;
+  tco: string;
+  run_total: string;
+  change_total: string;
+}
+
+export interface BusinessUnitCostRollup {
+  business_unit: string | null;
+  app_count: number;
+  tco: string;
+}
+
+export interface CostRollupResponse {
+  items: BusinessUnitCostRollup[];
+  total_tco: string;
+}
+
 export interface TechnicalCapability {
   id: string;
   name: string;
@@ -234,6 +274,38 @@ export function useOutOfSupport() {
   return useQuery<OutOfSupportResponse>({
     queryKey: ["applications", "risk", "out-of-support"],
     queryFn: () => apiFetch(`${API}/applications/risk/out-of-support`),
+    retry: false,
+  });
+}
+
+export function useApplicationCost(appId: string) {
+  return useQuery<ApplicationCost>({
+    queryKey: ["applications", appId, "cost"],
+    queryFn: () => apiFetch(`${API}/applications/${appId}/cost`),
+    enabled: !!appId,
+    retry: false, // sensitive data: don't hammer a reader who lacks access
+  });
+}
+
+export function useUpdateApplicationCost(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ApplicationCostUpdate) =>
+      apiFetch<ApplicationCost>(`${API}/applications/${appId}/cost`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["applications", appId, "cost"] });
+      qc.invalidateQueries({ queryKey: ["applications", "cost", "rollup"] });
+    },
+  });
+}
+
+export function useCostRollup() {
+  return useQuery<CostRollupResponse>({
+    queryKey: ["applications", "cost", "rollup"],
+    queryFn: () => apiFetch(`${API}/applications/cost/rollup`),
     retry: false,
   });
 }

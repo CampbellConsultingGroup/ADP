@@ -149,3 +149,29 @@ async def test_risk_read_gate_allows_permitted_role() -> None:
     from adp.authz.roles import ActionType
     dep = require_action_dep(ActionType.READ_APPLICATION_RISK)
     await dep(user=_user(PersonaRole.SOLUTION_ARCHITECT))  # must not raise
+
+
+# ── APM US4: sensitive cost (TCO) reads ARE gated ──────────────────────────────
+
+def test_reviewer_denied_cost_read(app: FastAPI) -> None:
+    resp = _client_as(app, PersonaRole.REVIEWER).get("/api/v1/applications/X/cost")
+    assert resp.status_code == 403
+
+
+def test_reviewer_denied_cost_rollup(app: FastAPI) -> None:
+    resp = _client_as(app, PersonaRole.REVIEWER).get("/api/v1/applications/cost/rollup")
+    assert resp.status_code == 403
+
+
+def test_reviewer_denied_cost_write(app: FastAPI) -> None:
+    """WRITE_APPLICATION_COST overrides the /applications prefix (WRITE_APPLICATION)."""
+    resp = _client_as(app, PersonaRole.REVIEWER).put("/api/v1/applications/X/cost", json={})
+    assert resp.status_code == 403
+
+
+def test_cost_write_route_maps_to_sensitive_action() -> None:
+    from adp.authz.roles import ActionType
+    assert (
+        required_action_for("PUT", "/api/v1/applications/{app_id}/cost")
+        == ActionType.WRITE_APPLICATION_COST
+    )

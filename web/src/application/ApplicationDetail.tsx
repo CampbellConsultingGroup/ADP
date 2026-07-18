@@ -11,6 +11,7 @@ import DomainIntegrationEditor from "./DomainIntegrationEditor";
 import DesignLinkEditor from "./DesignLinkEditor";
 import IntegrationList from "./IntegrationList";
 import RiskPanel from "./RiskPanel";
+import CostPanel from "./CostPanel";
 
 interface Props {
   appId: string;
@@ -18,7 +19,7 @@ interface Props {
   onDeleted: () => void;
 }
 
-type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs" | "risk";
+type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs" | "risk" | "cost";
 
 export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) {
   const { data: app, isLoading } = useApplication(appId);
@@ -51,6 +52,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
     { id: "integrations", label: "Integrations" },
     { id: "designs", label: "Designs" },
     { id: "risk", label: "Risk & Compliance" },
+    { id: "cost", label: "Cost (TCO)" },
   ];
 
   const tabStyle = (id: Section): React.CSSProperties => ({
@@ -124,6 +126,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
         {section === "integrations" && <IntegrationList apps={allApps} filterAppId={appId} />}
         {section === "designs" && <DesignLinkEditor appId={appId} />}
         {section === "risk" && <RiskPanel appId={appId} />}
+        {section === "cost" && <CostPanel appId={appId} />}
       </div>
     </div>
   );
