@@ -71,6 +71,8 @@ _capabilities = sa.Table(
     sa.Column("domain_id", sa.String(36), nullable=True),
     # ADP-33v: strategic classification (migration 020)
     sa.Column("strategic_relevance", sa.SmallInteger(), nullable=True),
+    # ADP-4ga: CMMI-style maturity assessment (migration 021)
+    sa.Column("maturity_level", sa.SmallInteger(), nullable=True),
 )
 
 _value_streams = sa.Table(
@@ -189,6 +191,7 @@ def _row_to_capability(row: Any) -> BusinessCapability:
         domain_id=getattr(row, "domain_id", None),
         domain_name=getattr(row, "domain_name", None),
         strategic_relevance=getattr(row, "strategic_relevance", None),
+        maturity_level=getattr(row, "maturity_level", None),
     )
 
 
@@ -273,6 +276,7 @@ async def create_capability(
             created_at=now,
             updated_at=now,
             strategic_relevance=data.strategic_relevance,
+            maturity_level=data.maturity_level,
         )
     )
     await index_entity(
@@ -288,6 +292,7 @@ async def create_capability(
         created_at=now,
         updated_at=now,
         strategic_relevance=data.strategic_relevance,
+        maturity_level=data.maturity_level,
     )
 
 
@@ -309,6 +314,8 @@ async def update_capability(
         updates["description"] = data.description
     if "strategic_relevance" in data.model_fields_set:
         updates["strategic_relevance"] = data.strategic_relevance
+    if "maturity_level" in data.model_fields_set:
+        updates["maturity_level"] = data.maturity_level
 
     await session.execute(
         _capabilities.update().where(_capabilities.c.id == cap_id).values(**updates)

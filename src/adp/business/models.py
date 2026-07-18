@@ -20,6 +20,45 @@ StrategicRelevance = Literal[1, 2, 3]
 STRATEGIC_RELEVANCE_LABELS: dict[int, str] = {1: "Strategic", 2: "Core", 3: "Supporting"}
 
 
+# ── Maturity level (ADP-4ga) ──────────────────────────────────────────────────
+# Business capabilities only (the CMMI-style ladder is business-process
+# oriented). Distinct from 'level' (hierarchy depth) and from
+# strategic_relevance -- three separate numeric axes.
+
+MaturityLevel = Literal[1, 2, 3, 4, 5]
+
+MATURITY_LEVEL_LABELS: dict[int, str] = {
+    1: "Ad hoc",
+    2: "Emerging",
+    3: "Established",
+    4: "Advanced",
+    5: "World Class",
+}
+
+MATURITY_LEVEL_DESCRIPTIONS: dict[int, str] = {
+    1: (
+        "Capability exists informally, person-dependent, undocumented, "
+        "inconsistent; outcomes unpredictable."
+    ),
+    2: (
+        "Basic processes exist, somewhat consistent within a team/unit, "
+        "still largely reactive, not standardized org-wide."
+    ),
+    3: (
+        "Documented, standardized, consistently applied across the org; "
+        "roles/processes/tools formally defined, not tribal knowledge."
+    ),
+    4: (
+        "Quantitatively managed; performance tracked with metrics/KPIs, "
+        "decisions data-driven, variability understood and controlled."
+    ),
+    5: (
+        "Continuous improvement via feedback loops, innovation, proactive "
+        "adaptation, often ahead of business need."
+    ),
+}
+
+
 # ── BusinessCapability ────────────────────────────────────────────────────────
 
 class BusinessCapability(BaseModel):
@@ -39,6 +78,8 @@ class BusinessCapability(BaseModel):
     domain_name: str | None = None
     # ADP-33v: strategic classification (null = unclassified)
     strategic_relevance: StrategicRelevance | None = None
+    # ADP-4ga: CMMI-style maturity assessment (null = not yet assessed)
+    maturity_level: MaturityLevel | None = None
 
 
 class BusinessCapabilityCreate(BaseModel):
@@ -51,6 +92,7 @@ class BusinessCapabilityCreate(BaseModel):
     parent_id: str | None = None
     position: int = 0
     strategic_relevance: StrategicRelevance | None = None
+    maturity_level: MaturityLevel | None = None
 
     @field_validator("name")
     @classmethod
@@ -78,6 +120,7 @@ class BusinessCapabilityUpdate(BaseModel):
     description: str | None = None
     position: int | None = None
     strategic_relevance: StrategicRelevance | None = None
+    maturity_level: MaturityLevel | None = None
 
     @field_validator("name")
     @classmethod
