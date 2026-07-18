@@ -26,6 +26,9 @@ Quadrant = Literal["tolerate", "invest", "migrate", "eliminate"]
 # ADP-SPEC-038 (APM US2): explicit application lifecycle state.
 LifecycleStatus = Literal["planned", "active", "sunset", "retired"]
 
+# ADP-SPEC-038 (APM US5): technical fit depth.
+HostingModel = Literal["on_prem", "cloud", "saas", "hybrid"]
+
 # ── Error classes ─────────────────────────────────────────────────────────────
 
 
@@ -73,6 +76,9 @@ class Application(BaseModel):
     business_owner: str | None = None
     technical_owner: str | None = None
     lifecycle_status: LifecycleStatus = "active"
+    hosting_model: HostingModel | None = None
+    architecture_pattern: str | None = None
+    tech_debt_flags: list[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -93,6 +99,9 @@ class ApplicationCreate(BaseModel):
     business_owner: str | None = None
     technical_owner: str | None = None
     lifecycle_status: LifecycleStatus = "active"
+    hosting_model: HostingModel | None = None
+    architecture_pattern: str | None = None
+    tech_debt_flags: list[str] = Field(default_factory=list)
 
     @field_validator("name")
     @classmethod
@@ -118,6 +127,9 @@ class ApplicationUpdate(BaseModel):
     business_owner: str | None = None
     technical_owner: str | None = None
     lifecycle_status: LifecycleStatus | None = None
+    hosting_model: HostingModel | None = None
+    architecture_pattern: str | None = None
+    tech_debt_flags: list[str] | None = None
 
     @field_validator("name")
     @classmethod

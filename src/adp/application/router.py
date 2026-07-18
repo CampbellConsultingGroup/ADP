@@ -105,10 +105,16 @@ _require_cost_read = require_action_dep(ActionType.READ_APPLICATION_COST)
 async def list_applications(
     business_unit: Optional[str] = Query(default=None),
     lifecycle_status: Optional[str] = Query(default=None),
+    hosting_model: Optional[str] = Query(default=None),
+    tech_debt_flag: Optional[str] = Query(default=None),
     session: AsyncSession = Depends(_get_session),
 ):
     return await astore.list_applications(
-        session, business_unit=business_unit, lifecycle_status=lifecycle_status
+        session,
+        business_unit=business_unit,
+        lifecycle_status=lifecycle_status,
+        hosting_model=hosting_model,
+        tech_debt_flag=tech_debt_flag,
     )
 
 

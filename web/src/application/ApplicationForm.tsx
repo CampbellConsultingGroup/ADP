@@ -12,6 +12,7 @@ const TIME_OPTIONS = ["", "Tolerate", "Invest", "Migrate", "Eliminate"] as const
 const R_OPTIONS = ["", "Rehost", "Replatform", "Repurchase", "Refactor", "Retire", "Retain", "Relocate"] as const;
 const PACE_OPTIONS = ["", "Record", "Differentiation", "Innovation"] as const;
 const LIFECYCLE_OPTIONS = ["planned", "active", "sunset", "retired"] as const;
+const HOSTING_OPTIONS = ["", "on_prem", "cloud", "saas", "hybrid"] as const;
 
 export default function ApplicationForm({ initial, onSave, onCancel, saving }: Props) {
   const [name, setName] = useState(initial?.name ?? "");
@@ -28,6 +29,9 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
   const [bizOwner, setBizOwner] = useState<string>(initial?.business_owner ?? "");
   const [techOwner, setTechOwner] = useState<string>(initial?.technical_owner ?? "");
   const [lifecycle, setLifecycle] = useState<string>(initial?.lifecycle_status ?? "active");
+  const [hostingModel, setHostingModel] = useState<string>(initial?.hosting_model ?? "");
+  const [archPattern, setArchPattern] = useState<string>(initial?.architecture_pattern ?? "");
+  const [techDebtFlags, setTechDebtFlags] = useState<string>((initial?.tech_debt_flags ?? []).join(", "));
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,6 +61,9 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
         business_owner: bizOwner || null,
         technical_owner: techOwner || null,
         lifecycle_status: (lifecycle || "active") as ApplicationCreate["lifecycle_status"],
+        hosting_model: (hostingModel || null) as ApplicationCreate["hosting_model"],
+        architecture_pattern: archPattern || null,
+        tech_debt_flags: techDebtFlags.split(",").map((t) => t.trim()).filter(Boolean),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
@@ -132,6 +139,20 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
         <select style={field} value={lifecycle} onChange={e => setLifecycle(e.target.value)}>
           {LIFECYCLE_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
         </select>
+      </label>
+
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Hosting Model
+        <select style={field} value={hostingModel} onChange={e => setHostingModel(e.target.value)}>
+          {HOSTING_OPTIONS.map(o => <option key={o} value={o}>{o || "— none —"}</option>)}
+        </select>
+      </label>
+
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Architecture Pattern
+        <input style={field} value={archPattern} onChange={e => setArchPattern(e.target.value)} placeholder="e.g. microservices" />
+      </label>
+
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Tech-Debt Flags (comma-separated)
+        <input style={field} value={techDebtFlags} onChange={e => setTechDebtFlags(e.target.value)} placeholder="unsupported_version, deprecated_tech" />
       </label>
 
       <div style={{ display: "flex", gap: 8 }}>
