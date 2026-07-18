@@ -5,6 +5,7 @@ import ApplicationList from "./ApplicationList";
 import ApplicationDetail from "./ApplicationDetail";
 import ApplicationForm from "./ApplicationForm";
 import RationalizationView from "./RationalizationView";
+import RoadmapView from "./RoadmapView";
 
 function ApplicationPageInner() {
   const { data } = useApplications();
@@ -73,7 +74,7 @@ function tabStyle(active: boolean): CSSProperties {
 }
 
 export default function ApplicationPage() {
-  const [view, setView] = useState<"registry" | "rationalization">("registry");
+  const [view, setView] = useState<"registry" | "rationalization" | "roadmap">("registry");
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ display: "flex", gap: 8, padding: "10px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
@@ -83,15 +84,18 @@ export default function ApplicationPage() {
         <button type="button" style={tabStyle(view === "rationalization")} aria-pressed={view === "rationalization"} onClick={() => setView("rationalization")}>
           Rationalization
         </button>
+        <button type="button" style={tabStyle(view === "roadmap")} aria-pressed={view === "roadmap"} onClick={() => setView("roadmap")}>
+          Roadmap
+        </button>
       </div>
       <div style={{ flex: 1, overflow: "hidden" }}>
-        {view === "registry" ? (
+        {view === "registry" && (
           <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-3)" }}>Loading…</div>}>
             <ApplicationPageInner />
           </Suspense>
-        ) : (
-          <RationalizationView />
         )}
+        {view === "rationalization" && <RationalizationView />}
+        {view === "roadmap" && <RoadmapView />}
       </div>
     </div>
   );

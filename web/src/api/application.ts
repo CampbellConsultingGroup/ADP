@@ -110,6 +110,73 @@ export interface OutOfSupportResponse {
   total: number;
 }
 
+// ── Lifecycle & Roadmap: Transformation Initiatives (APM US6) ────────────────
+
+export type Disposition = "retire" | "replace" | "modernize" | "invest";
+
+export interface TransformationInitiative {
+  id: string;
+  name: string;
+  description: string | null;
+  target_date: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TransformationInitiativeCreate {
+  name: string;
+  description?: string | null;
+  target_date?: string | null;
+}
+
+export interface TransformationInitiativeUpdate extends Partial<TransformationInitiativeCreate> {}
+
+export interface TransformationInitiativeListResponse {
+  items: TransformationInitiative[];
+  total: number;
+}
+
+export interface InitiativeMember {
+  app_id: string;
+  app_name: string;
+  planned_disposition: Disposition;
+}
+
+export interface TransformationInitiativeDetail extends TransformationInitiative {
+  members: InitiativeMember[];
+}
+
+export interface ApplicationInitiativeLink {
+  app_id: string;
+  initiative_id: string;
+  initiative_name: string;
+  planned_disposition: Disposition;
+}
+
+export interface ApplicationInitiativeLinkCreate {
+  initiative_id: string;
+  planned_disposition: Disposition;
+}
+
+export interface ApplicationInitiativeLinksResponse {
+  items: ApplicationInitiativeLink[];
+  total: number;
+}
+
+export interface RoadmapEntry {
+  app_id: string;
+  name: string;
+  time_classification: TimeClassification | null;
+  lifecycle_status: LifecycleStatus;
+  end_of_life_date: string | null;
+  initiative_links: ApplicationInitiativeLink[];
+}
+
+export interface RoadmapResponse {
+  items: RoadmapEntry[];
+  total: number;
+}
+
 // ── Total Cost of Ownership (APM US4, ADP-9x6, sensitive) ────────────────────
 // Money is Decimal on the backend and serializes as a string — never parse it
 // back into a JS number except for display formatting.
@@ -405,6 +472,90 @@ export function useDeleteAppCapLink(appId: string) {
     mutationFn: (capId: string) =>
       apiFetch<void>(`${API}/applications/${appId}/capability-links/${capId}`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "capability-links"] }),
+  });
+}
+
+// ── Transformation Initiative hooks ───────────────────────────────────────────
+
+export function useInitiatives() {
+  return useQuery<TransformationInitiativeListResponse>({
+    queryKey: ["transformation-initiatives"],
+    queryFn: () => apiFetch(`${API}/transformation-initiatives`),
+  });
+}
+
+export function useInitiative(id: string) {
+  return useQuery<TransformationInitiativeDetail>({
+    queryKey: ["transformation-initiatives", id],
+    queryFn: () => apiFetch(`${API}/transformation-initiatives/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useCreateInitiative() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TransformationInitiativeCreate) =>
+      apiFetch<TransformationInitiative>(`${API}/transformation-initiatives`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["transformation-initiatives"] }),
+  });
+}
+
+export function useDeleteInitiative() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<void>(`${API}/transformation-initiatives/${id}`, { method: "DELETE" }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["transformation-initiatives"] }),
+  });
+}
+
+export function useRoadmap() {
+  return useQuery<RoadmapResponse>({
+    queryKey: ["applications", "roadmap"],
+    queryFn: () => apiFetch(`${API}/applications/roadmap`),
+  });
+}
+
+export function useAppInitiativeLinks(appId: string) {
+  return useQuery<ApplicationInitiativeLinksResponse>({
+    queryKey: ["applications", appId, "initiative-links"],
+    queryFn: () => apiFetch(`${API}/applications/${appId}/initiative-links`),
+    enabled: !!appId,
+  });
+}
+
+export function useCreateInitiativeLink(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ApplicationInitiativeLinkCreate) =>
+      apiFetch<ApplicationInitiativeLink>(`${API}/applications/${appId}/initiative-links`, {
+        method: "POST",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["applications", appId, "initiative-links"] });
+      qc.invalidateQueries({ queryKey: ["applications", "roadmap"] });
+      qc.invalidateQueries({ queryKey: ["transformation-initiatives"] });
+    },
+  });
+}
+
+export function useDeleteInitiativeLink(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (initiativeId: string) =>
+      apiFetch<void>(`${API}/applications/${appId}/initiative-links/${initiativeId}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["applications", appId, "initiative-links"] });
+      qc.invalidateQueries({ queryKey: ["applications", "roadmap"] });
+      qc.invalidateQueries({ queryKey: ["transformation-initiatives"] });
+    },
   });
 }
 
