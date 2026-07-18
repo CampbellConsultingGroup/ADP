@@ -31,6 +31,7 @@ const APP: Application = {
   pace_layer: "Differentiation", health_score: 4,
   business_value: null, business_criticality: null,
   owning_business_unit: null, business_owner: null, technical_owner: null, lifecycle_status: "active",
+  hosting_model: null, architecture_pattern: null, tech_debt_flags: [],
   created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
 };
 

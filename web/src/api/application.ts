@@ -9,6 +9,7 @@ export type UsageType = "provides" | "consumes";
 export type IntegrationDir = "inbound" | "outbound" | "bidirectional";
 export type AppIntegrationType = "API" | "event" | "file" | "database" | "messaging" | "other";
 export type LifecycleStatus = "planned" | "active" | "sunset" | "retired";
+export type HostingModel = "on_prem" | "cloud" | "saas" | "hybrid";
 
 export interface Application {
   id: string;
@@ -26,6 +27,9 @@ export interface Application {
   business_owner: string | null;
   technical_owner: string | null;
   lifecycle_status: LifecycleStatus;
+  hosting_model: HostingModel | null;
+  architecture_pattern: string | null;
+  tech_debt_flags: string[];
   created_at: string;
   updated_at: string;
 }
@@ -45,6 +49,9 @@ export interface ApplicationCreate {
   business_owner?: string | null;
   technical_owner?: string | null;
   lifecycle_status?: LifecycleStatus;
+  hosting_model?: HostingModel | null;
+  architecture_pattern?: string | null;
+  tech_debt_flags?: string[];
 }
 
 export interface ApplicationUpdate extends Partial<ApplicationCreate> {}
