@@ -615,3 +615,35 @@ class RoadmapResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[RoadmapEntry]
     total: int
+
+
+# ── Ownership & Governance (APM US7) ──────────────────────────────────────────
+
+
+class ApplicationGovernanceUpdate(BaseModel):
+    """Upsert body for an application's ownership & governance record."""
+    model_config = ConfigDict(extra="forbid")
+    contract_terms: str | None = None
+    renewal_date: date | None = None
+    sla: str | None = None
+    business_sponsor: str | None = None
+    it_owner: str | None = None
+    decision_rights: str | None = None
+
+
+class ApplicationGovernance(ApplicationGovernanceUpdate):
+    """Read model — the stored governance record (updated_at set once persisted)."""
+    updated_at: datetime | None = None
+
+
+class RenewalSoonEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    app_id: str
+    name: str
+    renewal_date: date
+
+
+class RenewalsSoonResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[RenewalSoonEntry]
+    total: int

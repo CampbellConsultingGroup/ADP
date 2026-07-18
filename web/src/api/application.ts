@@ -177,6 +177,31 @@ export interface RoadmapResponse {
   total: number;
 }
 
+// ── Ownership & Governance (APM US7, sensitive) ───────────────────────────────
+
+export interface ApplicationGovernance {
+  contract_terms: string | null;
+  renewal_date: string | null;
+  sla: string | null;
+  business_sponsor: string | null;
+  it_owner: string | null;
+  decision_rights: string | null;
+  updated_at: string | null;
+}
+
+export type ApplicationGovernanceUpdate = Omit<ApplicationGovernance, "updated_at">;
+
+export interface RenewalSoonEntry {
+  app_id: string;
+  name: string;
+  renewal_date: string;
+}
+
+export interface RenewalsSoonResponse {
+  items: RenewalSoonEntry[];
+  total: number;
+}
+
 // ── Total Cost of Ownership (APM US4, ADP-9x6, sensitive) ────────────────────
 // Money is Decimal on the backend and serializes as a string — never parse it
 // back into a JS number except for display formatting.
@@ -380,6 +405,41 @@ export function useCostRollup() {
   return useQuery<CostRollupResponse>({
     queryKey: ["applications", "cost", "rollup"],
     queryFn: () => apiFetch(`${API}/applications/cost/rollup`),
+    retry: false,
+  });
+}
+
+export function useApplicationGovernance(appId: string) {
+  return useQuery<ApplicationGovernance>({
+    queryKey: ["applications", appId, "governance"],
+    queryFn: () => apiFetch(`${API}/applications/${appId}/governance`),
+    enabled: !!appId,
+    retry: false, // sensitive data: don't hammer a reader who lacks access
+  });
+}
+
+export function useUpdateApplicationGovernance(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ApplicationGovernanceUpdate) =>
+      apiFetch<ApplicationGovernance>(`${API}/applications/${appId}/governance`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["applications", appId, "governance"] });
+      qc.invalidateQueries({ queryKey: ["applications", "governance", "renewals-soon"] });
+    },
+  });
+}
+
+export function useRenewalsSoon(withinDays?: number) {
+  return useQuery<RenewalsSoonResponse>({
+    queryKey: ["applications", "governance", "renewals-soon", withinDays ?? 90],
+    queryFn: () =>
+      apiFetch(
+        `${API}/applications/governance/renewals-soon${withinDays ? `?within_days=${withinDays}` : ""}`,
+      ),
     retry: false,
   });
 }

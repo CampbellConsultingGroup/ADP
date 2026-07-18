@@ -26,7 +26,11 @@ _logger = logging.getLogger("adp.authz")
 #   1.3.0 — added READ_APPLICATION_COST / WRITE_APPLICATION_COST (same three
 #           architect roles) to gate the sensitive TCO / cost register
 #           (ADP-SPEC-038 US4). Reviewers do NOT hold these either.
-PERMISSIONS_VERSION = "1.3.0"
+#   1.4.0 — added READ_APPLICATION_GOVERNANCE / WRITE_APPLICATION_GOVERNANCE
+#           (same three architect roles) to gate the sensitive contract/
+#           governance register (ADP-SPEC-038 US7). Reviewers do NOT hold
+#           these either.
+PERMISSIONS_VERSION = "1.4.0"
 
 # ── Permission table ─────────────────────────────────────────────────────────
 # Maps each PersonaRole to the frozenset of ActionTypes it may perform.
@@ -48,6 +52,8 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.WRITE_APPLICATION_RISK,
         ActionType.READ_APPLICATION_COST,
         ActionType.WRITE_APPLICATION_COST,
+        ActionType.READ_APPLICATION_GOVERNANCE,
+        ActionType.WRITE_APPLICATION_GOVERNANCE,
     }),
     PersonaRole.TECHNICAL_ARCHITECT: frozenset({
         ActionType.READ_DESIGN,
@@ -61,6 +67,8 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.WRITE_APPLICATION_RISK,
         ActionType.READ_APPLICATION_COST,
         ActionType.WRITE_APPLICATION_COST,
+        ActionType.READ_APPLICATION_GOVERNANCE,
+        ActionType.WRITE_APPLICATION_GOVERNANCE,
     }),
     PersonaRole.REVIEWER: frozenset({
         ActionType.READ_DESIGN,

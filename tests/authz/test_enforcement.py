@@ -175,3 +175,33 @@ def test_cost_write_route_maps_to_sensitive_action() -> None:
         required_action_for("PUT", "/api/v1/applications/{app_id}/cost")
         == ActionType.WRITE_APPLICATION_COST
     )
+
+
+# ── APM US7: sensitive governance/contract reads ARE gated ────────────────────
+
+def test_reviewer_denied_governance_read(app: FastAPI) -> None:
+    resp = _client_as(app, PersonaRole.REVIEWER).get("/api/v1/applications/X/governance")
+    assert resp.status_code == 403
+
+
+def test_reviewer_denied_renewals_soon(app: FastAPI) -> None:
+    resp = _client_as(app, PersonaRole.REVIEWER).get(
+        "/api/v1/applications/governance/renewals-soon"
+    )
+    assert resp.status_code == 403
+
+
+def test_reviewer_denied_governance_write(app: FastAPI) -> None:
+    """WRITE_APPLICATION_GOVERNANCE overrides the /applications prefix (WRITE_APPLICATION)."""
+    resp = _client_as(app, PersonaRole.REVIEWER).put(
+        "/api/v1/applications/X/governance", json={}
+    )
+    assert resp.status_code == 403
+
+
+def test_governance_write_route_maps_to_sensitive_action() -> None:
+    from adp.authz.roles import ActionType
+    assert (
+        required_action_for("PUT", "/api/v1/applications/{app_id}/governance")
+        == ActionType.WRITE_APPLICATION_GOVERNANCE
+    )
