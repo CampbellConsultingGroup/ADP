@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { useDeleteCapability, useUpdateCapability } from "../api/business";
-import type { BusinessCapability } from "../api/business";
+import { STRATEGIC_RELEVANCE_LABEL, useDeleteCapability, useUpdateCapability } from "../api/business";
+import type { BusinessCapability, StrategicRelevance } from "../api/business";
 import CapabilityForm from "./CapabilityForm";
 import DesignLinkEditor from "./DesignLinkEditor";
 import { LEVEL_STYLE } from "./classification";
@@ -38,6 +38,11 @@ export default function CapabilityNode({ capability, children }: CapabilityNodeP
     deleteCap.mutate(capability.id, {
       onError: (err) => setDeleteError(err.message),
     });
+  }
+
+  function handleRelevanceChange(value: string) {
+    const strategic_relevance = value === "" ? null : (Number(value) as StrategicRelevance);
+    update.mutate({ strategic_relevance });
   }
 
   return (
@@ -90,6 +95,17 @@ export default function CapabilityNode({ capability, children }: CapabilityNodeP
                 </span>
               )}
             </span>
+            <select
+              value={capability.strategic_relevance ?? ""}
+              onChange={(e) => handleRelevanceChange(e.target.value)}
+              title="Strategic relevance"
+              style={{ fontSize: 10, color: "var(--ink-2)", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 3, padding: "1px 3px" }}
+            >
+              <option value="">Unclassified</option>
+              {([1, 2, 3] as const).map((v) => (
+                <option key={v} value={v}>{STRATEGIC_RELEVANCE_LABEL[v]}</option>
+              ))}
+            </select>
             <button onClick={() => setEditing(true)} title="Edit" style={actionBtn}>✎</button>
             {canAddChild && (
               <button onClick={() => setAddingChild(!addingChild)} title="Add child capability" style={{ ...actionBtn, color: "var(--good)" }}>+</button>
