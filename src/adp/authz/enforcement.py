@@ -86,6 +86,7 @@ _PREFIX_ROUTE_ACTIONS: tuple[tuple[str, ActionType], ...] = (
     ("/api/v1/applications", ActionType.WRITE_APPLICATION),
     ("/api/v1/technical-capabilities", ActionType.WRITE_APPLICATION),
     ("/api/v1/integrations", ActionType.WRITE_APPLICATION),
+    ("/api/v1/transformation-initiatives", ActionType.WRITE_APPLICATION),
 )
 
 

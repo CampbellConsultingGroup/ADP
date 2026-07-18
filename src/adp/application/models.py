@@ -506,3 +506,112 @@ class ApplicationDesignLinkCreate(BaseModel):
 class ApplicationDesignLinksResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[ApplicationDesignLink]
+
+
+# ── Lifecycle & Roadmap: Transformation Initiatives (APM US6) ─────────────────
+
+Disposition = Literal["retire", "replace", "modernize", "invest"]
+
+
+class DuplicateAppInitiativeLinkError(Exception):
+    """Raised when the (app_id, initiative_id) link already exists."""
+
+
+class TransformationInitiative(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    name: str
+    description: str | None
+    target_date: date | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class TransformationInitiativeCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    description: str | None = None
+    target_date: date | None = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("name must not be blank")
+        return v
+
+
+class TransformationInitiativeUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = None
+    description: str | None = None
+    target_date: date | None = None
+
+    @field_validator("name")
+    @classmethod
+    def name_not_blank(cls, v: str | None) -> str | None:
+        if v is not None and not v.strip():
+            raise ValueError("name must not be blank")
+        return v
+
+
+class TransformationInitiativeListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[TransformationInitiative]
+    total: int
+
+
+class InitiativeMember(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    app_id: str
+    app_name: str
+    planned_disposition: Disposition
+
+
+class TransformationInitiativeDetail(TransformationInitiative):
+    """An initiative with its member applications and their planned dispositions."""
+    members: list[InitiativeMember] = Field(default_factory=list)
+
+
+class ApplicationInitiativeLink(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    app_id: str
+    initiative_id: str
+    initiative_name: str
+    planned_disposition: Disposition
+
+
+class ApplicationInitiativeLinkCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    initiative_id: str
+    planned_disposition: Disposition
+
+
+class ApplicationInitiativeLinkUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    planned_disposition: Disposition
+
+
+class ApplicationInitiativeLinksResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[ApplicationInitiativeLink]
+    total: int
+
+
+class RoadmapEntry(BaseModel):
+    """An application on the decommission/roadmap track: Eliminate-classified or
+    sunset/retired, with its EOL date (if recorded, ADP-SPEC-038 US3) and any
+    initiative links."""
+    model_config = ConfigDict(extra="forbid")
+    app_id: str
+    name: str
+    time_classification: TimeClassification | None
+    lifecycle_status: LifecycleStatus
+    end_of_life_date: date | None
+    initiative_links: list[ApplicationInitiativeLink]
+
+
+class RoadmapResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[RoadmapEntry]
+    total: int

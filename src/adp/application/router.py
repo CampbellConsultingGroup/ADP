@@ -37,6 +37,10 @@ from adp.application.models import (
     ApplicationDomainIntegration,
     ApplicationDomainIntegrationCreate,
     ApplicationDomainIntegrationsResponse,
+    ApplicationInitiativeLink,
+    ApplicationInitiativeLinkCreate,
+    ApplicationInitiativeLinksResponse,
+    ApplicationInitiativeLinkUpdate,
     ApplicationIntegration,
     ApplicationIntegrationCreate,
     ApplicationIntegrationListResponse,
@@ -54,16 +58,23 @@ from adp.application.models import (
     CostRollupResponse,
     DuplicateAppCapLinkError,
     DuplicateAppDesignLinkError,
+    DuplicateAppInitiativeLinkError,
     DuplicateAppStageLinkError,
     DuplicateAppTechCapLinkError,
     OutOfSupportResponse,
     RationalizationResponse,
+    RoadmapResponse,
     TechCapDepthError,
     TechCapHasChildrenError,
     TechCapListResponse,
     TechnicalCapability,
     TechnicalCapabilityCreate,
     TechnicalCapabilityUpdate,
+    TransformationInitiative,
+    TransformationInitiativeCreate,
+    TransformationInitiativeDetail,
+    TransformationInitiativeListResponse,
+    TransformationInitiativeUpdate,
 )
 from adp.authz.enforcement import require_action_dep
 from adp.authz.roles import ActionType
@@ -75,6 +86,9 @@ tech_caps_router = APIRouter(
     prefix="/api/v1/technical-capabilities", tags=["technical-capabilities"]
 )
 integrations_router = APIRouter(prefix="/api/v1/integrations", tags=["integrations"])
+initiatives_router = APIRouter(
+    prefix="/api/v1/transformation-initiatives", tags=["transformation-initiatives"]
+)
 
 
 # ── Shared helpers ────────────────────────────────────────────────────────────
@@ -138,6 +152,14 @@ async def get_rationalization(session: AsyncSession = Depends(_get_session)):
     Registered before ``/{app_id}`` so the literal path is not shadowed.
     """
     return await astore.fetch_rationalization(session)
+
+
+@applications_router.get("/roadmap", response_model=RoadmapResponse)
+async def get_roadmap(session: AsyncSession = Depends(_get_session)):
+    """Decommission track: Eliminate-classified or sunset/retired applications
+    (APM US6). Registered before ``/{app_id}`` so the literal path is not shadowed.
+    """
+    return await astore.get_roadmap(session)
 
 
 @applications_router.get("/{app_id}", response_model=Application)
@@ -260,6 +282,87 @@ async def put_application_cost(
     await session.commit()
     logger.info("application.cost.update id=%s actor=%s", app_id, _get_actor(request))
     return cost
+
+
+# ── Lifecycle & Roadmap (APM US6, links) ───────────────────────────────────────
+
+@applications_router.get(
+    "/{app_id}/initiative-links", response_model=ApplicationInitiativeLinksResponse
+)
+async def list_initiative_links(app_id: str, session: AsyncSession = Depends(_get_session)):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    return await astore.list_app_initiative_links(app_id, session)
+
+
+@applications_router.post(
+    "/{app_id}/initiative-links",
+    response_model=ApplicationInitiativeLink,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_initiative_link(
+    app_id: str,
+    body: ApplicationInitiativeLinkCreate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    try:
+        link = await astore.create_app_initiative_link(app_id, body, session)
+    except DuplicateAppInitiativeLinkError:
+        raise HTTPException(status_code=409, detail="Link already exists")
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    await session.commit()
+    logger.info(
+        "app.initiative_link.create app_id=%s initiative_id=%s actor=%s",
+        app_id, body.initiative_id, _get_actor(request),
+    )
+    return link
+
+
+@applications_router.patch(
+    "/{app_id}/initiative-links/{initiative_id}",
+    response_model=ApplicationInitiativeLink,
+)
+async def update_initiative_link(
+    app_id: str,
+    initiative_id: str,
+    body: ApplicationInitiativeLinkUpdate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    link = await astore.update_app_initiative_link(app_id, initiative_id, body, session)
+    if link is None:
+        raise HTTPException(status_code=404, detail="Link not found")
+    await session.commit()
+    logger.info(
+        "app.initiative_link.update app_id=%s initiative_id=%s actor=%s",
+        app_id, initiative_id, _get_actor(request),
+    )
+    return link
+
+
+@applications_router.delete(
+    "/{app_id}/initiative-links/{initiative_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_initiative_link(
+    app_id: str,
+    initiative_id: str,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    deleted = await astore.delete_app_initiative_link(app_id, initiative_id, session)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Link not found")
+    await session.commit()
+    logger.info(
+        "app.initiative_link.delete app_id=%s initiative_id=%s actor=%s",
+        app_id, initiative_id, _get_actor(request),
+    )
 
 
 # ── Application–Business Capability Links ─────────────────────────────────────
@@ -739,3 +842,69 @@ async def delete_integration(
     await session.commit()
     actor = _get_actor(request)
     logger.info("integration.delete id=%s actor=%s", int_id, actor)
+
+
+# ── Transformation Initiatives (APM US6) ───────────────────────────────────────
+
+@initiatives_router.get("", response_model=TransformationInitiativeListResponse)
+async def list_initiatives(session: AsyncSession = Depends(_get_session)):
+    return await astore.list_initiatives(session)
+
+
+@initiatives_router.post(
+    "", response_model=TransformationInitiative, status_code=status.HTTP_201_CREATED
+)
+async def create_initiative(
+    body: TransformationInitiativeCreate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    initiative = await astore.create_initiative(body, session)
+    await session.commit()
+    logger.info(
+        "initiative.create id=%s name=%r actor=%s",
+        initiative.id, initiative.name, _get_actor(request),
+    )
+    return initiative
+
+
+@initiatives_router.get("/{initiative_id}", response_model=TransformationInitiativeDetail)
+async def get_initiative(initiative_id: str, session: AsyncSession = Depends(_get_session)):
+    initiative = await astore.get_initiative(initiative_id, session)
+    if initiative is None:
+        raise HTTPException(
+            status_code=404, detail=f"Transformation initiative {initiative_id!r} not found"
+        )
+    return initiative
+
+
+@initiatives_router.patch("/{initiative_id}", response_model=TransformationInitiative)
+async def update_initiative(
+    initiative_id: str,
+    body: TransformationInitiativeUpdate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    initiative = await astore.update_initiative(initiative_id, body, session)
+    if initiative is None:
+        raise HTTPException(
+            status_code=404, detail=f"Transformation initiative {initiative_id!r} not found"
+        )
+    await session.commit()
+    logger.info("initiative.update id=%s actor=%s", initiative_id, _get_actor(request))
+    return initiative
+
+
+@initiatives_router.delete("/{initiative_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_initiative(
+    initiative_id: str,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    deleted = await astore.delete_initiative(initiative_id, session)
+    if not deleted:
+        raise HTTPException(
+            status_code=404, detail=f"Transformation initiative {initiative_id!r} not found"
+        )
+    await session.commit()
+    logger.info("initiative.delete id=%s actor=%s", initiative_id, _get_actor(request))
