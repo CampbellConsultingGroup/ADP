@@ -90,6 +90,9 @@ _applications = sa.Table(
     sa.Column("business_owner", sa.String(255)),
     sa.Column("technical_owner", sa.String(255)),
     sa.Column("lifecycle_status", sa.Text(), nullable=False, server_default="active"),
+    sa.Column("hosting_model", sa.Text()),
+    sa.Column("architecture_pattern", sa.Text()),
+    sa.Column("tech_debt_flags", sa.JSON(), nullable=False),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
@@ -270,6 +273,9 @@ def _row_to_application(row: Any) -> Application:
         business_owner=row.business_owner,
         technical_owner=row.technical_owner,
         lifecycle_status=row.lifecycle_status,
+        hosting_model=row.hosting_model,
+        architecture_pattern=row.architecture_pattern,
+        tech_debt_flags=list(row.tech_debt_flags or []),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -298,14 +304,23 @@ async def list_applications(
     session: AsyncSession,
     business_unit: str | None = None,
     lifecycle_status: str | None = None,
+    hosting_model: str | None = None,
+    tech_debt_flag: str | None = None,
 ) -> ApplicationListResponse:
     stmt = sa.select(_applications)
     if business_unit is not None:
         stmt = stmt.where(_applications.c.owning_business_unit == business_unit)
     if lifecycle_status is not None:
         stmt = stmt.where(_applications.c.lifecycle_status == lifecycle_status)
+    if hosting_model is not None:
+        stmt = stmt.where(_applications.c.hosting_model == hosting_model)
     result = await session.execute(stmt.order_by(_applications.c.name))
-    items = [_row_to_application(row) for row in result.mappings().all()]
+    rows = result.mappings().all()
+    if tech_debt_flag is not None:
+        # JSON containment isn't portable across SQLite/Postgres in SQLAlchemy Core
+        # without dialect-specific operators; filter in Python (small result sets).
+        rows = [row for row in rows if tech_debt_flag in (row.tech_debt_flags or [])]
+    items = [_row_to_application(row) for row in rows]
     return ApplicationListResponse(items=items, total=len(items))
 
 
@@ -337,6 +352,9 @@ async def create_application(body: ApplicationCreate, session: AsyncSession) -> 
             business_owner=body.business_owner,
             technical_owner=body.technical_owner,
             lifecycle_status=body.lifecycle_status,
+            hosting_model=body.hosting_model,
+            architecture_pattern=body.architecture_pattern,
+            tech_debt_flags=list(body.tech_debt_flags),
             created_at=now,
             updated_at=now,
         )
@@ -357,6 +375,9 @@ async def create_application(body: ApplicationCreate, session: AsyncSession) -> 
         business_owner=body.business_owner,
         technical_owner=body.technical_owner,
         lifecycle_status=body.lifecycle_status,
+        hosting_model=body.hosting_model,
+        architecture_pattern=body.architecture_pattern,
+        tech_debt_flags=list(body.tech_debt_flags),
         created_at=now,
         updated_at=now,
     )
@@ -380,6 +401,7 @@ async def update_application(
         "r_strategy", "pace_layer", "health_score",
         "business_value", "business_criticality",
         "owning_business_unit", "business_owner", "technical_owner", "lifecycle_status",
+        "hosting_model", "architecture_pattern", "tech_debt_flags",
     ):
         if field in body.model_fields_set:
             updates[field] = getattr(body, field)
