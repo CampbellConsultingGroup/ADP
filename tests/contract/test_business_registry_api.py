@@ -137,6 +137,30 @@ async def test_capability_strategic_relevance(client):
     assert resp.status_code == 422
 
 
+async def test_capability_maturity_level(client):
+    cap = await _mk_cap(client)
+    assert cap["maturity_level"] is None
+
+    resp = await client.put(
+        f"{BASE}/capabilities/{cap['id']}", json={"maturity_level": 3}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["maturity_level"] == 3
+
+    # explicit null clears it (distinct from L1 "Ad hoc")
+    resp = await client.put(
+        f"{BASE}/capabilities/{cap['id']}", json={"maturity_level": None}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["maturity_level"] is None
+
+    resp = await client.post(
+        f"{BASE}/capabilities",
+        json={"name": "Fraud Detection", "level": 1, "maturity_level": 6},
+    )
+    assert resp.status_code == 422
+
+
 async def test_capability_hierarchy_rules(client):
     l1 = await _mk_cap(client, name="Sales")
     l2 = await _mk_cap(client, name="Quoting", level=2, parent_id=l1["id"])

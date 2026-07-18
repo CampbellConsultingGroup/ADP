@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import { STRATEGIC_RELEVANCE_LABEL, useDeleteCapability, useUpdateCapability } from "../api/business";
-import type { BusinessCapability, StrategicRelevance } from "../api/business";
+import { MATURITY_LEVEL_LABEL, STRATEGIC_RELEVANCE_LABEL, useDeleteCapability, useUpdateCapability } from "../api/business";
+import type { BusinessCapability, MaturityLevel, StrategicRelevance } from "../api/business";
 import CapabilityForm from "./CapabilityForm";
 import DesignLinkEditor from "./DesignLinkEditor";
 import { LEVEL_STYLE } from "./classification";
@@ -43,6 +43,11 @@ export default function CapabilityNode({ capability, children }: CapabilityNodeP
   function handleRelevanceChange(value: string) {
     const strategic_relevance = value === "" ? null : (Number(value) as StrategicRelevance);
     update.mutate({ strategic_relevance });
+  }
+
+  function handleMaturityChange(value: string) {
+    const maturity_level = value === "" ? null : (Number(value) as MaturityLevel);
+    update.mutate({ maturity_level });
   }
 
   return (
@@ -104,6 +109,17 @@ export default function CapabilityNode({ capability, children }: CapabilityNodeP
               <option value="">Unclassified</option>
               {([1, 2, 3] as const).map((v) => (
                 <option key={v} value={v}>{STRATEGIC_RELEVANCE_LABEL[v]}</option>
+              ))}
+            </select>
+            <select
+              value={capability.maturity_level ?? ""}
+              onChange={(e) => handleMaturityChange(e.target.value)}
+              title="Maturity level"
+              style={{ fontSize: 10, color: "var(--ink-2)", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 3, padding: "1px 3px" }}
+            >
+              <option value="">Not assessed</option>
+              {([1, 2, 3, 4, 5] as const).map((v) => (
+                <option key={v} value={v}>{MATURITY_LEVEL_LABEL[v]}</option>
               ))}
             </select>
             <button onClick={() => setEditing(true)} title="Edit" style={actionBtn}>✎</button>
