@@ -48,6 +48,8 @@ from adp.application.models import (
     ApplicationIntegrationListResponse,
     ApplicationIntegrationUpdate,
     ApplicationListResponse,
+    ApplicationQualityMetric,
+    ApplicationQualityMetricUpdate,
     ApplicationRisk,
     ApplicationRiskUpdate,
     ApplicationStageLink,
@@ -411,6 +413,34 @@ async def put_application_governance(
     await session.commit()
     logger.info("application.governance.update id=%s actor=%s", app_id, _get_actor(request))
     return governance
+
+
+# ── Application Quality & Performance Signals (APM US8) ───────────────────────
+# Manual/advisory in v1 — not a sensitive category, no new authz (like US5/US6).
+
+@applications_router.get("/{app_id}/quality", response_model=ApplicationQualityMetric)
+async def get_application_quality(app_id: str, session: AsyncSession = Depends(_get_session)):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    quality = await astore.get_application_quality(app_id, session)
+    return quality or ApplicationQualityMetric()
+
+
+@applications_router.put("/{app_id}/quality", response_model=ApplicationQualityMetric)
+async def put_application_quality(
+    app_id: str,
+    body: ApplicationQualityMetricUpdate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    quality = await astore.upsert_application_quality(app_id, body, session)
+    await session.commit()
+    logger.info("application.quality.update id=%s actor=%s", app_id, _get_actor(request))
+    return quality
 
 
 # ── Application–Business Capability Links ─────────────────────────────────────
