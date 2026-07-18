@@ -110,11 +110,15 @@ alembic current
 alembic history
 ```
 
-Migration chain (as of ADP-SPEC-036): `001` initial schema → `002` knowledge →
+Migration chain (as of ADP-SPEC-038): `001` initial schema → `002` knowledge →
 `003` operations → `004` LLM reasoning log → `005` element technology tags →
 `006` design lifecycle → `007` business architecture → `008` business
-traceability → `009` business domain registry → `010` application registry
-(`head`).
+traceability → `009` business domain registry → `010` application registry →
+`011` searchable items → `012` APM rationalization (US1) → `013` APM identity
+(US2) → `014` APM risk & compliance (US3, sensitive) → `015` APM TCO/cost
+(US4, sensitive) → `016` APM technical fit (US5) → `017` APM roadmap /
+transformation initiatives (US6) → `018` APM ownership & governance (US7,
+sensitive) → `019` APM quality & performance signals (US8, `head`).
 
 ### Rollback one step
 
@@ -317,8 +321,42 @@ curl "http://localhost:8001/api/v1/applications" | python3 -m json.tool
 If these tables are empty or missing, confirm migrations are applied:
 
 ```bash
-alembic current   # should report 010 (head)
+alembic current   # should report 019 (head)
 ```
+
+---
+
+## Application portfolio management
+
+Rationalization, identity, risk, cost, tech fit, roadmap, governance, and
+quality signals (ADP-SPEC-038, US1–US8) live in dedicated 1:1/link tables
+added by migrations 011–019. Risk, cost, and governance are sensitive
+categories — reads require `READ_APPLICATION_{RISK,COST,GOVERNANCE}`
+(`PERMISSIONS_VERSION` 1.4.0); a caller without the grant gets `403`.
+
+```bash
+# TIME rationalization quadrant (business_value × health_score)
+curl "http://localhost:8001/api/v1/applications/rationalization" | python3 -m json.tool
+
+# Risk & compliance register for one application (sensitive)
+curl "http://localhost:8001/api/v1/applications/APP-001/risk" | python3 -m json.tool
+
+# TCO rollup by business unit (sensitive)
+curl "http://localhost:8001/api/v1/applications/cost/rollup" | python3 -m json.tool
+
+# Decommission roadmap (Eliminate-classified or sunset/retired applications)
+curl "http://localhost:8001/api/v1/applications/roadmap" | python3 -m json.tool
+
+# Contracts renewing within 90 days (sensitive; ?within_days=N to override)
+curl "http://localhost:8001/api/v1/applications/governance/renewals-soon" | python3 -m json.tool
+
+# Quality & performance signals — advisory only, never overrides health_score
+curl "http://localhost:8001/api/v1/applications/APP-001/quality" | python3 -m json.tool
+```
+
+If a sensitive-category read returns `403` for a role that should have
+access, check `PERMISSIONS_VERSION` in `adp.authz.permissions` matches
+`1.4.0` and that migrations 014/015/018 are applied.
 
 ---
 
@@ -360,7 +398,7 @@ cd web && ADP_API_URL=http://localhost:8001 npm run test:e2e:api
 cd web && ADP_API_URL=http://localhost:8001 ADP_WEB_URL=http://localhost:5173 npm run test:e2e
 ```
 
-Current test count: **574 Python** unit + contract + **132 Python** integration (706 total across 72 files) + **~59 TypeScript** (Vitest) + **45 Playwright E2E** (all passing).
+Current test count: **659 Python** unit + contract + authz + **136 Python** integration (795 total across 90 files) + **75 TypeScript** (Vitest) + **45 Playwright E2E** (all passing).
 
 ---
 
