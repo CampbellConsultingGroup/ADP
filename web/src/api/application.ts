@@ -257,6 +257,16 @@ export interface CostRollupResponse {
   total_tco: string;
 }
 
+// ADP-33v: strategic classification (1=Strategic, 2=Core, 3=Supporting).
+// Applies to both business and technical capabilities; null = unclassified.
+export type StrategicRelevance = 1 | 2 | 3;
+
+export const STRATEGIC_RELEVANCE_LABEL: Record<StrategicRelevance, string> = {
+  1: "Strategic",
+  2: "Core",
+  3: "Supporting",
+};
+
 export interface TechnicalCapability {
   id: string;
   name: string;
@@ -264,12 +274,20 @@ export interface TechnicalCapability {
   parent_id: string | null;
   level: number;
   created_at: string;
+  strategic_relevance: StrategicRelevance | null;
 }
 
 export interface TechnicalCapabilityCreate {
   name: string;
   description?: string | null;
   parent_id?: string | null;
+  strategic_relevance?: StrategicRelevance | null;
+}
+
+export interface TechnicalCapabilityUpdate {
+  name?: string;
+  description?: string | null;
+  strategic_relevance?: StrategicRelevance | null;
 }
 
 export interface TechCapListResponse {
@@ -526,6 +544,18 @@ export function useCreateTechCap() {
   return useMutation({
     mutationFn: (body: TechnicalCapabilityCreate) =>
       apiFetch<TechnicalCapability>(`${API}/technical-capabilities`, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tech-caps"] }),
+  });
+}
+
+export function useUpdateTechCap() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string; body: TechnicalCapabilityUpdate }) =>
+      apiFetch<TechnicalCapability>(`${API}/technical-capabilities/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tech-caps"] }),
   });
 }

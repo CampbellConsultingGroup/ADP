@@ -302,6 +302,13 @@ class CostRollupResponse(BaseModel):
 
 # ── Technical Capability models ───────────────────────────────────────────────
 
+# ADP-33v: strategic relevance (1=Strategic, 2=Core, 3=Supporting) applies to
+# both business_capabilities and technical_capabilities. Distinct from the
+# hierarchy 'level' (1-3 depth) on this same table.
+TechCapStrategicRelevance = Literal[1, 2, 3]
+
+TECH_CAP_STRATEGIC_RELEVANCE_LABELS: dict[int, str] = {1: "Strategic", 2: "Core", 3: "Supporting"}
+
 
 class TechnicalCapability(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -311,6 +318,7 @@ class TechnicalCapability(BaseModel):
     parent_id: str | None
     level: int
     created_at: datetime
+    strategic_relevance: TechCapStrategicRelevance | None = None
 
 
 class TechnicalCapabilityCreate(BaseModel):
@@ -318,6 +326,7 @@ class TechnicalCapabilityCreate(BaseModel):
     name: str
     description: str | None = None
     parent_id: str | None = None
+    strategic_relevance: TechCapStrategicRelevance | None = None
 
     @field_validator("name")
     @classmethod
@@ -331,6 +340,7 @@ class TechnicalCapabilityUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str | None = None
     description: str | None = None
+    strategic_relevance: TechCapStrategicRelevance | None = None
 
     @field_validator("name")
     @classmethod

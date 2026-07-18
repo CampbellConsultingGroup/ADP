@@ -11,6 +11,7 @@ function cap(partial: Partial<BusinessCapability> & { id: string; name: string; 
     updated_at: "2024-01-01T00:00:00Z",
     domain_id: null,
     domain_name: null,
+    strategic_relevance: null,
     ...partial,
   };
 }

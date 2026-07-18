@@ -5,6 +5,16 @@ import { apiGet, apiMutation } from "./client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+// ADP-33v: strategic classification (1=Strategic, 2=Core, 3=Supporting).
+// Applies to both business and technical capabilities; null = unclassified.
+export type StrategicRelevance = 1 | 2 | 3;
+
+export const STRATEGIC_RELEVANCE_LABEL: Record<StrategicRelevance, string> = {
+  1: "Strategic",
+  2: "Core",
+  3: "Supporting",
+};
+
 export interface BusinessCapability {
   id: string;
   name: string;
@@ -16,6 +26,7 @@ export interface BusinessCapability {
   updated_at: string;
   domain_id: string | null;
   domain_name: string | null;
+  strategic_relevance: StrategicRelevance | null;
 }
 
 export interface BusinessCapabilityCreate {
@@ -24,12 +35,14 @@ export interface BusinessCapabilityCreate {
   level: 1 | 2 | 3;
   parent_id?: string | null;
   position?: number;
+  strategic_relevance?: StrategicRelevance | null;
 }
 
 export interface BusinessCapabilityUpdate {
   name?: string;
   description?: string | null;
   position?: number;
+  strategic_relevance?: StrategicRelevance | null;
 }
 
 export interface ValueStreamStage {

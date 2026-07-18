@@ -39,7 +39,7 @@ const APP2: Application = { ...APP, id: "app-2", name: "Ledger", vendor: null, t
 
 const TC: TechnicalCapability = {
   id: "tc-1", name: "Messaging", description: null, parent_id: null, level: 1,
-  created_at: "2026-01-01T00:00:00Z",
+  created_at: "2026-01-01T00:00:00Z", strategic_relevance: null,
 };
 const TC_CHILD: TechnicalCapability = { ...TC, id: "tc-2", name: "Queues", parent_id: "tc-1", level: 2 };
 

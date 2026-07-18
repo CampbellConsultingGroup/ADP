@@ -125,6 +125,8 @@ _tech_caps = sa.Table(
     sa.Column("parent_id", sa.String(36)),
     sa.Column("level", sa.Integer(), nullable=False),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    # ADP-33v: strategic classification (migration 020)
+    sa.Column("strategic_relevance", sa.SmallInteger(), nullable=True),
 )
 
 _app_cap_links = sa.Table(
@@ -355,6 +357,7 @@ def _row_to_tech_cap(row: Any) -> TechnicalCapability:
         parent_id=row.parent_id,
         level=row.level,
         created_at=row.created_at,
+        strategic_relevance=getattr(row, "strategic_relevance", None),
     )
 
 
@@ -1117,6 +1120,7 @@ async def create_technical_capability(
             parent_id=body.parent_id,
             level=level,
             created_at=now,
+            strategic_relevance=body.strategic_relevance,
         )
     )
     tc = TechnicalCapability(
@@ -1126,6 +1130,7 @@ async def create_technical_capability(
         parent_id=body.parent_id,
         level=level,
         created_at=now,
+        strategic_relevance=body.strategic_relevance,
     )
     await index_entity(
         ENTITY_TECHNICAL_CAPABILITY, tc_id, build_text(body.name, body.description), session
@@ -1147,6 +1152,8 @@ async def update_technical_capability(
     # an omitted field is left unchanged (model_fields_set distinguishes them).
     if "description" in body.model_fields_set:
         updates["description"] = body.description
+    if "strategic_relevance" in body.model_fields_set:
+        updates["strategic_relevance"] = body.strategic_relevance
 
     if updates:
         await session.execute(
