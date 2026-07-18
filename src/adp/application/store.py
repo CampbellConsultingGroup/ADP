@@ -7,7 +7,7 @@ All functions accept an AsyncSession and are called from the router inside
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, cast
 
@@ -30,6 +30,8 @@ from adp.application.models import (
     ApplicationDomainIntegration,
     ApplicationDomainIntegrationCreate,
     ApplicationDomainIntegrationsResponse,
+    ApplicationGovernance,
+    ApplicationGovernanceUpdate,
     ApplicationInitiativeLink,
     ApplicationInitiativeLinkCreate,
     ApplicationInitiativeLinksResponse,
@@ -60,6 +62,8 @@ from adp.application.models import (
     OutOfSupportEntry,
     OutOfSupportResponse,
     RationalizationResponse,
+    RenewalSoonEntry,
+    RenewalsSoonResponse,
     RoadmapEntry,
     RoadmapResponse,
     TechCapDepthError,
@@ -255,6 +259,20 @@ _app_initiative_links = sa.Table(
     sa.Column("app_id", sa.String(36), nullable=False),
     sa.Column("initiative_id", sa.String(36), nullable=False),
     sa.Column("planned_disposition", sa.Text(), nullable=False),
+)
+
+# APM US7: ownership & governance (1:1 with applications; cascade-deletes)
+_application_contracts = sa.Table(
+    "application_contracts",
+    _metadata,
+    sa.Column("app_id", sa.String(36), primary_key=True),
+    sa.Column("contract_terms", sa.Text()),
+    sa.Column("renewal_date", sa.Date()),
+    sa.Column("sla", sa.Text()),
+    sa.Column("business_sponsor", sa.String(255)),
+    sa.Column("it_owner", sa.String(255)),
+    sa.Column("decision_rights", sa.Text()),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
 
 # ── Session factory ───────────────────────────────────────────────────────────
@@ -898,6 +916,89 @@ async def get_roadmap(session: AsyncSession) -> RoadmapResponse:
             )
         )
     return RoadmapResponse(items=items, total=len(items))
+
+
+# ── Application Governance CRUD (US7) ─────────────────────────────────────────
+
+
+def _row_to_governance(row: Any) -> ApplicationGovernance:
+    return ApplicationGovernance(
+        contract_terms=row.contract_terms,
+        renewal_date=row.renewal_date,
+        sla=row.sla,
+        business_sponsor=row.business_sponsor,
+        it_owner=row.it_owner,
+        decision_rights=row.decision_rights,
+        updated_at=row.updated_at,
+    )
+
+
+async def get_application_governance(
+    app_id: str, session: AsyncSession
+) -> ApplicationGovernance | None:
+    result = await session.execute(
+        sa.select(_application_contracts).where(_application_contracts.c.app_id == app_id)
+    )
+    row = result.mappings().first()
+    return _row_to_governance(row) if row else None
+
+
+async def upsert_application_governance(
+    app_id: str, body: ApplicationGovernanceUpdate, session: AsyncSession
+) -> ApplicationGovernance:
+    values: dict[str, Any] = {
+        "contract_terms": body.contract_terms,
+        "renewal_date": body.renewal_date,
+        "sla": body.sla,
+        "business_sponsor": body.business_sponsor,
+        "it_owner": body.it_owner,
+        "decision_rights": body.decision_rights,
+        "updated_at": _now(),
+    }
+    exists = (
+        await session.execute(
+            sa.select(_application_contracts.c.app_id).where(
+                _application_contracts.c.app_id == app_id
+            )
+        )
+    ).first() is not None
+    if exists:
+        await session.execute(
+            _application_contracts.update()
+            .where(_application_contracts.c.app_id == app_id)
+            .values(**values)
+        )
+    else:
+        await session.execute(_application_contracts.insert().values(app_id=app_id, **values))
+    governance = await get_application_governance(app_id, session)
+    assert governance is not None  # just upserted
+    return governance
+
+
+async def list_renewals_soon(
+    session: AsyncSession, today: date, within_days: int = 90
+) -> RenewalsSoonResponse:
+    horizon = today + timedelta(days=within_days)
+    stmt = (
+        sa.select(
+            _application_contracts.c.app_id,
+            _applications.c.name,
+            _application_contracts.c.renewal_date,
+        )
+        .join(_applications, _applications.c.id == _application_contracts.c.app_id)
+        .where(
+            _application_contracts.c.renewal_date.is_not(None),
+            _application_contracts.c.renewal_date >= today,
+            _application_contracts.c.renewal_date <= horizon,
+        )
+        .order_by(_application_contracts.c.renewal_date)
+    )
+    result = await session.execute(stmt)
+    items = [
+        RenewalSoonEntry(app_id=r.app_id, name=r.name, renewal_date=r.renewal_date)
+        for r in result.mappings().all()
+    ]
+    return RenewalsSoonResponse(items=items, total=len(items))
 
 
 # ── Technical Capability CRUD (US3) ──────────────────────────────────────────

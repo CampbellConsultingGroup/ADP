@@ -37,6 +37,8 @@ from adp.application.models import (
     ApplicationDomainIntegration,
     ApplicationDomainIntegrationCreate,
     ApplicationDomainIntegrationsResponse,
+    ApplicationGovernance,
+    ApplicationGovernanceUpdate,
     ApplicationInitiativeLink,
     ApplicationInitiativeLinkCreate,
     ApplicationInitiativeLinksResponse,
@@ -63,6 +65,7 @@ from adp.application.models import (
     DuplicateAppTechCapLinkError,
     OutOfSupportResponse,
     RationalizationResponse,
+    RenewalsSoonResponse,
     RoadmapResponse,
     TechCapDepthError,
     TechCapHasChildrenError,
@@ -111,6 +114,7 @@ async def _get_session():
 # reader. The app-level enforcer exempts GETs, so gate these reads per-route.
 _require_risk_read = require_action_dep(ActionType.READ_APPLICATION_RISK)
 _require_cost_read = require_action_dep(ActionType.READ_APPLICATION_COST)
+_require_governance_read = require_action_dep(ActionType.READ_APPLICATION_GOVERNANCE)
 
 
 # ── Applications CRUD ─────────────────────────────────────────────────────────
@@ -363,6 +367,50 @@ async def delete_initiative_link(
         "app.initiative_link.delete app_id=%s initiative_id=%s actor=%s",
         app_id, initiative_id, _get_actor(request),
     )
+
+
+# ── Application Ownership & Governance (APM US7, sensitive) ───────────────────
+
+@applications_router.get(
+    "/governance/renewals-soon",
+    response_model=RenewalsSoonResponse,
+    dependencies=[Depends(_require_governance_read)],
+)
+async def list_renewals_soon(
+    within_days: int = Query(default=90, ge=1),
+    session: AsyncSession = Depends(_get_session),
+):
+    """Contracts renewing within the given window (default 90 days)."""
+    return await astore.list_renewals_soon(session, date.today(), within_days=within_days)
+
+
+@applications_router.get(
+    "/{app_id}/governance",
+    response_model=ApplicationGovernance,
+    dependencies=[Depends(_require_governance_read)],
+)
+async def get_application_governance(app_id: str, session: AsyncSession = Depends(_get_session)):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    governance = await astore.get_application_governance(app_id, session)
+    return governance or ApplicationGovernance()
+
+
+@applications_router.put("/{app_id}/governance", response_model=ApplicationGovernance)
+async def put_application_governance(
+    app_id: str,
+    body: ApplicationGovernanceUpdate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    governance = await astore.upsert_application_governance(app_id, body, session)
+    await session.commit()
+    logger.info("application.governance.update id=%s actor=%s", app_id, _get_actor(request))
+    return governance
 
 
 # ── Application–Business Capability Links ─────────────────────────────────────

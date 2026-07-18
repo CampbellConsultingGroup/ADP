@@ -33,3 +33,6 @@ class ActionType(StrEnum):
     # ADP-SPEC-038 (APM US4): sensitive application cost (TCO) data.
     READ_APPLICATION_COST = "read_application_cost"
     WRITE_APPLICATION_COST = "write_application_cost"
+    # ADP-SPEC-038 (APM US7): sensitive application governance/contract data.
+    READ_APPLICATION_GOVERNANCE = "read_application_governance"
+    WRITE_APPLICATION_GOVERNANCE = "write_application_governance"
