@@ -33,7 +33,7 @@ _BUCKETS = (
 
 
 def upgrade() -> None:
-    columns = [
+    columns: list[sa.Column] = [
         sa.Column(
             "app_id",
             sa.String(36),
