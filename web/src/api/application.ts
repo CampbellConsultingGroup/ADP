@@ -202,6 +202,21 @@ export interface RenewalsSoonResponse {
   total: number;
 }
 
+// ── Quality & Performance Signals (APM US8) ───────────────────────────────────
+// Manual/advisory in v1 — never overrides health_score. Not a sensitive
+// category (like tech-fit/roadmap): no 403-handling needed.
+
+export interface ApplicationQualityMetric {
+  uptime_pct: string | null;
+  incidents_ytd: number | null;
+  satisfaction_score: number | null;
+  perf_note: string | null;
+  ticket_volume_30d: number | null;
+  updated_at: string | null;
+}
+
+export type ApplicationQualityMetricUpdate = Omit<ApplicationQualityMetric, "updated_at">;
+
 // ── Total Cost of Ownership (APM US4, ADP-9x6, sensitive) ────────────────────
 // Money is Decimal on the backend and serializes as a string — never parse it
 // back into a JS number except for display formatting.
@@ -441,6 +456,26 @@ export function useRenewalsSoon(withinDays?: number) {
         `${API}/applications/governance/renewals-soon${withinDays ? `?within_days=${withinDays}` : ""}`,
       ),
     retry: false,
+  });
+}
+
+export function useApplicationQuality(appId: string) {
+  return useQuery<ApplicationQualityMetric>({
+    queryKey: ["applications", appId, "quality"],
+    queryFn: () => apiFetch(`${API}/applications/${appId}/quality`),
+    enabled: !!appId,
+  });
+}
+
+export function useUpdateApplicationQuality(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ApplicationQualityMetricUpdate) =>
+      apiFetch<ApplicationQualityMetric>(`${API}/applications/${appId}/quality`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "quality"] }),
   });
 }
 

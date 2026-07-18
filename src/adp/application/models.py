@@ -647,3 +647,22 @@ class RenewalsSoonResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[RenewalSoonEntry]
     total: int
+
+
+# ── Quality & Performance Signals (APM US8) ───────────────────────────────────
+# Manual/advisory in v1 — these never override health_score.
+
+
+class ApplicationQualityMetricUpdate(BaseModel):
+    """Upsert body for an application's quality & performance signals."""
+    model_config = ConfigDict(extra="forbid")
+    uptime_pct: Annotated[Decimal, Field(ge=0, le=100)] | None = None
+    incidents_ytd: Annotated[int, Field(ge=0)] | None = None
+    satisfaction_score: Score15 | None = None
+    perf_note: str | None = None
+    ticket_volume_30d: Annotated[int, Field(ge=0)] | None = None
+
+
+class ApplicationQualityMetric(ApplicationQualityMetricUpdate):
+    """Read model — the stored quality record (updated_at set once persisted)."""
+    updated_at: datetime | None = None

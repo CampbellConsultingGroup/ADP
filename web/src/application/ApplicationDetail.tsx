@@ -15,6 +15,7 @@ import CostPanel from "./CostPanel";
 import TechFitPanel from "./TechFitPanel";
 import InitiativeLinkEditor from "./InitiativeLinkEditor";
 import GovernancePanel from "./GovernancePanel";
+import QualityPanel from "./QualityPanel";
 
 interface Props {
   appId: string;
@@ -22,7 +23,7 @@ interface Props {
   onDeleted: () => void;
 }
 
-type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs" | "risk" | "cost" | "tech-fit" | "initiatives" | "governance";
+type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs" | "risk" | "cost" | "tech-fit" | "initiatives" | "governance" | "quality";
 
 export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) {
   const { data: app, isLoading } = useApplication(appId);
@@ -59,6 +60,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
     { id: "tech-fit", label: "Technical Fit" },
     { id: "initiatives", label: "Initiatives" },
     { id: "governance", label: "Governance" },
+    { id: "quality", label: "Quality" },
   ];
 
   const tabStyle = (id: Section): React.CSSProperties => ({
@@ -136,6 +138,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
         {section === "tech-fit" && <TechFitPanel app={app} />}
         {section === "initiatives" && <InitiativeLinkEditor appId={appId} />}
         {section === "governance" && <GovernancePanel appId={appId} />}
+        {section === "quality" && <QualityPanel appId={appId} />}
       </div>
     </div>
   );

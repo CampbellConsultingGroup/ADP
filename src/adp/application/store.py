@@ -41,6 +41,8 @@ from adp.application.models import (
     ApplicationIntegrationListResponse,
     ApplicationIntegrationUpdate,
     ApplicationListResponse,
+    ApplicationQualityMetric,
+    ApplicationQualityMetricUpdate,
     ApplicationRisk,
     ApplicationRiskUpdate,
     ApplicationStageLink,
@@ -272,6 +274,19 @@ _application_contracts = sa.Table(
     sa.Column("business_sponsor", sa.String(255)),
     sa.Column("it_owner", sa.String(255)),
     sa.Column("decision_rights", sa.Text()),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# APM US8: quality & performance signals (1:1 with applications; cascade-deletes)
+_application_quality_metrics = sa.Table(
+    "application_quality_metrics",
+    _metadata,
+    sa.Column("app_id", sa.String(36), primary_key=True),
+    sa.Column("uptime_pct", sa.Numeric(5, 2)),
+    sa.Column("incidents_ytd", sa.Integer()),
+    sa.Column("satisfaction_score", sa.SmallInteger()),
+    sa.Column("perf_note", sa.Text()),
+    sa.Column("ticket_volume_30d", sa.Integer()),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
 
@@ -999,6 +1014,65 @@ async def list_renewals_soon(
         for r in result.mappings().all()
     ]
     return RenewalsSoonResponse(items=items, total=len(items))
+
+
+# ── Application Quality & Performance CRUD (US8) ──────────────────────────────
+
+
+def _row_to_quality(row: Any) -> ApplicationQualityMetric:
+    return ApplicationQualityMetric(
+        uptime_pct=row.uptime_pct,
+        incidents_ytd=row.incidents_ytd,
+        satisfaction_score=row.satisfaction_score,
+        perf_note=row.perf_note,
+        ticket_volume_30d=row.ticket_volume_30d,
+        updated_at=row.updated_at,
+    )
+
+
+async def get_application_quality(
+    app_id: str, session: AsyncSession
+) -> ApplicationQualityMetric | None:
+    result = await session.execute(
+        sa.select(_application_quality_metrics).where(
+            _application_quality_metrics.c.app_id == app_id
+        )
+    )
+    row = result.mappings().first()
+    return _row_to_quality(row) if row else None
+
+
+async def upsert_application_quality(
+    app_id: str, body: ApplicationQualityMetricUpdate, session: AsyncSession
+) -> ApplicationQualityMetric:
+    values: dict[str, Any] = {
+        "uptime_pct": body.uptime_pct,
+        "incidents_ytd": body.incidents_ytd,
+        "satisfaction_score": body.satisfaction_score,
+        "perf_note": body.perf_note,
+        "ticket_volume_30d": body.ticket_volume_30d,
+        "updated_at": _now(),
+    }
+    exists = (
+        await session.execute(
+            sa.select(_application_quality_metrics.c.app_id).where(
+                _application_quality_metrics.c.app_id == app_id
+            )
+        )
+    ).first() is not None
+    if exists:
+        await session.execute(
+            _application_quality_metrics.update()
+            .where(_application_quality_metrics.c.app_id == app_id)
+            .values(**values)
+        )
+    else:
+        await session.execute(
+            _application_quality_metrics.insert().values(app_id=app_id, **values)
+        )
+    quality = await get_application_quality(app_id, session)
+    assert quality is not None  # just upserted
+    return quality
 
 
 # ── Technical Capability CRUD (US3) ──────────────────────────────────────────

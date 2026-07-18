@@ -25,6 +25,7 @@ The platform now spans the full enterprise-architecture stack: business capabili
 | Governance reporting dashboard | `/api/v1/governance` |
 | Business architecture (capabilities, value streams, domains) | `adp.business`, `/api/v1/business` |
 | Application & integration registry | `adp.application`, `/api/v1/applications` |
+| Application portfolio management (rationalization, identity, risk, TCO, tech fit, roadmap, governance, quality) | `adp.application`, `/api/v1/applications/*` sub-resources |
 | Identity / authorization (Keycloak OIDC) | `adp.auth`, `adp.authz` |
 | Observability (OTel spans + Prometheus) | `GET /health`, `GET /metrics` |
 | End-to-end tests | `web/tests/e2e/` (Playwright) |
@@ -192,6 +193,24 @@ All routes below are registered and active. Auth (when `ADP_AUTH_ENABLED=true`) 
 | `GET`/`POST`/`PATCH`/`DELETE` | `/api/v1/technical-capabilities[/{id}]` | Technical capabilities |
 | `GET`/`POST`/`PATCH`/`DELETE` | `/api/v1/integrations[/{id}]` | Application integrations |
 
+### Application Portfolio Management (ADP-SPEC-038)
+
+Risk, cost, and governance are sensitive categories gated by dedicated `READ_`/`WRITE_` actions (`PERMISSIONS_VERSION` 1.4.0); rationalization, identity, tech fit, roadmap, and quality are open reads.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/v1/applications/rationalization` | TIME quadrant projection: business value × health score (US1) |
+| `GET` / `PUT` | `/api/v1/applications/{id}/risk` | Risk & compliance register (US3, sensitive) |
+| `GET` | `/api/v1/applications/risk/out-of-support` | Applications past `end_of_support_date` (US3, sensitive) |
+| `GET` / `PUT` | `/api/v1/applications/{id}/cost` | Total cost of ownership by bucket (US4, sensitive) |
+| `GET` | `/api/v1/applications/cost/rollup` | TCO rollup by business unit (US4, sensitive) |
+| `GET` | `/api/v1/applications/roadmap` | Decommission track: Eliminate / sunset / retired (US6) |
+| `GET`/`POST`/`DELETE` | `/api/v1/applications/{id}/initiative-links[/{initiative_id}]` | Transformation initiative membership (US6) |
+| `GET`/`POST`/`PATCH`/`DELETE` | `/api/v1/transformation-initiatives[/{id}]` | Transformation initiative CRUD (US6) |
+| `GET` / `PUT` | `/api/v1/applications/{id}/governance` | Ownership & governance (contract, renewal, SLA, sponsor) (US7, sensitive) |
+| `GET` | `/api/v1/applications/governance/renewals-soon` | Contracts renewing within N days (US7, sensitive) |
+| `GET` / `PUT` | `/api/v1/applications/{id}/quality` | Quality & performance signals — advisory, never overrides `health_score` (US8) |
+
 ## Data model
 
 The canonical unit is `ArchitectureDescription` (schema version `1.0.0`):
@@ -271,7 +290,7 @@ cd web && ADP_API_URL=http://localhost:8001 ADP_WEB_URL=http://localhost:5173 np
 
 ## Specs implemented
 
-The full specification set (36 specs) is indexed in `docs/000-index.md`. Foundational specs (001–012) have per-spec design docs in `docs/`; delivered feature specs 013–019 also have `docs/` docs; from 020 onward the canonical spec lives in `specs/NNN-<slug>/spec.md`.
+The full specification set (38 specs) is indexed in `docs/000-index.md`. Foundational specs (001–012) have per-spec design docs in `docs/`; delivered feature specs 013–019 also have `docs/` docs; from 020 onward the canonical spec lives in `specs/NNN-<slug>/spec.md`.
 
 | Spec | What it built |
 |---|---|
@@ -296,3 +315,4 @@ The full specification set (36 specs) is indexed in `docs/000-index.md`. Foundat
 | ADP-SPEC-034 | Business architecture traceability |
 | ADP-SPEC-035 | Business domain registry + stage-capability mapping |
 | ADP-SPEC-036 | Application registry |
+| ADP-SPEC-038 | Application portfolio management — TIME rationalization, identity, risk & compliance, TCO, technical fit, roadmap/transformation initiatives, ownership & governance, quality & performance signals (US1–US8) |

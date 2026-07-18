@@ -2,7 +2,7 @@
 document_type: solution-architecture
 title: AI-Assisted Architecture Design Platform (ADP)
 status: current
-version: 1.0.0
+version: 1.2.0
 classification: internal
 level: high-level
 machine_readable: true
@@ -26,9 +26,9 @@ This document is the canonical, human-readable rendering of a machine-readable a
 | Audience | Enterprise, solution, and technical architects |
 | Source of truth | Structured artifacts (YAML/JSON), not this prose |
 | Diagram source | React Flow canvas (`@xyflow/react`); PNG rendered by CairoSVG from locked theme |
-| Status | Current — reflects implemented system as of ADP-SPEC-036 |
+| Status | Current — reflects implemented system as of ADP-SPEC-038 |
 
-This document supersedes v0.1.0. All capabilities described here are implemented and tested. Version history: v1.0.0 (ADP-SPEC-035); v1.1.0 (ADP-SPEC-036, Application Registry).
+This document supersedes v0.1.0. All capabilities described here are implemented and tested. Version history: v1.0.0 (ADP-SPEC-035); v1.1.0 (ADP-SPEC-036, Application Registry); v1.2.0 (ADP-SPEC-038, Application Portfolio Management).
 
 ## Purpose and Scope
 
@@ -93,6 +93,7 @@ The platform's capabilities map to architect personas. Each capability is owned 
 | Governance reporting | Per-design audit trail aggregation, compliance exception extraction, paginated activity feed, CSV export | Governance Reporting |
 | Business architecture | 3-level business capability model (L1 Strategic → L2 Operational → L3 Granular) and ordered value streams with stages | Business Architecture |
 | Application registry | Map applications to business capabilities, technical capabilities, value stream stages, and solution designs; track TIME/R-strategy/pace/health-score classification | Application Registry |
+| Application portfolio management | Rationalization quadrant, identity fields, risk & compliance register, TCO/cost tracking, technical fit, decommission roadmap + transformation initiatives, ownership & governance, quality & performance signals | Application Portfolio Management |
 | LLM reasoning log | Persistent log of every LLM interaction with token counts, cost estimates, and span metadata | Reasoning Store |
 | Machine-readable output | Persist and export all artifacts as typed, queryable data; YAML/Markdown bundles to VCS | Documentation Model |
 | Traceability | Thread requirements through design to recommendation to validation verdict | Canonical Data Model |
@@ -155,7 +156,7 @@ All screens are built from a shared design system in `web/src/ui`: design tokens
 
 ## Platform API — Router Inventory
 
-The Platform API exposes 20 FastAPI routers grouped by domain. All routes are prefixed `/api/v1/`.
+The Platform API exposes 23 FastAPI routers grouped by domain. All routes are prefixed `/api/v1/`.
 
 | Router prefix | Spec | Purpose |
 |---|---|---|
@@ -180,6 +181,13 @@ The Platform API exposes 20 FastAPI routers grouped by domain. All routes are pr
 | `/applications` | ADP-SPEC-036 | Application CRUD with TIME/R-strategy/pace-layer/health-score fields; capability links, tech-cap links, stage links, domain integrations, design links |
 | `/technical-capabilities` | ADP-SPEC-036 | Technical capability hierarchy CRUD; 3-level max; parent-delete blocked when children exist |
 | `/integrations` | ADP-SPEC-036 | Point-to-point application integration registry; self-loop rejected; bidirectional permitted; filterable by app_id |
+| `/applications/rationalization` | ADP-SPEC-038 (US1) | TIME quadrant projection: business value × health score |
+| `/applications/{id}/risk`, `/applications/risk/out-of-support` | ADP-SPEC-038 (US3, sensitive) | Risk & compliance register; out-of-support report |
+| `/applications/{id}/cost`, `/applications/cost/rollup` | ADP-SPEC-038 (US4, sensitive) | TCO by cost bucket; business-unit rollup |
+| `/applications/roadmap`, `/transformation-initiatives`, `/applications/{id}/initiative-links` | ADP-SPEC-038 (US6) | Decommission roadmap; transformation initiative CRUD + membership |
+| `/applications/{id}/governance`, `/applications/governance/renewals-soon` | ADP-SPEC-038 (US7, sensitive) | Ownership & governance (contract, renewal, SLA, sponsor) |
+| `/applications/{id}/quality` | ADP-SPEC-038 (US8) | Quality & performance signals — advisory, never overrides `health_score` |
+| `/search` | ADP-SPEC-038 (groundwork) | Unified hybrid keyword+vector search over the `searchable_items` generated column (migration 011) |
 
 Every response carries `X-Trace-ID`, `X-Content-Type-Options`, `X-Frame-Options`, `Cross-Origin-Resource-Policy`, and `Referrer-Policy` headers applied by the observability middleware.
 
@@ -460,9 +468,33 @@ The application registry module (`adp.application`, ADP-SPEC-036) provides first
 
 **Frontend**: The `ApplicationPage` view provides a sidebar list of applications (with TIME colour badges and health-score stars) and a tabbed detail panel with sections for Overview, Business Capabilities, Technical Capabilities, Value Stream Stages + Domain Integrations, Integrations, and Linked Designs. `TechCapTree.tsx` renders the technical capability hierarchy as an interactive indented tree with inline add/delete. Three router prefixes (`/applications`, `/technical-capabilities`, `/integrations`) are registered in `adp.api.app`.
 
+## Application Portfolio Management
+
+The application portfolio management epic (`adp.application`, ADP-SPEC-038) extends the ADP-SPEC-036 application registry with eight user stories (US1–US8), each adding a focused 1:1 table or link table to the `applications` entity rather than growing a single monolithic record. All eight stories share one implementation pattern: a full-replace upsert (`get_application_X` / `upsert_application_X` — a partial-body PUT always overwrites the whole row, never a field-by-field PATCH) and, for US3/US4/US7 only, a dedicated sensitive-read gate.
+
+**US1 — Rationalization** (migration 012): `GET /applications/rationalization` projects every application onto a TIME quadrant (Tolerate/Invest/Migrate/Eliminate) from `business_value × health_score`, splitting the result into assessed and unassessed sets.
+
+**US2 — Identity**: additional identity fields on the base `Application` record (no separate table); non-sensitive, covered by the existing `WRITE_APPLICATION` prefix rule.
+
+**US3 — Risk & compliance register** (migration 014, sensitive): `application_risk` records security posture, vulnerability status, data classification, regulatory tags, DR/BC status, end-of-life/end-of-support dates. `GET /applications/risk/out-of-support` reports applications past their `end_of_support_date`. Gated by `READ_APPLICATION_RISK` / `WRITE_APPLICATION_RISK`.
+
+**US4 — Total cost of ownership** (migration 015, sensitive, ADP-9x6): `application_cost` tracks eight cost buckets (acquisition, implementation, training, operational, maintenance, upgrades, risk/downtime, end-of-life), each with a one-time and an annual `Money` figure, plus currency and horizon-years. `GET /applications/cost/rollup` aggregates TCO by business unit. Money is `Decimal` on the backend and serializes as a JSON string — the web layer never parses it back into a number except for display formatting. Gated by `READ_APPLICATION_COST` / `WRITE_APPLICATION_COST`.
+
+**US5 — Technical fit** (migration 016): additional fields on the base `Application` record scoring fit against the technical capability hierarchy; non-sensitive, no separate endpoint — the web `TechFitPanel` reads directly from the application object.
+
+**US6 — Roadmap & transformation initiatives** (migration 017): `transformation_initiatives` (name, description, target date) group applications under a planned disposition (retire/replace/modernize/invest) via `application_initiative_links`. `GET /applications/roadmap` lists Eliminate-classified or sunset/retired applications together with their initiative memberships — a decommission planning view. Non-sensitive.
+
+**US7 — Ownership & governance** (migration 018, sensitive): `application_contracts` records contract terms, renewal date, SLA, business sponsor, IT owner, and decision rights. `GET /applications/governance/renewals-soon` (default 90-day window, `within_days` override) surfaces contracts approaching renewal. Gated by `READ_APPLICATION_GOVERNANCE` / `WRITE_APPLICATION_GOVERNANCE`.
+
+**US8 — Quality & performance signals** (migration 019): `application_quality_metrics` records uptime %, YTD incident count, a 1–5 user satisfaction score, a free-text performance note, and 30-day support ticket volume — all manual/advisory inputs that are explicitly documented to never override the application's `health_score`. Non-sensitive.
+
+**Authorization**: US3, US4, and US7 are the only sensitive categories in the epic — each added its own `READ_`/`WRITE_APPLICATION_{RISK,COST,GOVERNANCE}` `ActionType` pair to `PERMISSION_GRANTS`, bumping `PERMISSIONS_VERSION` from `1.1.0` to `1.4.0` across the three additions (reviewers deliberately do not hold any of the six actions — this data is not open to every reader). US1, US2, US5, US6, and US8 are non-sensitive and ride the pre-existing `WRITE_APPLICATION` prefix rule with open GET reads, the same enforcement pattern the base application registry uses.
+
+**Frontend**: each sensitive-category panel (`RiskPanel`, `CostPanel`, `GovernancePanel`) follows the same shape — a `useApplicationX(appId)` query with `retry: false` and a graceful "you don't have permission" render when the fetch error contains `403`, plus a Save button and toast. The non-sensitive `QualityPanel` and `TechFitPanel` need no 403-handling. All panels are tabs on the shared `ApplicationDetail` component.
+
 ## Data Architecture
 
-ADP uses PostgreSQL 16 as its single stateful backing service, serving both the relational model store and the vector knowledge index (via the `pgvector` extension). Ten Alembic migrations bring the schema from zero to its current state.
+ADP uses PostgreSQL 16 as its single stateful backing service, serving both the relational model store and the vector knowledge index (via the `pgvector` extension). Nineteen Alembic migrations bring the schema from zero to its current state.
 
 | Migration | Tables added |
 |---|---|
@@ -476,6 +508,15 @@ ADP uses PostgreSQL 16 as its single stateful backing service, serving both the 
 | 008 | `capability_design_links` (composite PK, CASCADE both FKs, index on `design_id`), `value_stream_design_links` (same) |
 | 009 | `business_domains` (CHECK on classification, TEXT[] risk_flags), `domain_id` FK on `business_capabilities` (ON DELETE SET NULL), `value_stream_stage_capabilities` (composite PK, CASCADE both FKs, reverse index on `capability_id`) |
 | 010 | `applications` (TIME/R-strategy/pace_layer CHECK constraints, health_score 1–5 CHECK), `technical_capabilities` (adjacency-list self-ref FK, RESTRICT on parent delete), `application_capability_links` (composite PK, fit_score 1–5 CHECK), `application_tech_cap_links` (composite PK incl. usage_type, provides/consumes CHECK), `application_stage_links` (composite PK, CASCADE on stage delete), `application_domain_integrations` (direction CHECK, CASCADE on domain delete), `application_integrations` (source≠target CHECK, CASCADE on either endpoint delete), `application_design_links` (composite PK) |
+| 011 | Unified `searchable_items` generated full-text-search column for hybrid keyword+vector search (ADP-SPEC-038 groundwork) |
+| 012 | ADP-SPEC-038 US1: rationalization scoring fields on `applications` |
+| 013 | ADP-SPEC-038 US2: identity fields on `applications` |
+| 014 | ADP-SPEC-038 US3 (sensitive): `application_risk` (1:1, CASCADE delete) — security posture, vulnerability status, data classification, regulatory tags (JSON), DR/BC status, end-of-life/end-of-support dates |
+| 015 | ADP-SPEC-038 US4 (sensitive, ADP-9x6): `application_cost` (1:1, CASCADE delete) — 8 cost buckets × {one_time, annual} NUMERIC, currency, horizon_years |
+| 016 | ADP-SPEC-038 US5: technical-fit fields on `applications` |
+| 017 | ADP-SPEC-038 US6: `transformation_initiatives`, `application_initiative_links` (composite PK, planned_disposition CHECK, CASCADE on either endpoint delete) |
+| 018 | ADP-SPEC-038 US7 (sensitive): `application_contracts` (1:1, CASCADE delete) — contract terms, renewal_date (partial index where NOT NULL), SLA, business sponsor, IT owner, decision rights |
+| 019 | ADP-SPEC-038 US8: `application_quality_metrics` (1:1, CASCADE delete) — uptime_pct, incidents_ytd, satisfaction_score (1–5 CHECK), perf_note, ticket_volume_30d (`head`) |
 
 The `designs` table is the system of record for active design work. `design_versions` is append-only — no row is ever updated or deleted — making the full version history of every design reconstructable. `audit_entries` is similarly append-only. `operations` rows are expired and cleaned up by a background asyncio task that runs every 10 minutes inside the API process.
 
@@ -487,7 +528,7 @@ Authentication is implemented via `AuthMiddleware` (Starlette middleware) that v
 
 `ADP_AUTH_ENABLED` (default: `true`) is the runtime toggle. Setting `ADP_AUTH_ENABLED=false` bypasses validation, which is required for local development without Keycloak and for the real-stack E2E test suite.
 
-Authorisation is **action-based**, not a linear role hierarchy: the `PERMISSION_GRANTS` table (`adp.authz.permissions`, version 1.1.0) maps each `PersonaRole` to the set of `ActionType`s it may perform — so a reviewer may `OVERRIDE_VERDICT` yet not `WRITE_DESIGN`. Enforcement is wired at the HTTP layer by a single application-level FastAPI dependency (`adp.authz.enforcement.enforce_route_permission`) installed on the app: every mutating route resolves to a required `ActionType` (via an explicit design/intake/recommend map plus prefix rules for the business, application, and knowledge routers) and a caller lacking that grant is refused with `403` before the endpoint runs. Safe methods (GET/HEAD/OPTIONS) are never gated. A completeness test fails CI if any mutating route ships without a mapped action, keeping the policy exhaustive. When `ADP_AUTH_ENABLED=false`, the caller is the `ENTERPRISE_ARCHITECT` sentinel (all actions), so local development and the auth-disabled E2E suite are unaffected.
+Authorisation is **action-based**, not a linear role hierarchy: the `PERMISSION_GRANTS` table (`adp.authz.permissions`, version 1.4.0) maps each `PersonaRole` to the set of `ActionType`s it may perform — so a reviewer may `OVERRIDE_VERDICT` yet not `WRITE_DESIGN`. Enforcement is wired at the HTTP layer by a single application-level FastAPI dependency (`adp.authz.enforcement.enforce_route_permission`) installed on the app: every mutating route resolves to a required `ActionType` (via an explicit design/intake/recommend map plus prefix rules for the business, application, and knowledge routers) and a caller lacking that grant is refused with `403` before the endpoint runs. Safe methods (GET/HEAD/OPTIONS) are never gated — which matters for the three sensitive application-portfolio categories (ADP-SPEC-038 US3/US4/US7: risk, cost, governance), whose *reads* also need gating; each adds a dedicated `require_action_dep(ActionType.READ_APPLICATION_X)` dependency on its GET route rather than relying on the app-level dependency. A completeness test fails CI if any mutating route ships without a mapped action, keeping the policy exhaustive. When `ADP_AUTH_ENABLED=false`, the caller is the `ENTERPRISE_ARCHITECT` sentinel (all actions), so local development and the auth-disabled E2E suite are unaffected.
 
 The frontend reads `VITE_AUTH_ENABLED` to decide whether to attach Bearer tokens via the Keycloak JS adapter. When auth is enabled, all API mutations go through `apiMutation()`, which injects the `Authorization: Bearer <token>` header from the Keycloak token store.
 
@@ -575,7 +616,7 @@ Environment variables drive all runtime configuration:
 | Backend | Python + FastAPI + uvicorn | Python 3.12, FastAPI ≥ 0.111, uvicorn ≥ 0.30 |
 | Async ORM | SQLAlchemy (async) + asyncpg | SQLAlchemy 2.x, asyncpg 0.31 |
 | Database | PostgreSQL + pgvector | PostgreSQL 16, pgvector ≥ 0.3 |
-| Schema migration | Alembic | 10 migration files |
+| Schema migration | Alembic | 19 migration files |
 | Schema validation | Pydantic v2 | Shared canonical model |
 | AI orchestration | LangGraph + LangChain Core | LangGraph ≥ 0.2 |
 | LLM client | httpx (async) | ≥ 0.27 |

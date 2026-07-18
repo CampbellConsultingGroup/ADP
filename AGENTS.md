@@ -1,5 +1,9 @@
 # Agent Instructions
 
+## Project Status
+
+Latest feature: **038-application-portfolio-management** (Application Portfolio Management epic, 8 user stories US1–US8 built on the 036 application registry). Alembic head is migration `019` (`down_revision` chain 010→019). `PERMISSIONS_VERSION` (`adp.authz.permissions`) is `1.4.0` — it progressed from `1.1.0` as US3 (risk), US4 (cost), and US7 (governance) each added a sensitive-category `READ_/WRITE_APPLICATION_{RISK,COST,GOVERNANCE}` gate; US1/US2/US5/US6/US8 are non-sensitive and ride the existing `WRITE_APPLICATION` prefix rule. See `CLAUDE.md`'s "Active Technologies" / "Recent Changes" and `docs/solution-architecture.md`'s "Application Portfolio Management" section for full detail.
+
 This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
 
 > **Architecture in one line:** Issues live in a local Dolt database
@@ -130,7 +134,7 @@ bd prime                # Refresh Beads context
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (8971 symbols, 13433 relationships, 178 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (10058 symbols, 15490 relationships, 174 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
