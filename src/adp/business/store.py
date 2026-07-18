@@ -69,6 +69,8 @@ _capabilities = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
     # ADP-SPEC-035: ON DELETE SET NULL at DB level (migration 009)
     sa.Column("domain_id", sa.String(36), nullable=True),
+    # ADP-33v: strategic classification (migration 020)
+    sa.Column("strategic_relevance", sa.SmallInteger(), nullable=True),
 )
 
 _value_streams = sa.Table(
@@ -186,6 +188,7 @@ def _row_to_capability(row: Any) -> BusinessCapability:
         updated_at=row.updated_at,
         domain_id=getattr(row, "domain_id", None),
         domain_name=getattr(row, "domain_name", None),
+        strategic_relevance=getattr(row, "strategic_relevance", None),
     )
 
 
@@ -269,6 +272,7 @@ async def create_capability(
             position=data.position,
             created_at=now,
             updated_at=now,
+            strategic_relevance=data.strategic_relevance,
         )
     )
     await index_entity(
@@ -283,6 +287,7 @@ async def create_capability(
         position=data.position,
         created_at=now,
         updated_at=now,
+        strategic_relevance=data.strategic_relevance,
     )
 
 
@@ -302,6 +307,8 @@ async def update_capability(
     # an omitted field is left unchanged (model_fields_set distinguishes them).
     if "description" in data.model_fields_set:
         updates["description"] = data.description
+    if "strategic_relevance" in data.model_fields_set:
+        updates["strategic_relevance"] = data.strategic_relevance
 
     await session.execute(
         _capabilities.update().where(_capabilities.c.id == cap_id).values(**updates)

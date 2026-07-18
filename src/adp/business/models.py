@@ -10,6 +10,16 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+# ── Strategic relevance (ADP-33v) ─────────────────────────────────────────────
+# Applies to BOTH business_capabilities and technical_capabilities. Distinct
+# from the hierarchy 'level' (1-3 = L1/L2/L3 depth) and from maturity_level
+# (1-5, business capabilities only, ADP-4ga) -- three separate numeric axes.
+
+StrategicRelevance = Literal[1, 2, 3]
+
+STRATEGIC_RELEVANCE_LABELS: dict[int, str] = {1: "Strategic", 2: "Core", 3: "Supporting"}
+
+
 # ── BusinessCapability ────────────────────────────────────────────────────────
 
 class BusinessCapability(BaseModel):
@@ -27,6 +37,8 @@ class BusinessCapability(BaseModel):
     # ADP-SPEC-035: domain assignment (null when unassigned or level > 1)
     domain_id: str | None = None
     domain_name: str | None = None
+    # ADP-33v: strategic classification (null = unclassified)
+    strategic_relevance: StrategicRelevance | None = None
 
 
 class BusinessCapabilityCreate(BaseModel):
@@ -38,6 +50,7 @@ class BusinessCapabilityCreate(BaseModel):
     level: Literal[1, 2, 3]
     parent_id: str | None = None
     position: int = 0
+    strategic_relevance: StrategicRelevance | None = None
 
     @field_validator("name")
     @classmethod
@@ -64,6 +77,7 @@ class BusinessCapabilityUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     position: int | None = None
+    strategic_relevance: StrategicRelevance | None = None
 
     @field_validator("name")
     @classmethod

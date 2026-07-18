@@ -113,6 +113,30 @@ async def test_capability_crud(client):
     assert (await client.delete(f"{BASE}/capabilities/{cap['id']}")).status_code == 404
 
 
+async def test_capability_strategic_relevance(client):
+    cap = await _mk_cap(client)
+    assert cap["strategic_relevance"] is None
+
+    resp = await client.put(
+        f"{BASE}/capabilities/{cap['id']}", json={"strategic_relevance": 1}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["strategic_relevance"] == 1
+
+    # explicit null clears it
+    resp = await client.put(
+        f"{BASE}/capabilities/{cap['id']}", json={"strategic_relevance": None}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["strategic_relevance"] is None
+
+    resp = await client.post(
+        f"{BASE}/capabilities",
+        json={"name": "Fraud Detection", "level": 1, "strategic_relevance": 4},
+    )
+    assert resp.status_code == 422
+
+
 async def test_capability_hierarchy_rules(client):
     l1 = await _mk_cap(client, name="Sales")
     l2 = await _mk_cap(client, name="Quoting", level=2, parent_id=l1["id"])

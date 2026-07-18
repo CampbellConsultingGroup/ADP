@@ -334,6 +334,28 @@ async def test_tech_cap_hierarchy_and_depth_limit(client):
     assert listing["total"] == 3
 
 
+async def test_tech_cap_strategic_relevance(client):
+    tc = await _mk_tech_cap(client)
+    assert tc["strategic_relevance"] is None
+
+    resp = await client.patch(
+        f"/api/v1/technical-capabilities/{tc['id']}", json={"strategic_relevance": 2}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["strategic_relevance"] == 2
+
+    resp = await client.patch(
+        f"/api/v1/technical-capabilities/{tc['id']}", json={"strategic_relevance": None}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["strategic_relevance"] is None
+
+    resp = await client.post(
+        "/api/v1/technical-capabilities", json={"name": "X", "strategic_relevance": 0}
+    )
+    assert resp.status_code == 422
+
+
 async def test_tech_cap_unknown_parent_404(client):
     resp = await client.post(
         "/api/v1/technical-capabilities", json={"name": "X", "parent_id": "TC-999"}
