@@ -7,6 +7,7 @@ import ProposalsList from "./ProposalsList";
 import RequirementsList from "./RequirementsList";
 import LLMSettings from "./LLMSettings";
 import BusinessContextPanel from "../business/BusinessContextPanel";
+import CapabilityGapPanel from "./CapabilityGapPanel";
 import { Button } from "../ui";
 
 interface IntakePageProps {
@@ -180,6 +181,7 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
           {/* Business context — capabilities and value streams linked to this design (ADP-SPEC-034) */}
           <div style={{ padding: "0 16px 16px" }}>
             <BusinessContextPanel designId={designId} onNavigate={onNavigate} />
+            <CapabilityGapPanel designId={designId} />
           </div>
         </div>
       </div>

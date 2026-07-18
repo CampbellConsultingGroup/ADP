@@ -159,3 +159,40 @@ export function useRequirements(designId: string) {
     staleTime: 0,
   });
 }
+
+// ── Capability gap analysis (ADP-zg3.4) ───────────────────────────────────────
+// Advisory only: compares confirmed requirements against the business/
+// technical capability registries. Does not create or modify any records.
+
+export interface CapabilityMatchItem {
+  requirement_id: string;
+  requirement_title: string;
+  capability_id: string;
+  capability_name: string;
+  relevance: number;
+}
+
+export interface CapabilityGapItem {
+  requirement_id: string;
+  requirement_title: string;
+}
+
+export interface CapabilityGapSection {
+  present: CapabilityMatchItem[];
+  missing: CapabilityGapItem[];
+}
+
+export interface CapabilityGapAnalysisResponse {
+  design_id: string;
+  business_capabilities: CapabilityGapSection;
+  technical_capabilities: CapabilityGapSection;
+}
+
+export function useCapabilityGaps(designId: string) {
+  return useQuery<CapabilityGapAnalysisResponse>({
+    queryKey: ["capability-gaps", designId],
+    queryFn: () =>
+      apiGet<CapabilityGapAnalysisResponse>(`/api/v1/designs/${designId}/capability-gaps`),
+    enabled: !!designId,
+  });
+}
