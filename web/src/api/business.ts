@@ -15,6 +15,18 @@ export const STRATEGIC_RELEVANCE_LABEL: Record<StrategicRelevance, string> = {
   3: "Supporting",
 };
 
+// ADP-4ga: CMMI-style maturity ladder (business capabilities only).
+// null = not yet assessed (distinct from 1 = "Ad hoc", an active assessment).
+export type MaturityLevel = 1 | 2 | 3 | 4 | 5;
+
+export const MATURITY_LEVEL_LABEL: Record<MaturityLevel, string> = {
+  1: "Ad hoc",
+  2: "Emerging",
+  3: "Established",
+  4: "Advanced",
+  5: "World Class",
+};
+
 export interface BusinessCapability {
   id: string;
   name: string;
@@ -27,6 +39,7 @@ export interface BusinessCapability {
   domain_id: string | null;
   domain_name: string | null;
   strategic_relevance: StrategicRelevance | null;
+  maturity_level: MaturityLevel | null;
 }
 
 export interface BusinessCapabilityCreate {
@@ -36,6 +49,7 @@ export interface BusinessCapabilityCreate {
   parent_id?: string | null;
   position?: number;
   strategic_relevance?: StrategicRelevance | null;
+  maturity_level?: MaturityLevel | null;
 }
 
 export interface BusinessCapabilityUpdate {
@@ -43,6 +57,7 @@ export interface BusinessCapabilityUpdate {
   description?: string | null;
   position?: number;
   strategic_relevance?: StrategicRelevance | null;
+  maturity_level?: MaturityLevel | null;
 }
 
 export interface ValueStreamStage {

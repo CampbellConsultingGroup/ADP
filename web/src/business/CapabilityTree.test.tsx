@@ -12,6 +12,7 @@ function cap(partial: Partial<BusinessCapability> & { id: string; name: string; 
     domain_id: null,
     domain_name: null,
     strategic_relevance: null,
+    maturity_level: null,
     ...partial,
   };
 }
