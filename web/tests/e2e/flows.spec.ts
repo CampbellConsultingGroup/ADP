@@ -254,3 +254,51 @@ test.describe("New-router API smoke (real DB)", () => {
     expect(body.from_date).toBe(from);
   });
 });
+
+// ── Flow 6: Business Capabilities Agent Review button (ADP-SPEC-039) ─────────
+
+test.describe("Business Capabilities Agent Review button", () => {
+  test.beforeEach(() => {
+    if (!WEB_URL) test.skip();
+  });
+
+  test("a capability row shows a working Review button that triggers a review", async ({ page }) => {
+    // A real LLM call (if configured) can take longer than the config's 15s
+    // default test timeout -- give this one enough room for that path too.
+    test.setTimeout(45_000);
+
+    const capName = `E2E-AgentReview-${RUN_ID}`;
+    const created = await apiPost("/api/v1/business/capabilities", {
+      name: capName,
+      level: 1,
+    });
+    expect(created.ok).toBe(true);
+
+    await page.goto(WEB_URL);
+    await expect(page.getByRole("heading", { name: "Designs" })).toBeVisible({ timeout: 10_000 });
+
+    await page.getByRole("button", { name: "Business", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Business Architecture" })).toBeVisible({ timeout: 10_000 });
+
+    const row = page.getByText(capName, { exact: true }).locator("../..");
+    await expect(row).toBeVisible({ timeout: 10_000 });
+
+    const reviewButton = row.getByRole("button", { name: /Review/ });
+    await expect(reviewButton).toBeVisible();
+    await reviewButton.click();
+
+    // Opens the AgentReviewButton panel with its own trigger button.
+    const triggerButton = row.getByRole("button", { name: /Ask the business architecture expert/ });
+    await expect(triggerButton).toBeVisible({ timeout: 10_000 });
+    await triggerButton.click();
+
+    // Whether or not a real LLM key is configured in this environment, the
+    // operation must reach a terminal state (empty/with-suggestions/failed) --
+    // proves the full trigger/poll round trip works end to end either way.
+    await expect(
+      row.getByText("No suggestions.")
+        .or(row.getByText(/Review failed:/))
+        .or(row.getByRole("button", { name: /^Accept$/i }))
+    ).toBeVisible({ timeout: 30_000 });
+  });
+});
