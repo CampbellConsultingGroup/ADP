@@ -67,21 +67,27 @@ async def verify_references(
 
 ## `adp.agents.provenance`
 
+Business capabilities (and applications) have no `design_id` -- `write_audit_record` requires a real `ArchitectureDescription` + `DesignStore`, neither of which exists for a capability. Consistent with the rest of `adp.business`/`adp.application` (ART-IX is already SHOULD there, satisfied by structured logging -- see e.g. `business.capability.update` log lines in `business/router.py`), `write_suggestion_audit` writes a structured log line, not a real `AuditEntry`. A hypothetical future design-centric adapter can pass a `design`+`store` pair to get a genuine `AuditEntry` via the existing `write_audit_record` instead -- the toolkit supports either, since which one applies is a property of the adapter's domain.
+
 ```python
 async def write_suggestion_audit(
-    design_or_entity_context, *, actor: str, action: str, affected_entity: str,
-    summary: str, operation_id: str,
+    *, actor: str, action: str, affected_entity: str, summary: str,
+    operation_id: str, suggestion_id: str,
+    design_and_store: tuple[Any, Any] | None = None,  # (ArchitectureDescription, DesignStore)
 ) -> None:
-    """Writes an AuditEntry with origin='ai', actor=the confirming human.
-    Adapters call this from their accept path, after the underlying store
-    write succeeds -- mirrors materialize_option's audit write."""
+    """Default path: structured log line (origin=ai, actor, operation_id,
+    suggestion_id) mirroring adp.business's existing logger.info() convention.
+    If design_and_store is provided (a design-centric adapter), writes a real
+    AuditEntry via adp.audit.writer.write_audit_record instead."""
 
 async def write_suggestion_reasoning(
     *, operation_id: str, suggestion_id: str, step_name: str, model_id: str,
     reasoning_text: str, input_tokens: int, output_tokens: int, session,
 ) -> None:
     """Fire-and-forget (asyncio.create_task by the caller) write to the
-    existing llm_reasoning_log table, passing suggestion_id as option_id."""
+    existing llm_reasoning_log table, passing suggestion_id as option_id.
+    This IS a genuine, queryable, append-only database record regardless of
+    adapter -- the durable provenance trail here, distinct from the log line."""
 ```
 
 ## Business Capabilities adapter models (`src/adp/business/models.py` additions)

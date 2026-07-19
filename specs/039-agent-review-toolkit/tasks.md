@@ -30,7 +30,7 @@ Shared toolkit `src/adp/agents/{models,grounding,llm_stub,provenance}.py`; adapt
 - [ ] T004 Implement `verify_references()` grounding validator (fails closed on an unrecognized entity type) in src/adp/agents/grounding.py (depends on T003 failing first)
 - [ ] T005 [P] Unit test: shared stub LLM client's `chat()` returns an empty choice list with no API key, in tests/unit/agents/test_llm_stub.py
 - [ ] T006 Implement `StubLLMClient` in src/adp/agents/llm_stub.py; update src/adp/api/routers/intake.py and src/adp/api/routers/recommend.py to import it instead of their ad hoc local stub classes (depends on T005)
-- [ ] T007 [P] Implement `write_suggestion_audit()` (AuditEntry, `origin="ai"`) and `write_suggestion_reasoning()` (`llm_reasoning_log` row via `option_id`) in src/adp/agents/provenance.py
+- [ ] T007 [P] Implement `write_suggestion_audit()` (structured log line, `origin="ai"` — business capabilities have no `design_id` for a real `AuditEntry`, matching `adp.business`'s existing logging-only ART-IX convention; a `design_and_store` param supports a future design-centric adapter instead) and `write_suggestion_reasoning()` (`llm_reasoning_log` row via `option_id` — a genuine, queryable, append-only record regardless of adapter) in src/adp/agents/provenance.py
 - [ ] T008 Add `ActionType.CONFIRM_AGENT_SUGGESTION` in src/adp/authz/roles.py
 - [ ] T009 Bump `PERMISSIONS_VERSION` to `1.5.0` and grant `CONFIRM_AGENT_SUGGESTION` to solution/technical/enterprise architect roles in src/adp/authz/permissions.py (depends on T008)
 - [ ] T010 [P] Update the expected-permissions matrix and version-constant assertion in tests/authz/test_permissions.py
@@ -83,7 +83,7 @@ Shared toolkit `src/adp/agents/{models,grounding,llm_stub,provenance}.py`; adapt
 
 - [ ] T028 [US2] Add `reclassify_strategic_relevance` + `set_maturity_level` to suggestion generation, capturing the capability's current value into `previous_strategic_relevance`/`previous_maturity_level` at generation time (FR-015) and stating it in the rationale when already classified, in src/adp/business/agent_review.py
 - [ ] T029 [US2] Accept-dispatch for these two types: re-fetch the capability and compare its *current* value for the one field the suggestion targets against the suggestion's `previous_*` snapshot, 409 without writing on a mismatch (FR-015, field-scoped — an unrelated field having changed does not block this); re-check `WRITE_BUSINESS_ARCH` for the target capability (FR-016); then call the existing `update_capability`, in src/adp/business/agent_review.py
-- [ ] T030 [US2] Write the audit entry and `llm_reasoning_log` row on accept via the `adp.agents.provenance` helpers (depends on T007), in src/adp/business/agent_review.py
+- [ ] T030 [US2] Write the structured audit log line and `llm_reasoning_log` row on accept via the `adp.agents.provenance` helpers (depends on T007), in src/adp/business/agent_review.py
 - [ ] T031 [P] [US2] Web: render these two suggestion types' current→suggested value distinctly, in web/src/agent-review/SuggestionCard.tsx
 
 **Checkpoint**: US1 and US2 both work independently; the write-and-audit path is proven.

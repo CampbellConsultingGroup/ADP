@@ -5,7 +5,7 @@
 
 ## Summary
 
-Generalize the shape every existing AI pipeline (intake, recommendation, validation) already shares — submit → `OperationStore`-tracked job → structured suggestions → human accepts/rejects individually → acceptance writes through existing store CRUD with an `origin="ai"` audit entry — into a small shared toolkit (`adp.agents`), then build exactly one concrete adapter on it: a "business architecture expert" review of a single Business Capability. The primary requirement is FR-002 (grounding/citation validation) and FR-014 (no parallel write path): every suggestion that cites an entity is independently re-verified against the database, and acceptance always calls the same functions the manual edit UI already calls. No new database tables; the toolkit reuses `OperationStore` and `llm_reasoning_log` as-is (both already have untyped `Text`/nullable id columns with no FK constraints — confirmed by inspection, not assumed). Two authz actions gate the flow: the existing shared `SUBMIT_AI_OPERATION` (reused, not duplicated) for triggering, and one new `CONFIRM_AGENT_SUGGESTION` for accept/reject — separate from `WRITE_BUSINESS_ARCH`, the action actually performing the write.
+Generalize the shape every existing AI pipeline (intake, recommendation, validation) already shares — submit → `OperationStore`-tracked job → structured suggestions → human accepts/rejects individually → acceptance writes through existing store CRUD with an attributable `origin="ai"` provenance record — into a small shared toolkit (`adp.agents`), then build exactly one concrete adapter on it: a "business architecture expert" review of a single Business Capability. Business capabilities have no `design_id`, so that provenance record is a structured log line + a durable `llm_reasoning_log` row, not a real `AuditEntry` — consistent with how the rest of `adp.business`/`adp.application` already handles audit (ART-IX is SHOULD there, satisfied by structured logging). The primary requirement is FR-002 (grounding/citation validation) and FR-014 (no parallel write path): every suggestion that cites an entity is independently re-verified against the database, and acceptance always calls the same functions the manual edit UI already calls. No new database tables; the toolkit reuses `OperationStore` and `llm_reasoning_log` as-is (both already have untyped `Text`/nullable id columns with no FK constraints — confirmed by inspection, not assumed). Two authz actions gate the flow: the existing shared `SUBMIT_AI_OPERATION` (reused, not duplicated) for triggering, and one new `CONFIRM_AGENT_SUGGESTION` for accept/reject — separate from `WRITE_BUSINESS_ARCH`, the action actually performing the write.
 
 ## Technical Context
 
@@ -30,8 +30,8 @@ Generalize the shape every existing AI pipeline (intake, recommendation, validat
 - **ART-VI (Observability)**: ✅ the review operation emits a span with the same attribute categories (step name, entity id, operation id, tokens, cost, latency) as intake/recommendation steps; an LLM-call failure is caught and surfaced as `status=failed` with `error_description` (FR-021) — never silently swallowed into an empty result.
 - **ART-VII (Grounded AI Only)**: ✅ the toolkit's grounding validator re-verifies every cited entity id against the database before a suggestion is fully actionable (FR-002); unverifiable → advisory, requires explicit override to accept (mirrors `validate_citations_step`/`advisory_acknowledged`).
 - **ART-VIII (Human-in-the-Loop)**: ✅ every suggestion is accepted/rejected individually; nothing auto-applies (FR-014, FR-017).
-- **ART-IX (Provenance/Audit)**: ✅ acceptance writes an `AuditEntry` (`origin="ai"`) via a shared toolkit helper, plus a `llm_reasoning_log` row carrying the suggestion's rationale.
-- **ART-XI (Traceability)**: ✅ the audit entry and reasoning-log row both carry the operation id (and suggestion id, via the reasoning log's `option_id` column) so an accepted change traces back to what produced it.
+- **ART-IX (Provenance/Audit)**: ✅ business capabilities have no `design_id` (the `audit_entries` table is design-centric — `write_audit_record` requires a real `ArchitectureDescription`), so, matching the rest of `adp.business`/`adp.application` (ART-IX is SHOULD there, satisfied by structured logging), acceptance writes a structured, attributable log line (`origin="ai"`, actor, operation/suggestion id) via a shared toolkit helper, plus a genuine `llm_reasoning_log` row carrying the rationale — the latter is the real, queryable, append-only provenance record here.
+- **ART-XI (Traceability)**: ✅ the structured log line and the reasoning-log row both carry the operation id (and suggestion id, via the reasoning log's `option_id` column) so an accepted change traces back to what produced it.
 
 **Result**: PASS — no violations; Complexity Tracking not required.
 
@@ -58,9 +58,10 @@ src/adp/agents/                        # NEW shared toolkit package
 │                     #   ad hoc _StubLLMClient duplicated in intake.py/recommend.py
 ├── grounding.py       # NEW — verify_references(): given cited ids + an "id exists" lookup
 │                     #   per entity type, returns which resolved/failed (ART-VII)
-├── provenance.py      # NEW — write_suggestion_audit() (AuditEntry, origin="ai") +
-│                     #   write_suggestion_reasoning() (llm_reasoning_log row), shared
-│                     #   by every adapter's accept path
+├── provenance.py      # NEW — write_suggestion_audit() (structured log line, origin="ai";
+│                     #   a design-centric adapter may pass a design+store to get a real
+│                     #   AuditEntry instead via write_audit_record) + write_suggestion_
+│                     #   reasoning() (llm_reasoning_log row), shared by every adapter
 └── models.py          # NEW — AgentReviewOperation / AgentSuggestionBase shapes shared
                         #   across adapters (adapters extend/parameterize, not duplicate)
 
