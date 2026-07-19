@@ -30,7 +30,12 @@ _logger = logging.getLogger("adp.authz")
 #           (same three architect roles) to gate the sensitive contract/
 #           governance register (ADP-SPEC-038 US7). Reviewers do NOT hold
 #           these either.
-PERMISSIONS_VERSION = "1.4.0"
+#   1.5.0 — added CONFIRM_AGENT_SUGGESTION (solution & technical architects;
+#           enterprise via all-actions) to gate accepting/rejecting an Agent
+#           Review suggestion (ADP-SPEC-039), distinct from WRITE_BUSINESS_ARCH
+#           (the underlying write) and from SUBMIT_AI_OPERATION (reused,
+#           unchanged, for triggering the review). Reviewers do NOT hold it.
+PERMISSIONS_VERSION = "1.5.0"
 
 # ── Permission table ─────────────────────────────────────────────────────────
 # Maps each PersonaRole to the frozenset of ActionTypes it may perform.
@@ -54,6 +59,7 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.WRITE_APPLICATION_COST,
         ActionType.READ_APPLICATION_GOVERNANCE,
         ActionType.WRITE_APPLICATION_GOVERNANCE,
+        ActionType.CONFIRM_AGENT_SUGGESTION,
     }),
     PersonaRole.TECHNICAL_ARCHITECT: frozenset({
         ActionType.READ_DESIGN,
@@ -69,6 +75,7 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.WRITE_APPLICATION_COST,
         ActionType.READ_APPLICATION_GOVERNANCE,
         ActionType.WRITE_APPLICATION_GOVERNANCE,
+        ActionType.CONFIRM_AGENT_SUGGESTION,
     }),
     PersonaRole.REVIEWER: frozenset({
         ActionType.READ_DESIGN,
@@ -87,6 +94,7 @@ REQUIRES_CONFIRMATION: frozenset[ActionType] = frozenset({
     ActionType.AMEND_STANDARD,
     ActionType.MANAGE_ROLES,
     ActionType.EXPORT_DESIGN,
+    ActionType.CONFIRM_AGENT_SUGGESTION,
 })
 
 

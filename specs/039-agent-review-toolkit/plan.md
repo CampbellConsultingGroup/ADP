@@ -58,10 +58,10 @@ src/adp/agents/                        # NEW shared toolkit package
 │                     #   ad hoc _StubLLMClient duplicated in intake.py/recommend.py
 ├── grounding.py       # NEW — verify_references(): given cited ids + an "id exists" lookup
 │                     #   per entity type, returns which resolved/failed (ART-VII)
-├── provenance.py      # NEW — write_suggestion_audit() (structured log line, origin="ai";
-│                     #   a design-centric adapter may pass a design+store to get a real
-│                     #   AuditEntry instead via write_audit_record) + write_suggestion_
-│                     #   reasoning() (llm_reasoning_log row), shared by every adapter
+├── provenance.py      # NEW — write_suggestion_audit() (structured log line, origin="ai" --
+│                     #   business capabilities have no design_id for a real AuditEntry) +
+│                     #   write_suggestion_reasoning() (llm_reasoning_log row, fire-and-
+│                     #   forget), shared by every adapter's accept path
 └── models.py          # NEW — AgentReviewOperation / AgentSuggestionBase shapes shared
                         #   across adapters (adapters extend/parameterize, not duplicate)
 

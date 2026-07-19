@@ -67,18 +67,15 @@ async def verify_references(
 
 ## `adp.agents.provenance`
 
-Business capabilities (and applications) have no `design_id` -- `write_audit_record` requires a real `ArchitectureDescription` + `DesignStore`, neither of which exists for a capability. Consistent with the rest of `adp.business`/`adp.application` (ART-IX is already SHOULD there, satisfied by structured logging -- see e.g. `business.capability.update` log lines in `business/router.py`), `write_suggestion_audit` writes a structured log line, not a real `AuditEntry`. A hypothetical future design-centric adapter can pass a `design`+`store` pair to get a genuine `AuditEntry` via the existing `write_audit_record` instead -- the toolkit supports either, since which one applies is a property of the adapter's domain.
+Business capabilities (and applications) have no `design_id` -- `write_audit_record` requires a real `ArchitectureDescription` + `DesignStore`, neither of which exists for a capability. Consistent with the rest of `adp.business`/`adp.application` (ART-IX is already SHOULD there, satisfied by structured logging -- see e.g. `business.capability.update` log lines in `business/router.py`), `write_suggestion_audit` writes a structured log line, not a real `AuditEntry`. (A future design-centric adapter that needs a real `AuditEntry` would call `adp.audit.writer.write_audit_record` directly -- that path already exists and needs no toolkit involvement; this helper is not built to anticipate it.)
 
 ```python
-async def write_suggestion_audit(
-    *, actor: str, action: str, affected_entity: str, summary: str,
-    operation_id: str, suggestion_id: str,
-    design_and_store: tuple[Any, Any] | None = None,  # (ArchitectureDescription, DesignStore)
+def write_suggestion_audit(
+    logger: logging.Logger, *, actor: str, action: str, affected_entity: str,
+    summary: str, operation_id: str, suggestion_id: str,
 ) -> None:
-    """Default path: structured log line (origin=ai, actor, operation_id,
-    suggestion_id) mirroring adp.business's existing logger.info() convention.
-    If design_and_store is provided (a design-centric adapter), writes a real
-    AuditEntry via adp.audit.writer.write_audit_record instead."""
+    """Structured log line (origin=ai, actor, operation_id, suggestion_id),
+    mirroring adp.business's existing logger.info() convention exactly."""
 
 async def write_suggestion_reasoning(
     *, operation_id: str, suggestion_id: str, step_name: str, model_id: str,
@@ -136,10 +133,17 @@ class CapabilityAgentReviewResponse(BaseModel):
                                             # prompt/response content
 
 
-class SuggestionDecisionRequest(BaseModel):
-    """Accept/reject body. advisory_acknowledged is required (True) to accept
-    a suggestion where advisory=True; ignored on reject."""
+class SuggestionAcceptRequest(BaseModel):
+    """Accept body. Mirrors AcceptOptionRequest (recommend.py): confirmation_id
+    is required and non-empty (ART-VIII -- accepting is consequential and
+    CONFIRM_AGENT_SUGGESTION is in REQUIRES_CONFIRMATION). advisory_acknowledged
+    must be True to accept a suggestion where advisory=True."""
+    confirmation_id: str   # validated non-empty, same pattern as AcceptOptionRequest
     advisory_acknowledged: bool = False
+
+# Reject takes no request body (FR-017: no write occurs, nothing to confirm --
+# unlike RejectOptionRequest's rejection_reason, there is no ADP-SPEC-019-style
+# feedback loop here, per this spec's Clarifications).
 ```
 
 Context assembly (`src/adp/business/agent_review.py`) reads, for the target capability: its own row (including `strategic_relevance`, `maturity_level`), its domain via the existing `get_capability`/domain join, its parent and direct children, its linked value-stream stages, its linked applications' `time_classification`/`r_strategy`/`pace_layer`/`health_score` only (never risk/cost/governance — research D6), its linked technical capabilities, its linked designs, and (for `flag_duplicate` only) the sibling set at the same `level`.

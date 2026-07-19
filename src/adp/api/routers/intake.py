@@ -220,6 +220,7 @@ def _make_orchestrator(model: str | None = None):  # type: ignore[return]
     3. ADP_LLM_MODEL env var fallback
     4. claude-sonnet-4-6 default
     """
+    from adp.agents.llm_stub import StubLLMClient
     from adp.api.routers.config import get_api_key, get_extraction_model
     from adp.intake.orchestrator import ExtractionOrchestrator
     from adp.llm.client import LLMClient
@@ -229,11 +230,7 @@ def _make_orchestrator(model: str | None = None):  # type: ignore[return]
 
     if not api_key:
         # Graceful degradation: stub client returns empty extraction
-        class _StubLLMClient(LLMClient):
-            async def extract(self, text: str, correlation_id: str | None = None) -> dict:  # type: ignore[override]
-                return {"choices": [], "usage": {}}
-
-        llm = _StubLLMClient(base_url="http://stub", api_key="stub", model="stub")  # type: ignore[assignment]
+        llm = StubLLMClient(base_url="http://stub", api_key="stub", model="stub")  # type: ignore[assignment]
     else:
         active_model = model or get_extraction_model()
         llm = LLMClient(base_url=endpoint, api_key=api_key, model=active_model)  # type: ignore[assignment]

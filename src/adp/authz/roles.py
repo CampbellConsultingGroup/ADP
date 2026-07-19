@@ -36,3 +36,8 @@ class ActionType(StrEnum):
     # ADP-SPEC-038 (APM US7): sensitive application governance/contract data.
     READ_APPLICATION_GOVERNANCE = "read_application_governance"
     WRITE_APPLICATION_GOVERNANCE = "write_application_governance"
+    # ADP-SPEC-039: confirming (accepting/rejecting) an Agent Review suggestion,
+    # distinct from WRITE_BUSINESS_ARCH (the underlying store write when a
+    # suggestion is applied) and from SUBMIT_AI_OPERATION (reused, triggers
+    # the review itself).
+    CONFIRM_AGENT_SUGGESTION = "confirm_agent_suggestion"
