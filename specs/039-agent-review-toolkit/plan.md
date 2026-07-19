@@ -16,18 +16,18 @@ Generalize the shape every existing AI pipeline (intake, recommendation, validat
 **Target Platform**: Linux server (API) + browser (web canvas)
 **Project Type**: Web application (existing `src/adp` backend + `web/` frontend)
 **Performance Goals**: context assembly for one capability is a handful of scoped queries (the capability's own row + direct joins), not a tree traversal — bounded prompt size, no N+1 across the estate
-**Constraints**: zero hallucinated entity ids ever presented as fully actionable (FR-002); zero suggestions written without an explicit human accept (ART-VIII); zero new write path (ART-II); toolkit modules import nothing from `adp.business` (SC-005)
+**Constraints**: zero hallucinated entity ids ever presented as fully actionable (FR-002); zero suggestions written without an explicit human accept (ART-VIII); zero new write path (ART-II); toolkit modules import nothing from `adp.business` (SC-005); an LLM-call failure always surfaces as operation `status=failed` with `error_description`, never a silent empty result indistinguishable from "no LLM configured" (FR-021); accept-time staleness is checked per-field via a generation-time value snapshot, never whole-record (FR-015)
 **Scale/Scope**: one toolkit package (`adp.agents`) + one adapter (business capability review); 4 user stories; 0 new tables; ~1 new authz action
 
 ## Constitution Check
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-- **ART-II (Model is source of truth)**: ✅ acceptance calls existing `business.store` functions (`update_capability`, capability-domain assignment, `create_capability`); no shadow write path (FR-014).
+- **ART-II (Model is source of truth)**: ✅ acceptance calls existing `business.store` functions (`update_capability`, capability-domain assignment, `create_capability`); no shadow write path (FR-014); accept-time consistency uses a per-field, generation-time value snapshot (FR-015, research D8) rather than inventing a new versioning column.
 - **ART-III / ART-XIII (Machine-readable / Typed contracts)**: ✅ all new Pydantic v2 models (`extra="forbid"`); suggestion types are a tagged union; new models emit to JSON Schema via `adp-generate`.
 - **ART-IV (TDD)**: ✅ contract tests for the toolkit's grounding validator and the capability adapter's endpoints precede handlers.
 - **ART-V (Security by Design)**: ✅ threat model in spec; two-permission separation (trigger vs. confirm) distinct from the write action; sensitive application fields excluded from context by construction (FR-009), not by a permission check that could be bypassed.
-- **ART-VI (Observability)**: ✅ the review operation emits a span with the same attribute categories (step name, entity id, operation id, tokens, cost, latency) as intake/recommendation steps.
+- **ART-VI (Observability)**: ✅ the review operation emits a span with the same attribute categories (step name, entity id, operation id, tokens, cost, latency) as intake/recommendation steps; an LLM-call failure is caught and surfaced as `status=failed` with `error_description` (FR-021) — never silently swallowed into an empty result.
 - **ART-VII (Grounded AI Only)**: ✅ the toolkit's grounding validator re-verifies every cited entity id against the database before a suggestion is fully actionable (FR-002); unverifiable → advisory, requires explicit override to accept (mirrors `validate_citations_step`/`advisory_acknowledged`).
 - **ART-VIII (Human-in-the-Loop)**: ✅ every suggestion is accepted/rejected individually; nothing auto-applies (FR-014, FR-017).
 - **ART-IX (Provenance/Audit)**: ✅ acceptance writes an `AuditEntry` (`origin="ai"`) via a shared toolkit helper, plus a `llm_reasoning_log` row carrying the suggestion's rationale.
@@ -124,10 +124,10 @@ Captured in [research.md](./research.md). Key decisions:
 `adp.agents` package (`llm_stub.py`, `grounding.py`, `provenance.py`, `models.py`); `ActionType.CONFIRM_AGENT_SUGGESTION` + `PERMISSIONS_VERSION` bump; `web/src/agent-review/` generic components + `agentReview.ts` hooks. No adapter wired yet — covered by toolkit-level unit tests only.
 
 ### Phase 2 — US1 (P1): Flag possible duplicates
-`agent_review.py` context assembly + prompt + `flag_duplicate` suggestion type; `POST/GET .../agent-review` endpoints; accept path is a no-op acknowledgment (no write); web wiring on `CapabilityNode`. **Ships the full pipeline end to end with zero write risk.**
+`agent_review.py` context assembly + prompt + `flag_duplicate` suggestion type; the `LLMClient.chat()` call is wrapped in try/except here (the first and only place it's made — later stories reuse this same call site), transitioning the operation to `failed` with `error_description` on any exception (FR-021); `POST/GET .../agent-review` endpoints; accept path is a no-op acknowledgment (no write); web wiring on `CapabilityNode`. **Ships the full pipeline end to end with zero write risk.**
 
 ### Phase 3 — US2 (P2): Strategic relevance / maturity suggestions
-`reclassify_strategic_relevance` + `set_maturity_level` suggestion types; accept path calls existing `update_capability`; first exercise of the audit + reasoning-log write via `provenance.py`.
+`reclassify_strategic_relevance` + `set_maturity_level` suggestion types, each capturing a `previous_*` value snapshot at generation time (FR-015, research D8); accept path re-checks the snapshot against the capability's current field value (409 on mismatch) before calling existing `update_capability`; first exercise of the audit + reasoning-log write via `provenance.py`.
 
 ### Phase 4 — US3 (P3): Domain assignment suggestions
 `assign_domain` suggestion type (L1-only, per FR-012); accept path calls the existing domain-assignment function; first cross-entity grounding check (domain id, not the capability's own id).
@@ -140,4 +140,4 @@ Captured in [research.md](./research.md). Key decisions:
 
 ## Post-Design Constitution Re-Check
 
-Re-evaluate after data-model.md: confirm (a) the toolkit package genuinely has no `adp.business` import (SC-005), (b) every suggestion type's citations are grounded before display, (c) every accept path calls a pre-existing store function (grep-verifiable — no new INSERT/UPDATE statements outside the toolkit/adapter's use of existing functions), (d) new models appear in `generated/` after `adp-generate`. No anticipated violations.
+Re-evaluate after data-model.md: confirm (a) the toolkit package genuinely has no `adp.business` import (SC-005), (b) every suggestion type's citations are grounded before display, (c) every accept path calls a pre-existing store function (grep-verifiable — no new INSERT/UPDATE statements outside the toolkit/adapter's use of existing functions), (d) new models appear in `generated/` after `adp-generate`, (e) the only `LLMClient.chat()` call site is wrapped in try/except with a `failed`-status path (FR-021), (f) `reclassify_strategic_relevance`/`set_maturity_level` suggestions carry a `previous_*` snapshot and accept re-checks it before writing (FR-015). No anticipated violations.

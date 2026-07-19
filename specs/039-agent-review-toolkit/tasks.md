@@ -50,14 +50,14 @@ Shared toolkit `src/adp/agents/{models,grounding,llm_stub,provenance}.py`; adapt
 
 ### Tests for User Story 1 (MANDATORY — ART-IV)
 
-- [ ] T015 [P] [US1] Contract test: trigger → poll → `flag_duplicate` suggestion citing a real same-level capability id + rationale; accept is a no-op (no DB write); reject marks rejected; trigger requires `SUBMIT_AI_OPERATION`, accept/reject require `CONFIRM_AGENT_SUGGESTION`; unknown capability → 404, in tests/contract/test_capability_agent_review_api.py
+- [ ] T015 [P] [US1] Contract test: trigger → poll → `flag_duplicate` suggestion citing a real same-level capability id + rationale; accept is a no-op (no DB write); reject marks rejected; trigger requires `SUBMIT_AI_OPERATION`, accept/reject require `CONFIRM_AGENT_SUGGESTION`; unknown capability → 404; **an `LLMClient.chat()` failure (mocked to raise) transitions the operation to `status=failed` with a non-null `error_description`, distinct from the no-API-key empty-result case (FR-021)**, in tests/contract/test_capability_agent_review_api.py
 - [ ] T016 [P] [US1] Unit test: duplicate-candidate matching is restricted to the same `level` (no cross-level flags), in tests/unit/business/test_agent_review_duplicates.py
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] `CapabilitySuggestion` tagged union (starting with `flag_duplicate`), `CapabilityAgentReviewResponse`, `SuggestionDecisionRequest` models in src/adp/business/models.py
+- [ ] T017 [US1] `CapabilitySuggestion` tagged union — all five types' fields per data-model.md, including the `previous_strategic_relevance`/`previous_maturity_level` generation-time snapshot fields that US2 will populate and compare (FR-015) — `CapabilityAgentReviewResponse` (with `error_description`, FR-021), `SuggestionDecisionRequest` models in src/adp/business/models.py
 - [ ] T018 [US1] Context assembly for one capability — own fields, domain, direct parent/children, linked stages, linked applications' non-sensitive fields only (`time_classification`/`r_strategy`/`pace_layer`/`health_score`), linked technical capabilities, linked designs, and same-level siblings (for duplicate comparison) — in src/adp/business/agent_review.py
-- [ ] T019 [US1] "Business architecture expert" prompt construction + `LLMClient.chat()` call + `flag_duplicate` suggestion parsing, in src/adp/business/agent_review.py (depends on T018, T006)
+- [ ] T019 [US1] "Business architecture expert" prompt construction + `LLMClient.chat()` call (wrapped in try/except — any exception transitions the operation to `status=failed` with `error_description`, no retry, FR-021 — this is the only `chat()` call site; later stories' suggestion types are parsed from the same response) + `flag_duplicate` suggestion parsing, in src/adp/business/agent_review.py (depends on T018, T006)
 - [ ] T020 [US1] Grounding pass over `flag_duplicate` citations via `adp.agents.grounding.verify_references`, marking unresolvable ones advisory, in src/adp/business/agent_review.py (depends on T004, T019)
 - [ ] T021 [US1] `POST` trigger, `GET` poll, `POST` accept, `POST` reject endpoints under `/api/v1/business/capabilities/{cap_id}/agent-review`, tracked via the existing `OperationStore` (capability id passed as `design_id`), in src/adp/business/router.py
 - [ ] T022 [US1] Register explicit route→action mappings — trigger → `SUBMIT_AI_OPERATION`, accept/reject → `CONFIRM_AGENT_SUGGESTION` (both override the `/api/v1/business/` prefix's `WRITE_BUSINESS_ARCH` default) — in src/adp/authz/enforcement.py
@@ -76,13 +76,13 @@ Shared toolkit `src/adp/agents/{models,grounding,llm_stub,provenance}.py`; adapt
 
 ### Tests for User Story 2 (MANDATORY — ART-IV)
 
-- [ ] T026 [P] [US2] Contract test: `reclassify_strategic_relevance`/`set_maturity_level` suggestions generated with rationale; accept writes the field via the existing `update_capability` + an audit entry with `origin="ai"`; reject writes nothing; a suggestion cannot be accepted twice; accept re-verifies the capability's current state and 409s if it changed since generation, in tests/contract/test_capability_agent_review_api.py (extends T015's file)
-- [ ] T027 [P] [US2] Unit test: accept dispatch calls `update_capability` with exactly the suggested field and value, nothing else, in tests/unit/business/test_agent_review_accept.py
+- [ ] T026 [P] [US2] Contract test: `reclassify_strategic_relevance`/`set_maturity_level` suggestions generated with rationale and a `previous_*` snapshot matching the capability's value at generation time; accept writes the field via the existing `update_capability` + an audit entry with `origin="ai"`; reject writes nothing; a suggestion cannot be accepted twice; **accept 409s if the specific snapshotted field changed since generation, but still succeeds if a *different*, unrelated field changed in the meantime (field-scoped, not whole-record — FR-015)**, in tests/contract/test_capability_agent_review_api.py (extends T015's file)
+- [ ] T027 [P] [US2] Unit test: accept dispatch calls `update_capability` with exactly the suggested field and value, nothing else; the snapshot comparison reads only the one field named by the suggestion type, in tests/unit/business/test_agent_review_accept.py
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] Add `reclassify_strategic_relevance` + `set_maturity_level` to suggestion generation (stating the capability's current value in the rationale when already classified) in src/adp/business/agent_review.py
-- [ ] T029 [US2] Accept-dispatch for these two types: re-verify current capability state immediately before writing (FR-015), re-check `WRITE_BUSINESS_ARCH` for the target capability (FR-016), then call the existing `update_capability`, in src/adp/business/agent_review.py
+- [ ] T028 [US2] Add `reclassify_strategic_relevance` + `set_maturity_level` to suggestion generation, capturing the capability's current value into `previous_strategic_relevance`/`previous_maturity_level` at generation time (FR-015) and stating it in the rationale when already classified, in src/adp/business/agent_review.py
+- [ ] T029 [US2] Accept-dispatch for these two types: re-fetch the capability and compare its *current* value for the one field the suggestion targets against the suggestion's `previous_*` snapshot, 409 without writing on a mismatch (FR-015, field-scoped — an unrelated field having changed does not block this); re-check `WRITE_BUSINESS_ARCH` for the target capability (FR-016); then call the existing `update_capability`, in src/adp/business/agent_review.py
 - [ ] T030 [US2] Write the audit entry and `llm_reasoning_log` row on accept via the `adp.agents.provenance` helpers (depends on T007), in src/adp/business/agent_review.py
 - [ ] T031 [P] [US2] Web: render these two suggestion types' current→suggested value distinctly, in web/src/agent-review/SuggestionCard.tsx
 
@@ -97,14 +97,14 @@ Shared toolkit `src/adp/agents/{models,grounding,llm_stub,provenance}.py`; adapt
 
 ### Tests for User Story 3 (MANDATORY — ART-IV)
 
-- [ ] T032 [P] [US3] Contract test: `assign_domain` produced only for L1 capabilities, citing a real domain id; accept calls the existing domain-assignment path + audit entry; a level-2/3 capability review never produces `assign_domain`, in tests/contract/test_capability_agent_review_api.py
+- [ ] T032 [P] [US3] Contract test: `assign_domain` produced only for L1 capabilities, citing a real domain id; accept calls the existing domain-assignment path + audit entry; a level-2/3 capability review never produces `assign_domain`; **if the capability's domain was assigned by someone else between generation and accept (no longer `NULL`), accept 409s rather than overwriting it (FR-015's degenerate case, research D8)**, in tests/contract/test_capability_agent_review_api.py
 - [ ] T033 [P] [US3] Unit test: `assign_domain`'s citation is grounded against `business_domains`, not `business_capabilities` — cross-entity-type grounding, in tests/unit/business/test_agent_review_grounding.py
 
 ### Implementation for User Story 3
 
 - [ ] T034 [US3] Add `assign_domain` suggestion generation, gated to L1 capabilities only (FR-012), in src/adp/business/agent_review.py
 - [ ] T035 [US3] Register a domain-id lookup function alongside the existing capability-id lookup passed to `verify_references`, in src/adp/business/agent_review.py
-- [ ] T036 [US3] Accept-dispatch for `assign_domain`: call the existing `assign_capability_domain`, in src/adp/business/agent_review.py
+- [ ] T036 [US3] Accept-dispatch for `assign_domain`: re-verify the capability's `domain_id` is still `NULL` before writing (409 if not, FR-015's degenerate case), then call the existing `assign_capability_domain`, in src/adp/business/agent_review.py
 
 **Checkpoint**: US1–US3 all work independently; cross-entity grounding is proven.
 
