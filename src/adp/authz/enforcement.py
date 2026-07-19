@@ -77,6 +77,24 @@ _EXPLICIT_ROUTE_ACTIONS: dict[tuple[str, str], ActionType] = {
     ("PUT", "/api/v1/applications/{app_id}/governance"): ActionType.WRITE_APPLICATION_GOVERNANCE,
     # LLM provider configuration is an admin action
     ("PUT", "/api/v1/config/llm"): ActionType.MANAGE_CONFIG,
+    # ADP-SPEC-039: triggering an Agent Review reuses SUBMIT_AI_OPERATION
+    # (research.md D3) -- overrides the /business prefix's WRITE_BUSINESS_ARCH.
+    (
+        "POST",
+        "/api/v1/business/capabilities/{cap_id}/agent-review",
+    ): ActionType.SUBMIT_AI_OPERATION,
+    # Accepting/rejecting a suggestion is a consequential confirmation, distinct
+    # from WRITE_BUSINESS_ARCH (the action gating the underlying write itself).
+    (
+        "POST",
+        "/api/v1/business/capabilities/{cap_id}/agent-review/{operation_id}"
+        "/suggestions/{suggestion_id}/accept",
+    ): ActionType.CONFIRM_AGENT_SUGGESTION,
+    (
+        "POST",
+        "/api/v1/business/capabilities/{cap_id}/agent-review/{operation_id}"
+        "/suggestions/{suggestion_id}/reject",
+    ): ActionType.CONFIRM_AGENT_SUGGESTION,
 }
 
 # ── Prefix rules ─────────────────────────────────────────────────────────────

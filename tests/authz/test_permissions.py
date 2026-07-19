@@ -145,6 +145,12 @@ _EXPECTED: dict[tuple[PersonaRole, ActionType], bool] = {
     (PersonaRole.SOLUTION_ARCHITECT, ActionType.WRITE_APPLICATION_GOVERNANCE): True,
     (PersonaRole.TECHNICAL_ARCHITECT, ActionType.WRITE_APPLICATION_GOVERNANCE): True,
     (PersonaRole.REVIEWER, ActionType.WRITE_APPLICATION_GOVERNANCE): False,
+    # confirm_agent_suggestion: same grant shape as confirm_recommendation --
+    # accepting/rejecting an Agent Review suggestion (v1.5.0, ADP-SPEC-039)
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.CONFIRM_AGENT_SUGGESTION): True,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.CONFIRM_AGENT_SUGGESTION): True,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.CONFIRM_AGENT_SUGGESTION): True,
+    (PersonaRole.REVIEWER, ActionType.CONFIRM_AGENT_SUGGESTION): False,
 }
 
 
@@ -196,8 +202,8 @@ def test_require_action_logs_warning_on_denial(caplog: pytest.LogCaptureFixture)
 
 
 def test_permissions_version_constant() -> None:
-    """PERMISSIONS_VERSION exists and is 1.4.0 — any permission change must bump it."""
-    assert PERMISSIONS_VERSION == "1.4.0"
+    """PERMISSIONS_VERSION exists and is 1.5.0 — any permission change must bump it."""
+    assert PERMISSIONS_VERSION == "1.5.0"
 
 
 # ── US3: Per-action confirmation requirements ────────────────────────────────
@@ -221,6 +227,7 @@ _CONFIRMATION_EXPECTED: dict[ActionType, bool] = {
     ActionType.WRITE_APPLICATION_COST: False,
     ActionType.READ_APPLICATION_GOVERNANCE: False,
     ActionType.WRITE_APPLICATION_GOVERNANCE: False,
+    ActionType.CONFIRM_AGENT_SUGGESTION: True,
 }
 
 

@@ -8,6 +8,7 @@ from the router inside `async with session_factory() as session: ...` blocks.
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, cast
 
@@ -569,6 +570,58 @@ async def list_capability_designs(capability_id: str, session: AsyncSession) -> 
     ]
 
 
+@dataclass(frozen=True)
+class CapabilityStageRef:
+    """A value-stream stage linked to a capability (ADP-SPEC-039 context assembly).
+
+    Not a boundary payload (ART-XIII concerns external APIs) -- internal
+    context data feeding the Agent Review toolkit, mirroring ReasoningRecord's
+    dataclass precedent for non-boundary internal shapes.
+    """
+
+    stage_id: str
+    stage_name: str
+    value_stream_id: str
+    value_stream_name: str
+
+
+async def list_stages_for_capability(
+    capability_id: str, session: AsyncSession
+) -> list[CapabilityStageRef]:
+    """Reverse of list_stage_caps: value-stream stages linked to a capability."""
+    result = await session.execute(
+        sa.select(
+            _stage_caps.c.stage_id,
+            _stages.c.name.label("stage_name"),
+            _stages.c.value_stream_id,
+            _value_streams.c.name.label("value_stream_name"),
+        )
+        .join(_stages, _stages.c.id == _stage_caps.c.stage_id)
+        .join(_value_streams, _value_streams.c.id == _stages.c.value_stream_id)
+        .where(_stage_caps.c.capability_id == capability_id)
+        .order_by(_stages.c.position)
+    )
+    return [
+        CapabilityStageRef(
+            stage_id=row.stage_id,
+            stage_name=row.stage_name,
+            value_stream_id=row.value_stream_id,
+            value_stream_name=row.value_stream_name,
+        )
+        for row in result.mappings()
+    ]
+
+
+async def stage_exists(stage_id: str, session: AsyncSession) -> bool:
+    """Existence check for a value-stream stage by id alone (ids are globally
+    unique, no value_stream_id needed) -- used by the Agent Review adapter
+    (ADP-SPEC-039 US4) to ground a propose_new_capability suggestion's
+    supporting-stage citation at generation time, and to re-verify it at
+    accept time (FR-015)."""
+    result = await session.execute(sa.select(_stages.c.id).where(_stages.c.id == stage_id))
+    return result.first() is not None
+
+
 async def link_design_to_capability(
     capability_id: str, design_id: str, session: AsyncSession
 ) -> None:
@@ -766,6 +819,15 @@ async def list_domains(session: AsyncSession) -> DomainListResponse:
         for row in result.mappings().all()
     ]
     return DomainListResponse(items=items, total=len(items))
+
+
+async def list_domains_full(session: AsyncSession) -> list[BusinessDomain]:
+    """Full domain records including scope_statement (list_domains' DomainSummary
+    omits it) -- used by the Agent Review adapter (ADP-SPEC-039 US3) to ground
+    an assign_domain suggestion against each domain's actual scope, not just
+    its name."""
+    result = await session.execute(sa.select(_domains).order_by(_domains.c.name))
+    return [_row_to_domain(row) for row in result.mappings().all()]
 
 
 async def get_domain(domain_id: str, session: AsyncSession) -> DomainDetail | None:

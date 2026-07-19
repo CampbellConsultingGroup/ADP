@@ -329,6 +329,7 @@ def _make_stub_knowledge_retrieval():
 
 def _make_recommend_orchestrator(model: str | None = None):
     """Create RecommendationOrchestrator with stub knowledge retrieval and configured LLM."""
+    from adp.agents.llm_stub import StubLLMClient
     from adp.api.routers.config import get_api_key, get_recommendation_model
     from adp.llm.client import LLMClient
     from adp.recommendation.orchestrator import RecommendationOrchestrator
@@ -337,16 +338,7 @@ def _make_recommend_orchestrator(model: str | None = None):
     api_key = get_api_key()
 
     if not api_key:
-        class _StubLLMClient(LLMClient):
-            async def extract(self, text: str, correlation_id: str | None = None) -> dict:  # type: ignore[override]
-                return {"choices": [], "usage": {}}
-
-            async def chat(  # type: ignore[override]
-                self, system: str, user: str, correlation_id: str | None = None
-            ) -> dict:
-                return {"choices": [], "usage": {}}
-
-        llm = _StubLLMClient(base_url="http://stub", api_key="stub", model="stub")  # type: ignore[assignment]
+        llm = StubLLMClient(base_url="http://stub", api_key="stub", model="stub")  # type: ignore[assignment]
     else:
         active_model = model or get_recommendation_model()
         llm = LLMClient(base_url=endpoint, api_key=api_key, model=active_model)  # type: ignore[assignment]

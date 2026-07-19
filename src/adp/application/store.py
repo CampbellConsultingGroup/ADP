@@ -7,6 +7,7 @@ All functions accept an AsyncSession and are called from the router inside
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, cast
@@ -1214,6 +1215,57 @@ async def list_app_capability_links(
         for row in result.mappings().all()
     ]
     return ApplicationCapabilityLinksResponse(items=items)
+
+
+@dataclass(frozen=True)
+class CapabilityApplicationRef:
+    """An application linked to a business capability, with non-sensitive APM
+    fields only (ADP-SPEC-039 context assembly -- risk/cost/governance are
+    deliberately excluded by construction, not by a permission check).
+
+    Not a boundary payload (ART-XIII concerns external APIs) -- internal
+    context data feeding the Agent Review toolkit.
+    """
+
+    app_id: str
+    app_name: str
+    fit_score: int
+    time_classification: str | None
+    r_strategy: str | None
+    pace_layer: str | None
+    health_score: int | None
+
+
+async def list_applications_for_capability(
+    capability_id: str, session: AsyncSession
+) -> list[CapabilityApplicationRef]:
+    """Reverse of list_app_capability_links: applications linked to a capability."""
+    result = await session.execute(
+        sa.select(
+            _app_cap_links.c.app_id,
+            _applications.c.name.label("app_name"),
+            _app_cap_links.c.fit_score,
+            _applications.c.time_classification,
+            _applications.c.r_strategy,
+            _applications.c.pace_layer,
+            _applications.c.health_score,
+        )
+        .join(_applications, _applications.c.id == _app_cap_links.c.app_id)
+        .where(_app_cap_links.c.capability_id == capability_id)
+        .order_by(_applications.c.name)
+    )
+    return [
+        CapabilityApplicationRef(
+            app_id=row.app_id,
+            app_name=row.app_name,
+            fit_score=row.fit_score,
+            time_classification=row.time_classification,
+            r_strategy=row.r_strategy,
+            pace_layer=row.pace_layer,
+            health_score=row.health_score,
+        )
+        for row in result.mappings()
+    ]
 
 
 async def create_app_capability_link(
