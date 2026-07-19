@@ -18,6 +18,11 @@ interface Props<S extends AgentSuggestionBase = AgentSuggestionBase> {
   basePath: string;
   operationId: string;
   renderDetail?: (suggestion: S) => React.ReactNode;
+  /** Called after a successful accept -- lets the adapter refresh whatever
+   * data the suggestion just wrote to (e.g. the capabilities list), since
+   * this card only knows about the review operation, not the adapter's
+   * underlying entity data. */
+  onAccepted?: () => void;
 }
 
 export default function SuggestionCard<S extends AgentSuggestionBase = AgentSuggestionBase>({
@@ -25,6 +30,7 @@ export default function SuggestionCard<S extends AgentSuggestionBase = AgentSugg
   basePath,
   operationId,
   renderDetail,
+  onAccepted,
 }: Props<S>): React.ReactElement {
   const [advisoryAcknowledged, setAdvisoryAcknowledged] = useState(false);
   const accept = useAcceptSuggestion(basePath, operationId);
@@ -80,7 +86,12 @@ export default function SuggestionCard<S extends AgentSuggestionBase = AgentSugg
       {suggestion.status === "pending" ? (
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={() => accept.mutate({ suggestionId: suggestion.suggestion_id, advisoryAcknowledged })}
+            onClick={() =>
+              accept.mutate(
+                { suggestionId: suggestion.suggestion_id, advisoryAcknowledged },
+                { onSuccess: () => onAccepted?.() },
+              )
+            }
             disabled={!canAccept}
             style={{ ...btnStyle, background: canAccept ? "var(--good)" : "var(--border)", color: "#fff", cursor: canAccept ? "pointer" : "not-allowed" }}
           >

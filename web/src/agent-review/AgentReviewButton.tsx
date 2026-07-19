@@ -15,12 +15,17 @@ interface Props<S extends AgentSuggestionBase = AgentSuggestionBase> {
   basePath: string;
   label?: string;
   renderDetail?: (suggestion: S) => React.ReactNode;
+  /** Called after a suggestion is successfully accepted -- passed through to
+   * each SuggestionCard so the adapter can refresh the data the accept just
+   * wrote to (this component only knows about the review operation itself). */
+  onAccepted?: () => void;
 }
 
 export default function AgentReviewButton<S extends AgentSuggestionBase = AgentSuggestionBase>({
   basePath,
   label = "Review with AI",
   renderDetail,
+  onAccepted,
 }: Props<S>): React.ReactElement {
   const [operationId, setOperationId] = useState<string | null>(null);
   const submit = useSubmitAgentReview(basePath);
@@ -36,16 +41,33 @@ export default function AgentReviewButton<S extends AgentSuggestionBase = AgentS
 
   return (
     <div>
-      <button
-        onClick={handleClick}
-        disabled={busy}
-        style={{
-          fontSize: 12, padding: "4px 10px", borderRadius: 4, cursor: busy ? "not-allowed" : "pointer",
-          background: "var(--accent-wash)", color: "var(--accent-2)", border: "1px solid var(--accent)",
-        }}
-      >
-        {busy ? "Reviewing…" : label}
-      </button>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <button
+          onClick={handleClick}
+          disabled={busy}
+          style={{
+            fontSize: 12, padding: "4px 10px", borderRadius: 4, cursor: busy ? "not-allowed" : "pointer",
+            background: "var(--accent-wash)", color: "var(--accent-2)", border: "1px solid var(--accent)",
+          }}
+        >
+          {busy ? "Reviewing…" : label}
+        </button>
+
+        {/* Explicit dismiss for the current review's results -- distinct from
+         * whatever toggle the consuming screen uses to show/hide this whole
+         * component, so results can be cleared without losing that toggle. */}
+        {data && !running && (
+          <button
+            onClick={() => setOperationId(null)}
+            style={{
+              fontSize: 12, padding: "4px 10px", borderRadius: 4, cursor: "pointer",
+              background: "transparent", color: "var(--ink-3)", border: "1px solid var(--border)",
+            }}
+          >
+            Close
+          </button>
+        )}
+      </div>
 
       {data?.status === "failed" && (
         <div className="ui-alert crit" style={{ marginTop: 8 }}>
@@ -66,6 +88,7 @@ export default function AgentReviewButton<S extends AgentSuggestionBase = AgentS
               basePath={basePath}
               operationId={operationId}
               renderDetail={renderDetail}
+              onAccepted={onAccepted}
             />
           ))}
         </div>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { MATURITY_LEVEL_LABEL, STRATEGIC_RELEVANCE_LABEL, useDeleteCapability, useUpdateCapability } from "../api/business";
 import type { BusinessCapability, MaturityLevel, StrategicRelevance } from "../api/business";
 import CapabilityForm from "./CapabilityForm";
@@ -25,6 +26,7 @@ export default function CapabilityNode({ capability, children }: CapabilityNodeP
 
   const update = useUpdateCapability(capability.id);
   const deleteCap = useDeleteCapability();
+  const queryClient = useQueryClient();
 
   const hasChildren = React.Children.count(children) > 0;
   const canAddChild = capability.level < 3;
@@ -141,9 +143,9 @@ export default function CapabilityNode({ capability, children }: CapabilityNodeP
               title="Ask the business architecture expert to review this capability"
               style={{ ...actionBtn, color: showAgentReview ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
             >
-              🤖 Review
+              Review
             </button>
-            <button onClick={handleDelete} title="Delete" style={{ ...actionBtn, color: "var(--crit)" }}>🗑</button>
+            <button onClick={handleDelete} title="Delete" style={{ ...actionBtn, color: "var(--crit)" }}>Delete</button>
           </>
         )}
       </div>
@@ -196,8 +198,9 @@ export default function CapabilityNode({ capability, children }: CapabilityNodeP
         >
           <AgentReviewButton
             basePath={`/api/v1/business/capabilities/${capability.id}/agent-review`}
-            label="🤖 Ask the business architecture expert"
+            label="Ask the business architecture expert"
             renderDetail={renderCapabilitySuggestionDetail}
+            onAccepted={() => queryClient.invalidateQueries({ queryKey: ["business-capabilities"] })}
           />
         </div>
       )}

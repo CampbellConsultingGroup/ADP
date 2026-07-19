@@ -43,6 +43,38 @@ describe("AgentReviewButton + SuggestionCard", () => {
     expect(lastCall(calls, "POST")?.url).toBe(BASE_PATH);
   });
 
+  it("Close button dismisses the current review's results", async () => {
+    mockFetch({
+      [`POST ${BASE_PATH}`]: { operation_id: "OP-1" },
+      [`GET ${BASE_PATH}/OP-1`]: {
+        operation_id: "OP-1",
+        status: "completed",
+        suggestions: [
+          {
+            suggestion_id: "SUG-1",
+            rationale: "This overlaps with CAP-2.",
+            citations: [],
+            advisory: false,
+            status: "pending",
+          },
+        ],
+      },
+    });
+
+    renderWithQuery(<AgentReviewButton basePath={BASE_PATH} />);
+    fireEvent.click(screen.getByRole("button", { name: /Review with AI/i }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/This overlaps with CAP-2/)).toBeDefined();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /^Close$/i }));
+
+    expect(screen.queryByText(/This overlaps with CAP-2/)).toBeNull();
+    // Close button itself disappears too -- there's nothing left to dismiss.
+    expect(screen.queryByRole("button", { name: /^Close$/i })).toBeNull();
+  });
+
   it("shows a failed review's error_description", async () => {
     mockFetch({
       [`POST ${BASE_PATH}`]: { operation_id: "OP-2" },
@@ -84,6 +116,63 @@ describe("AgentReviewButton + SuggestionCard", () => {
       expect(call?.url).toBe(`${BASE_PATH}/OP-1/suggestions/SUG-1/accept`);
       expect(call?.body).toMatchObject({ confirmation_id: "CONFIRM-SUG-1", advisory_acknowledged: false });
     });
+  });
+
+  it("accept calls onAccepted after a successful accept", async () => {
+    mockFetch({
+      [`POST ${BASE_PATH}/OP-1/suggestions/SUG-1/accept`]: {},
+    });
+    const suggestion = {
+      suggestion_id: "SUG-1",
+      rationale: "Set maturity to Established.",
+      citations: [],
+      advisory: false,
+      status: "pending" as const,
+    };
+    const onAccepted = vi.fn();
+
+    renderWithQuery(
+      <SuggestionCard
+        suggestion={suggestion}
+        basePath={BASE_PATH}
+        operationId="OP-1"
+        onAccepted={onAccepted}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Accept$/i }));
+
+    await waitFor(() => {
+      expect(onAccepted).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("does not call onAccepted on reject", async () => {
+    const calls = mockFetch({
+      [`POST ${BASE_PATH}/OP-1/suggestions/SUG-1/reject`]: {},
+    });
+    const suggestion = {
+      suggestion_id: "SUG-1",
+      rationale: "Flagged as duplicate.",
+      citations: [],
+      advisory: false,
+      status: "pending" as const,
+    };
+    const onAccepted = vi.fn();
+
+    renderWithQuery(
+      <SuggestionCard
+        suggestion={suggestion}
+        basePath={BASE_PATH}
+        operationId="OP-1"
+        onAccepted={onAccepted}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /^Reject$/i }));
+
+    await waitFor(() => {
+      expect(lastCall(calls, "POST")?.url).toBe(`${BASE_PATH}/OP-1/suggestions/SUG-1/reject`);
+    });
+    expect(onAccepted).not.toHaveBeenCalled();
   });
 
   it("reject calls the reject endpoint", async () => {
