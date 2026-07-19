@@ -8,6 +8,7 @@ from the router inside `async with session_factory() as session: ...` blocks.
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, cast
 
@@ -564,6 +565,48 @@ async def list_capability_designs(capability_id: str, session: AsyncSession) -> 
     return [
         DesignRef(
             design_id=row.design_id, title=row.title, lifecycle_status=row.lifecycle_status
+        )
+        for row in result.mappings()
+    ]
+
+
+@dataclass(frozen=True)
+class CapabilityStageRef:
+    """A value-stream stage linked to a capability (ADP-SPEC-039 context assembly).
+
+    Not a boundary payload (ART-XIII concerns external APIs) -- internal
+    context data feeding the Agent Review toolkit, mirroring ReasoningRecord's
+    dataclass precedent for non-boundary internal shapes.
+    """
+
+    stage_id: str
+    stage_name: str
+    value_stream_id: str
+    value_stream_name: str
+
+
+async def list_stages_for_capability(
+    capability_id: str, session: AsyncSession
+) -> list[CapabilityStageRef]:
+    """Reverse of list_stage_caps: value-stream stages linked to a capability."""
+    result = await session.execute(
+        sa.select(
+            _stage_caps.c.stage_id,
+            _stages.c.name.label("stage_name"),
+            _stages.c.value_stream_id,
+            _value_streams.c.name.label("value_stream_name"),
+        )
+        .join(_stages, _stages.c.id == _stage_caps.c.stage_id)
+        .join(_value_streams, _value_streams.c.id == _stages.c.value_stream_id)
+        .where(_stage_caps.c.capability_id == capability_id)
+        .order_by(_stages.c.position)
+    )
+    return [
+        CapabilityStageRef(
+            stage_id=row.stage_id,
+            stage_name=row.stage_name,
+            value_stream_id=row.value_stream_id,
+            value_stream_name=row.value_stream_name,
         )
         for row in result.mappings()
     ]

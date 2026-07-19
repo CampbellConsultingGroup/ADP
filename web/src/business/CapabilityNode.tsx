@@ -4,6 +4,7 @@ import type { BusinessCapability, MaturityLevel, StrategicRelevance } from "../a
 import CapabilityForm from "./CapabilityForm";
 import DesignLinkEditor from "./DesignLinkEditor";
 import { LEVEL_STYLE } from "./classification";
+import AgentReviewButton from "../agent-review/AgentReviewButton";
 
 interface CapabilityNodeProps {
   capability: BusinessCapability;
@@ -19,6 +20,7 @@ export default function CapabilityNode({ capability, children }: CapabilityNodeP
   const [addingChild, setAddingChild] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showLinks, setShowLinks] = useState(false);
+  const [showAgentReview, setShowAgentReview] = useState(false);
 
   const update = useUpdateCapability(capability.id);
   const deleteCap = useDeleteCapability();
@@ -133,6 +135,13 @@ export default function CapabilityNode({ capability, children }: CapabilityNodeP
             >
               Links
             </button>
+            <button
+              onClick={() => setShowAgentReview(!showAgentReview)}
+              title="Ask the business architecture expert to review this capability"
+              style={{ ...actionBtn, color: showAgentReview ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
+            >
+              🤖 Review
+            </button>
             <button onClick={handleDelete} title="Delete" style={{ ...actionBtn, color: "var(--crit)" }}>🗑</button>
           </>
         )}
@@ -170,6 +179,24 @@ export default function CapabilityNode({ capability, children }: CapabilityNodeP
             Supporting Designs
           </p>
           <DesignLinkEditor entityType="capability" entityId={capability.id} />
+        </div>
+      )}
+
+      {showAgentReview && (
+        <div
+          style={{
+            marginLeft: 20,
+            marginBottom: 6,
+            padding: "8px 12px",
+            background: "var(--surface-2)",
+            border: "1px solid var(--border)",
+            borderRadius: 4,
+          }}
+        >
+          <AgentReviewButton
+            basePath={`/api/v1/business/capabilities/${capability.id}/agent-review`}
+            label="🤖 Ask the business architecture expert"
+          />
         </div>
       )}
 

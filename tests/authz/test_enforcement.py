@@ -205,3 +205,55 @@ def test_governance_write_route_maps_to_sensitive_action() -> None:
         required_action_for("PUT", "/api/v1/applications/{app_id}/governance")
         == ActionType.WRITE_APPLICATION_GOVERNANCE
     )
+
+
+# ── ADP-SPEC-039: Agent Review trigger/confirm are gated ──────────────────────
+
+def test_reviewer_denied_agent_review_trigger(app: FastAPI) -> None:
+    """Reviewer lacks SUBMIT_AI_OPERATION."""
+    resp = _client_as(app, PersonaRole.REVIEWER).post(
+        "/api/v1/business/capabilities/X/agent-review"
+    )
+    assert resp.status_code == 403
+
+
+def test_reviewer_denied_agent_review_accept(app: FastAPI) -> None:
+    """Reviewer lacks CONFIRM_AGENT_SUGGESTION."""
+    resp = _client_as(app, PersonaRole.REVIEWER).post(
+        "/api/v1/business/capabilities/X/agent-review/OP-1/suggestions/SUG-1/accept",
+        json={"confirmation_id": "CONFIRM-SUG-1"},
+    )
+    assert resp.status_code == 403
+
+
+def test_reviewer_denied_agent_review_reject(app: FastAPI) -> None:
+    """Reviewer lacks CONFIRM_AGENT_SUGGESTION."""
+    resp = _client_as(app, PersonaRole.REVIEWER).post(
+        "/api/v1/business/capabilities/X/agent-review/OP-1/suggestions/SUG-1/reject"
+    )
+    assert resp.status_code == 403
+
+
+def test_agent_review_routes_map_to_expected_actions() -> None:
+    from adp.authz.roles import ActionType
+
+    assert (
+        required_action_for("POST", "/api/v1/business/capabilities/{cap_id}/agent-review")
+        == ActionType.SUBMIT_AI_OPERATION
+    )
+    assert (
+        required_action_for(
+            "POST",
+            "/api/v1/business/capabilities/{cap_id}/agent-review/{operation_id}"
+            "/suggestions/{suggestion_id}/accept",
+        )
+        == ActionType.CONFIRM_AGENT_SUGGESTION
+    )
+    assert (
+        required_action_for(
+            "POST",
+            "/api/v1/business/capabilities/{cap_id}/agent-review/{operation_id}"
+            "/suggestions/{suggestion_id}/reject",
+        )
+        == ActionType.CONFIRM_AGENT_SUGGESTION
+    )

@@ -17,10 +17,14 @@ ART-IX (SHOULD): structured logging used for business entities; design link muta
 from __future__ import annotations
 
 import logging
+import os
+import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.agents.models import AgentSuggestionStatus
+from adp.agents.provenance import write_suggestion_audit
 from adp.business import store as bstore
 from adp.business.models import (
     BusinessCapability,
@@ -28,10 +32,13 @@ from adp.business.models import (
     BusinessCapabilityListResponse,
     BusinessCapabilityUpdate,
     BusinessContextResponse,
+    CapabilityAgentReviewResponse,
+    CapabilitySuggestion,
     DesignLinkCreate,
     DuplicateLinkError,
     LinkedDesignsResponse,
     LinkNotFoundError,
+    SuggestionAcceptRequest,
     ValueStream,
     ValueStreamCreate,
     ValueStreamDetail,
@@ -62,6 +69,47 @@ async def _get_session():
     factory = bstore._get_session_factory()
     async with factory() as session:
         yield session
+
+
+async def _get_application_session():
+    from adp.application import store as astore
+    factory = astore._get_session_factory()
+    async with factory() as session:
+        yield session
+
+
+async def _get_biz_session_factory():
+    """Returns the session FACTORY (not a session) so a background task can
+    open its own fresh session after the request-scoped one above has closed.
+    A distinct dependency (not calling bstore._get_session_factory() directly
+    inside the background closure) so tests can override it to a SQLite
+    factory -- overriding _get_session alone would not reach the background
+    task, since it isn't a request-scoped dependency."""
+    return bstore._get_session_factory()
+
+
+async def _get_application_session_factory():
+    from adp.application import store as astore
+    return astore._get_session_factory()
+
+
+async def _get_op_store():
+    from adp.api.deps import get_operation_store
+    return await get_operation_store()
+
+
+def _make_agent_review_llm_client():
+    """Create an LLMClient for the Agent Review toolkit, or the shared stub
+    when no API key is configured (mirrors _make_orchestrator in intake.py)."""
+    from adp.agents.llm_stub import StubLLMClient
+    from adp.api.routers.config import get_api_key, get_extraction_model
+    from adp.llm.client import LLMClient
+
+    endpoint = os.environ.get("ADP_LLM_ENDPOINT", "https://api.anthropic.com")
+    api_key = get_api_key()
+    if not api_key:
+        return StubLLMClient(base_url="http://stub", api_key="stub", model="stub")
+    return LLMClient(base_url=endpoint, api_key=api_key, model=get_extraction_model())
 
 
 # ── Business Capabilities ─────────────────────────────────────────────────────
@@ -142,6 +190,185 @@ async def delete_capability(
 
     actor = _get_actor(request)
     logger.info("business.capability.delete id=%s actor=%s", cap_id, actor)
+
+
+# ── Agent Review: Business Capabilities adapter (ADP-SPEC-039) ────────────────
+# Trigger uses the shared SUBMIT_AI_OPERATION action (reused, not duplicated --
+# research.md D3); accept/reject use the new CONFIRM_AGENT_SUGGESTION action,
+# distinct from WRITE_BUSINESS_ARCH (the action gating the underlying write).
+# Both are registered as explicit route->action overrides in enforcement.py.
+
+@router.post(
+    "/capabilities/{cap_id}/agent-review",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def submit_capability_agent_review(
+    cap_id: str,
+    background_tasks: BackgroundTasks,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+    op_store=Depends(_get_op_store),
+    biz_session_factory=Depends(_get_biz_session_factory),
+    app_session_factory=Depends(_get_application_session_factory),
+):
+    """Trigger an Agent Review of one capability (FR-007). Returns 202 + operation_id."""
+    capability = await bstore.get_capability(cap_id, session)
+    if capability is None:
+        raise HTTPException(status_code=404, detail=f"Capability {cap_id!r} not found")
+
+    operation_id = str(uuid.uuid4())
+    actor = _get_actor(request)
+    await op_store.create(operation_id, "agent_review", cap_id, actor, {"suggestions": {}})
+
+    llm_client = _make_agent_review_llm_client()
+
+    async def _run() -> None:
+        # Fresh sessions for the background task -- the request-scoped `session`
+        # dependency above is closed once this endpoint returns its response.
+        # Uses the injected factories (test-overridable), not a direct call to
+        # bstore/astore._get_session_factory(), so tests can point the
+        # background task at a SQLite engine instead of real Postgres.
+        from adp.business.agent_review import run_review
+
+        async with biz_session_factory() as biz_session, app_session_factory() as app_session:
+            await run_review(
+                operation_id=operation_id,
+                capability_id=cap_id,
+                biz_session=biz_session,
+                app_session=app_session,
+                llm_client=llm_client,
+                op_store=op_store,
+            )
+
+    background_tasks.add_task(_run)
+    logger.info("business.capability.agent_review.submit id=%s actor=%s", cap_id, actor)
+    return {"operation_id": operation_id}
+
+
+@router.get(
+    "/capabilities/{cap_id}/agent-review/{operation_id}",
+    response_model=CapabilityAgentReviewResponse,
+)
+async def get_capability_agent_review(
+    cap_id: str,
+    operation_id: str,
+    op_store=Depends(_get_op_store),
+):
+    """Poll an Agent Review operation (FR-007)."""
+    op = await op_store.get(operation_id)
+    if op is None:
+        raise HTTPException(status_code=404, detail=f"Operation {operation_id!r} not found")
+
+    suggestions = [
+        CapabilitySuggestion.model_validate(raw)
+        for raw in (op.get("suggestions") or {}).values()
+    ]
+    return CapabilityAgentReviewResponse(
+        operation_id=operation_id,
+        capability_id=cap_id,
+        status=op["status"],
+        suggestions=suggestions,
+        error_description=op.get("error_description"),
+    )
+
+
+async def _get_pending_suggestion(
+    op_store, operation_id: str, suggestion_id: str
+) -> tuple[dict, CapabilitySuggestion]:
+    op = await op_store.get(operation_id)
+    if op is None:
+        raise HTTPException(status_code=404, detail=f"Operation {operation_id!r} not found")
+    suggestions = op.get("suggestions") or {}
+    raw = suggestions.get(suggestion_id)
+    if raw is None:
+        raise HTTPException(status_code=404, detail=f"Suggestion {suggestion_id!r} not found")
+    suggestion = CapabilitySuggestion.model_validate(raw)
+    if suggestion.status != AgentSuggestionStatus.PENDING:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Suggestion {suggestion_id!r} has already been actioned "
+            f"(status={suggestion.status})",
+        )
+    return suggestions, suggestion
+
+
+@router.post(
+    "/capabilities/{cap_id}/agent-review/{operation_id}/suggestions/{suggestion_id}/accept",
+    response_model=CapabilitySuggestion,
+)
+async def accept_capability_suggestion(
+    cap_id: str,
+    operation_id: str,
+    suggestion_id: str,
+    body: SuggestionAcceptRequest,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+    op_store=Depends(_get_op_store),
+):
+    """Accept a suggestion (FR-014/FR-015/FR-016). Dispatches by type to the
+    same store functions the manual edit UI already calls -- no new write path.
+    """
+    suggestions, suggestion = await _get_pending_suggestion(op_store, operation_id, suggestion_id)
+
+    if suggestion.advisory and not body.advisory_acknowledged:
+        raise HTTPException(
+            status_code=422,
+            detail="This suggestion is advisory (an unverified citation); set "
+            "advisory_acknowledged=true to accept it anyway.",
+        )
+
+    # v1 (US1): flag_duplicate only -- no store write, acknowledgment only.
+    # Later stories add reclassify_strategic_relevance / set_maturity_level /
+    # assign_domain / propose_new_capability dispatch here.
+    if suggestion.type == "flag_duplicate":
+        pass
+    else:  # pragma: no cover -- unreachable until a later story's type lands
+        raise HTTPException(
+            status_code=501, detail=f"Suggestion type {suggestion.type!r} not yet supported"
+        )
+
+    suggestion.status = AgentSuggestionStatus.ACCEPTED
+    suggestions[suggestion_id] = suggestion.model_dump(mode="json")
+    await op_store.update(operation_id, payload_patch={"suggestions": suggestions})
+
+    actor = _get_actor(request)
+    write_suggestion_audit(
+        logger,
+        actor=actor,
+        action="business.capability.agent_review_accept",
+        affected_entity=cap_id,
+        summary=f"accepted {suggestion.type} suggestion",
+        operation_id=operation_id,
+        suggestion_id=suggestion_id,
+    )
+    return suggestion
+
+
+@router.post(
+    "/capabilities/{cap_id}/agent-review/{operation_id}/suggestions/{suggestion_id}/reject",
+    response_model=CapabilitySuggestion,
+)
+async def reject_capability_suggestion(
+    cap_id: str,
+    operation_id: str,
+    suggestion_id: str,
+    request: Request,
+    op_store=Depends(_get_op_store),
+):
+    """Reject a suggestion (FR-017). No database write occurs."""
+    suggestions, suggestion = await _get_pending_suggestion(op_store, operation_id, suggestion_id)
+
+    suggestion.status = AgentSuggestionStatus.REJECTED
+    suggestions[suggestion_id] = suggestion.model_dump(mode="json")
+    await op_store.update(operation_id, payload_patch={"suggestions": suggestions})
+
+    actor = _get_actor(request)
+    logger.info(
+        "business.capability.agent_review_reject id=%s actor=%s origin=ai "
+        "operation_id=%s suggestion_id=%s",
+        cap_id, actor, operation_id, suggestion_id,
+    )
+    return suggestion
 
 
 # ── Value Streams ─────────────────────────────────────────────────────────────

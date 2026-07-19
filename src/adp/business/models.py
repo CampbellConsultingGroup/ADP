@@ -10,6 +10,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+from adp.agents.models import (
+    AgentReviewOperationStatus,
+    AgentSuggestionStatus,
+    GroundingCitation,
+)
+
 # ── Strategic relevance (ADP-33v) ─────────────────────────────────────────────
 # Applies to BOTH business_capabilities and technical_capabilities. Distinct
 # from the hierarchy 'level' (1-3 = L1/L2/L3 depth) and from maturity_level
@@ -461,4 +467,98 @@ class DuplicateStageCapError(Exception):
 
 
 class StageCapNotFoundError(Exception):
+    """Raised when a stage-capability link to delete does not exist."""
+
+
+# ── Agent Review: Business Capabilities adapter (ADP-SPEC-039) ───────────────
+# Five suggestion types, fixed for this adapter's v1 scope (spec Clarifications).
+# Each suggestion carries the shared toolkit fields (rationale, citations,
+# advisory, status) plus its own type-specific payload; unused fields for a
+# given type stay None. previous_* fields are generation-time snapshots used
+# by FR-015's field-scoped accept-time staleness check (research.md D8) --
+# assign_domain has none, since FR-012 scopes it to domain_id IS NULL
+# capabilities, so its implicit snapshot is always None.
+
+AgentSuggestionType = Literal[
+    "reclassify_strategic_relevance",
+    "set_maturity_level",
+    "assign_domain",
+    "flag_duplicate",
+    "propose_new_capability",
+]
+
+
+class CapabilitySuggestion(BaseModel):
+    """One suggestion from a capability review (FR-010)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    suggestion_id: str
+    type: AgentSuggestionType
+    capability_id: str | None = None  # null only for propose_new_capability
+    rationale: str
+    citations: list[GroundingCitation] = []
+    advisory: bool = False
+    status: AgentSuggestionStatus = AgentSuggestionStatus.PENDING
+
+    # reclassify_strategic_relevance
+    strategic_relevance: StrategicRelevance | None = None
+    previous_strategic_relevance: StrategicRelevance | None = None
+
+    # set_maturity_level
+    maturity_level: MaturityLevel | None = None
+    previous_maturity_level: MaturityLevel | None = None
+
+    # assign_domain
+    domain_id: str | None = None
+
+    # flag_duplicate
+    duplicate_of_capability_id: str | None = None
+
+    # propose_new_capability
+    proposed_name: str | None = None
+    proposed_description: str | None = None
+    proposed_level: Literal[1, 2, 3] | None = None
+    proposed_parent_id: str | None = None
+
+
+class CapabilityAgentReviewResponse(BaseModel):
+    """Poll response, mirrors IntakeStatusResponse's shape (FR-007)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation_id: str
+    capability_id: str
+    status: AgentReviewOperationStatus
+    suggestions: list[CapabilitySuggestion] = []
+    # Set only when status=FAILED (FR-021); short, sanitized -- never raw
+    # prompt/response content.
+    error_description: str | None = None
+
+
+class SuggestionAcceptRequest(BaseModel):
+    """Accept body. Mirrors AcceptOptionRequest (recommend.py): confirmation_id
+    is required and non-empty (ART-VIII -- CONFIRM_AGENT_SUGGESTION is in
+    REQUIRES_CONFIRMATION). advisory_acknowledged must be True to accept a
+    suggestion where advisory=True."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    confirmation_id: str
+    advisory_acknowledged: bool = False
+
+    @field_validator("confirmation_id")
+    @classmethod
+    def _require_non_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError(
+                "confirmation_id must be non-empty — accepting a suggestion is a "
+                "consequential action per ART-VIII"
+            )
+        return v
+
+
+# Reject takes no request body (FR-017: no write occurs, nothing to confirm --
+# unlike a hypothetical rejection_reason field, there is no ADP-SPEC-019-style
+# feedback loop here, per this spec's Clarifications).
     """Raised when a stage-capability link to delete does not exist."""
