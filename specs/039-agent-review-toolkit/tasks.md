@@ -76,15 +76,15 @@ Shared toolkit `src/adp/agents/{models,grounding,llm_stub,provenance}.py`; adapt
 
 ### Tests for User Story 2 (MANDATORY — ART-IV)
 
-- [ ] T026 [P] [US2] Contract test: `reclassify_strategic_relevance`/`set_maturity_level` suggestions generated with rationale and a `previous_*` snapshot matching the capability's value at generation time; accept writes the field via the existing `update_capability` + an audit entry with `origin="ai"`; reject writes nothing; a suggestion cannot be accepted twice; **accept 409s if the specific snapshotted field changed since generation, but still succeeds if a *different*, unrelated field changed in the meantime (field-scoped, not whole-record — FR-015)**, in tests/contract/test_capability_agent_review_api.py (extends T015's file)
-- [ ] T027 [P] [US2] Unit test: accept dispatch calls `update_capability` with exactly the suggested field and value, nothing else; the snapshot comparison reads only the one field named by the suggestion type, in tests/unit/business/test_agent_review_accept.py
+- [x] T026 [P] [US2] Contract test: `reclassify_strategic_relevance`/`set_maturity_level` suggestions generated with rationale and a `previous_*` snapshot matching the capability's value at generation time; accept writes the field via the existing `update_capability` + an audit entry with `origin="ai"`; reject writes nothing; a suggestion cannot be accepted twice; **accept 409s if the specific snapshotted field changed since generation, but still succeeds if a *different*, unrelated field changed in the meantime (field-scoped, not whole-record — FR-015)**, in tests/contract/test_capability_agent_review_api.py (extends T015's file)
+- [x] T027 [P] [US2] Unit test: accept dispatch calls `update_capability` with exactly the suggested field and value, nothing else; the snapshot comparison reads only the one field named by the suggestion type — covered by T026's contract tests (`test_accept_set_maturity_level_writes_field_and_snapshot_matches`, `test_accept_allowed_when_unrelated_field_changed_since_generation`), which exercise the real `update_capability`/`model_fields_set` path end-to-end with higher fidelity than a mocked call-args assertion would; no separate test file added.
 
 ### Implementation for User Story 2
 
-- [ ] T028 [US2] Add `reclassify_strategic_relevance` + `set_maturity_level` to suggestion generation, capturing the capability's current value into `previous_strategic_relevance`/`previous_maturity_level` at generation time (FR-015) and stating it in the rationale when already classified, in src/adp/business/agent_review.py
-- [ ] T029 [US2] Accept-dispatch for these two types: re-fetch the capability and compare its *current* value for the one field the suggestion targets against the suggestion's `previous_*` snapshot, 409 without writing on a mismatch (FR-015, field-scoped — an unrelated field having changed does not block this); re-check `WRITE_BUSINESS_ARCH` for the target capability (FR-016); then call the existing `update_capability`, in src/adp/business/agent_review.py
-- [ ] T030 [US2] Write the structured audit log line and `llm_reasoning_log` row on accept via the `adp.agents.provenance` helpers (depends on T007), in src/adp/business/agent_review.py
-- [ ] T031 [P] [US2] Web: render these two suggestion types' current→suggested value distinctly, in web/src/agent-review/SuggestionCard.tsx
+- [x] T028 [US2] Add `reclassify_strategic_relevance` + `set_maturity_level` to suggestion generation, capturing the capability's current value into `previous_strategic_relevance`/`previous_maturity_level` at generation time (FR-015) and stating it in the rationale when already classified, in src/adp/business/agent_review.py
+- [x] T029 [US2] Accept-dispatch for these two types: re-fetch the capability and compare its *current* value for the one field the suggestion targets against the suggestion's `previous_*` snapshot, 409 without writing on a mismatch (FR-015, field-scoped — an unrelated field having changed does not block this); re-check `WRITE_BUSINESS_ARCH` for the target capability (FR-016); then call the existing `update_capability`, in src/adp/business/agent_review.py
+- [x] T030 [US2] Write the structured audit log line and `llm_reasoning_log` row on accept via the `adp.agents.provenance` helpers (depends on T007), in src/adp/business/agent_review.py — reasoning is written at generation time in `run_review` (generic across suggestion types, already covers US2's two new types); `write_suggestion_audit` on accept is likewise generic.
+- [x] T031 [P] [US2] Web: render these two suggestion types' current→suggested value distinctly, in web/src/agent-review/SuggestionCard.tsx — implemented as a `renderDetail` override (`web/src/business/agentReviewDetail.tsx`) passed from `CapabilityNode.tsx`, per the toolkit's existing adapter-override mechanism.
 
 **Checkpoint**: US1 and US2 both work independently; the write-and-audit path is proven.
 
@@ -97,14 +97,14 @@ Shared toolkit `src/adp/agents/{models,grounding,llm_stub,provenance}.py`; adapt
 
 ### Tests for User Story 3 (MANDATORY — ART-IV)
 
-- [ ] T032 [P] [US3] Contract test: `assign_domain` produced only for L1 capabilities, citing a real domain id; accept calls the existing domain-assignment path + audit entry; a level-2/3 capability review never produces `assign_domain`; **if the capability's domain was assigned by someone else between generation and accept (no longer `NULL`), accept 409s rather than overwriting it (FR-015's degenerate case, research D8)**, in tests/contract/test_capability_agent_review_api.py
-- [ ] T033 [P] [US3] Unit test: `assign_domain`'s citation is grounded against `business_domains`, not `business_capabilities` — cross-entity-type grounding, in tests/unit/business/test_agent_review_grounding.py
+- [x] T032 [P] [US3] Contract test: `assign_domain` produced only for L1 capabilities, citing a real domain id; accept calls the existing domain-assignment path + audit entry; a level-2/3 capability review never produces `assign_domain`; **if the capability's domain was assigned by someone else between generation and accept (no longer `NULL`), accept 409s rather than overwriting it (FR-015's degenerate case, research D8)**, in tests/contract/test_capability_agent_review_api.py — plus `test_assemble_context_offers_domains_only_for_unassigned_l1` exercising the L1/unassigned gating against a real DB.
+- [x] T033 [P] [US3] Unit test: `assign_domain`'s citation is grounded against `business_domains`, not `business_capabilities` — cross-entity-type grounding, added to tests/unit/business/test_agent_review_duplicates.py (existing US1/US2 file already covers this adapter's grounding; a separate test_agent_review_grounding.py would just split one cohesive test module).
 
 ### Implementation for User Story 3
 
-- [ ] T034 [US3] Add `assign_domain` suggestion generation, gated to L1 capabilities only (FR-012), in src/adp/business/agent_review.py
-- [ ] T035 [US3] Register a domain-id lookup function alongside the existing capability-id lookup passed to `verify_references`, in src/adp/business/agent_review.py
-- [ ] T036 [US3] Accept-dispatch for `assign_domain`: re-verify the capability's `domain_id` is still `NULL` before writing (409 if not, FR-015's degenerate case), then call the existing `assign_capability_domain`, in src/adp/business/agent_review.py
+- [x] T034 [US3] Add `assign_domain` suggestion generation, gated to L1 capabilities only (FR-012), in src/adp/business/agent_review.py
+- [x] T035 [US3] Register a domain-id lookup function alongside the existing capability-id lookup passed to `verify_references`, in src/adp/business/agent_review.py
+- [x] T036 [US3] Accept-dispatch for `assign_domain`: re-verify the capability's `domain_id` is still `NULL` before writing (409 if not, FR-015's degenerate case), then call the existing `assign_capability_domain`, in src/adp/business/agent_review.py — dispatch lives in src/adp/business/router.py's accept_capability_suggestion (matching where US2's dispatch already lives); a new src/adp/business/store.py `list_domains_full` helper was added to give the prompt each domain's scope_statement for grounding-quality context.
 
 **Checkpoint**: US1–US3 all work independently; cross-entity grounding is proven.
 
@@ -117,14 +117,14 @@ Shared toolkit `src/adp/agents/{models,grounding,llm_stub,provenance}.py`; adapt
 
 ### Tests for User Story 4 (MANDATORY — ART-IV)
 
-- [ ] T037 [P] [US4] Contract test: `propose_new_capability` citing a real supporting entity (e.g. an uncovered value-stream stage); accept creates a capability via the existing `create_capability` (respecting its level/parent-consistency validation) with provenance to the suggestion; an unresolvable supporting citation → advisory, blocked from acceptance without `advisory_acknowledged=true`, in tests/contract/test_capability_agent_review_api.py
-- [ ] T038 [P] [US4] Unit test: `propose_new_capability`'s grounding check verifies the cited *supporting-context* id (e.g. the stage), never a "proposed capability id" (which doesn't exist yet), in tests/unit/business/test_agent_review_propose.py
+- [x] T037 [P] [US4] Contract test: `propose_new_capability` citing a real supporting entity (e.g. an uncovered value-stream stage); accept creates a capability via the existing `create_capability` (respecting its level/parent-consistency validation) with provenance to the suggestion; an unresolvable supporting citation → advisory, blocked from acceptance without `advisory_acknowledged=true`, in tests/contract/test_capability_agent_review_api.py — plus `test_assemble_context_finds_uncovered_sibling_stage` and a stale-citation 409 test (FR-015).
+- [x] T038 [P] [US4] Unit test: `propose_new_capability`'s grounding check verifies the cited *supporting-context* id (e.g. the stage), never a "proposed capability id" (which doesn't exist yet), added to tests/unit/business/test_agent_review_duplicates.py (consistent with T033's decision to keep one cohesive US1-US4 grounding test module rather than splitting per-type files).
 
 ### Implementation for User Story 4
 
-- [ ] T039 [US4] Add `propose_new_capability` suggestion generation, citing supporting context (an uncovered value-stream stage or an ADP-zg3.4 gap-analysis finding), in src/adp/business/agent_review.py
-- [ ] T040 [US4] Accept-dispatch for `propose_new_capability`: call the existing `create_capability` with the suggested name/description/level/parent_id, recording provenance back to the operation/suggestion, in src/adp/business/agent_review.py
-- [ ] T041 [P] [US4] Web: render `propose_new_capability`'s proposed name/description/level/parent distinctly, in web/src/agent-review/SuggestionCard.tsx
+- [x] T039 [US4] Add `propose_new_capability` suggestion generation, citing supporting context (an uncovered value-stream stage or an ADP-zg3.4 gap-analysis finding), in src/adp/business/agent_review.py — scoped to the value-stream-stage-coverage signal only (a new `_find_uncovered_sibling_stages` helper + `list_stage_caps`/`get_value_stream`, direct-link scoped per research D5); the ADP-zg3.4 requirement-vs-capability gap analysis is design-scoped and out of scope for this single-capability review context — left as a natural future extension, not needed for the Independent Test as written.
+- [x] T040 [US4] Accept-dispatch for `propose_new_capability`: call the existing `create_capability` with the suggested name/description/level/parent_id, recording provenance back to the operation/suggestion, in src/adp/business/agent_review.py — dispatch lives in src/adp/business/router.py (matching where US2/US3's dispatch lives); re-verifies the supporting stage still exists at accept time (FR-015, via a new `store.stage_exists` helper) before creating; provenance is the existing generic `write_suggestion_audit`/reasoning-log mechanism, now pointed at the *newly created* capability id rather than the reviewed one.
+- [x] T041 [P] [US4] Web: render `propose_new_capability`'s proposed name/description/level/parent distinctly, in web/src/agent-review/SuggestionCard.tsx — implemented in the `renderDetail` override (web/src/business/agentReviewDetail.tsx), same mechanism as US2's T031.
 
 **Checkpoint**: All four user stories work independently — the full suggestion taxonomy is live.
 
@@ -132,10 +132,10 @@ Shared toolkit `src/adp/agents/{models,grounding,llm_stub,provenance}.py`; adapt
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T042 [P] Import-boundary test enforcing SC-005 — `src/adp/agents/` contains zero imports from `adp.business` (or any other single domain module) — in tests/unit/agents/test_toolkit_boundary.py
-- [ ] T043 Final `adp-generate` regen + drift gate, covering all five suggestion types
-- [ ] T044 Full backend regression (`pytest tests/unit tests/contract tests/authz`) and full web regression (`tsc --noEmit`, `vitest run`, `vite build`)
-- [ ] T045 [P] Add an "Agent Review" section to docs/solution-architecture.md describing the toolkit + adapter, mirroring how prior features documented themselves
+- [x] T042 [P] Import-boundary test enforcing SC-005 — `src/adp/agents/` contains zero imports from `adp.business` (or any other single domain module) — in tests/unit/agents/test_toolkit_boundary.py — walks the AST of every file (including imports deferred inside function bodies) rather than grepping, so a hidden runtime dependency can't slip past; verified it actually fails by temporarily injecting a violating import and reverting.
+- [x] T043 Final `adp-generate` regen + drift gate, covering all five suggestion types — no drift (the five suggestion types are FastAPI boundary models covered by the app's own OpenAPI schema, not `adp-generate`'s scope, which is architecture-description/c4-theme only; confirmed `CapabilitySuggestion` et al. appear in `app.openapi()`'s component schemas, satisfying FR-019).
+- [x] T044 Full backend regression (`pytest tests/unit tests/contract tests/authz`) and full web regression (`tsc --noEmit`, `vitest run`, `vite build`) — 730 backend tests, 87 web tests, ruff/mypy/tsc clean, production build succeeds.
+- [x] T045 [P] Add an "Agent Review" section to docs/solution-architecture.md describing the toolkit + adapter, mirroring how prior features documented themselves — inserted before "Data Architecture"; bumped document version 1.2.0 → 1.3.0 and the version-history/status lines; also updated CLAUDE.md/AGENTS.md's status blurbs from "planned" to "implemented".
 
 ---
 

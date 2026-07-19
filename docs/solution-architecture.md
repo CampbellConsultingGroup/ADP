@@ -2,7 +2,7 @@
 document_type: solution-architecture
 title: AI-Assisted Architecture Design Platform (ADP)
 status: current
-version: 1.2.0
+version: 1.3.0
 classification: internal
 level: high-level
 machine_readable: true
@@ -26,9 +26,9 @@ This document is the canonical, human-readable rendering of a machine-readable a
 | Audience | Enterprise, solution, and technical architects |
 | Source of truth | Structured artifacts (YAML/JSON), not this prose |
 | Diagram source | React Flow canvas (`@xyflow/react`); PNG rendered by CairoSVG from locked theme |
-| Status | Current — reflects implemented system as of ADP-SPEC-038 |
+| Status | Current — reflects implemented system as of ADP-SPEC-039 |
 
-This document supersedes v0.1.0. All capabilities described here are implemented and tested. Version history: v1.0.0 (ADP-SPEC-035); v1.1.0 (ADP-SPEC-036, Application Registry); v1.2.0 (ADP-SPEC-038, Application Portfolio Management).
+This document supersedes v0.1.0. All capabilities described here are implemented and tested. Version history: v1.0.0 (ADP-SPEC-035); v1.1.0 (ADP-SPEC-036, Application Registry); v1.2.0 (ADP-SPEC-038, Application Portfolio Management); v1.3.0 (ADP-SPEC-039, Agent Review).
 
 ## Purpose and Scope
 
@@ -491,6 +491,37 @@ The application portfolio management epic (`adp.application`, ADP-SPEC-038) exte
 **Authorization**: US3, US4, and US7 are the only sensitive categories in the epic — each added its own `READ_`/`WRITE_APPLICATION_{RISK,COST,GOVERNANCE}` `ActionType` pair to `PERMISSION_GRANTS`, bumping `PERMISSIONS_VERSION` from `1.1.0` to `1.4.0` across the three additions (reviewers deliberately do not hold any of the six actions — this data is not open to every reader). US1, US2, US5, US6, and US8 are non-sensitive and ride the pre-existing `WRITE_APPLICATION` prefix rule with open GET reads, the same enforcement pattern the base application registry uses.
 
 **Frontend**: each sensitive-category panel (`RiskPanel`, `CostPanel`, `GovernancePanel`) follows the same shape — a `useApplicationX(appId)` query with `retry: false` and a graceful "you don't have permission" render when the fetch error contains `403`, plus a Save button and toast. The non-sensitive `QualityPanel` and `TechFitPanel` need no 403-handling. All panels are tabs on the shared `ApplicationDetail` component.
+
+## Agent Review
+
+ADP-SPEC-039 provides a reusable "AI expert review" pattern: any screen can add a button that asks an LLM to review one entity and its directly linked context, propose suggestions, and require an explicit human accept/reject before any suggestion touches the database. The pattern is split into a domain-agnostic toolkit (`adp.agents`, `web/src/agent-review/`) and thin per-domain adapters — Business Capabilities (`adp.business.agent_review`, `web/src/business/agentReviewDetail.tsx`) is the first and, for v1, only adapter.
+
+**Toolkit** (`adp.agents`): four modules with zero dependency on any single domain module (`src/adp/business`, `src/adp/application`, etc.), mechanically enforced by `tests/unit/agents/test_toolkit_boundary.py` so a second adapter for a different screen can reuse them unmodified.
+
+- `llm_stub.StubLLMClient` — the shared no-API-key-configured stub, replacing the ad hoc per-router stub duplication that existed in the intake and recommendation routers before this feature.
+- `grounding.verify_references` — given a suggestion's citations and a `dict[str, EntityLookup]` (one independent existence-check callable per entity type), re-verifies every cited id actually resolves. An unresolvable citation doesn't discard the suggestion — it marks it `advisory=True`, which the accept endpoint then requires an explicit `advisory_acknowledged=true` to override.
+- `provenance.write_suggestion_audit` / `write_suggestion_reasoning` — a structured `origin="ai"` log line plus an `llm_reasoning_log` row (reused as-is, no schema change) for every suggestion, one row per suggestion at *generation* time regardless of later accept/reject, mirroring how the recommendation engine records per-option reasoning.
+- `models` — the shared `GroundingCitation`, `GroundingResult`, and the `AgentSuggestionStatus` / `AgentReviewOperationStatus` enums every adapter's suggestion type reuses.
+
+No new tables were added. A review operation reuses the existing `OperationStore` (`operations.design_id`, a plain `TEXT` column with no FK, holds the reviewed entity's id instead of a design id) for submit/poll status tracking, exactly like intake and recommendation.
+
+**Business Capabilities adapter** (`adp.business.agent_review`): reviews one capability and everything directly linked to it — its own fields, assigned domain, parent/children, linked value-stream stages, linked applications (non-sensitive APM fields only — risk/cost/governance data is excluded from the prompt by construction, not by a permission check), linked technical capabilities, and linked designs. Context assembly is direct-links-only, never a subtree or portfolio-wide traversal, keeping the prompt bounded regardless of hierarchy size. The system prompt is loaded from `docs/system_prompt_sr_bus_arch.md` at runtime (falling back to a short built-in prompt if the file is missing), so the persona can be edited without a code change.
+
+Five suggestion types, added incrementally by priority (each strictly higher write-risk than the last):
+
+| Type | Writes via | Grounding |
+|---|---|---|
+| `flag_duplicate` | *(none — acknowledgment only)* | Cites another capability, same hierarchy level only (FR-011) |
+| `reclassify_strategic_relevance` | `update_capability` | No citation — targets the reviewed capability's own field |
+| `set_maturity_level` | `update_capability` | No citation — targets the reviewed capability's own field |
+| `assign_domain` | `assign_capability_domain` | Cites a `business_domain` id — first cross-entity-type grounding, L1-only, unassigned-only (FR-012) |
+| `propose_new_capability` | `create_capability` | Cites a *supporting-context* id (an uncovered value-stream stage with zero capability coverage) — there is no "proposed capability id" to cite, since it doesn't exist yet |
+
+**Accept-time re-verification (FR-015, FR-016)**: immediately before writing, accept re-checks that every cited entity still exists and that the *specific field* the suggestion targets is unchanged since generation — a change to an unrelated field does not block acceptance. `reclassify_strategic_relevance` / `set_maturity_level` carry an explicit `previous_*` snapshot captured at generation time; `assign_domain` has none, since FR-012 scopes it to `domain_id IS NULL` capabilities by construction, so its check degenerates to "is it still unassigned"; `propose_new_capability` re-verifies its supporting stage still exists rather than a field snapshot, since it creates a new record instead of overwriting one. Accept also independently re-checks the underlying `WRITE_BUSINESS_ARCH` permission, regardless of whether the caller was permitted to trigger the review or confirm suggestions in general — a `SUBMIT_AI_OPERATION`/`CONFIRM_AGENT_SUGGESTION` grant does not imply write access to the target entity.
+
+**Authorization**: triggering a review reuses the existing `SUBMIT_AI_OPERATION` action (shared with intake/recommend, not duplicated); accepting or rejecting a suggestion uses a new `CONFIRM_AGENT_SUGGESTION` action, added to `REQUIRES_CONFIRMATION` alongside `CONFIRM_RECOMMENDATION` (`PERMISSIONS_VERSION` `1.4.0` → `1.5.0`). Both are registered as explicit route→action overrides in `enforcement.py`, taking precedence over the `/api/v1/business/` prefix's default `WRITE_BUSINESS_ARCH` rule.
+
+**Frontend**: `AgentReviewButton` (trigger + poll + render) and `SuggestionCard` (rationale, citations, advisory acknowledgment, accept/reject) are generic, parameterized by `basePath` and an optional `renderDetail` override — a future second adapter points these at a different `basePath` without modifying either component. The Business Capabilities adapter supplies `renderCapabilitySuggestionDetail` (in `agentReviewDetail.tsx`) to render a current→suggested transition for the two classification types and the proposed name/description/level for `propose_new_capability`; other types fall through to `SuggestionCard`'s generic field-list rendering. `CapabilityNode` wires a per-capability "🤖 Review" toggle — there is no page-level "review everything" button.
 
 ## Data Architecture
 

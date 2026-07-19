@@ -88,7 +88,7 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
-- 039-agent-review-toolkit: Planned a reusable "agent review" pattern (ADP-SPEC-039) — shared `adp.agents` toolkit (LLM stub, ART-VII grounding/citation validator, audit+reasoning helpers, reusing `OperationStore` as-is) + a Business Capabilities adapter (4 suggestion-type stories, P1 read-only duplicate-flagging → P4 propose-new-capability); no new tables; `PERMISSIONS_VERSION` 1.4.0 → 1.5.0 adding `CONFIRM_AGENT_SUGGESTION`
+- 039-agent-review-toolkit: Implemented a reusable "agent review" pattern (ADP-SPEC-039) — shared `adp.agents` toolkit (LLM stub, ART-VII grounding/citation validator, audit+reasoning helpers, reusing `OperationStore` as-is; zero domain-module imports, mechanically enforced by tests/unit/agents/test_toolkit_boundary.py) + a Business Capabilities adapter with all 4 suggestion-type stories (P1 read-only duplicate-flagging → P4 propose-new-capability, each strictly higher write-risk than the last); no new tables; `PERMISSIONS_VERSION` 1.4.0 → 1.5.0 adding `CONFIRM_AGENT_SUGGESTION`
 - 038-application-portfolio-management: Added the Application Portfolio Management epic (ADP-SPEC-038), 8 user stories (US1 rationalization scoring → US8 quality & performance signals) on top of the 036 application registry; migrations 011–019; `PERMISSIONS_VERSION` 1.1.0 → 1.4.0
 - 036-application-registry: Added Python 3.12 (backend); TypeScript 5.x (frontend) + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Pydantic v2, React 18, TanStack Query v5 — all existing stack; zero new packages
 - 035-business-domain-registry: Added Python 3.12 (backend); TypeScript 5.x (frontend) + FastAPI ≥ 0.111, SQLAlchemy 2 async, asyncpg, Pydantic v2, React 18, TanStack Query v5 — all existing stack; `sa.ARRAY(sa.Text())` for TEXT[] columns; zero new packages
@@ -157,7 +157,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (10250 symbols, 15779 relationships, 179 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (10634 symbols, 16650 relationships, 186 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
