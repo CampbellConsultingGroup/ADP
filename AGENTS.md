@@ -2,7 +2,9 @@
 
 ## Project Status
 
-Latest feature: **038-application-portfolio-management** (Application Portfolio Management epic, 8 user stories US1–US8 built on the 036 application registry). Alembic head is migration `019` (`down_revision` chain 010→019). `PERMISSIONS_VERSION` (`adp.authz.permissions`) is `1.4.0` — it progressed from `1.1.0` as US3 (risk), US4 (cost), and US7 (governance) each added a sensitive-category `READ_/WRITE_APPLICATION_{RISK,COST,GOVERNANCE}` gate; US1/US2/US5/US6/US8 are non-sensitive and ride the existing `WRITE_APPLICATION` prefix rule. See `CLAUDE.md`'s "Active Technologies" / "Recent Changes" and `docs/solution-architecture.md`'s "Application Portfolio Management" section for full detail.
+Latest work: **039-agent-review-toolkit** (ADP-SPEC-039, spec + plan drafted, not yet implemented) — a reusable "agent review" pattern: a shared `adp.agents` toolkit (LLM stub, ART-VII grounding/citation validator, audit+reasoning helpers, no new tables — reuses `OperationStore`/`llm_reasoning_log` as-is) plus a Business Capabilities adapter (4 suggestion-type stories). `PERMISSIONS_VERSION` will progress `1.4.0` → `1.5.0` adding `CONFIRM_AGENT_SUGGESTION` (trigger reuses the existing `SUBMIT_AI_OPERATION`) once implemented.
+
+Prior completed epic: **038-application-portfolio-management** (Application Portfolio Management, 8 user stories US1–US8 built on the 036 application registry, plus 3 follow-on beads: strategic relevance, capability maturity, intake gap analysis). Alembic head is migration `021` (`down_revision` chain 010→021). See `CLAUDE.md`'s "Active Technologies" / "Recent Changes" and `docs/solution-architecture.md`'s "Application Portfolio Management" section for full detail.
 
 This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
 
@@ -134,7 +136,7 @@ bd prime                # Refresh Beads context
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (10058 symbols, 15490 relationships, 174 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (10250 symbols, 15779 relationships, 179 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
