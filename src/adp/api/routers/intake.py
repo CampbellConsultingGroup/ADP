@@ -142,6 +142,40 @@ class RequirementListResponse(BaseModel):
     total: int
 
 
+# ── Capability gap analysis (ADP-zg3.4) ────────────────────────────────────────
+
+class CapabilityMatchItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    requirement_id: str
+    requirement_title: str
+    capability_id: str
+    capability_name: str
+    relevance: float
+
+
+class CapabilityGapItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    requirement_id: str
+    requirement_title: str
+
+
+class CapabilityGapSection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    present: list[CapabilityMatchItem]
+    missing: list[CapabilityGapItem]
+
+
+class CapabilityGapAnalysisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    design_id: str
+    business_capabilities: CapabilityGapSection
+    technical_capabilities: CapabilityGapSection
+
+
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 
 def _get_actor(request: Request) -> str:
@@ -161,6 +195,20 @@ async def _get_design_store():  # type: ignore[return]
 async def _get_op_store():  # type: ignore[return]
     from adp.api.deps import get_operation_store
     return await get_operation_store()
+
+
+async def _get_business_session():
+    from adp.business import store as bstore
+    factory = bstore._get_session_factory()
+    async with factory() as session:
+        yield session
+
+
+async def _get_application_session():
+    from adp.application import store as astore
+    factory = astore._get_session_factory()
+    async with factory() as session:
+        yield session
 
 
 def _make_orchestrator(model: str | None = None):  # type: ignore[return]
@@ -563,6 +611,83 @@ async def list_requirements(
         design_id=design_id,
         requirements=items,
         total=len(items),
+    )
+
+
+# ── Capability gap analysis (ADP-zg3.4) ────────────────────────────────────────
+
+@router.get(
+    "/{design_id}/capability-gaps",
+    response_model=CapabilityGapAnalysisResponse,
+)
+async def get_capability_gaps(
+    design_id: str,
+    store=Depends(_get_design_store),
+    biz_session=Depends(_get_business_session),
+    app_session=Depends(_get_application_session),
+) -> CapabilityGapAnalysisResponse:
+    """Compare confirmed requirements against the capability registries.
+
+    Advisory only: surfaces which needed capabilities already exist
+    (cited from the registry) and which appear to be gaps. Does not
+    create or modify any registry records.
+    """
+    from adp.application.store import list_technical_capabilities
+    from adp.business.store import list_capabilities
+    from adp.intake.gap_analysis import (
+        CapabilityRef,
+        GapAnalysisSection,
+        RequirementRef,
+        analyze_section,
+    )
+    from adp.store.store import DesignNotFoundError  # type: ignore[attr-defined]
+
+    try:
+        design = await store.get(design_id)
+    except DesignNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Design {design_id!r} not found")
+
+    requirements = [
+        RequirementRef(id=req.id, title=req.title, description=req.description)
+        for req in design.requirements
+    ]
+
+    biz_caps = await list_capabilities(biz_session)
+    biz_refs = [
+        CapabilityRef(id=c.id, name=c.name, description=c.description) for c in biz_caps
+    ]
+    biz_section = analyze_section(requirements, biz_refs)
+
+    tech_caps = (await list_technical_capabilities(app_session)).items
+    tech_refs = [
+        CapabilityRef(id=c.id, name=c.name, description=c.description) for c in tech_caps
+    ]
+    tech_section = analyze_section(requirements, tech_refs)
+
+    def _to_response(section: GapAnalysisSection) -> CapabilityGapSection:
+        return CapabilityGapSection(
+            present=[
+                CapabilityMatchItem(
+                    requirement_id=m.requirement_id,
+                    requirement_title=m.requirement_title,
+                    capability_id=m.capability_id,
+                    capability_name=m.capability_name,
+                    relevance=m.relevance,
+                )
+                for m in section.present
+            ],
+            missing=[
+                CapabilityGapItem(
+                    requirement_id=g.requirement_id, requirement_title=g.requirement_title
+                )
+                for g in section.missing
+            ],
+        )
+
+    return CapabilityGapAnalysisResponse(
+        design_id=design_id,
+        business_capabilities=_to_response(biz_section),
+        technical_capabilities=_to_response(tech_section),
     )
 
 

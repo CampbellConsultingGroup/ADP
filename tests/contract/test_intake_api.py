@@ -7,6 +7,7 @@ Uses TestClient with mocked DesignStore — no database required.
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -319,3 +320,115 @@ def test_list_requirements_empty_design_returns_empty(client):
     body = resp.json()
     assert body["requirements"] == []
     assert body["total"] == 0
+
+
+# ── Capability gap analysis (ADP-zg3.4) ───────────────────────────────────────
+
+@pytest.fixture()
+async def gap_client(tmp_path):
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from adp.application import store as astore
+    from adp.business import store as bstore
+
+    biz_engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/biz.db")
+    async with biz_engine.begin() as conn:
+        await conn.run_sync(bstore._metadata.create_all)
+    app_engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/app.db")
+    async with app_engine.begin() as conn:
+        await conn.run_sync(astore._metadata.create_all)
+
+    biz_factory = async_sessionmaker(biz_engine, expire_on_commit=False)
+    app_factory = async_sessionmaker(app_engine, expire_on_commit=False)
+
+    now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    async with biz_factory() as session:
+        await session.execute(
+            bstore._capabilities.insert().values(
+                id="CAP-001",
+                name="Fraud Detection",
+                description="Detects fraudulent payment transactions across channels",
+                level=1,
+                parent_id=None,
+                position=0,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+        await session.commit()
+
+    design = _make_design(requirements=[
+        {
+            "id": "REQ-001",
+            "title": "Fraud detection",
+            "description": "Detect fraudulent payment transactions across channels in real time",
+        },
+        {
+            "id": "REQ-002",
+            "title": "Quantum encryption",
+            "description": "Use quantum-resistant encryption for all data at rest",
+        },
+    ])
+    mock_store = AsyncMock()
+    mock_store.get = AsyncMock(return_value=design)
+
+    from adp.api.app import create_app
+    from adp.api.routers import intake as intake_module
+
+    app = create_app()
+
+    async def _fake_store():
+        return mock_store
+
+    async def _override_biz():
+        async with biz_factory() as session:
+            yield session
+
+    async def _override_app():
+        async with app_factory() as session:
+            yield session
+
+    app.dependency_overrides[intake_module._get_design_store] = _fake_store
+    app.dependency_overrides[intake_module._get_business_session] = _override_biz
+    app.dependency_overrides[intake_module._get_application_session] = _override_app
+
+    yield TestClient(app, raise_server_exceptions=False)
+    await biz_engine.dispose()
+    await app_engine.dispose()
+
+
+def test_capability_gaps_splits_present_and_missing(gap_client):
+    resp = gap_client.get("/api/v1/designs/D-001/capability-gaps")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+
+    assert body["design_id"] == "D-001"
+    biz = body["business_capabilities"]
+    assert len(biz["present"]) == 1
+    assert biz["present"][0]["requirement_id"] == "REQ-001"
+    assert biz["present"][0]["capability_id"] == "CAP-001"
+    assert len(biz["missing"]) == 1
+    assert biz["missing"][0]["requirement_id"] == "REQ-002"
+
+    # No technical capabilities seeded -> both requirements are gaps there
+    tech = body["technical_capabilities"]
+    assert tech["present"] == []
+    assert len(tech["missing"]) == 2
+
+
+def test_capability_gaps_unknown_design_404(gap_client):
+    from adp.store.store import DesignNotFoundError
+
+    app = gap_client.app
+    from adp.api.routers import intake as intake_module
+
+    mock_store = AsyncMock()
+    mock_store.get = AsyncMock(side_effect=DesignNotFoundError("nope", "Design 'nope' not found"))
+
+    async def _fake_store():
+        return mock_store
+
+    app.dependency_overrides[intake_module._get_design_store] = _fake_store
+
+    resp = gap_client.get("/api/v1/designs/nope/capability-gaps")
+    assert resp.status_code == 404
