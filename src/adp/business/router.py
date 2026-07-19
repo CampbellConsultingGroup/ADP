@@ -292,6 +292,20 @@ async def _get_pending_suggestion(
     return suggestions, suggestion
 
 
+def _require_write_business_arch(user) -> None:
+    """FR-016: accept re-checks the underlying write permission for the target
+    entity, independent of whether the caller was permitted to trigger the
+    review or confirm suggestions in general."""
+    from adp.authz.permissions import is_permitted
+    from adp.authz.roles import ActionType
+
+    if not is_permitted(user.role, ActionType.WRITE_BUSINESS_ARCH):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Role '{user.role.value}' is not permitted to write_business_arch.",
+        )
+
+
 @router.post(
     "/capabilities/{cap_id}/agent-review/{operation_id}/suggestions/{suggestion_id}/accept",
     response_model=CapabilitySuggestion,
@@ -308,6 +322,8 @@ async def accept_capability_suggestion(
     """Accept a suggestion (FR-014/FR-015/FR-016). Dispatches by type to the
     same store functions the manual edit UI already calls -- no new write path.
     """
+    from adp.auth.deps import get_current_user
+
     suggestions, suggestion = await _get_pending_suggestion(op_store, operation_id, suggestion_id)
 
     if suggestion.advisory and not body.advisory_acknowledged:
@@ -317,12 +333,111 @@ async def accept_capability_suggestion(
             "advisory_acknowledged=true to accept it anyway.",
         )
 
-    # v1 (US1): flag_duplicate only -- no store write, acknowledgment only.
-    # Later stories add reclassify_strategic_relevance / set_maturity_level /
-    # assign_domain / propose_new_capability dispatch here.
+    # Overridden below for propose_new_capability, whose write targets a
+    # brand-new capability, not the one under review.
+    affected_entity = cap_id
+
     if suggestion.type == "flag_duplicate":
+        # US1: no store write, acknowledgment only.
         pass
-    else:  # pragma: no cover -- unreachable until a later story's type lands
+    elif suggestion.type in ("reclassify_strategic_relevance", "set_maturity_level"):
+        current = await bstore.get_capability(cap_id, session)
+        if current is None:
+            raise HTTPException(status_code=404, detail=f"Capability {cap_id!r} not found")
+
+        is_relevance = suggestion.type == "reclassify_strategic_relevance"
+
+        # FR-015: field-scoped stale check -- compare only the one field this
+        # suggestion targets against its generation-time snapshot. A change to
+        # an unrelated field does not block acceptance.
+        current_value = current.strategic_relevance if is_relevance else current.maturity_level
+        previous_value = (
+            suggestion.previous_strategic_relevance if is_relevance
+            else suggestion.previous_maturity_level
+        )
+        if current_value != previous_value:
+            field_name = "strategic_relevance" if is_relevance else "maturity_level"
+            raise HTTPException(
+                status_code=409,
+                detail=f"{field_name} has changed since this suggestion was generated; "
+                "re-run the review.",
+            )
+
+        # FR-016: re-check the write permission independent of trigger/confirm.
+        _require_write_business_arch(get_current_user(request))
+
+        update = (
+            BusinessCapabilityUpdate(strategic_relevance=suggestion.strategic_relevance)
+            if is_relevance
+            else BusinessCapabilityUpdate(maturity_level=suggestion.maturity_level)
+        )
+        await bstore.update_capability(cap_id, update, session)
+        await session.commit()
+    elif suggestion.type == "assign_domain":
+        current = await bstore.get_capability(cap_id, session)
+        if current is None:
+            raise HTTPException(status_code=404, detail=f"Capability {cap_id!r} not found")
+
+        # FR-015's degenerate case (research D8): assign_domain has no
+        # previous_* snapshot field -- it's scoped to domain_id IS NULL
+        # capabilities by construction, so the stale check degenerates to "is
+        # it still unassigned."
+        if current.domain_id is not None:
+            raise HTTPException(
+                status_code=409,
+                detail="Capability has already been assigned a domain since this "
+                "suggestion was generated; re-run the review.",
+            )
+
+        # FR-016: re-check the write permission independent of trigger/confirm.
+        _require_write_business_arch(get_current_user(request))
+
+        try:
+            await bstore.assign_capability_domain(
+                cap_id, CapabilityDomainAssign(domain_id=suggestion.domain_id), session
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc))
+        await session.commit()
+    elif suggestion.type == "propose_new_capability":
+        # FR-015: re-verify the supporting citation (the uncovered stage) still
+        # exists before creating a record from this suggestion.
+        citation = suggestion.citations[0] if suggestion.citations else None
+        if citation is not None and not await bstore.stage_exists(citation.entity_id, session):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Supporting stage {citation.entity_id!r} no longer exists; "
+                "re-run the review.",
+            )
+
+        # FR-016: re-check the write permission independent of trigger/confirm.
+        _require_write_business_arch(get_current_user(request))
+
+        if suggestion.proposed_name is None or suggestion.proposed_level is None:
+            # Unreachable in practice -- _build_propose_new_capability_suggestion
+            # always sets both -- but satisfies the type checker's Optional
+            # fields (shared across all suggestion types) without a cast.
+            raise HTTPException(
+                status_code=422, detail="Suggestion is missing proposed_name/proposed_level"
+            )
+
+        try:
+            new_capability = await bstore.create_capability(
+                BusinessCapabilityCreate(
+                    name=suggestion.proposed_name,
+                    description=suggestion.proposed_description,
+                    level=suggestion.proposed_level,
+                    parent_id=suggestion.proposed_parent_id,
+                ),
+                session,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
+        await session.commit()
+        affected_entity = new_capability.id
+    else:  # pragma: no cover -- unreachable, all five suggestion types handled above
         raise HTTPException(
             status_code=501, detail=f"Suggestion type {suggestion.type!r} not yet supported"
         )
@@ -336,7 +451,7 @@ async def accept_capability_suggestion(
         logger,
         actor=actor,
         action="business.capability.agent_review_accept",
-        affected_entity=cap_id,
+        affected_entity=affected_entity,
         summary=f"accepted {suggestion.type} suggestion",
         operation_id=operation_id,
         suggestion_id=suggestion_id,

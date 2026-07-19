@@ -47,9 +47,7 @@ export default function SuggestionCard<S extends AgentSuggestionBase = AgentSugg
 
       <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--ink)" }}>{suggestion.rationale}</p>
 
-      {renderDetail ? (
-        renderDetail(suggestion)
-      ) : (
+      {renderDetail?.(suggestion) ?? (
         extraFields.length > 0 && (
           <ul style={{ margin: "0 0 8px", padding: "0 0 0 14px" }}>
             {extraFields.map(([key, value]) => (

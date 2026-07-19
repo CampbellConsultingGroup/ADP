@@ -6,10 +6,9 @@ is the first (and, for this spec, only) adapter built on the shared
 `adp.agents` toolkit -- see that package for the domain-agnostic pieces
 (grounding validator, LLM stub, provenance helpers) this module composes.
 
-v1 scope (US1 of this spec): `flag_duplicate` only. Later stories add
-`reclassify_strategic_relevance`, `set_maturity_level`, `assign_domain`, and
-`propose_new_capability` to `_parse_suggestions`/`_ground_and_finalize`
-without touching the endpoints, context assembly, or failure handling below.
+All five suggestion types are supported: `flag_duplicate`,
+`reclassify_strategic_relevance`, `set_maturity_level`, `assign_domain`,
+`propose_new_capability` (US1-US4).
 """
 
 from __future__ import annotations
@@ -27,7 +26,13 @@ from adp.agents.models import GroundingCitation
 from adp.agents.provenance import write_suggestion_reasoning
 from adp.application import store as astore
 from adp.business import store as bstore
-from adp.business.models import BusinessCapability, CapabilitySuggestion
+from adp.business.models import (
+    MATURITY_LEVEL_LABELS,
+    STRATEGIC_RELEVANCE_LABELS,
+    BusinessCapability,
+    BusinessDomain,
+    CapabilitySuggestion,
+)
 from adp.telemetry.spans import ai_step_span
 
 logger = logging.getLogger("adp.business.agent_review")
@@ -69,6 +74,46 @@ class CapabilityContext:
     applications: list[astore.CapabilityApplicationRef]
     technical_capabilities: list[tuple[str, str]]  # (tech_cap_id, name)
     designs: list[Any]  # DesignRef
+    # Populated only when assign_domain could apply (FR-012: L1, unassigned) --
+    # empty otherwise, so the prompt never offers a domain-assignment task to a
+    # capability it doesn't apply to.
+    assignable_domains: list[BusinessDomain]
+    # Value-stream stages in the same value stream(s) as `stages` above that
+    # have NO capability coverage at all -- the supporting-context signal for
+    # propose_new_capability (US4). Direct-link scoped (research D5): only the
+    # value streams this capability itself already touches.
+    uncovered_stages: list[bstore.CapabilityStageRef]
+
+
+async def _find_uncovered_sibling_stages(
+    context_stages: list[bstore.CapabilityStageRef], biz_session: Any
+) -> list[bstore.CapabilityStageRef]:
+    """Stages in the same value stream(s) as `context_stages` that have no
+    capability linked at all -- a candidate capability gap (US4). Scoped to
+    the value streams the reviewed capability's own stages already belong to,
+    not a full portfolio scan (research D5: direct links only)."""
+    seen_vs_ids = {s.value_stream_id for s in context_stages}
+    own_stage_ids = {s.stage_id for s in context_stages}
+
+    uncovered: list[bstore.CapabilityStageRef] = []
+    for vs_id in seen_vs_ids:
+        vs = await bstore.get_value_stream(vs_id, biz_session)
+        if vs is None:
+            continue
+        for stage in vs.stages:
+            if stage.id in own_stage_ids:
+                continue
+            caps = await bstore.list_stage_caps(vs_id, stage.id, biz_session)
+            if caps is not None and not caps.items:
+                uncovered.append(
+                    bstore.CapabilityStageRef(
+                        stage_id=stage.id,
+                        stage_name=stage.name,
+                        value_stream_id=vs_id,
+                        value_stream_name=vs.name,
+                    )
+                )
+    return uncovered
 
 
 async def assemble_context(
@@ -102,6 +147,16 @@ async def assemble_context(
         for link in links.items:
             tech_caps[link.tech_cap_id] = link.tech_cap_name
 
+    # FR-012: assign_domain only applies to an unassigned L1 capability -- only
+    # fetch/offer domains in that case, so a lower-level or already-assigned
+    # capability's prompt never invites the suggestion at all.
+    assignable_domains = (
+        await bstore.list_domains_full(biz_session)
+        if capability.level == 1 and capability.domain_id is None
+        else []
+    )
+    uncovered_stages = await _find_uncovered_sibling_stages(stages, biz_session)
+
     return CapabilityContext(
         capability=capability,
         parent=parent,
@@ -111,6 +166,8 @@ async def assemble_context(
         applications=applications,
         technical_capabilities=sorted(tech_caps.items(), key=lambda t: t[1]),
         designs=designs,
+        assignable_domains=assignable_domains,
+        uncovered_stages=uncovered_stages,
     )
 
 
@@ -165,17 +222,93 @@ def _build_user_prompt(context: CapabilityContext) -> str:
     else:
         lines.append("  (none)")
 
+    if context.assignable_domains:
+        lines.append("")
+        lines.append("Available business domains (this capability has none assigned):")
+        for domain in context.assignable_domains:
+            lines.append(
+                f"  - {domain.name} (id={domain.id}, classification={domain.classification}): "
+                f"{domain.scope_statement or '(no scope statement)'}"
+            )
+
+    if context.uncovered_stages:
+        lines.append("")
+        lines.append(
+            "Value-stream stages with NO capability coverage at all "
+            "(potential capability gaps):"
+        )
+        for stage in context.uncovered_stages:
+            lines.append(
+                f"  - {stage.stage_name} in {stage.value_stream_name} (id={stage.stage_id})"
+            )
+
+    relevance_label = (
+        STRATEGIC_RELEVANCE_LABELS.get(cap.strategic_relevance, "unclassified")
+        if cap.strategic_relevance
+        else "unclassified"
+    )
+    maturity_label = (
+        MATURITY_LEVEL_LABELS.get(cap.maturity_level, "not assessed")
+        if cap.maturity_level
+        else "not assessed"
+    )
     lines.append("")
     lines.append(
-        "Task: identify whether this capability is a likely structural duplicate of any "
-        "capability in the same-level list above (not a parent/child/different-level "
-        "capability). Respond with ONLY a JSON object of this exact shape:\n"
-        '{"suggestions": [{"type": "flag_duplicate", '
-        '"duplicate_of_capability_id": "<id from the list above>", "rationale": "<why>"}]}\n'
-        "Only cite a capability id that appears in the same-level list above -- never "
-        "invent one. If there is no plausible duplicate, return "
-        '{"suggestions": []} rather than a low-confidence guess.'
+        f"Current strategic relevance: {relevance_label}. Current maturity level: {maturity_label}."
     )
+
+    task_lines = [
+        "Tasks -- propose zero or more of the following, each as one object in a "
+        '"suggestions" list. Respond with ONLY a JSON object: {"suggestions": [...]}.\n',
+        "1. flag_duplicate -- is this capability a likely structural duplicate of any "
+        "capability in the same-level list above (never a parent/child/different-level "
+        "capability)? {\"type\": \"flag_duplicate\", "
+        '"duplicate_of_capability_id": "<id from the same-level list above>", '
+        '"rationale": "<why>"}. Only cite an id from that list -- never invent one.\n',
+        "2. reclassify_strategic_relevance -- should strategic relevance be set or "
+        "changed? Values: 1=Strategic, 2=Core, 3=Supporting. "
+        '{"type": "reclassify_strategic_relevance", "strategic_relevance": <1|2|3>, '
+        '"rationale": "<why, stating the current value if already classified>"}.\n',
+        "3. set_maturity_level -- should the CMMI-style maturity level be set or "
+        "changed? Values: 1=Ad hoc, 2=Emerging, 3=Established, 4=Advanced, "
+        "5=World Class. "
+        '{"type": "set_maturity_level", "maturity_level": <1-5>, '
+        '"rationale": "<why, stating the current value if already assessed>"}.\n',
+    ]
+    if context.assignable_domains:
+        task_lines.append(
+            "4. assign_domain -- does this capability clearly belong to one of the "
+            "business domains listed above, based on its scope statement? "
+            '{"type": "assign_domain", "domain_id": "<id from the domains list above>", '
+            '"rationale": "<why this domain\'s scope fits>"}. Only cite an id from that '
+            "list -- never invent one, and never suggest this if no domain list was "
+            "given above.\n"
+        )
+    if context.uncovered_stages:
+        child_level_hint = (
+            f"a child would be level {cap.level + 1}"
+            if cap.level < 3
+            else "a child is not possible (max depth L3 already reached)"
+        )
+        task_lines.append(
+            "5. propose_new_capability -- does one of the uncovered stages above imply "
+            "a capability that doesn't exist yet? Propose exactly ONE new capability "
+            f"as either a sibling of this one (level {cap.level}, same parent_id) or "
+            f"a child of this one ({child_level_hint}, parent_id="
+            f'"{cap.id}"). {{"type": "propose_new_capability", '
+            '"proposed_name": "<name>", "proposed_description": "<description>", '
+            f'"proposed_level": <1-3>, "proposed_parent_id": "<parent id, or null for '
+            'a top-level sibling>", "supporting_stage_id": "<id from the uncovered-'
+            'stages list above>", "rationale": "<why, citing the specific uncovered '
+            'stage>"}. Only cite a stage id from that list -- never invent one, and '
+            "never propose this if no uncovered-stages list was given above.\n"
+        )
+    task_lines.append(
+        'If none apply, return {"suggestions": []} rather than a low-confidence guess.'
+    )
+
+    lines.append("")
+    lines.append("\n".join(task_lines))
     return "\n".join(lines)
 
 
@@ -196,56 +329,197 @@ def _extract_json_content(response: dict[str, Any]) -> dict[str, Any]:
     return parsed if isinstance(parsed, dict) else {"suggestions": []}
 
 
-async def _build_flag_duplicate_suggestion(
+def _build_flag_duplicate_suggestion(
     raw: dict[str, Any], capability_id: str, cap_lookup: dict[str, str]
-) -> CapabilitySuggestion | None:
-    """Build and ground one flag_duplicate suggestion. Returns None if malformed."""
+) -> tuple[CapabilitySuggestion, GroundingCitation] | None:
+    """Build one flag_duplicate suggestion (ungrounded -- caller grounds it).
+    Returns None if malformed."""
     duplicate_id = raw.get("duplicate_of_capability_id")
     rationale = raw.get("rationale")
     if not duplicate_id or not rationale:
         return None
 
     citation = GroundingCitation(entity_type="business_capability", entity_id=str(duplicate_id))
-
-    async def _capability_exists(entity_id: str) -> bool:
-        return entity_id in cap_lookup
-
-    grounding = await verify_references(
-        [citation], lookups={"business_capability": _capability_exists}
-    )
-
-    return CapabilitySuggestion(
+    suggestion = CapabilitySuggestion(
         suggestion_id=str(uuid.uuid4()),
         type="flag_duplicate",
         capability_id=capability_id,
         rationale=str(rationale),
         citations=[citation],
-        advisory=not grounding.fully_grounded,
         duplicate_of_capability_id=str(duplicate_id),
+    )
+    return suggestion, citation
+
+
+def _build_reclassify_strategic_relevance_suggestion(
+    raw: dict[str, Any], capability: BusinessCapability
+) -> CapabilitySuggestion | None:
+    """Build one reclassify_strategic_relevance suggestion. No citations to
+    ground -- it targets the reviewed capability's own field, not another
+    entity. Captures the current value as the FR-015 accept-time snapshot."""
+    value = raw.get("strategic_relevance")
+    rationale = raw.get("rationale")
+    if value not in (1, 2, 3) or not rationale:
+        return None
+
+    return CapabilitySuggestion(
+        suggestion_id=str(uuid.uuid4()),
+        type="reclassify_strategic_relevance",
+        capability_id=capability.id,
+        rationale=str(rationale),
+        strategic_relevance=value,
+        previous_strategic_relevance=capability.strategic_relevance,
     )
 
 
+def _build_set_maturity_level_suggestion(
+    raw: dict[str, Any], capability: BusinessCapability
+) -> CapabilitySuggestion | None:
+    """Build one set_maturity_level suggestion. Same shape as strategic
+    relevance above: no citations, captures the FR-015 snapshot."""
+    value = raw.get("maturity_level")
+    rationale = raw.get("rationale")
+    if value not in (1, 2, 3, 4, 5) or not rationale:
+        return None
+
+    return CapabilitySuggestion(
+        suggestion_id=str(uuid.uuid4()),
+        type="set_maturity_level",
+        capability_id=capability.id,
+        rationale=str(rationale),
+        maturity_level=value,
+        previous_maturity_level=capability.maturity_level,
+    )
+
+
+def _build_assign_domain_suggestion(
+    raw: dict[str, Any], capability: BusinessCapability
+) -> tuple[CapabilitySuggestion, GroundingCitation] | None:
+    """Build one assign_domain suggestion (ungrounded -- caller grounds it
+    against business_domains, not business_capabilities -- cross-entity-type
+    grounding, US3). FR-012 gates this to an unassigned L1 capability; the
+    caller only offers a domain list to the LLM in that case, but we also gate
+    here defensively in case the model ignores that."""
+    if capability.level != 1 or capability.domain_id is not None:
+        return None
+
+    domain_id = raw.get("domain_id")
+    rationale = raw.get("rationale")
+    if not domain_id or not rationale:
+        return None
+
+    citation = GroundingCitation(entity_type="business_domain", entity_id=str(domain_id))
+    suggestion = CapabilitySuggestion(
+        suggestion_id=str(uuid.uuid4()),
+        type="assign_domain",
+        capability_id=capability.id,
+        rationale=str(rationale),
+        citations=[citation],
+        domain_id=str(domain_id),
+    )
+    return suggestion, citation
+
+
+def _build_propose_new_capability_suggestion(
+    raw: dict[str, Any], capability: BusinessCapability
+) -> tuple[CapabilitySuggestion, GroundingCitation] | None:
+    """Build one propose_new_capability suggestion (ungrounded -- caller
+    grounds it). Unlike every other type, there's no existing capability id to
+    cite for what's being proposed (it doesn't exist yet) -- ART-VII is
+    satisfied instead by requiring a real, verifiable *supporting-context*
+    citation (the uncovered stage), never a fabricated "proposed capability
+    id". capability_id is left None (data-model.md: null only for this type)."""
+    name = raw.get("proposed_name")
+    level = raw.get("proposed_level")
+    rationale = raw.get("rationale")
+    supporting_stage_id = raw.get("supporting_stage_id")
+    if not name or level not in (1, 2, 3) or not rationale or not supporting_stage_id:
+        return None
+
+    parent_id = raw.get("proposed_parent_id")
+    citation = GroundingCitation(
+        entity_type="value_stream_stage", entity_id=str(supporting_stage_id)
+    )
+    suggestion = CapabilitySuggestion(
+        suggestion_id=str(uuid.uuid4()),
+        type="propose_new_capability",
+        capability_id=None,
+        rationale=str(rationale),
+        citations=[citation],
+        proposed_name=str(name),
+        proposed_description=raw.get("proposed_description"),
+        proposed_level=level,
+        proposed_parent_id=str(parent_id) if parent_id else None,
+    )
+    return suggestion, citation
+
+
 async def _parse_suggestions(
-    response: dict[str, Any], capability_id: str, same_level_siblings: list[BusinessCapability]
+    response: dict[str, Any], context: CapabilityContext
 ) -> list[CapabilitySuggestion]:
     """Parse the LLM's JSON response into grounded CapabilitySuggestions.
 
-    v1 (US1): flag_duplicate only. Later stories extend this with the other
-    four types without changing the surrounding orchestration.
+    All five suggestion types: flag_duplicate, reclassify_strategic_relevance,
+    set_maturity_level, assign_domain, propose_new_capability.
     """
     parsed = _extract_json_content(response)
     raw_suggestions = parsed.get("suggestions") or []
     if not isinstance(raw_suggestions, list):
         return []
 
-    cap_lookup = {c.id: c.name for c in same_level_siblings}
+    capability = context.capability
+    cap_lookup = {c.id: c.name for c in context.same_level_siblings}
+    domain_lookup = {d.id: d.name for d in context.assignable_domains}
+    stage_lookup = {s.stage_id: s.stage_name for s in context.uncovered_stages}
+
+    async def _capability_exists(entity_id: str) -> bool:
+        return entity_id in cap_lookup
+
+    async def _domain_exists(entity_id: str) -> bool:
+        return entity_id in domain_lookup
+
+    async def _stage_exists(entity_id: str) -> bool:
+        return entity_id in stage_lookup
+
     suggestions: list[CapabilitySuggestion] = []
+    ungrounded: list[tuple[CapabilitySuggestion, GroundingCitation]] = []
+
     for raw in raw_suggestions:
-        if not isinstance(raw, dict) or raw.get("type") != "flag_duplicate":
+        if not isinstance(raw, dict):
             continue
-        suggestion = await _build_flag_duplicate_suggestion(raw, capability_id, cap_lookup)
-        if suggestion is not None:
-            suggestions.append(suggestion)
+        suggestion_type = raw.get("type")
+        if suggestion_type == "flag_duplicate":
+            built = _build_flag_duplicate_suggestion(raw, capability.id, cap_lookup)
+            if built is not None:
+                ungrounded.append(built)
+        elif suggestion_type == "reclassify_strategic_relevance":
+            suggestion = _build_reclassify_strategic_relevance_suggestion(raw, capability)
+            if suggestion is not None:
+                suggestions.append(suggestion)
+        elif suggestion_type == "set_maturity_level":
+            suggestion = _build_set_maturity_level_suggestion(raw, capability)
+            if suggestion is not None:
+                suggestions.append(suggestion)
+        elif suggestion_type == "assign_domain":
+            built = _build_assign_domain_suggestion(raw, capability)
+            if built is not None:
+                ungrounded.append(built)
+        elif suggestion_type == "propose_new_capability":
+            built = _build_propose_new_capability_suggestion(raw, capability)
+            if built is not None:
+                ungrounded.append(built)
+
+    for suggestion, citation in ungrounded:
+        grounding = await verify_references(
+            [citation],
+            lookups={
+                "business_capability": _capability_exists,
+                "business_domain": _domain_exists,
+                "value_stream_stage": _stage_exists,
+            },
+        )
+        suggestions.append(suggestion.model_copy(update={"advisory": not grounding.fully_grounded}))
+
     return suggestions
 
 
@@ -290,9 +564,7 @@ async def run_review(
                 system=system_prompt, user=user_prompt, correlation_id=operation_id
             )
 
-            suggestions = await _parse_suggestions(
-                response, capability_id, context.same_level_siblings
-            )
+            suggestions = await _parse_suggestions(response, context)
 
             usage = response.get("usage", {})
             input_tokens = usage.get("prompt_tokens", 0)

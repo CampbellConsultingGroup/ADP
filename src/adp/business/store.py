@@ -612,6 +612,16 @@ async def list_stages_for_capability(
     ]
 
 
+async def stage_exists(stage_id: str, session: AsyncSession) -> bool:
+    """Existence check for a value-stream stage by id alone (ids are globally
+    unique, no value_stream_id needed) -- used by the Agent Review adapter
+    (ADP-SPEC-039 US4) to ground a propose_new_capability suggestion's
+    supporting-stage citation at generation time, and to re-verify it at
+    accept time (FR-015)."""
+    result = await session.execute(sa.select(_stages.c.id).where(_stages.c.id == stage_id))
+    return result.first() is not None
+
+
 async def link_design_to_capability(
     capability_id: str, design_id: str, session: AsyncSession
 ) -> None:
@@ -809,6 +819,15 @@ async def list_domains(session: AsyncSession) -> DomainListResponse:
         for row in result.mappings().all()
     ]
     return DomainListResponse(items=items, total=len(items))
+
+
+async def list_domains_full(session: AsyncSession) -> list[BusinessDomain]:
+    """Full domain records including scope_statement (list_domains' DomainSummary
+    omits it) -- used by the Agent Review adapter (ADP-SPEC-039 US3) to ground
+    an assign_domain suggestion against each domain's actual scope, not just
+    its name."""
+    result = await session.execute(sa.select(_domains).order_by(_domains.c.name))
+    return [_row_to_domain(row) for row in result.mappings().all()]
 
 
 async def get_domain(domain_id: str, session: AsyncSession) -> DomainDetail | None:

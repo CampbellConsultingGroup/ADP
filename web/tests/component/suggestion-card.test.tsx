@@ -5,6 +5,7 @@ import { screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 
 import AgentReviewButton from "../../src/agent-review/AgentReviewButton";
 import SuggestionCard from "../../src/agent-review/SuggestionCard";
+import { renderCapabilitySuggestionDetail } from "../../src/business/agentReviewDetail";
 import { mockFetch, renderWithQuery, lastCall } from "./registry-test-utils";
 
 const BASE_PATH = "/api/v1/business/capabilities/CAP-1/agent-review";
@@ -143,5 +144,110 @@ describe("AgentReviewButton + SuggestionCard", () => {
       <SuggestionCard suggestion={suggestion} basePath={BASE_PATH} operationId="OP-1" />,
     );
     expect(screen.getByText(/strategic_relevance/)).toBeDefined();
+  });
+
+  it("renders a current -> suggested transition for set_maturity_level via the Business Capabilities renderDetail", () => {
+    mockFetch({});
+    const suggestion = {
+      suggestion_id: "SUG-4",
+      type: "set_maturity_level",
+      capability_id: "CAP-1",
+      rationale: "Documented and standardized org-wide.",
+      citations: [],
+      advisory: false,
+      status: "pending" as const,
+      maturity_level: 3 as const,
+      previous_maturity_level: 2 as const,
+    };
+
+    renderWithQuery(
+      <SuggestionCard
+        suggestion={suggestion}
+        basePath={BASE_PATH}
+        operationId="OP-1"
+        renderDetail={renderCapabilitySuggestionDetail}
+      />,
+    );
+    expect(screen.getByText("Emerging")).toBeDefined();
+    expect(screen.getByText("Established")).toBeDefined();
+  });
+
+  it("renders a current -> suggested transition for reclassify_strategic_relevance via the Business Capabilities renderDetail", () => {
+    mockFetch({});
+    const suggestion = {
+      suggestion_id: "SUG-5",
+      type: "reclassify_strategic_relevance",
+      capability_id: "CAP-1",
+      rationale: "Now core to strategy.",
+      citations: [],
+      advisory: false,
+      status: "pending" as const,
+      strategic_relevance: 1 as const,
+      previous_strategic_relevance: 3 as const,
+    };
+
+    renderWithQuery(
+      <SuggestionCard
+        suggestion={suggestion}
+        basePath={BASE_PATH}
+        operationId="OP-1"
+        renderDetail={renderCapabilitySuggestionDetail}
+      />,
+    );
+    expect(screen.getByText("Supporting")).toBeDefined();
+    expect(screen.getByText("Strategic")).toBeDefined();
+  });
+
+  it("renders the proposed name/description/level distinctly for propose_new_capability via the Business Capabilities renderDetail", () => {
+    mockFetch({});
+    const suggestion = {
+      suggestion_id: "SUG-7",
+      type: "propose_new_capability",
+      capability_id: null,
+      rationale: "Returns Processing stage has no capability coverage.",
+      citations: [{ entity_type: "value_stream_stage", entity_id: "STAGE-1" }],
+      advisory: false,
+      status: "pending" as const,
+      proposed_name: "Returns Management",
+      proposed_description: "Handles product returns.",
+      proposed_level: 2 as const,
+      proposed_parent_id: "CAP-1",
+    };
+
+    renderWithQuery(
+      <SuggestionCard
+        suggestion={suggestion}
+        basePath={BASE_PATH}
+        operationId="OP-1"
+        renderDetail={renderCapabilitySuggestionDetail}
+      />,
+    );
+    expect(screen.getByText("Returns Management")).toBeDefined();
+    expect(screen.getByText("Handles product returns.")).toBeDefined();
+    expect(screen.getByText(/L2/)).toBeDefined();
+  });
+
+  it("falls back to the generic field list for flag_duplicate when the Business Capabilities renderDetail is passed", () => {
+    mockFetch({});
+    const suggestion = {
+      suggestion_id: "SUG-6",
+      type: "flag_duplicate",
+      capability_id: "CAP-1",
+      rationale: "Near-identical name and description to CAP-2.",
+      citations: [],
+      advisory: false,
+      status: "pending" as const,
+      duplicate_of_capability_id: "CAP-2",
+    };
+
+    renderWithQuery(
+      <SuggestionCard
+        suggestion={suggestion}
+        basePath={BASE_PATH}
+        operationId="OP-1"
+        renderDetail={renderCapabilitySuggestionDetail}
+      />,
+    );
+    expect(screen.getByText(/duplicate_of_capability_id/)).toBeDefined();
   });
 });

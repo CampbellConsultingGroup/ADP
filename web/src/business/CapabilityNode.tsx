@@ -5,6 +5,7 @@ import CapabilityForm from "./CapabilityForm";
 import DesignLinkEditor from "./DesignLinkEditor";
 import { LEVEL_STYLE } from "./classification";
 import AgentReviewButton from "../agent-review/AgentReviewButton";
+import { renderCapabilitySuggestionDetail } from "./agentReviewDetail";
 
 interface CapabilityNodeProps {
   capability: BusinessCapability;
@@ -196,6 +197,7 @@ export default function CapabilityNode({ capability, children }: CapabilityNodeP
           <AgentReviewButton
             basePath={`/api/v1/business/capabilities/${capability.id}/agent-review`}
             label="🤖 Ask the business architecture expert"
+            renderDetail={renderCapabilitySuggestionDetail}
           />
         </div>
       )}
