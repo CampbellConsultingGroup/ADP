@@ -1,8 +1,11 @@
 import React, { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCapabilities } from "../api/business";
 import type { BusinessCapability } from "../api/business";
 import CapabilityNode from "./CapabilityNode";
 import CapabilityForm from "./CapabilityForm";
+import AgentReviewButton from "../agent-review/AgentReviewButton";
+import { renderCapabilitySuggestionDetail } from "./agentReviewDetail";
 
 export interface CapabilityTreeNode extends BusinessCapability {
   children: CapabilityTreeNode[];
@@ -48,6 +51,8 @@ function renderTree(nodes: CapabilityTreeNode[]): React.ReactElement[] {
 export default function CapabilityTree(): React.ReactElement {
   const { data, isLoading, error } = useCapabilities();
   const [showRootForm, setShowRootForm] = useState(false);
+  const [showPortfolioReview, setShowPortfolioReview] = useState(false);
+  const queryClient = useQueryClient();
 
   if (isLoading) return <div style={{ padding: 20, color: "var(--ink-3)", fontSize: 14 }}>Loading capabilities…</div>;
   if (error) return <div style={{ padding: 14, background: "var(--crit-wash)", borderRadius: 6, fontSize: 13, color: "var(--crit)" }}>Failed to load capabilities: {error.message}</div>;
@@ -61,13 +66,45 @@ export default function CapabilityTree(): React.ReactElement {
         <span style={{ fontSize: 13, color: "var(--ink-3)" }}>
           {items.length} capability{items.length !== 1 ? "ies" : "y"} across all levels
         </span>
-        <button
-          onClick={() => setShowRootForm(!showRootForm)}
-          style={{ padding: "6px 14px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600 }}
-        >
-          + Add Strategic Capability
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setShowPortfolioReview(!showPortfolioReview)}
+            title="Ask the business architecture expert to review the entire capability portfolio for gaps and redundancies"
+            style={{
+              padding: "6px 14px", background: showPortfolioReview ? "var(--accent-wash)" : "var(--surface)",
+              color: showPortfolioReview ? "var(--accent-2)" : "var(--ink-2)",
+              border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600,
+            }}
+          >
+            Review Portfolio
+          </button>
+          <button
+            onClick={() => setShowRootForm(!showRootForm)}
+            style={{ padding: "6px 14px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+          >
+            + Add Strategic Capability
+          </button>
+        </div>
       </div>
+
+      {showPortfolioReview && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "10px 12px",
+            background: "var(--surface-2)",
+            border: "1px solid var(--border)",
+            borderRadius: 4,
+          }}
+        >
+          <AgentReviewButton
+            basePath="/api/v1/business/capabilities/agent-review"
+            label="Ask the business architecture expert to review the portfolio"
+            renderDetail={renderCapabilitySuggestionDetail}
+            onAccepted={() => queryClient.invalidateQueries({ queryKey: ["business-capabilities"] })}
+          />
+        </div>
+      )}
 
       {showRootForm && (
         <CapabilityForm

@@ -95,6 +95,22 @@ _EXPLICIT_ROUTE_ACTIONS: dict[tuple[str, str], ActionType] = {
         "/api/v1/business/capabilities/{cap_id}/agent-review/{operation_id}"
         "/suggestions/{suggestion_id}/reject",
     ): ActionType.CONFIRM_AGENT_SUGGESTION,
+    # ADP-SPEC-040: portfolio-scope Agent Review -- distinct route shape (no
+    # {cap_id} segment), same two actions as the per-capability endpoints.
+    (
+        "POST",
+        "/api/v1/business/capabilities/agent-review",
+    ): ActionType.SUBMIT_AI_OPERATION,
+    (
+        "POST",
+        "/api/v1/business/capabilities/agent-review/{operation_id}"
+        "/suggestions/{suggestion_id}/accept",
+    ): ActionType.CONFIRM_AGENT_SUGGESTION,
+    (
+        "POST",
+        "/api/v1/business/capabilities/agent-review/{operation_id}"
+        "/suggestions/{suggestion_id}/reject",
+    ): ActionType.CONFIRM_AGENT_SUGGESTION,
 }
 
 # ── Prefix rules ─────────────────────────────────────────────────────────────

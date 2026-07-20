@@ -1,14 +1,20 @@
-"""Business Capabilities Agent Review adapter (ADP-SPEC-039).
+"""Business Capabilities Agent Review adapter (ADP-SPEC-039/040).
 
-A "business architecture expert" reviews a single capability and everything
-directly linked to it, proposing suggestions grounded in that context. This
-is the first (and, for this spec, only) adapter built on the shared
-`adp.agents` toolkit -- see that package for the domain-agnostic pieces
-(grounding validator, LLM stub, provenance helpers) this module composes.
+A "business architecture expert" reviews either a single capability and
+everything directly linked to it (`run_review`), or the whole capability
+portfolio at once (`run_portfolio_review`, ADP-SPEC-040), proposing
+suggestions grounded in that context. This is the first (and, for 039, only)
+adapter built on the shared `adp.agents` toolkit -- see that package for the
+domain-agnostic pieces (grounding validator, LLM stub, provenance helpers)
+this module composes.
 
-All five suggestion types are supported: `flag_duplicate`,
+Per-capability scope supports five suggestion types: `flag_duplicate`,
 `reclassify_strategic_relevance`, `set_maturity_level`, `assign_domain`,
-`propose_new_capability` (US1-US4).
+`propose_new_capability` (US1-US4). Portfolio scope reuses
+`propose_new_capability` (scanning uncovered stages across every value
+stream, not just one capability's siblings) and adds a sixth type,
+`flag_capability_for_removal`, that only a whole-tree review can meaningfully
+produce.
 """
 
 from __future__ import annotations
@@ -421,14 +427,17 @@ def _build_assign_domain_suggestion(
 
 
 def _build_propose_new_capability_suggestion(
-    raw: dict[str, Any], capability: BusinessCapability
+    raw: dict[str, Any],
 ) -> tuple[CapabilitySuggestion, GroundingCitation] | None:
     """Build one propose_new_capability suggestion (ungrounded -- caller
     grounds it). Unlike every other type, there's no existing capability id to
     cite for what's being proposed (it doesn't exist yet) -- ART-VII is
     satisfied instead by requiring a real, verifiable *supporting-context*
     citation (the uncovered stage), never a fabricated "proposed capability
-    id". capability_id is left None (data-model.md: null only for this type)."""
+    id". capability_id is left None (data-model.md: null only for this type).
+    Takes no capability param -- shared verbatim between per-capability
+    review (US4) and portfolio review (ADP-SPEC-040), neither of which this
+    builder needs to know about."""
     name = raw.get("proposed_name")
     level = raw.get("proposed_level")
     rationale = raw.get("rationale")
@@ -450,6 +459,31 @@ def _build_propose_new_capability_suggestion(
         proposed_description=raw.get("proposed_description"),
         proposed_level=level,
         proposed_parent_id=str(parent_id) if parent_id else None,
+    )
+    return suggestion, citation
+
+
+def _build_flag_capability_for_removal_suggestion(
+    raw: dict[str, Any],
+) -> tuple[CapabilitySuggestion, GroundingCitation] | None:
+    """Build one flag_capability_for_removal suggestion (ungrounded -- caller
+    grounds it). Portfolio-review scope only (ADP-SPEC-040): unlike
+    flag_duplicate, which compares two capabilities at the same level, this
+    targets a single existing capability directly -- the citation IS the
+    suggestion's own capability_id, grounded against the full portfolio
+    (any level), not a level-scoped pool."""
+    target_id = raw.get("target_capability_id")
+    rationale = raw.get("rationale")
+    if not target_id or not rationale:
+        return None
+
+    citation = GroundingCitation(entity_type="business_capability", entity_id=str(target_id))
+    suggestion = CapabilitySuggestion(
+        suggestion_id=str(uuid.uuid4()),
+        type="flag_capability_for_removal",
+        capability_id=str(target_id),
+        rationale=str(rationale),
+        citations=[citation],
     )
     return suggestion, citation
 
@@ -505,7 +539,7 @@ async def _parse_suggestions(
             if built is not None:
                 ungrounded.append(built)
         elif suggestion_type == "propose_new_capability":
-            built = _build_propose_new_capability_suggestion(raw, capability)
+            built = _build_propose_new_capability_suggestion(raw)
             if built is not None:
                 ungrounded.append(built)
 
@@ -521,6 +555,212 @@ async def _parse_suggestions(
         suggestions.append(suggestion.model_copy(update={"advisory": not grounding.fully_grounded}))
 
     return suggestions
+
+
+# ── Portfolio-scope review (ADP-SPEC-040) ─────────────────────────────────────
+# Reviews the ENTIRE capability tree at once rather than one capability's
+# direct links. Only two suggestion types apply at this scope:
+# propose_new_capability (reused verbatim from per-capability scope) and
+# flag_capability_for_removal (portfolio-only -- there's no single "reviewed
+# capability" whose siblings/duplicates would make flag_duplicate meaningful
+# here; reclassify/maturity/domain-assignment stay per-capability only, since
+# those target one specific capability's own fields by design).
+
+@dataclass(frozen=True)
+class PortfolioContext:
+    """The whole capability tree plus every uncovered value-stream stage,
+    portfolio-wide (contrast CapabilityContext's direct-links-only scope)."""
+
+    capabilities: list[BusinessCapability]
+    uncovered_stages: list[bstore.CapabilityStageRef]
+
+
+async def assemble_portfolio_context(biz_session: Any) -> PortfolioContext:
+    """Assemble the whole-portfolio review context. Unlike assemble_context,
+    this can never return None -- an empty portfolio is still a valid (if
+    unremarkable) thing to review."""
+    capabilities = await bstore.list_capabilities(biz_session)
+    uncovered_stages = await bstore.list_all_uncovered_stages(biz_session)
+    return PortfolioContext(capabilities=capabilities, uncovered_stages=uncovered_stages)
+
+
+def _build_portfolio_user_prompt(context: PortfolioContext) -> str:
+    lines = ["Review this organization's entire business capability portfolio:", ""]
+
+    by_level: dict[int, list[BusinessCapability]] = {1: [], 2: [], 3: []}
+    for cap in context.capabilities:
+        by_level.setdefault(cap.level, []).append(cap)
+
+    for level in (1, 2, 3):
+        caps = by_level.get(level, [])
+        if not caps:
+            continue
+        lines.append(f"L{level} capabilities:")
+        for cap in caps:
+            parent_note = f", parent_id={cap.parent_id}" if cap.parent_id else ""
+            lines.append(
+                f"  - {cap.name} (id={cap.id}{parent_note}): "
+                f"{cap.description or '(no description)'}"
+            )
+        lines.append("")
+
+    if context.uncovered_stages:
+        lines.append(
+            "Value-stream stages with NO capability coverage at all "
+            "(potential capability gaps):"
+        )
+        for stage in context.uncovered_stages:
+            lines.append(
+                f"  - {stage.stage_name} in {stage.value_stream_name} (id={stage.stage_id})"
+            )
+        lines.append("")
+
+    task_lines = [
+        "Tasks -- propose zero or more of the following, each as one object in a "
+        '"suggestions" list. Respond with ONLY a JSON object: {"suggestions": [...]}.\n',
+    ]
+    if context.uncovered_stages:
+        task_lines.append(
+            "1. propose_new_capability -- does an uncovered stage above imply a "
+            "capability that doesn't exist yet? Propose a new capability with a level "
+            "and parent_id consistent with the existing hierarchy above (a level-1 "
+            "capability has no parent_id; level-2/3 must reference a real parent id "
+            "from the lists above at the level directly above it). "
+            '{"type": "propose_new_capability", "proposed_name": "<name>", '
+            '"proposed_description": "<description>", "proposed_level": <1-3>, '
+            '"proposed_parent_id": "<parent id from the lists above, or null for a '
+            'level-1 capability>", "supporting_stage_id": "<id from the uncovered-'
+            'stages list above>", "rationale": "<why, citing the specific uncovered '
+            'stage>"}. Only cite a stage id from that list -- never invent one.\n'
+        )
+    task_lines.append(
+        "2. flag_capability_for_removal -- is any capability above clearly obsolete, "
+        "redundant, or no longer meaningful (e.g. no description, a placeholder-looking "
+        "name, or fully superseded by another capability)? Flag at most a few, and only "
+        "with clear justification -- removal is destructive and should be rare. "
+        '{"type": "flag_capability_for_removal", '
+        '"target_capability_id": "<id from the lists above>", '
+        '"rationale": "<why this specific capability should be removed>"}. Only cite '
+        "an id from the lists above -- never invent one. Do not flag a capability that "
+        "has children (it cannot be removed while children exist).\n"
+    )
+    task_lines.append(
+        'If none apply, return {"suggestions": []} rather than a low-confidence guess.'
+    )
+    lines.append("\n".join(task_lines))
+    return "\n".join(lines)
+
+
+async def _parse_portfolio_suggestions(
+    response: dict[str, Any], context: PortfolioContext
+) -> list[CapabilitySuggestion]:
+    """Parse the LLM's JSON response into grounded CapabilitySuggestions,
+    portfolio scope: propose_new_capability and flag_capability_for_removal
+    only."""
+    parsed = _extract_json_content(response)
+    raw_suggestions = parsed.get("suggestions") or []
+    if not isinstance(raw_suggestions, list):
+        return []
+
+    cap_lookup = {c.id: c.name for c in context.capabilities}
+    stage_lookup = {s.stage_id: s.stage_name for s in context.uncovered_stages}
+
+    async def _capability_exists(entity_id: str) -> bool:
+        return entity_id in cap_lookup
+
+    async def _stage_exists(entity_id: str) -> bool:
+        return entity_id in stage_lookup
+
+    suggestions: list[CapabilitySuggestion] = []
+    ungrounded: list[tuple[CapabilitySuggestion, GroundingCitation]] = []
+
+    for raw in raw_suggestions:
+        if not isinstance(raw, dict):
+            continue
+        suggestion_type = raw.get("type")
+        if suggestion_type == "propose_new_capability":
+            built = _build_propose_new_capability_suggestion(raw)
+            if built is not None:
+                ungrounded.append(built)
+        elif suggestion_type == "flag_capability_for_removal":
+            built = _build_flag_capability_for_removal_suggestion(raw)
+            if built is not None:
+                ungrounded.append(built)
+
+    for suggestion, citation in ungrounded:
+        grounding = await verify_references(
+            [citation],
+            lookups={
+                "business_capability": _capability_exists,
+                "value_stream_stage": _stage_exists,
+            },
+        )
+        suggestions.append(suggestion.model_copy(update={"advisory": not grounding.fully_grounded}))
+
+    return suggestions
+
+
+async def run_portfolio_review(
+    *,
+    operation_id: str,
+    biz_session: Any,
+    llm_client: Any,
+    op_store: Any,
+) -> None:
+    """Background job: portfolio-scope sibling of run_review below -- same
+    span/reasoning/failure-handling shape, different context assembly and
+    parsing (see the "Portfolio-scope review" section above)."""
+    try:
+        with ai_step_span("agent_review", operation_id=operation_id) as span:
+            span.set_attribute("adp.capability_id", "PORTFOLIO")
+
+            await op_store.update(operation_id, status="running")
+
+            context = await assemble_portfolio_context(biz_session)
+
+            system_prompt = _load_system_prompt()
+            user_prompt = _build_portfolio_user_prompt(context)
+            response = await llm_client.chat(
+                system=system_prompt, user=user_prompt, correlation_id=operation_id
+            )
+
+            suggestions = await _parse_portfolio_suggestions(response, context)
+
+            usage = response.get("usage", {})
+            input_tokens = usage.get("prompt_tokens", 0)
+            output_tokens = usage.get("completion_tokens", 0)
+            span.set_attribute("adp.input_tokens", input_tokens)
+            span.set_attribute("adp.output_tokens", output_tokens)
+
+            model_id = getattr(llm_client, "_model", "unknown")
+            for suggestion in suggestions:
+                asyncio.create_task(
+                    write_suggestion_reasoning(
+                        operation_id=operation_id,
+                        suggestion_id=suggestion.suggestion_id,
+                        step_name="agent_review",
+                        model_id=model_id,
+                        reasoning_text=suggestion.rationale,
+                        prompt=f"{system_prompt}\n{user_prompt}",
+                        input_tokens=input_tokens,
+                        output_tokens=output_tokens,
+                    )
+                )
+
+            await op_store.update(
+                operation_id,
+                status="completed",
+                payload_patch={
+                    "suggestions": {s.suggestion_id: s.model_dump(mode="json") for s in suggestions}
+                },
+            )
+    except Exception as exc:
+        logger.exception("agent_review.run_portfolio_review failed")
+        await op_store.update(
+            operation_id,
+            status="failed",
+            payload_patch={"error_description": str(exc)[:500]},
+        )
 
 
 # ── Orchestration (FR-004, FR-006, FR-021) ────────────────────────────────────

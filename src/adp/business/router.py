@@ -306,6 +306,80 @@ def _require_write_business_arch(user) -> None:
         )
 
 
+async def _create_capability_from_suggestion(
+    suggestion: CapabilitySuggestion, session: AsyncSession
+) -> BusinessCapability:
+    """Shared propose_new_capability accept logic -- used by both the
+    per-capability review's accept endpoint and the portfolio review's
+    (ADP-SPEC-040): re-verify the supporting citation still exists (FR-015),
+    then create via the existing create_capability path (FR-014),
+    translating its hierarchy-consistency ValueError into a 422. Caller is
+    responsible for the FR-016 permission check beforehand."""
+    citation = suggestion.citations[0] if suggestion.citations else None
+    if citation is not None and not await bstore.stage_exists(citation.entity_id, session):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Supporting stage {citation.entity_id!r} no longer exists; "
+            "re-run the review.",
+        )
+
+    if suggestion.proposed_name is None or suggestion.proposed_level is None:
+        # Unreachable in practice -- _build_propose_new_capability_suggestion
+        # always sets both -- but satisfies the type checker's Optional
+        # fields (shared across all suggestion types) without a cast.
+        raise HTTPException(
+            status_code=422, detail="Suggestion is missing proposed_name/proposed_level"
+        )
+
+    try:
+        new_capability = await bstore.create_capability(
+            BusinessCapabilityCreate(
+                name=suggestion.proposed_name,
+                description=suggestion.proposed_description,
+                level=suggestion.proposed_level,
+                parent_id=suggestion.proposed_parent_id,
+            ),
+            session,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+    await session.commit()
+    return new_capability
+
+
+async def _remove_capability_from_suggestion(
+    suggestion: CapabilitySuggestion, session: AsyncSession
+) -> str:
+    """flag_capability_for_removal accept logic (ADP-SPEC-040, portfolio
+    scope only): re-verify the target capability still exists, then delete
+    via the existing delete_capability path (FR-014) -- which itself already
+    guards against removing a capability that still has children, exactly
+    like the manual delete button. Caller is responsible for the FR-016
+    permission check beforehand. Returns the removed capability's id."""
+    target_id = suggestion.capability_id
+    if target_id is None:  # pragma: no cover -- always set by the builder
+        raise HTTPException(status_code=422, detail="Suggestion is missing capability_id")
+
+    current = await bstore.get_capability(target_id, session)
+    if current is None:
+        raise HTTPException(status_code=404, detail=f"Capability {target_id!r} not found")
+
+    try:
+        deleted = await bstore.delete_capability(target_id, session)
+    except bstore.ChildCapabilitiesExist as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Cannot remove capability: it has {exc.count} child capability(ies). "
+                "Delete or reassign them first."
+            ),
+        )
+    if not deleted:  # pragma: no cover -- current-check above already guards this
+        raise HTTPException(status_code=404, detail=f"Capability {target_id!r} not found")
+    await session.commit()
+    return target_id
+
+
 @router.post(
     "/capabilities/{cap_id}/agent-review/{operation_id}/suggestions/{suggestion_id}/accept",
     response_model=CapabilitySuggestion,
@@ -402,40 +476,9 @@ async def accept_capability_suggestion(
             raise HTTPException(status_code=404, detail=str(exc))
         await session.commit()
     elif suggestion.type == "propose_new_capability":
-        # FR-015: re-verify the supporting citation (the uncovered stage) still
-        # exists before creating a record from this suggestion.
-        citation = suggestion.citations[0] if suggestion.citations else None
-        if citation is not None and not await bstore.stage_exists(citation.entity_id, session):
-            raise HTTPException(
-                status_code=409,
-                detail=f"Supporting stage {citation.entity_id!r} no longer exists; "
-                "re-run the review.",
-            )
-
         # FR-016: re-check the write permission independent of trigger/confirm.
         _require_write_business_arch(get_current_user(request))
-
-        if suggestion.proposed_name is None or suggestion.proposed_level is None:
-            # Unreachable in practice -- _build_propose_new_capability_suggestion
-            # always sets both -- but satisfies the type checker's Optional
-            # fields (shared across all suggestion types) without a cast.
-            raise HTTPException(
-                status_code=422, detail="Suggestion is missing proposed_name/proposed_level"
-            )
-
-        try:
-            new_capability = await bstore.create_capability(
-                BusinessCapabilityCreate(
-                    name=suggestion.proposed_name,
-                    description=suggestion.proposed_description,
-                    level=suggestion.proposed_level,
-                    parent_id=suggestion.proposed_parent_id,
-                ),
-                session,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc))
-        await session.commit()
+        new_capability = await _create_capability_from_suggestion(suggestion, session)
         affected_entity = new_capability.id
     else:  # pragma: no cover -- unreachable, all five suggestion types handled above
         raise HTTPException(
@@ -482,6 +525,165 @@ async def reject_capability_suggestion(
         "business.capability.agent_review_reject id=%s actor=%s origin=ai "
         "operation_id=%s suggestion_id=%s",
         cap_id, actor, operation_id, suggestion_id,
+    )
+    return suggestion
+
+
+# ── Agent Review: Portfolio scope (ADP-SPEC-040) ──────────────────────────────
+# Reviews the WHOLE capability tree at once rather than one capability's
+# direct links (contrast the per-capability endpoints above). Distinct route
+# shape (no {cap_id} segment) -- no path collision with the per-capability
+# routes, since FastAPI/Starlette match on segment shape and these differ in
+# segment count/structure. Only two suggestion types are ever produced at
+# this scope: propose_new_capability and flag_capability_for_removal (see
+# agent_review.py's "Portfolio-scope review" section for why the other four
+# don't apply here).
+
+# operations.design_id is NOT NULL (no single reviewed entity at this scope).
+_PORTFOLIO_OPERATION_SLOT = "PORTFOLIO"
+
+
+@router.post(
+    "/capabilities/agent-review",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def submit_portfolio_agent_review(
+    background_tasks: BackgroundTasks,
+    request: Request,
+    op_store=Depends(_get_op_store),
+    biz_session_factory=Depends(_get_biz_session_factory),
+):
+    """Trigger a whole-portfolio Agent Review. Returns 202 + operation_id."""
+    operation_id = str(uuid.uuid4())
+    actor = _get_actor(request)
+    await op_store.create(
+        operation_id, "agent_review", _PORTFOLIO_OPERATION_SLOT, actor, {"suggestions": {}}
+    )
+
+    llm_client = _make_agent_review_llm_client()
+
+    async def _run() -> None:
+        # See submit_capability_agent_review's identical comment: fresh
+        # session from the injected (test-overridable) factory, since the
+        # request-scoped session above closes once this endpoint returns.
+        from adp.business.agent_review import run_portfolio_review
+
+        async with biz_session_factory() as biz_session:
+            await run_portfolio_review(
+                operation_id=operation_id,
+                biz_session=biz_session,
+                llm_client=llm_client,
+                op_store=op_store,
+            )
+
+    background_tasks.add_task(_run)
+    logger.info("business.capability.agent_review.submit_portfolio actor=%s", actor)
+    return {"operation_id": operation_id}
+
+
+@router.get(
+    "/capabilities/agent-review/{operation_id}",
+    response_model=CapabilityAgentReviewResponse,
+)
+async def get_portfolio_agent_review(
+    operation_id: str,
+    op_store=Depends(_get_op_store),
+):
+    """Poll a portfolio Agent Review operation."""
+    op = await op_store.get(operation_id)
+    if op is None:
+        raise HTTPException(status_code=404, detail=f"Operation {operation_id!r} not found")
+
+    suggestions = [
+        CapabilitySuggestion.model_validate(raw)
+        for raw in (op.get("suggestions") or {}).values()
+    ]
+    return CapabilityAgentReviewResponse(
+        operation_id=operation_id,
+        capability_id=None,
+        status=op["status"],
+        suggestions=suggestions,
+        error_description=op.get("error_description"),
+    )
+
+
+@router.post(
+    "/capabilities/agent-review/{operation_id}/suggestions/{suggestion_id}/accept",
+    response_model=CapabilitySuggestion,
+)
+async def accept_portfolio_suggestion(
+    operation_id: str,
+    suggestion_id: str,
+    body: SuggestionAcceptRequest,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+    op_store=Depends(_get_op_store),
+):
+    """Accept a portfolio-scope suggestion (FR-014/015/016)."""
+    from adp.auth.deps import get_current_user
+
+    suggestions, suggestion = await _get_pending_suggestion(op_store, operation_id, suggestion_id)
+
+    if suggestion.advisory and not body.advisory_acknowledged:
+        raise HTTPException(
+            status_code=422,
+            detail="This suggestion is advisory (an unverified citation); set "
+            "advisory_acknowledged=true to accept it anyway.",
+        )
+
+    # FR-016: re-check the write permission independent of trigger/confirm.
+    _require_write_business_arch(get_current_user(request))
+
+    if suggestion.type == "propose_new_capability":
+        new_capability = await _create_capability_from_suggestion(suggestion, session)
+        affected_entity = new_capability.id
+    elif suggestion.type == "flag_capability_for_removal":
+        affected_entity = await _remove_capability_from_suggestion(suggestion, session)
+    else:  # pragma: no cover -- unreachable, only two types ever produced at this scope
+        raise HTTPException(
+            status_code=501,
+            detail=f"Suggestion type {suggestion.type!r} not supported at portfolio scope",
+        )
+
+    suggestion.status = AgentSuggestionStatus.ACCEPTED
+    suggestions[suggestion_id] = suggestion.model_dump(mode="json")
+    await op_store.update(operation_id, payload_patch={"suggestions": suggestions})
+
+    actor = _get_actor(request)
+    write_suggestion_audit(
+        logger,
+        actor=actor,
+        action="business.capability.agent_review_accept",
+        affected_entity=affected_entity,
+        summary=f"accepted {suggestion.type} suggestion (portfolio review)",
+        operation_id=operation_id,
+        suggestion_id=suggestion_id,
+    )
+    return suggestion
+
+
+@router.post(
+    "/capabilities/agent-review/{operation_id}/suggestions/{suggestion_id}/reject",
+    response_model=CapabilitySuggestion,
+)
+async def reject_portfolio_suggestion(
+    operation_id: str,
+    suggestion_id: str,
+    request: Request,
+    op_store=Depends(_get_op_store),
+):
+    """Reject a portfolio-scope suggestion (FR-017). No database write occurs."""
+    suggestions, suggestion = await _get_pending_suggestion(op_store, operation_id, suggestion_id)
+
+    suggestion.status = AgentSuggestionStatus.REJECTED
+    suggestions[suggestion_id] = suggestion.model_dump(mode="json")
+    await op_store.update(operation_id, payload_patch={"suggestions": suggestions})
+
+    actor = _get_actor(request)
+    logger.info(
+        "business.capability.agent_review_reject actor=%s origin=ai "
+        "operation_id=%s suggestion_id=%s (portfolio review)",
+        actor, operation_id, suggestion_id,
     )
     return suggestion
 

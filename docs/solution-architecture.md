@@ -2,7 +2,7 @@
 document_type: solution-architecture
 title: AI-Assisted Architecture Design Platform (ADP)
 status: current
-version: 1.3.0
+version: 1.4.0
 classification: internal
 level: high-level
 machine_readable: true
@@ -26,9 +26,9 @@ This document is the canonical, human-readable rendering of a machine-readable a
 | Audience | Enterprise, solution, and technical architects |
 | Source of truth | Structured artifacts (YAML/JSON), not this prose |
 | Diagram source | React Flow canvas (`@xyflow/react`); PNG rendered by CairoSVG from locked theme |
-| Status | Current — reflects implemented system as of ADP-SPEC-039 |
+| Status | Current — reflects implemented system as of ADP-SPEC-040 |
 
-This document supersedes v0.1.0. All capabilities described here are implemented and tested. Version history: v1.0.0 (ADP-SPEC-035); v1.1.0 (ADP-SPEC-036, Application Registry); v1.2.0 (ADP-SPEC-038, Application Portfolio Management); v1.3.0 (ADP-SPEC-039, Agent Review).
+This document supersedes v0.1.0. All capabilities described here are implemented and tested. Version history: v1.0.0 (ADP-SPEC-035); v1.1.0 (ADP-SPEC-036, Application Registry); v1.2.0 (ADP-SPEC-038, Application Portfolio Management); v1.3.0 (ADP-SPEC-039, Agent Review); v1.4.0 (ADP-SPEC-040, Portfolio-Scope Agent Review).
 
 ## Purpose and Scope
 
@@ -494,7 +494,7 @@ The application portfolio management epic (`adp.application`, ADP-SPEC-038) exte
 
 ## Agent Review
 
-ADP-SPEC-039 provides a reusable "AI expert review" pattern: any screen can add a button that asks an LLM to review one entity and its directly linked context, propose suggestions, and require an explicit human accept/reject before any suggestion touches the database. The pattern is split into a domain-agnostic toolkit (`adp.agents`, `web/src/agent-review/`) and thin per-domain adapters — Business Capabilities (`adp.business.agent_review`, `web/src/business/agentReviewDetail.tsx`) is the first and, for v1, only adapter.
+ADP-SPEC-039 provides a reusable "AI expert review" pattern: any screen can add a button that asks an LLM to review one entity and its directly linked context, propose suggestions, and require an explicit human accept/reject before any suggestion touches the database. ADP-SPEC-040 extends this with a *portfolio-scope* review of the whole capability tree at once. The pattern is split into a domain-agnostic toolkit (`adp.agents`, `web/src/agent-review/`) and thin per-domain adapters — Business Capabilities (`adp.business.agent_review`, `web/src/business/agentReviewDetail.tsx`) is the first and, so far, only adapter.
 
 **Toolkit** (`adp.agents`): four modules with zero dependency on any single domain module (`src/adp/business`, `src/adp/application`, etc.), mechanically enforced by `tests/unit/agents/test_toolkit_boundary.py` so a second adapter for a different screen can reuse them unmodified.
 
@@ -507,21 +507,26 @@ No new tables were added. A review operation reuses the existing `OperationStore
 
 **Business Capabilities adapter** (`adp.business.agent_review`): reviews one capability and everything directly linked to it — its own fields, assigned domain, parent/children, linked value-stream stages, linked applications (non-sensitive APM fields only — risk/cost/governance data is excluded from the prompt by construction, not by a permission check), linked technical capabilities, and linked designs. Context assembly is direct-links-only, never a subtree or portfolio-wide traversal, keeping the prompt bounded regardless of hierarchy size. The system prompt is loaded from `docs/system_prompt_sr_bus_arch.md` at runtime (falling back to a short built-in prompt if the file is missing), so the persona can be edited without a code change.
 
-Five suggestion types, added incrementally by priority (each strictly higher write-risk than the last):
+Six suggestion types. The first five are per-capability review scope, added incrementally by priority (each strictly higher write-risk than the last); the sixth is portfolio-scope only (ADP-SPEC-040):
 
-| Type | Writes via | Grounding |
-|---|---|---|
-| `flag_duplicate` | *(none — acknowledgment only)* | Cites another capability, same hierarchy level only (FR-011) |
-| `reclassify_strategic_relevance` | `update_capability` | No citation — targets the reviewed capability's own field |
-| `set_maturity_level` | `update_capability` | No citation — targets the reviewed capability's own field |
-| `assign_domain` | `assign_capability_domain` | Cites a `business_domain` id — first cross-entity-type grounding, L1-only, unassigned-only (FR-012) |
-| `propose_new_capability` | `create_capability` | Cites a *supporting-context* id (an uncovered value-stream stage with zero capability coverage) — there is no "proposed capability id" to cite, since it doesn't exist yet |
+| Type | Scope | Writes via | Grounding |
+|---|---|---|---|
+| `flag_duplicate` | per-capability | *(none — acknowledgment only)* | Cites another capability, same hierarchy level only (FR-011) |
+| `reclassify_strategic_relevance` | per-capability | `update_capability` | No citation — targets the reviewed capability's own field |
+| `set_maturity_level` | per-capability | `update_capability` | No citation — targets the reviewed capability's own field |
+| `assign_domain` | per-capability | `assign_capability_domain` | Cites a `business_domain` id — first cross-entity-type grounding, L1-only, unassigned-only (FR-012) |
+| `propose_new_capability` | both | `create_capability` | Cites a *supporting-context* id (an uncovered value-stream stage with zero capability coverage) — there is no "proposed capability id" to cite, since it doesn't exist yet |
+| `flag_capability_for_removal` | portfolio only | `delete_capability` | Cites the flagged capability's own id, grounded against the full portfolio (any level) |
 
 **Accept-time re-verification (FR-015, FR-016)**: immediately before writing, accept re-checks that every cited entity still exists and that the *specific field* the suggestion targets is unchanged since generation — a change to an unrelated field does not block acceptance. `reclassify_strategic_relevance` / `set_maturity_level` carry an explicit `previous_*` snapshot captured at generation time; `assign_domain` has none, since FR-012 scopes it to `domain_id IS NULL` capabilities by construction, so its check degenerates to "is it still unassigned"; `propose_new_capability` re-verifies its supporting stage still exists rather than a field snapshot, since it creates a new record instead of overwriting one. Accept also independently re-checks the underlying `WRITE_BUSINESS_ARCH` permission, regardless of whether the caller was permitted to trigger the review or confirm suggestions in general — a `SUBMIT_AI_OPERATION`/`CONFIRM_AGENT_SUGGESTION` grant does not imply write access to the target entity.
 
 **Authorization**: triggering a review reuses the existing `SUBMIT_AI_OPERATION` action (shared with intake/recommend, not duplicated); accepting or rejecting a suggestion uses a new `CONFIRM_AGENT_SUGGESTION` action, added to `REQUIRES_CONFIRMATION` alongside `CONFIRM_RECOMMENDATION` (`PERMISSIONS_VERSION` `1.4.0` → `1.5.0`). Both are registered as explicit route→action overrides in `enforcement.py`, taking precedence over the `/api/v1/business/` prefix's default `WRITE_BUSINESS_ARCH` rule.
 
-**Frontend**: `AgentReviewButton` (trigger + poll + render) and `SuggestionCard` (rationale, citations, advisory acknowledgment, accept/reject) are generic, parameterized by `basePath` and an optional `renderDetail` override — a future second adapter points these at a different `basePath` without modifying either component. The Business Capabilities adapter supplies `renderCapabilitySuggestionDetail` (in `agentReviewDetail.tsx`) to render a current→suggested transition for the two classification types and the proposed name/description/level for `propose_new_capability`; other types fall through to `SuggestionCard`'s generic field-list rendering. `CapabilityNode` wires a per-capability "🤖 Review" toggle — there is no page-level "review everything" button.
+**Frontend**: `AgentReviewButton` (trigger + poll + render) and `SuggestionCard` (rationale, citations, advisory acknowledgment, accept/reject) are generic, parameterized by `basePath` and an optional `renderDetail` override — a future second adapter points these at a different `basePath` without modifying either component. `AgentReviewButton` also exposes an `onAccepted` callback, threaded down to each `SuggestionCard`, so the adapter can refresh whatever data a successful accept just wrote to (neither generic component knows about the adapter's own query keys), and a "Close" button that clears the current operation's results independent of whatever toggle the consuming screen uses to show/hide the component. The Business Capabilities adapter supplies `renderCapabilitySuggestionDetail` (in `agentReviewDetail.tsx`) to render a current→suggested transition for the two classification types, the proposed name/description/level for `propose_new_capability`, and a distinct "Flagged for removal" notice for `flag_capability_for_removal`; other types fall through to `SuggestionCard`'s generic field-list rendering. `CapabilityNode` wires a per-capability "Review" toggle; `CapabilityTree` wires a page-level "Review Portfolio" button at the top of the Capabilities tab, pointed at the portfolio-scope `basePath` below.
+
+**Portfolio-scope review** (ADP-SPEC-040): `run_portfolio_review`/`assemble_portfolio_context` in `agent_review.py` are a sibling to the per-capability `run_review`/`assemble_context` — same span/reasoning/failure-handling shape, different context (the *entire* capability tree, grouped by level, plus every value-stream stage with zero capability coverage *portfolio-wide*, via a new single-query `list_all_uncovered_stages` rather than the per-capability N+1 scan). Only `propose_new_capability` (reused verbatim — it never referenced "the reviewed capability" in the first place) and `flag_capability_for_removal` apply at this scope; the other four target one specific capability's own fields by design and stay per-capability only.
+
+New routes (`POST`/`GET /api/v1/business/capabilities/agent-review`, plus accept/reject on suggestions) have no `{cap_id}` path segment — a different segment shape than the per-capability routes, so FastAPI's routing has no ambiguity between them. `operations.design_id` (`NOT NULL`, no FK) holds a `"PORTFOLIO"` sentinel in place of a reviewed entity id. Accept-dispatch is a separate, smaller function from the per-capability endpoint's (rather than threading an optional `cap_id` through the existing one) — lower risk than refactoring an already-shipped, tested code path for two suggestion types that share almost nothing with the other four's accept logic. `flag_capability_for_removal`'s accept calls the existing `delete_capability`, which already 409s if the target has children, exactly like the manual delete button — no new removal-safety logic was needed.
 
 ## Data Architecture
 

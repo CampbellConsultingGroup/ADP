@@ -5,10 +5,12 @@ import { screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 
 import AgentReviewButton from "../../src/agent-review/AgentReviewButton";
 import SuggestionCard from "../../src/agent-review/SuggestionCard";
+import CapabilityTree from "../../src/business/CapabilityTree";
 import { renderCapabilitySuggestionDetail } from "../../src/business/agentReviewDetail";
 import { mockFetch, renderWithQuery, lastCall } from "./registry-test-utils";
 
 const BASE_PATH = "/api/v1/business/capabilities/CAP-1/agent-review";
+const PORTFOLIO_BASE_PATH = "/api/v1/business/capabilities/agent-review";
 
 afterEach(() => {
   cleanup();
@@ -338,5 +340,65 @@ describe("AgentReviewButton + SuggestionCard", () => {
       />,
     );
     expect(screen.getByText(/duplicate_of_capability_id/)).toBeDefined();
+  });
+
+  it("renders a distinct 'Flagged for removal' notice for flag_capability_for_removal", () => {
+    mockFetch({});
+    const suggestion = {
+      suggestion_id: "SUG-8",
+      type: "flag_capability_for_removal",
+      capability_id: "CAP-2",
+      rationale: "Placeholder name, no description.",
+      citations: [{ entity_type: "business_capability", entity_id: "CAP-2" }],
+      advisory: false,
+      status: "pending" as const,
+    };
+
+    renderWithQuery(
+      <SuggestionCard
+        suggestion={suggestion}
+        basePath={PORTFOLIO_BASE_PATH}
+        operationId="OP-1"
+        renderDetail={renderCapabilitySuggestionDetail}
+      />,
+    );
+    expect(screen.getByText(/Flagged for removal/)).toBeDefined();
+    expect(screen.getAllByText(/CAP-2/).length).toBeGreaterThan(0);
+  });
+});
+
+describe("CapabilityTree Review Portfolio button", () => {
+  it("triggers a portfolio-scope review from the Capabilities tab header", async () => {
+    const calls = mockFetch({
+      [`GET /api/v1/business/capabilities`]: { items: [], total: 0 },
+      [`POST ${PORTFOLIO_BASE_PATH}`]: { operation_id: "OP-PORTFOLIO" },
+      [`GET ${PORTFOLIO_BASE_PATH}/OP-PORTFOLIO`]: {
+        operation_id: "OP-PORTFOLIO",
+        status: "completed",
+        suggestions: [
+          {
+            suggestion_id: "SUG-9",
+            type: "flag_capability_for_removal",
+            capability_id: "CAP-3",
+            rationale: "Redundant with another capability.",
+            citations: [{ entity_type: "business_capability", entity_id: "CAP-3" }],
+            advisory: false,
+            status: "pending",
+          },
+        ],
+      },
+    });
+
+    renderWithQuery(<CapabilityTree />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Review Portfolio" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: /Ask the business architecture expert to review the portfolio/ }),
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText(/Redundant with another capability/)).toBeDefined();
+    });
+    expect(lastCall(calls, "POST")?.url).toBe(PORTFOLIO_BASE_PATH);
   });
 });
