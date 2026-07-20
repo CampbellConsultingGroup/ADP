@@ -64,6 +64,14 @@ export function renderCapabilitySuggestionDetail(
     );
   }
 
+  if (suggestion.type === "flag_capability_for_removal") {
+    return (
+      <div style={{ fontSize: 12, color: "var(--crit)", marginBottom: 8 }}>
+        <strong>Flagged for removal:</strong> capability {suggestion.capability_id}
+      </div>
+    );
+  }
+
   if (suggestion.type === "propose_new_capability") {
     return (
       <div style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 8 }}>

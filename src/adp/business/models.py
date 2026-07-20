@@ -470,14 +470,17 @@ class StageCapNotFoundError(Exception):
     """Raised when a stage-capability link to delete does not exist."""
 
 
-# ── Agent Review: Business Capabilities adapter (ADP-SPEC-039) ───────────────
-# Five suggestion types, fixed for this adapter's v1 scope (spec Clarifications).
-# Each suggestion carries the shared toolkit fields (rationale, citations,
-# advisory, status) plus its own type-specific payload; unused fields for a
-# given type stay None. previous_* fields are generation-time snapshots used
-# by FR-015's field-scoped accept-time staleness check (research.md D8) --
-# assign_domain has none, since FR-012 scopes it to domain_id IS NULL
-# capabilities, so its implicit snapshot is always None.
+# ── Agent Review: Business Capabilities adapter (ADP-SPEC-039/040) ───────────
+# Six suggestion types. The first five are per-capability review scope
+# (spec Clarifications); flag_capability_for_removal (ADP-SPEC-040) is
+# portfolio-review scope only -- produced by a whole-tree review, not a
+# single-capability one. Each suggestion carries the shared toolkit fields
+# (rationale, citations, advisory, status) plus its own type-specific
+# payload; unused fields for a given type stay None. previous_* fields are
+# generation-time snapshots used by FR-015's field-scoped accept-time
+# staleness check (research.md D8) -- assign_domain has none, since FR-012
+# scopes it to domain_id IS NULL capabilities, so its implicit snapshot is
+# always None.
 
 AgentSuggestionType = Literal[
     "reclassify_strategic_relevance",
@@ -485,17 +488,21 @@ AgentSuggestionType = Literal[
     "assign_domain",
     "flag_duplicate",
     "propose_new_capability",
+    "flag_capability_for_removal",
 ]
 
 
 class CapabilitySuggestion(BaseModel):
-    """One suggestion from a capability review (FR-010)."""
+    """One suggestion from a capability or portfolio review (FR-010)."""
 
     model_config = ConfigDict(extra="forbid")
 
     suggestion_id: str
     type: AgentSuggestionType
-    capability_id: str | None = None  # null only for propose_new_capability
+    # The existing capability this suggestion targets (reclassify/maturity/
+    # domain/duplicate/removal); null only for propose_new_capability, which
+    # doesn't target an existing capability -- it proposes one.
+    capability_id: str | None = None
     rationale: str
     citations: list[GroundingCitation] = []
     advisory: bool = False
@@ -528,7 +535,9 @@ class CapabilityAgentReviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     operation_id: str
-    capability_id: str
+    # None for a portfolio-scope review (ADP-SPEC-040), which has no single
+    # reviewed capability; set for a per-capability review.
+    capability_id: str | None = None
     status: AgentReviewOperationStatus
     suggestions: list[CapabilitySuggestion] = []
     # Set only when status=FAILED (FR-021); short, sanitized -- never raw

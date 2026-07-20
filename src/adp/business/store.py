@@ -622,6 +622,36 @@ async def stage_exists(stage_id: str, session: AsyncSession) -> bool:
     return result.first() is not None
 
 
+async def list_all_uncovered_stages(session: AsyncSession) -> list[CapabilityStageRef]:
+    """Every value-stream stage across the whole portfolio with zero
+    capability coverage -- the supporting-context signal for a
+    portfolio-level propose_new_capability review (ADP-SPEC-040). A single
+    LEFT JOIN rather than the per-capability N+1 loop
+    (_find_uncovered_sibling_stages in agent_review.py), since this scans
+    every stage regardless of which capability (if any) is under review."""
+    result = await session.execute(
+        sa.select(
+            _stages.c.id.label("stage_id"),
+            _stages.c.name.label("stage_name"),
+            _stages.c.value_stream_id,
+            _value_streams.c.name.label("value_stream_name"),
+        )
+        .join(_value_streams, _value_streams.c.id == _stages.c.value_stream_id)
+        .outerjoin(_stage_caps, _stage_caps.c.stage_id == _stages.c.id)
+        .where(_stage_caps.c.capability_id.is_(None))
+        .order_by(_value_streams.c.position, _stages.c.position)
+    )
+    return [
+        CapabilityStageRef(
+            stage_id=row.stage_id,
+            stage_name=row.stage_name,
+            value_stream_id=row.value_stream_id,
+            value_stream_name=row.value_stream_name,
+        )
+        for row in result.mappings()
+    ]
+
+
 async def link_design_to_capability(
     capability_id: str, design_id: str, session: AsyncSession
 ) -> None:
