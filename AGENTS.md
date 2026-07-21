@@ -2,7 +2,9 @@
 
 ## Project Status
 
-Latest work: **040-portfolio-agent-review** (ADP-SPEC-040, extends 039, on branch `040-portfolio-agent-review` -- not yet merged) — a portfolio-scope sibling to the per-capability Agent Review: a "Review Portfolio" button reviews the whole capability tree at once, reusing `propose_new_capability` and adding a sixth suggestion type `flag_capability_for_removal` (accept reuses the existing `delete_capability`, which already guards against removing a capability with children). New routes have no `{cap_id}` path segment, so no collision with the 039 per-capability routes. Also fixed two bugs in the 039 UI: stale dropdowns after accepting a suggestion, and no way to close/dismiss the review panel.
+Latest work: **041-ai-chat-assistant** (ADP-SPEC-041, spec + plan drafted, not yet implemented, on branch `041-ai-chat-assistant`) — a read-only, cross-domain conversational Q&A assistant (business capabilities, applications, portfolio, governance) complementing Agent Review rather than duplicating its write path. New top-level `adp.chat` package (deliberately outside `adp.agents`' zero-domain-import contract, since cross-domain reads are the whole point); grounding is two-legged (extended `adp.search` hybrid index for fuzzy questions + a fixed read-only tool-call registry for precise/aggregate ones); sensitive application data filtered per the asking user's own permissions inside the tool layer; real-time SSE streaming (the platform's first); persisted, actor-scoped conversation history via new migration 022. First entry point: a toggle on the Business Capabilities page. See `specs/041-ai-chat-assistant/spec.md` and `plan.md`.
+
+Prior work: **040-portfolio-agent-review** (ADP-SPEC-040, implemented, merged) — a portfolio-scope sibling to the per-capability Agent Review: a "Review Portfolio" button reviews the whole capability tree at once, reusing `propose_new_capability` and adding a sixth suggestion type `flag_capability_for_removal` (accept reuses the existing `delete_capability`, which already guards against removing a capability with children). New routes have no `{cap_id}` path segment, so no collision with the 039 per-capability routes. Also fixed two bugs in the 039 UI: stale dropdowns after accepting a suggestion, and no way to close/dismiss the review panel.
 
 Prior work: **039-agent-review-toolkit** (ADP-SPEC-039, implemented — all 4 user stories) — a reusable "agent review" pattern: a shared `adp.agents` toolkit (LLM stub, ART-VII grounding/citation validator, audit+reasoning helpers, no new tables — reuses `OperationStore`/`llm_reasoning_log` as-is; zero domain-module imports, mechanically enforced by tests/unit/agents/test_toolkit_boundary.py) plus a Business Capabilities adapter (4 suggestion-type stories, P1 read-only duplicate-flagging → P4 propose-new-capability). `PERMISSIONS_VERSION` progressed `1.4.0` → `1.5.0` adding `CONFIRM_AGENT_SUGGESTION` (trigger reuses the existing `SUBMIT_AI_OPERATION`). See `docs/solution-architecture.md`'s "Agent Review" section for full detail.
 
@@ -138,7 +140,7 @@ bd prime                # Refresh Beads context
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (10713 symbols, 17139 relationships, 194 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (11032 symbols, 17628 relationships, 199 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

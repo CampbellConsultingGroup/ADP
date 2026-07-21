@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
@@ -102,6 +103,210 @@ class LLMClient:
         if self._is_anthropic:
             return await self._call_anthropic_chat(system, user)
         return await self._call_openai_compatible_chat(system, user)
+
+    async def chat_stream(
+        self,
+        messages: list[dict[str, Any]],
+        system: str,
+        tools: list[dict[str, Any]] | None = None,
+        correlation_id: str | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Multi-turn, streaming, tool-use-capable chat (ADP-SPEC-041).
+
+        `messages` follows the Anthropic Messages API content-block shape
+        directly (each item is {"role": ..., "content": ...}, where content
+        may be a plain string or a list of content blocks including
+        tool_use/tool_result blocks for a multi-turn tool-calling loop) --
+        deliberately not abstracted into a provider-neutral shape, since
+        there is exactly one caller (adp.chat) so far; the OpenAI-compatible
+        branch below translates from this same shape.
+
+        Yields normalized event dicts, regardless of provider (mirrors how
+        chat()/extract() already normalize their non-streaming responses to
+        one shape):
+          {"type": "text_delta", "text": str}
+          {"type": "tool_use", "id": str, "name": str, "input": dict}
+          {"type": "done", "stop_reason": str,
+           "usage": {"prompt_tokens": int, "completion_tokens": int}}
+        """
+        _logger.info(
+            json.dumps({
+                "operation": "llm.chat_stream_request",
+                "model": self._model,
+                "provider": "anthropic" if self._is_anthropic else "openai_compatible",
+                "message_count": len(messages),
+                "tool_count": len(tools) if tools else 0,
+                "correlation_id": correlation_id,
+            })
+        )
+        if self._is_anthropic:
+            async for event in self._stream_anthropic_chat(messages, system, tools):
+                yield event
+        else:
+            async for event in self._stream_openai_compatible_chat(messages, system, tools):
+                yield event
+
+    async def _stream_anthropic_chat(
+        self,
+        messages: list[dict[str, Any]],
+        system: str,
+        tools: list[dict[str, Any]] | None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        headers = {
+            "x-api-key": self._api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+        body: dict[str, Any] = {
+            "model": self._model,
+            "max_tokens": 4096,
+            "system": system,
+            "messages": messages,
+            "stream": True,
+        }
+        if tools:
+            body["tools"] = tools
+
+        input_tokens = 0
+        output_tokens = 0
+        stop_reason = "end_turn"
+        # Anthropic streams a tool's input as incremental JSON string
+        # fragments (input_json_delta) keyed by content-block index; a
+        # tool_use event is only yielded once its block closes and the
+        # accumulated fragment parses.
+        tool_use_blocks: dict[int, dict[str, str]] = {}
+        tool_json_fragments: dict[int, str] = {}
+
+        async with httpx.AsyncClient() as client, client.stream(
+            "POST", f"{self._base_url}/v1/messages",
+            headers=headers, json=body, timeout=180.0,
+        ) as response:
+            response.raise_for_status()
+            event_type: str | None = None
+            async for line in response.aiter_lines():
+                if not line:
+                    continue
+                if line.startswith("event:"):
+                    event_type = line[len("event:"):].strip()
+                    continue
+                if not line.startswith("data:"):
+                    continue
+                data = json.loads(line[len("data:"):].strip())
+
+                if event_type == "message_start":
+                    usage = data.get("message", {}).get("usage", {})
+                    input_tokens = usage.get("input_tokens", 0)
+                elif event_type == "content_block_start":
+                    block = data.get("content_block", {})
+                    if block.get("type") == "tool_use":
+                        idx = data["index"]
+                        tool_use_blocks[idx] = {"id": block["id"], "name": block["name"]}
+                        tool_json_fragments[idx] = ""
+                elif event_type == "content_block_delta":
+                    delta = data.get("delta", {})
+                    idx = data["index"]
+                    if delta.get("type") == "text_delta":
+                        yield {"type": "text_delta", "text": delta["text"]}
+                    elif delta.get("type") == "input_json_delta":
+                        tool_json_fragments[idx] = (
+                            tool_json_fragments.get(idx, "") + delta.get("partial_json", "")
+                        )
+                elif event_type == "content_block_stop":
+                    idx = data["index"]
+                    if idx in tool_use_blocks:
+                        try:
+                            parsed_input = json.loads(tool_json_fragments.get(idx) or "{}")
+                        except json.JSONDecodeError:
+                            parsed_input = {}
+                        yield {
+                            "type": "tool_use",
+                            "id": tool_use_blocks[idx]["id"],
+                            "name": tool_use_blocks[idx]["name"],
+                            "input": parsed_input,
+                        }
+                elif event_type == "message_delta":
+                    delta = data.get("delta", {})
+                    if "stop_reason" in delta:
+                        stop_reason = delta["stop_reason"]
+                    usage = data.get("usage", {})
+                    if "output_tokens" in usage:
+                        output_tokens = usage["output_tokens"]
+
+        yield {
+            "type": "done",
+            "stop_reason": stop_reason,
+            "usage": {"prompt_tokens": input_tokens, "completion_tokens": output_tokens},
+        }
+
+    async def _stream_openai_compatible_chat(
+        self,
+        messages: list[dict[str, Any]],
+        system: str,
+        tools: list[dict[str, Any]] | None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+        }
+        body: dict[str, Any] = {
+            "model": self._model,
+            "messages": [{"role": "system", "content": system}, *messages],
+            "stream": True,
+        }
+        if tools:
+            body["tools"] = tools
+
+        # OpenAI streams a tool call's name/arguments incrementally across
+        # several deltas, keyed by the call's position in the response.
+        tool_calls: dict[int, dict[str, str]] = {}
+        stop_reason = "stop"
+
+        async with httpx.AsyncClient() as client, client.stream(
+            "POST", f"{self._base_url}/v1/chat/completions",
+            headers=headers, json=body, timeout=180.0,
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line or not line.startswith("data:"):
+                    continue
+                payload = line[len("data:"):].strip()
+                if payload == "[DONE]":
+                    break
+                chunk = json.loads(payload)
+                choice = (chunk.get("choices") or [{}])[0]
+                delta = choice.get("delta", {})
+                if delta.get("content"):
+                    yield {"type": "text_delta", "text": delta["content"]}
+                for tc in delta.get("tool_calls") or []:
+                    idx = tc.get("index", 0)
+                    entry = tool_calls.setdefault(idx, {"id": "", "name": "", "arguments": ""})
+                    if tc.get("id"):
+                        entry["id"] = tc["id"]
+                    fn = tc.get("function") or {}
+                    if fn.get("name"):
+                        entry["name"] = fn["name"]
+                    if fn.get("arguments"):
+                        entry["arguments"] += fn["arguments"]
+                if choice.get("finish_reason"):
+                    stop_reason = choice["finish_reason"]
+
+        for entry in tool_calls.values():
+            try:
+                parsed_input = json.loads(entry["arguments"] or "{}")
+            except json.JSONDecodeError:
+                parsed_input = {}
+            yield {
+                "type": "tool_use",
+                "id": entry["id"],
+                "name": entry["name"],
+                "input": parsed_input,
+            }
+
+        yield {
+            "type": "done",
+            "stop_reason": stop_reason,
+            "usage": {"prompt_tokens": 0, "completion_tokens": 0},
+        }
 
     async def _call_anthropic_chat(self, system: str, user: str) -> dict[str, Any]:
         """Call Anthropic Messages API with caller-supplied system/user prompts."""

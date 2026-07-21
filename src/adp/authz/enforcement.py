@@ -111,6 +111,15 @@ _EXPLICIT_ROUTE_ACTIONS: dict[tuple[str, str], ActionType] = {
         "/api/v1/business/capabilities/agent-review/{operation_id}"
         "/suggestions/{suggestion_id}/reject",
     ): ActionType.CONFIRM_AGENT_SUGGESTION,
+    # ADP-SPEC-041: starting/using the AI Chat Assistant is a broad feature
+    # gate, not a data-sensitivity check (research D6) -- both mutating chat
+    # routes map to the same USE_CHAT_ASSISTANT action; GET list/detail are
+    # safe methods and never enforced here.
+    ("POST", "/api/v1/chat/conversations"): ActionType.USE_CHAT_ASSISTANT,
+    (
+        "POST",
+        "/api/v1/chat/conversations/{conversation_id}/messages",
+    ): ActionType.USE_CHAT_ASSISTANT,
 }
 
 # ── Prefix rules ─────────────────────────────────────────────────────────────

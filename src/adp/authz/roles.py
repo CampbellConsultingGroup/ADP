@@ -41,3 +41,8 @@ class ActionType(StrEnum):
     # suggestion is applied) and from SUBMIT_AI_OPERATION (reused, triggers
     # the review itself).
     CONFIRM_AGENT_SUGGESTION = "confirm_agent_suggestion"
+    # ADP-SPEC-041: starting/using the AI Chat Assistant (read-only -- this
+    # gate controls feature availability, not data sensitivity; sensitive
+    # application categories are filtered per-question inside the chat's
+    # tool layer against READ_APPLICATION_{RISK,COST,GOVERNANCE} instead).
+    USE_CHAT_ASSISTANT = "use_chat_assistant"

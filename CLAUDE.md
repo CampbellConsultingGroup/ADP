@@ -1,6 +1,6 @@
 # ADP Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-07-19 (040-portfolio-agent-review added)
+Auto-generated from all feature plans. Last updated: 2026-07-20 (041-ai-chat-assistant plan added)
 
 ## Active Technologies
 - Python 3.11+ + SQLAlchemy 2.x (async ORM), asyncpg (PostgreSQL async driver), Alembic (migrations), testcontainers-python (PostgreSQL container for integration tests), pydantic-settings (database URL config) (002-design-store)
@@ -46,6 +46,8 @@ Auto-generated from all feature plans. Last updated: 2026-07-19 (040-portfolio-a
 - PostgreSQL 16; no new tables or columns — reuses `operations.design_id` (TEXT, no FK) as a generic entity-id slot and `llm_reasoning_log.option_id` (TEXT NULL, no FK) as a generic suggestion-id slot; `PERMISSIONS_VERSION` progresses 1.4.0 → 1.5.0 adding `CONFIRM_AGENT_SUGGESTION` (trigger reuses the existing `SUBMIT_AI_OPERATION`) (039-agent-review-toolkit)
 - Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) + same stack as 039 — zero new packages; adds a portfolio-scope sibling to the existing per-capability Agent Review (`run_portfolio_review`/`assemble_portfolio_context` in `adp.business.agent_review`), reusing `propose_new_capability` and adding a sixth suggestion type `flag_capability_for_removal` (040-portfolio-agent-review)
 - PostgreSQL 16; no new tables — new routes `POST/GET /api/v1/business/capabilities/agent-review` (no `{cap_id}` segment, so no path collision with the per-capability routes) reuse the same `OperationStore`/`SUBMIT_AI_OPERATION`/`CONFIRM_AGENT_SUGGESTION` plumbing as 039; `operations.design_id` holds a `"PORTFOLIO"` sentinel (column is NOT NULL, no single reviewed entity at this scope); accept for `flag_capability_for_removal` reuses the existing `delete_capability` (already guards against removing a capability with children) (040-portfolio-agent-review)
+- Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) + same stack as 039/040, plus the platform's first streaming endpoint (SSE via FastAPI `StreamingResponse`) — no new package; a new top-level `adp.chat` package (deliberately NOT an `adp.agents` adapter, since cross-domain reads violate that toolkit's zero-domain-import contract by design), extending `adp.llm.client.LLMClient` with multi-turn/streaming/tool-use support built on its existing raw-httpx pattern (041-ai-chat-assistant, plan only — not yet implemented)
+- PostgreSQL 16; **two new tables** via migration 022 (`chat_conversations`, `chat_messages`) — the first schema change either Agent Review spec needed; also extends the existing `adp.search` hybrid index (ADP-b6o) with `ENTITY_APPLICATION`/`ENTITY_VALUE_STREAM`/`ENTITY_BUSINESS_DOMAIN` discriminators (no schema change there); new `ActionType.USE_CHAT_ASSISTANT` (broadly granted — sensitivity is filtered per-question inside read-only tool calls against `READ_APPLICATION_{RISK,COST,GOVERNANCE}`, not by this outer gate) (041-ai-chat-assistant, plan only — not yet implemented)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -90,6 +92,7 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 041-ai-chat-assistant: Spec + plan drafted (ADP-SPEC-041, not yet implemented) — a read-only, cross-domain conversational Q&A assistant complementing Agent Review, not duplicating its write path. New top-level `adp.chat` package (deliberately outside `adp.agents`' zero-domain-import contract); two-legged grounding (extended `adp.search` hybrid index for fuzzy questions + a fixed read-only tool-call registry for precise/aggregate ones); sensitive application data filtered per the asking user's own permissions inside the tool layer, not blanket-excluded or prompt-instructed; real-time SSE streaming (the platform's first); persisted, actor-scoped conversation history via new migration 022. First entry point: a toggle on the Business Capabilities page.
 - 040-portfolio-agent-review: Added a portfolio-scope Agent Review for Business Capabilities (ADP-SPEC-040, extends 039) — a "Review Portfolio" button at the top of the Capabilities tab reviews the whole tree at once, reusing `propose_new_capability` (uncovered stages scanned across every value stream, not just one capability's siblings) and adding a sixth suggestion type `flag_capability_for_removal`; accept dispatch reuses the existing `create_capability`/`delete_capability` store functions, no new write path; two bug fixes shipped alongside: capability dropdowns now refresh after accepting a suggestion (were stale until manual reload), and a "Close" button lets the review panel be dismissed
 - 039-agent-review-toolkit: Implemented a reusable "agent review" pattern (ADP-SPEC-039) — shared `adp.agents` toolkit (LLM stub, ART-VII grounding/citation validator, audit+reasoning helpers, reusing `OperationStore` as-is; zero domain-module imports, mechanically enforced by tests/unit/agents/test_toolkit_boundary.py) + a Business Capabilities adapter with all 4 suggestion-type stories (P1 read-only duplicate-flagging → P4 propose-new-capability, each strictly higher write-risk than the last); no new tables; `PERMISSIONS_VERSION` 1.4.0 → 1.5.0 adding `CONFIRM_AGENT_SUGGESTION`
 - 038-application-portfolio-management: Added the Application Portfolio Management epic (ADP-SPEC-038), 8 user stories (US1 rationalization scoring → US8 quality & performance signals) on top of the 036 application registry; migrations 011–019; `PERMISSIONS_VERSION` 1.1.0 → 1.4.0
@@ -160,7 +163,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (10713 symbols, 17139 relationships, 194 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (11032 symbols, 17628 relationships, 199 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

@@ -6,6 +6,8 @@ import CapabilityNode from "./CapabilityNode";
 import CapabilityForm from "./CapabilityForm";
 import AgentReviewButton from "../agent-review/AgentReviewButton";
 import { renderCapabilitySuggestionDetail } from "./agentReviewDetail";
+import ChatButton from "../chat/ChatButton";
+import ChatPanel from "../chat/ChatPanel";
 
 export interface CapabilityTreeNode extends BusinessCapability {
   children: CapabilityTreeNode[];
@@ -52,6 +54,7 @@ export default function CapabilityTree(): React.ReactElement {
   const { data, isLoading, error } = useCapabilities();
   const [showRootForm, setShowRootForm] = useState(false);
   const [showPortfolioReview, setShowPortfolioReview] = useState(false);
+  const [showChat, setShowChat] = useState(false);
   const queryClient = useQueryClient();
 
   if (isLoading) return <div style={{ padding: 20, color: "var(--ink-3)", fontSize: 14 }}>Loading capabilities…</div>;
@@ -67,6 +70,7 @@ export default function CapabilityTree(): React.ReactElement {
           {items.length} capability{items.length !== 1 ? "ies" : "y"} across all levels
         </span>
         <div style={{ display: "flex", gap: 8 }}>
+          <ChatButton active={showChat} onToggle={() => setShowChat(!showChat)} label="Chat" />
           <button
             onClick={() => setShowPortfolioReview(!showPortfolioReview)}
             title="Ask the business architecture expert to review the entire capability portfolio for gaps and redundancies"
@@ -86,6 +90,20 @@ export default function CapabilityTree(): React.ReactElement {
           </button>
         </div>
       </div>
+
+      {showChat && (
+        <div
+          style={{
+            marginBottom: 12,
+            padding: "10px 12px",
+            background: "var(--surface-2)",
+            border: "1px solid var(--border)",
+            borderRadius: 4,
+          }}
+        >
+          <ChatPanel basePath="/api/v1/chat" onClose={() => setShowChat(false)} />
+        </div>
+      )}
 
       {showPortfolioReview && (
         <div

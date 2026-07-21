@@ -82,6 +82,7 @@ from adp.application.models import (
     TransformationInitiativeUpdate,
 )
 from adp.search import (
+    ENTITY_APPLICATION,
     ENTITY_TECHNICAL_CAPABILITY,
     build_text,
     index_entity,
@@ -451,6 +452,7 @@ async def create_application(body: ApplicationCreate, session: AsyncSession) -> 
         created_at=now,
         updated_at=now,
     )
+    await index_entity(ENTITY_APPLICATION, app_id, build_text(body.name, body.description), session)
     return app
 
 
@@ -479,14 +481,22 @@ async def update_application(
     await session.execute(
         _applications.update().where(_applications.c.id == app_id).values(**updates)
     )
-    return await get_application(app_id, session)
+    refreshed = await get_application(app_id, session)
+    if refreshed is not None:
+        await index_entity(
+            ENTITY_APPLICATION, app_id, build_text(refreshed.name, refreshed.description), session
+        )
+    return refreshed
 
 
 async def delete_application(app_id: str, session: AsyncSession) -> bool:
     result = await session.execute(
         _applications.delete().where(_applications.c.id == app_id)
     )
-    return _rowcount(result) > 0
+    deleted = _rowcount(result) > 0
+    if deleted:
+        await unindex_entity(ENTITY_APPLICATION, app_id, session)
+    return deleted
 
 
 async def fetch_rationalization(session: AsyncSession) -> RationalizationResponse:

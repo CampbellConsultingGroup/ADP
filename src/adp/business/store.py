@@ -48,6 +48,8 @@ from adp.business.models import (
 )
 from adp.search import (
     ENTITY_BUSINESS_CAPABILITY,
+    ENTITY_BUSINESS_DOMAIN,
+    ENTITY_VALUE_STREAM,
     build_text,
     index_entity,
     unindex_entity,
@@ -394,7 +396,7 @@ async def create_value_stream(data: ValueStreamCreate, session: AsyncSession) ->
             updated_at=now,
         )
     )
-    return ValueStream(
+    vs = ValueStream(
         id=vs_id,
         name=data.name.strip(),
         description=data.description,
@@ -403,6 +405,8 @@ async def create_value_stream(data: ValueStreamCreate, session: AsyncSession) ->
         created_at=now,
         updated_at=now,
     )
+    await index_entity(ENTITY_VALUE_STREAM, vs_id, build_text(data.name, data.description), session)
+    return vs
 
 
 async def update_value_stream(
@@ -427,13 +431,20 @@ async def update_value_stream(
     )
 
     result2 = await session.execute(sa.select(_value_streams).where(_value_streams.c.id == vs_id))
-    return _row_to_vs(result2.mappings().first())
+    refreshed = _row_to_vs(result2.mappings().first())
+    await index_entity(
+        ENTITY_VALUE_STREAM, vs_id, build_text(refreshed.name, refreshed.description), session
+    )
+    return refreshed
 
 
 async def delete_value_stream(vs_id: str, session: AsyncSession) -> bool:
     # FK CASCADE handles stage deletion
     result = await session.execute(_value_streams.delete().where(_value_streams.c.id == vs_id))
-    return _rowcount(result) > 0
+    deleted = _rowcount(result) > 0
+    if deleted:
+        await unindex_entity(ENTITY_VALUE_STREAM, vs_id, session)
+    return deleted
 
 
 # ── Value Stream Stage CRUD ───────────────────────────────────────────────────
@@ -904,7 +915,7 @@ async def create_domain(data: BusinessDomainCreate, session: AsyncSession) -> Bu
             updated_at=now,
         )
     )
-    return BusinessDomain(
+    domain = BusinessDomain(
         id=domain_id,
         name=data.name.strip(),
         scope_statement=data.scope_statement,
@@ -914,6 +925,10 @@ async def create_domain(data: BusinessDomainCreate, session: AsyncSession) -> Bu
         created_at=now,
         updated_at=now,
     )
+    await index_entity(
+        ENTITY_BUSINESS_DOMAIN, domain_id, build_text(data.name, data.scope_statement), session
+    )
+    return domain
 
 
 async def update_domain(
@@ -945,7 +960,12 @@ async def update_domain(
     result2 = await session.execute(
         sa.select(_domains).where(_domains.c.id == domain_id)
     )
-    return _row_to_domain(result2.mappings().first())
+    refreshed = _row_to_domain(result2.mappings().first())
+    await index_entity(
+        ENTITY_BUSINESS_DOMAIN, domain_id,
+        build_text(refreshed.name, refreshed.scope_statement), session,
+    )
+    return refreshed
 
 
 async def delete_domain(domain_id: str, session: AsyncSession) -> bool:
@@ -953,7 +973,10 @@ async def delete_domain(domain_id: str, session: AsyncSession) -> bool:
     result = await session.execute(
         _domains.delete().where(_domains.c.id == domain_id)
     )
-    return _rowcount(result) > 0
+    deleted = _rowcount(result) > 0
+    if deleted:
+        await unindex_entity(ENTITY_BUSINESS_DOMAIN, domain_id, session)
+    return deleted
 
 
 # ── Capability-Domain Assignment (ADP-SPEC-035 US2) ──────────────────────────
