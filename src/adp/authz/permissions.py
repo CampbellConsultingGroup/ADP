@@ -35,7 +35,12 @@ _logger = logging.getLogger("adp.authz")
 #           Review suggestion (ADP-SPEC-039), distinct from WRITE_BUSINESS_ARCH
 #           (the underlying write) and from SUBMIT_AI_OPERATION (reused,
 #           unchanged, for triggering the review). Reviewers do NOT hold it.
-PERMISSIONS_VERSION = "1.5.0"
+#   1.6.0 — added USE_CHAT_ASSISTANT, granted to every role including
+#           Reviewer (ADP-SPEC-041) -- unlike CONFIRM_AGENT_SUGGESTION, this
+#           gates a read-only feature, not a consequential write, so it is
+#           NOT in REQUIRES_CONFIRMATION; sensitive application data is
+#           filtered per-question inside the chat's tool layer instead.
+PERMISSIONS_VERSION = "1.6.0"
 
 # ── Permission table ─────────────────────────────────────────────────────────
 # Maps each PersonaRole to the frozenset of ActionTypes it may perform.
@@ -60,6 +65,7 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.READ_APPLICATION_GOVERNANCE,
         ActionType.WRITE_APPLICATION_GOVERNANCE,
         ActionType.CONFIRM_AGENT_SUGGESTION,
+        ActionType.USE_CHAT_ASSISTANT,
     }),
     PersonaRole.TECHNICAL_ARCHITECT: frozenset({
         ActionType.READ_DESIGN,
@@ -76,11 +82,13 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.READ_APPLICATION_GOVERNANCE,
         ActionType.WRITE_APPLICATION_GOVERNANCE,
         ActionType.CONFIRM_AGENT_SUGGESTION,
+        ActionType.USE_CHAT_ASSISTANT,
     }),
     PersonaRole.REVIEWER: frozenset({
         ActionType.READ_DESIGN,
         ActionType.OVERRIDE_VERDICT,
         ActionType.ADD_FINDING,
+        ActionType.USE_CHAT_ASSISTANT,
     }),
 }
 

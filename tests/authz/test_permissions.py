@@ -151,6 +151,14 @@ _EXPECTED: dict[tuple[PersonaRole, ActionType], bool] = {
     (PersonaRole.SOLUTION_ARCHITECT, ActionType.CONFIRM_AGENT_SUGGESTION): True,
     (PersonaRole.TECHNICAL_ARCHITECT, ActionType.CONFIRM_AGENT_SUGGESTION): True,
     (PersonaRole.REVIEWER, ActionType.CONFIRM_AGENT_SUGGESTION): False,
+    # use_chat_assistant: granted to every role, including Reviewer -- a
+    # read-only feature gate, not a write (v1.6.0, ADP-SPEC-041). Sensitive
+    # application data is filtered per-question inside the chat's tool
+    # layer, not by this outer gate.
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.USE_CHAT_ASSISTANT): True,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.USE_CHAT_ASSISTANT): True,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.USE_CHAT_ASSISTANT): True,
+    (PersonaRole.REVIEWER, ActionType.USE_CHAT_ASSISTANT): True,
 }
 
 
@@ -202,8 +210,8 @@ def test_require_action_logs_warning_on_denial(caplog: pytest.LogCaptureFixture)
 
 
 def test_permissions_version_constant() -> None:
-    """PERMISSIONS_VERSION exists and is 1.5.0 — any permission change must bump it."""
-    assert PERMISSIONS_VERSION == "1.5.0"
+    """PERMISSIONS_VERSION exists and is 1.6.0 — any permission change must bump it."""
+    assert PERMISSIONS_VERSION == "1.6.0"
 
 
 # ── US3: Per-action confirmation requirements ────────────────────────────────
@@ -228,6 +236,7 @@ _CONFIRMATION_EXPECTED: dict[ActionType, bool] = {
     ActionType.READ_APPLICATION_GOVERNANCE: False,
     ActionType.WRITE_APPLICATION_GOVERNANCE: False,
     ActionType.CONFIRM_AGENT_SUGGESTION: True,
+    ActionType.USE_CHAT_ASSISTANT: False,
 }
 
 

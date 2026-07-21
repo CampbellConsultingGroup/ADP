@@ -19,27 +19,27 @@ New chat module `src/adp/chat/{models,store,tools,retrieval,orchestrator,router}
 
 ## Phase 1: Setup
 
-- [ ] T001 [P] Create the `adp.chat` package with `__init__.py` in src/adp/chat/__init__.py
-- [ ] T002 [P] Alembic migration `022` (`down_revision="021"`) adding `chat_conversations` and `chat_messages` per data-model.md's DDL sketch, in src/adp/store/migrations/versions/022_chat_conversations.py
+- [x] T001 [P] Create the `adp.chat` package with `__init__.py` in src/adp/chat/__init__.py
+- [x] T002 [P] Alembic migration `022` (`down_revision="021"`) adding `chat_conversations` and `chat_messages` per data-model.md's DDL sketch, in src/adp/store/migrations/versions/022_chat_conversations.py — verified up/down against the real dev Postgres before writing the automated test (T009).
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete — every story streams through the `LLMClient` extension, persists through the store CRUD, and is gated by the new permission built here.
 
-- [ ] T003 [P] Unit test: `LLMClient`'s new streaming method yields incremental text-delta chunks from a mocked SSE response and correctly serializes multi-turn message history + an (initially empty) `tools` parameter, in tests/unit/test_llm_client_streaming.py
-- [ ] T004 Implement the new multi-turn, streaming, tool-use-capable chat method on `LLMClient`, built on the existing raw-`httpx` pattern (research D1), in src/adp/llm/client.py (depends on T003 failing first)
-- [ ] T005 [P] Unit test: `ChatMessage`/`ChatConversationSummary`/`ChatConversationDetail`/`ChatCitation` round-trip and reject unknown fields (`extra="forbid"`), in tests/unit/chat/test_models.py
-- [ ] T006 [P] Add `ChatRole`, `ChatCitation`, `ChatMessage`, `ChatConversationSummary`, `ChatConversationDetail`, `CreateConversationRequest`, `SendMessageRequest` per data-model.md, in src/adp/chat/models.py
-- [ ] T007 [P] Unit test: conversation/message CRUD — create, append, get, list — each scoped to the creating actor; a non-owner's `get`/`list` never returns another actor's rows, in tests/unit/chat/test_store.py
-- [ ] T008 Implement `adp.chat.store` (`create_conversation`, `append_message`, `get_conversation`, `list_conversations`, all actor-scoped per FR-009) in src/adp/chat/store.py (depends on T002, T006, T007 failing first)
-- [ ] T009 [P] Migration `022` up/down integration test (apply, verify both tables + FK/cascade, downgrade cleanly), in tests/integration/test_migration_022.py
-- [ ] T010 Add `ActionType.USE_CHAT_ASSISTANT` in src/adp/authz/roles.py
-- [ ] T011 Bump `PERMISSIONS_VERSION` and grant `USE_CHAT_ASSISTANT` broadly (every role that can view a page the chat toggle appears on — research D6) in src/adp/authz/permissions.py (depends on T010)
-- [ ] T012 [P] Update the expected-permissions matrix and version-constant assertion in tests/authz/test_permissions.py
-- [ ] T013 [P] Generic hooks (`useCreateConversation`, `useConversations`, `useConversation`, `useSendMessage` — the last consuming the SSE stream via `EventSource`/fetch-stream, mirroring `agentReview.ts`'s parameterization) in web/src/api/chat.ts
-- [ ] T014 [P] Generic `ChatButton` toggle component, mirroring `AgentReviewButton`'s shape, in web/src/chat/ChatButton.tsx
-- [ ] T015 [P] Generic `ChatPanel` component skeleton (message list, input box, incremental streamed-text rendering) in web/src/chat/ChatPanel.tsx
-- [ ] T016 [P] Component test: `ChatPanel` renders streamed text incrementally as chunks arrive and disables the input while a turn is in flight, in web/tests/component/chat-panel.test.tsx
+- [x] T003 [P] Unit test: `LLMClient`'s new streaming method yields incremental text-delta chunks from a mocked SSE response and correctly serializes multi-turn message history + an (initially empty) `tools` parameter, in tests/unit/test_llm_client_streaming.py — also covers tool-use event accumulation (accumulated `input_json_delta` fragments parsed into a single `tool_use` event).
+- [x] T004 Implement the new multi-turn, streaming, tool-use-capable chat method on `LLMClient`, built on the existing raw-`httpx` pattern (research D1), in src/adp/llm/client.py (depends on T003 failing first) — both Anthropic (SSE `event:`/`data:` framing) and OpenAI-compatible (`data: {...}`/`[DONE]` framing) branches implemented, mirroring the existing dual-provider `chat()`/`extract()` split.
+- [x] T005 [P] Unit test: `ChatMessage`/`ChatConversationSummary`/`ChatConversationDetail`/`ChatCitation` round-trip and reject unknown fields (`extra="forbid"`), in tests/unit/chat/test_models.py
+- [x] T006 [P] Add `ChatRole`, `ChatCitation`, `ChatMessage`, `ChatConversationSummary`, `ChatConversationDetail`, `SendMessageRequest` per data-model.md, in src/adp/chat/models.py — **`CreateConversationRequest`/`initial_message` dropped during implementation**: it didn't actually save a round trip (the create endpoint returns plain JSON, not a stream -- only send-message streams), so a client would need to call send-message again regardless. Conversation creation is now a bare POST with no body (mirrors the existing bodyless Agent Review trigger endpoints); a sensible title is derived from the first message when it's appended (US1, T020) instead.
+- [x] T007 [P] Unit test: conversation/message CRUD — create, append, get, list — each scoped to the creating actor; a non-owner's `get`/`list` never returns another actor's rows, in tests/unit/chat/test_store.py
+- [x] T008 Implement `adp.chat.store` (`create_conversation`, `append_message`, `get_conversation`, `list_conversations`, all actor-scoped per FR-009) in src/adp/chat/store.py (depends on T002, T006, T007 failing first)
+- [x] T009 [P] Migration `022` up/down integration test (apply, verify both tables + FK/cascade, downgrade cleanly), in tests/integration/test_migration_022.py — uses its own dedicated testcontainer rather than the shared session-scoped `db_engine` fixture, since downgrading below head would corrupt state for every other integration test in the same session.
+- [x] T010 Add `ActionType.USE_CHAT_ASSISTANT` in src/adp/authz/roles.py
+- [x] T011 Bump `PERMISSIONS_VERSION` (to `1.6.0`) and grant `USE_CHAT_ASSISTANT` broadly, including Reviewer (every role that can view a page the chat toggle appears on — research D6) in src/adp/authz/permissions.py (depends on T010)
+- [x] T012 [P] Update the expected-permissions matrix and version-constant assertion in tests/authz/test_permissions.py
+- [x] T013 [P] Generic hooks (`useCreateConversation`, `useConversations`, `useConversation`, `useSendMessage`) in web/src/api/chat.ts — consumes the SSE stream via `fetch()` + a manual `ReadableStream` reader, **not** the browser's `EventSource`, since `EventSource` cannot send the `Authorization` header this API requires. `useSendMessage(basePath)` takes `conversationId` as an explicit argument to `sendMessage(id, content)` rather than closing over a prop/state value — a real stale-closure bug was caught here (see T016) where calling `sendMessage` immediately after `setConversationId(...)` used the pre-update `null` id, since a just-called `setState` doesn't take effect until the next render.
+- [x] T014 [P] Generic `ChatButton` toggle component, mirroring `AgentReviewButton`'s shape, in web/src/chat/ChatButton.tsx
+- [x] T015 [P] Generic `ChatPanel` component skeleton (message list, input box, incremental streamed-text rendering, past-conversations list) in web/src/chat/ChatPanel.tsx
+- [x] T016 [P] Component test: `ChatPanel` renders streamed text incrementally as chunks arrive and disables the input while a turn is in flight, in web/tests/component/chat-panel.test.tsx — this test caught the stale-closure bug above (the send-message call never fired at all until fixed); custom fetch stub used instead of the shared `mockFetch` helper, since it always JSON-serializes and this endpoint streams raw `text/event-stream`.
 
 **Checkpoint**: Foundational ready — every user story below builds on T004/T008/T011/T013–T015 without modifying their contracts.
 
@@ -52,17 +52,17 @@ New chat module `src/adp/chat/{models,store,tools,retrieval,orchestrator,router}
 
 ### Tests for User Story 1 (MANDATORY — ART-IV)
 
-- [ ] T017 [P] [US1] Contract test: create conversation (with or without `initial_message`) → send message → SSE response streams `text_delta` events followed by a `done` event carrying citations; an unresolvable citation is marked `verified: false`, never silently trusted; a mocked LLM-call failure mid-turn emits an `error` event and leaves the conversation resumable, in tests/contract/test_chat_api.py
-- [ ] T018 [P] [US1] Unit test: the orchestrator grounds reply citations via the existing `adp.agents.grounding.verify_references`, marking unresolved ones `verified: false` rather than discarding or blocking (there is no accept-gate here to block), in tests/unit/chat/test_orchestrator.py
+- [x] T017 [P] [US1] Contract test: create conversation (with or without `initial_message`) → send message → SSE response streams `text_delta` events followed by a `done` event carrying citations; an unresolvable citation is marked `verified: false`, never silently trusted; a mocked LLM-call failure mid-turn emits an `error` event and leaves the conversation resumable, in tests/contract/test_chat_api.py — 5 tests (no `initial_message` param — dropped per T006's note); all pass first run against SQLite-backed chat/biz/app stores with retrieval mocked (pgvector requires real Postgres) and the LLM client patched at `adp.chat.router._make_chat_llm_client`.
+- [x] T018 [P] [US1] Unit test: the orchestrator grounds reply citations via the existing `adp.agents.grounding.verify_references`, marking unresolved ones `verified: false` rather than discarding or blocking (there is no accept-gate here to block), in tests/unit/chat/test_orchestrator.py — 4 tests (resolved/unresolved citation, title-from-first-message, LLM-failure error event), all pass.
 
 ### Implementation for User Story 1
 
-- [ ] T019 [US1] Orchestrator: assemble context via `adp.chat.retrieval` (querying only the search index's existing `business_capability`/`technical_capability` coverage for now), call `LLMClient`'s new streaming method with no tools, yield text deltas, ground citations, persist the completed assistant message, in src/adp/chat/orchestrator.py (depends on T004, T008)
-- [ ] T020 [US1] `POST /api/v1/chat/conversations` (create, optional `initial_message`) and `POST /api/v1/chat/conversations/{id}/messages` (SSE send, `StreamingResponse`) endpoints in src/adp/chat/router.py
-- [ ] T021 [US1] Register explicit route→action mappings — both POSTs → `USE_CHAT_ASSISTANT` — in src/adp/authz/enforcement.py
-- [ ] T022 [US1] Observability span per chat turn (retrieval query, token usage, latency), in src/adp/chat/orchestrator.py
-- [ ] T023 [P] [US1] Web wiring: chat toggle on the Business Capabilities page using `ChatButton`/`ChatPanel` (FR-013), in web/src/business/CapabilityTree.tsx
-- [ ] T024 [US1] Regenerate JSON Schema (`adp-generate`) and confirm the drift gate passes
+- [x] T019 [US1] Orchestrator: assemble context via `adp.chat.retrieval` (querying only the search index's existing `business_capability`/`technical_capability` coverage for now), call `LLMClient`'s new streaming method with no tools, yield text deltas, ground citations, persist the completed assistant message, in src/adp/chat/orchestrator.py (depends on T004, T008) — ruff/mypy clean. Caught and self-fixed 3 design bugs before running any test: a broken actor-scoped re-fetch (fixed by taking `history` as an explicit param instead), a single-shared-session-for-cross-domain-lookups bug (fixed via separate `biz_session`/`app_session` params, mirroring agent_review.py), and a reference to a nonexistent `astore.technical_capability_exists()` (corrected to the real `astore.get_technical_capability()`).
+- [x] T020 [US1] `POST /api/v1/chat/conversations` (create, no body) and `POST /api/v1/chat/conversations/{id}/messages` (SSE send, `StreamingResponse`) endpoints in src/adp/chat/router.py — also added GET list/detail (pulled forward from US3/T034 since store support already existed from Foundational; trivial to add alongside). Sessions for the streaming turn are opened fresh inside the generator itself (session-factory deps), not the request-scoped `Depends` session, since that would close before the StreamingResponse body is actually consumed. Also added `StubLLMClient.chat_stream` (src/adp/agents/llm_stub.py) so local dev without an LLM key gets a graceful explanatory reply instead of a connection-error `error` event.
+- [x] T021 [US1] Register explicit route→action mappings — both POSTs → `USE_CHAT_ASSISTANT` — in src/adp/authz/enforcement.py — verified via the existing route-completeness test (`test_every_mutating_route_maps_to_an_action`), 28/28 authz tests pass.
+- [x] T022 [US1] Observability span per chat turn (retrieval query, token usage, latency), in src/adp/chat/orchestrator.py — done as part of T019 (`ai_step_span("chat_turn", ...)` wraps the whole turn; input/output token counts set as span attributes).
+- [x] T023 [P] [US1] Web wiring: chat toggle on the Business Capabilities page using `ChatButton`/`ChatPanel` (FR-013), in web/src/business/CapabilityTree.tsx — mirrors the existing "Review Portfolio" toggle pattern exactly. `tsc --noEmit` clean; all 94 web tests pass (including the pre-existing `CapabilityTree.test.tsx`).
+- [x] T024 [US1] Regenerate JSON Schema (`adp-generate`) and confirm the drift gate passes — `adp-generate --check` exits 0 with no output; chat models aren't part of the generated canonical-model schema set, so no drift.
 
 **Checkpoint**: MVP — single-domain streamed Q&A works end to end.
 
