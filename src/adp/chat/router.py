@@ -22,6 +22,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.auth.deps import get_current_user
+from adp.auth.models import AuthenticatedUser
 from adp.chat import orchestrator
 from adp.chat import store as chat_store
 from adp.chat.models import (
@@ -63,6 +65,11 @@ async def _get_biz_session_factory():
 async def _get_application_session_factory():
     from adp.application import store as astore
     return astore._get_session_factory()
+
+
+async def _get_kb_session_factory():
+    from adp.api.deps import _get_kb_session_factory as get_factory
+    return get_factory()
 
 
 def _make_chat_llm_client():
@@ -123,9 +130,11 @@ async def send_message(
     conversation_id: str,
     body: SendMessageRequest,
     request: Request,
+    user: AuthenticatedUser = Depends(get_current_user),
     chat_session_factory=Depends(_get_chat_session_factory),
     biz_session_factory=Depends(_get_biz_session_factory),
     app_session_factory=Depends(_get_application_session_factory),
+    kb_session_factory=Depends(_get_kb_session_factory),
 ):
     """Streams the assistant's reply as SSE (`text/event-stream`).
 
@@ -138,8 +147,16 @@ async def send_message(
     orchestrator.run_turn needs sessions it can hold open across the whole
     generator's lifetime (mirrors the background-task session pattern in
     business/router.py's submit_capability_agent_review).
+
+    `role` comes from the injected `get_current_user` dependency (not a
+    manual `request.state.user` read like `_get_actor`) so tests can
+    simulate any PersonaRole via `app.dependency_overrides[get_current_user]`
+    -- the same seam tests/authz/test_enforcement.py already uses -- to
+    exercise the tool layer's sensitive-category gating (research D5)
+    without needing a real auth-enabled JWT flow.
     """
     actor = _get_actor(request)
+    role = user.role
     async with chat_session_factory() as lookup_session:
         existing = await chat_store.get_conversation(conversation_id, actor, lookup_session)
     if existing is None:
@@ -155,6 +172,7 @@ async def send_message(
             chat_session_factory() as chat_session,
             biz_session_factory() as biz_session,
             app_session_factory() as app_session,
+            kb_session_factory() as kb_session,
         ):
             async for event in orchestrator.run_turn(
                 conversation_id=conversation_id,
@@ -163,6 +181,8 @@ async def send_message(
                 chat_session=chat_session,
                 biz_session=biz_session,
                 app_session=app_session,
+                kb_session=kb_session,
+                role=role,
                 llm_client=llm_client,
             ):
                 yield f"data: {json.dumps(event)}\n\n"

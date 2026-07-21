@@ -75,17 +75,17 @@ New chat module `src/adp/chat/{models,store,tools,retrieval,orchestrator,router}
 
 ### Tests for User Story 2 (MANDATORY — ART-IV)
 
-- [ ] T025 [P] [US2] Contract test: a question referencing linked applications correctly retrieves/cites application data; a sensitive-category question (risk, cost, governance) is answered when the caller holds the matching `READ_APPLICATION_*` permission and declined/omitted when they don't — one scenario per category (SC-004), in tests/contract/test_chat_api.py (extends T017's file)
-- [ ] T026 [P] [US2] Unit test: a `TOOL_REGISTRY` sensitive-category handler returns `{"permitted": false}` for an unauthorized role rather than raising an error or silently returning an empty result, in tests/unit/chat/test_tools.py
+- [x] T025 [P] [US2] Contract test: a question referencing linked applications correctly retrieves/cites application data; a sensitive-category question (risk, cost, governance) is answered when the caller holds the matching `READ_APPLICATION_*` permission and declined/omitted when they don't — one scenario per category (SC-004), in tests/contract/test_chat_api.py (extends T017's file) — 7 new tests. Two new fake LLM clients: `_ToolCallingLLMClient` (scripted reply after a tool call, for the application-citation scenario) and `_EchoToolResultLLMClient` (echoes the REAL `dispatch_tool` result back as its reply text, so the test asserts on what the actual permission-gated handler returned, not a stand-in). Role simulation uses `app.dependency_overrides[get_current_user]` — the same seam `tests/authz/test_enforcement.py` already uses — which required changing how `send_message` obtains `role` (see T031's note).
+- [x] T026 [P] [US2] Unit test: a `TOOL_REGISTRY` sensitive-category handler returns `{"permitted": false}` for an unauthorized role rather than raising an error or silently returning an empty result, in tests/unit/chat/test_tools.py — 11 tests covering all three sensitive handlers × denied/permitted, `get_capability`/`get_application` found/not-found, `dispatch_tool`'s unknown-tool path, and `anthropic_tool_specs()` registry coverage.
 
 ### Implementation for User Story 2
 
-- [ ] T027 [P] [US2] Add `ENTITY_APPLICATION`, `ENTITY_VALUE_STREAM`, `ENTITY_BUSINESS_DOMAIN` discriminators in src/adp/search/index.py
-- [ ] T028 [US2] Wire `index_entity`/`unindex_entity` into application create/update/delete (mirroring the existing `technical_capability` wiring), in src/adp/application/store.py (depends on T027)
-- [ ] T029 [US2] Wire `index_entity`/`unindex_entity` into value-stream and business-domain create/update/delete, in src/adp/business/store.py (depends on T027)
-- [ ] T030 [US2] `TOOL_REGISTRY` — `get_capability`, `get_application`, `get_application_risk`/`get_application_cost`/`get_application_governance` (each gated via `is_permitted(role, ActionType.READ_APPLICATION_*)` — research D5), `portfolio_summary`, `governance_status`, in src/adp/chat/tools.py
-- [ ] T031 [US2] Extend the orchestrator's turn loop to handle tool-use (the LLM requests a tool → dispatch to `TOOL_REGISTRY` → result fed back → generation continues → streaming resumes), in src/adp/chat/orchestrator.py (depends on T019, T030)
-- [ ] T032 [US2] Extend `adp.chat.retrieval` to query the newly-covered entity types, in src/adp/chat/retrieval.py (depends on T027)
+- [x] T027 [P] [US2] Add `ENTITY_APPLICATION`, `ENTITY_VALUE_STREAM`, `ENTITY_BUSINESS_DOMAIN` discriminators in src/adp/search/index.py — also exported from `adp.search.__init__`.
+- [x] T028 [US2] Wire `index_entity`/`unindex_entity` into application create/update/delete (mirroring the existing `technical_capability` wiring), in src/adp/application/store.py (depends on T027) — applications had no search-index wiring at all before this (only `technical_capability` did); confirmed via `pytest tests/unit tests/contract tests/authz` (782 passed) that the best-effort try/except swallows the expected "no such table: searchable_items" on SQLite test fixtures, same as the pre-existing capability/tech-cap wiring already did.
+- [x] T029 [US2] Wire `index_entity`/`unindex_entity` into value-stream and business-domain create/update/delete, in src/adp/business/store.py (depends on T027)
+- [x] T030 [US2] `TOOL_REGISTRY` — `get_capability`, `get_application`, `get_application_risk`/`get_application_cost`/`get_application_governance` (each gated via `is_permitted(role, ActionType.READ_APPLICATION_*)` — research D5), `portfolio_summary`, `governance_status`, in src/adp/chat/tools.py — the aggregate tools call the existing router functions (`adp.api.routers.portfolio.get_portfolio_summary`, `adp.api.routers.governance.get_governance_status`) directly rather than duplicating their raw-SQL queries; each handler takes `**_: Any` so one `dispatch_tool(name, args, role, sessions={...})` call site works regardless of which session(s) a given tool actually needs.
+- [x] T031 [US2] Extend the orchestrator's turn loop to handle tool-use (the LLM requests a tool → dispatch to `TOOL_REGISTRY` → result fed back → generation continues → streaming resumes), in src/adp/chat/orchestrator.py (depends on T019, T030) — bounded by `_MAX_TOOL_ROUNDS = 5` as a safety net against a pathological loop. `run_turn` gained `kb_session` (a fourth session, for the two aggregate tools that read the canonical design store via `adp.api.deps`'s shared "kb" session factory) and `role: PersonaRole` parameters. Also extended `_CITATION_PATTERN`/the system prompt to cover `application`/`value_stream`/`business_domain` citations, not just the two US1 entity types, with matching grounding lookups. **Design correction caught before writing any test**: `role` must come from `router.py`'s `Depends(get_current_user)` (bound to a route parameter), not a manual `request.state.user` read like `_get_actor` uses — only the former is overridable via `app.dependency_overrides`, which is what let T025's permission-denial contract tests simulate a non-privileged role at all.
+- [x] T032 [US2] Extend `adp.chat.retrieval` to query the newly-covered entity types, in src/adp/chat/retrieval.py (depends on T027) — `DEFAULT_ENTITY_TYPES` now lists all five `adp.search` entity-type constants instead of two hardcoded strings.
 
 **Checkpoint**: US1 and US2 work independently; cross-domain answers correctly respect sensitive-category permissions.
 
@@ -98,12 +98,12 @@ New chat module `src/adp/chat/{models,store,tools,retrieval,orchestrator,router}
 
 ### Tests for User Story 3 (MANDATORY — ART-IV)
 
-- [ ] T033 [P] [US3] Contract test: listing/opening one's own conversations succeeds; a second user's attempt to list or open the first user's conversation is refused — 404 either way (not-found vs. not-owned are never distinguished), never a 403 that would confirm the id exists (SC-003), in tests/contract/test_chat_api.py (extends T017's file)
+- [x] T033 [P] [US3] Contract test: listing/opening one's own conversations succeeds; a second user's attempt to list or open the first user's conversation is refused — 404 either way (not-found vs. not-owned are never distinguished), never a 403 that would confirm the id exists (SC-003), in tests/contract/test_chat_api.py (extends T017's file) — 2 tests, using distinct `X-Actor` headers (`alice`/`bob`) since auth is disabled in tests; also confirms `bob` sending a message to `alice`'s conversation is a 404, not just list/get.
 
 ### Implementation for User Story 3
 
-- [ ] T034 [US3] `GET /api/v1/chat/conversations` (list, actor-scoped) and `GET /api/v1/chat/conversations/{id}` (detail, actor-scoped) endpoints in src/adp/chat/router.py
-- [ ] T035 [P] [US3] Web: list and resume past conversations in `ChatPanel`, in web/src/chat/ChatPanel.tsx
+- [x] T034 [US3] `GET /api/v1/chat/conversations` (list, actor-scoped) and `GET /api/v1/chat/conversations/{id}` (detail, actor-scoped) endpoints in src/adp/chat/router.py — already built in T020 (pulled forward from this task during US1, since the store-layer actor-scoping it exposes already existed from Foundational/T008 — trivial to add both GETs alongside the two POSTs rather than come back to `router.py` a second time).
+- [x] T035 [P] [US3] Web: list and resume past conversations in `ChatPanel`, in web/src/chat/ChatPanel.tsx — already built in T015 (Foundational) as part of the initial `ChatPanel` skeleton (`showHistory` toggle + `useConversations` list + click-to-resume), since a "past conversations" affordance was part of the component's original design, not an afterthought bolted on for US3.
 
 **Checkpoint**: US1–US3 work independently; conversation history is durable, listable, and access-controlled.
 
@@ -116,12 +116,12 @@ New chat module `src/adp/chat/{models,store,tools,retrieval,orchestrator,router}
 
 ### Tests for User Story 4 (MANDATORY — ART-IV)
 
-- [ ] T036 [P] [US4] Contract test: a follow-up question correctly resolves a referent from an earlier turn in the same conversation; a conversation exceeding the sliding-window size still produces a coherent reply, and `GET .../conversations/{id}` still returns the complete, untruncated history regardless of what was sent to the model, in tests/contract/test_chat_api.py (extends T017's file)
-- [ ] T037 [P] [US4] Unit test: the sliding-window selector returns only the last N messages for LLM context regardless of full history length, in tests/unit/chat/test_orchestrator.py (extends T018's file)
+- [x] T036 [P] [US4] Contract test: a follow-up question correctly resolves a referent from an earlier turn in the same conversation; a conversation exceeding the sliding-window size still produces a coherent reply, and `GET .../conversations/{id}` still returns the complete, untruncated history regardless of what was sent to the model, in tests/contract/test_chat_api.py (extends T017's file) — 2 tests, using a `_RecordingLLMClient` that captures the actual `messages` payload sent, so the follow-up test asserts the prior turn's real content was included (not just that the endpoint returned 200), and the long-conversation test seeds 25 real persisted messages then confirms both `len(seen_messages) < 26` (windowed) and `len(GET ... .messages) == 27` (untruncated).
+- [x] T037 [P] [US4] Unit test: the sliding-window selector returns only the last N messages for LLM context regardless of full history length, in tests/unit/chat/test_orchestrator.py (extends T018's file) — 3 tests: `_windowed_history` pass-through under the window size, truncation over it, and an end-to-end `run_turn` test (25 real persisted messages, `_RecordingLLMClient` captures what was actually sent) proving the persisted-vs-sent distinction, not just the pure-function slice.
 
 ### Implementation for User Story 4
 
-- [ ] T038 [US4] Bounded sliding-window message-history selection per turn (research D8) in src/adp/chat/orchestrator.py (depends on T019)
+- [x] T038 [US4] Bounded sliding-window message-history selection per turn (research D8) in src/adp/chat/orchestrator.py (depends on T019) — `_CONTEXT_WINDOW_SIZE = 10` (research's suggested "last 10 messages" default), applied via `_windowed_history()` at the one call site in `run_turn`; `history` itself (fetched by the router, persisted by the store) is never truncated -- only the slice built for the LLM request is.
 
 **Checkpoint**: All four user stories work independently — the full chat capability is live.
 
@@ -129,10 +129,10 @@ New chat module `src/adp/chat/{models,store,tools,retrieval,orchestrator,router}
 
 ## Phase 7: Polish & Cross-Cutting Concerns
 
-- [ ] T039 [P] Automated check that every `TOOL_REGISTRY` handler is read-only — call-graph inspection confirming no handler calls an `INSERT`/`UPDATE`/`DELETE`-issuing store function, not just a naming-convention check (SC-002, mirrors ADP-SPEC-039's `test_toolkit_boundary.py`), in tests/unit/chat/test_tools_boundary.py
-- [ ] T040 Final `adp-generate` regen + drift gate
-- [ ] T041 Full backend regression (`pytest tests/unit tests/contract tests/authz tests/integration`) and full web regression (`tsc --noEmit`, `vitest run`, `vite build`)
-- [ ] T042 [P] Add an "AI Chat Assistant" section to docs/solution-architecture.md describing the module + its two-legged retrieval strategy, mirroring how Agent Review documented itself
+- [x] T039 [P] Automated check that every `TOOL_REGISTRY` handler is read-only — call-graph inspection confirming no handler calls an `INSERT`/`UPDATE`/`DELETE`-issuing store function, not just a naming-convention check (SC-002, mirrors ADP-SPEC-039's `test_toolkit_boundary.py`), in tests/unit/chat/test_tools_boundary.py — 3 tests: naming-contract check, no handler directly contains a write idiom, and (the real call-graph check) resolves every function each handler calls — including ones imported inline inside the handler body, this codebase's established deferred-import pattern — and inspects THOSE functions' own source for `.insert()`/`.update()`/`.delete()`.
+- [x] T040 Final `adp-generate` regen + drift gate — `adp-generate --check` exits 0.
+- [x] T041 Full backend regression (`pytest tests/unit tests/contract tests/authz tests/integration`) and full web regression (`tsc --noEmit`, `vitest run`, `vite build`) — backend: 795 passed, 5 pre-existing failures unrelated to this feature (an `asyncio.get_event_loop()` `RuntimeError` in `adp.export.bundle`/`adp.renderer.orchestrator`, neither of which imports anything from `adp.chat` or `adp.search` — confirmed via `git stash`/`git stash pop` that these fail identically on the pre-041 commit). Web: `tsc --noEmit` clean, 94/94 vitest passed, `vite build` succeeds (only the pre-existing chunk-size/dynamic-import warnings `client.ts` already had, now also flagged for the new `chat.ts`).
+- [x] T042 [P] Add an "AI Chat Assistant" section to docs/solution-architecture.md describing the module + its two-legged retrieval strategy, mirroring how Agent Review documented itself — inserted between the existing "Agent Review" and "Data Architecture" sections.
 
 ---
 

@@ -32,9 +32,13 @@ _EMBEDDING_DIM = int(os.environ.get("ADP_EMBEDDING_DIM", "384"))
 _EMBEDDING_MODEL = os.environ.get("ADP_EMBEDDING_MODEL", "all-MiniLM-L6-v2")
 _RRF_K = 60  # Reciprocal Rank Fusion constant (matches knowledge retrieval)
 
-# Entity-type discriminators (phase 1). Extend with value_stream / business_domain.
+# Entity-type discriminators.
 ENTITY_BUSINESS_CAPABILITY = "business_capability"
 ENTITY_TECHNICAL_CAPABILITY = "technical_capability"
+# ADP-SPEC-041 US2: cross-domain coverage for the Chat Assistant's retrieval leg.
+ENTITY_APPLICATION = "application"
+ENTITY_VALUE_STREAM = "value_stream"
+ENTITY_BUSINESS_DOMAIN = "business_domain"
 
 _metadata = sa.MetaData()
 searchable_items = sa.Table(

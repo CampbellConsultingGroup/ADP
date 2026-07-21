@@ -14,9 +14,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from adp.authz.roles import PersonaRole
 from adp.business import store as bstore
 from adp.chat import orchestrator
 from adp.chat import store as chat_store
+from adp.chat.models import ChatMessage, ChatRole
 
 
 class _FakeLLMClient:
@@ -85,6 +87,7 @@ async def test_run_turn_marks_resolved_citation_verified(sessions):
             async for event in orchestrator.run_turn(
                 conversation_id=conv.id, history=[], user_content="Tell me about Merchandising",
                 chat_session=chat_session, biz_session=biz_session, app_session=biz_session,
+                kb_session=biz_session, role=PersonaRole.ENTERPRISE_ARCHITECT,
                 llm_client=llm,
             ):
                 events.append(event)
@@ -120,6 +123,7 @@ async def test_run_turn_marks_unresolved_citation_unverified(sessions):
             async for event in orchestrator.run_turn(
                 conversation_id=conv.id, history=[], user_content="hi",
                 chat_session=chat_session, biz_session=biz_session, app_session=biz_session,
+                kb_session=biz_session, role=PersonaRole.ENTERPRISE_ARCHITECT,
                 llm_client=llm,
             ):
                 events.append(event)
@@ -143,6 +147,7 @@ async def test_run_turn_sets_title_from_first_message(sessions):
                 conversation_id=conv.id, history=[],
                 user_content="Which capabilities are unclassified?",
                 chat_session=chat_session, biz_session=biz_session, app_session=biz_session,
+                kb_session=biz_session, role=PersonaRole.ENTERPRISE_ARCHITECT,
                 llm_client=llm,
             ):
                 pass
@@ -171,9 +176,89 @@ async def test_run_turn_yields_error_event_on_llm_failure(sessions):
             async for event in orchestrator.run_turn(
                 conversation_id=conv.id, history=[], user_content="hi",
                 chat_session=chat_session, biz_session=biz_session, app_session=biz_session,
+                kb_session=biz_session, role=PersonaRole.ENTERPRISE_ARCHITECT,
                 llm_client=_FailingLLMClient(),
             ):
                 events.append(event)
 
     assert events[-1]["type"] == "error"
     assert "LLM provider timed out" in events[-1]["detail"]
+
+
+def _mk_message(n: int) -> ChatMessage:
+    role = ChatRole.USER if n % 2 == 0 else ChatRole.ASSISTANT
+    return ChatMessage(
+        id=f"M-{n}", conversation_id="C-1", role=role, content=f"message {n}",
+        citations=[], created_at=datetime.now(timezone.utc),
+    )
+
+
+def test_windowed_history_passes_through_short_history_unchanged():
+    history = [_mk_message(n) for n in range(5)]
+    assert orchestrator._windowed_history(history) == history
+
+
+def test_windowed_history_truncates_to_the_most_recent_messages():
+    history = [_mk_message(n) for n in range(25)]
+    windowed = orchestrator._windowed_history(history)
+    assert len(windowed) == orchestrator._CONTEXT_WINDOW_SIZE
+    assert [m.content for m in windowed] == [
+        f"message {n}" for n in range(25 - orchestrator._CONTEXT_WINDOW_SIZE, 25)
+    ]
+
+
+async def test_run_turn_sends_only_windowed_history_to_the_llm_but_persists_all(sessions):
+    """US4/research D8: a conversation far longer than the window still only
+    sends the most recent slice to the model, while GET .../conversations/{id}
+    (chat_store.get_conversation) continues to return the complete,
+    untruncated history regardless of what was sent.
+
+    Persists 25 real prior messages first (not synthetic ChatMessage objects
+    passed straight into run_turn) so `history` here is exactly what a
+    router's `get_conversation` call would have fetched -- proving the
+    persisted-vs-sent distinction end to end, not just windowing in isolation."""
+    chat_factory, biz_factory = sessions
+
+    async with chat_factory() as chat_session:
+        conv = await chat_store.create_conversation("alice", chat_session)
+        for n in range(25):
+            role = ChatRole.USER if n % 2 == 0 else ChatRole.ASSISTANT
+            await chat_store.append_message(conv.id, role, f"message {n}", chat_session)
+        await chat_session.commit()
+        detail_before = await chat_store.get_conversation(conv.id, "alice", chat_session)
+    assert detail_before is not None
+    history = detail_before.messages
+    assert len(history) == 25
+
+    class _RecordingLLMClient:
+        def __init__(self) -> None:
+            self.seen_messages: list[dict] | None = None
+
+        async def chat_stream(self, *, messages, system, tools=None, correlation_id=None):
+            self.seen_messages = messages
+            for event in _text_events("noted."):
+                yield event
+
+    llm = _RecordingLLMClient()
+    with patch("adp.chat.retrieval.retrieve_context", new=AsyncMock(return_value=[])):
+        async with chat_factory() as chat_session, biz_factory() as biz_session:
+            async for _ in orchestrator.run_turn(
+                conversation_id=conv.id, history=history, user_content="and now?",
+                chat_session=chat_session, biz_session=biz_session, app_session=biz_session,
+                kb_session=biz_session, role=PersonaRole.ENTERPRISE_ARCHITECT,
+                llm_client=llm,
+            ):
+                pass
+
+    assert llm.seen_messages is not None
+    # window + the new user turn appended by _messages_for_llm
+    assert len(llm.seen_messages) == orchestrator._CONTEXT_WINDOW_SIZE + 1
+    assert llm.seen_messages[-1] == {"role": "user", "content": "and now?"}
+
+    async with chat_factory() as chat_session:
+        detail_after = await chat_store.get_conversation(conv.id, "alice", chat_session)
+    assert detail_after is not None
+    # the full prior history (25) plus this turn's user+assistant messages
+    # (2) -- nothing was ever discarded from what's persisted/shown, only
+    # from what was sent to the model.
+    assert len(detail_after.messages) == 25 + 2

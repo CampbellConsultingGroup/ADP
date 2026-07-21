@@ -9,12 +9,26 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from adp.search.index import SearchHit, default_index
+from adp.search.index import (
+    ENTITY_APPLICATION,
+    ENTITY_BUSINESS_CAPABILITY,
+    ENTITY_BUSINESS_DOMAIN,
+    ENTITY_TECHNICAL_CAPABILITY,
+    ENTITY_VALUE_STREAM,
+    SearchHit,
+    default_index,
+)
 
-# US1 scope: only the entity types adp.search already covers. US2 extends
-# this once ENTITY_APPLICATION/ENTITY_VALUE_STREAM/ENTITY_BUSINESS_DOMAIN
-# are wired up (research D4).
-DEFAULT_ENTITY_TYPES: list[str] = ["business_capability", "technical_capability"]
+# US2 (research D4): now covers every entity type adp.search indexes --
+# applications/value-streams/business-domains were wired up in
+# adp.application.store/adp.business.store alongside this change.
+DEFAULT_ENTITY_TYPES: list[str] = [
+    ENTITY_BUSINESS_CAPABILITY,
+    ENTITY_TECHNICAL_CAPABILITY,
+    ENTITY_APPLICATION,
+    ENTITY_VALUE_STREAM,
+    ENTITY_BUSINESS_DOMAIN,
+]
 
 
 async def retrieve_context(
