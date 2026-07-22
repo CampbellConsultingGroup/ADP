@@ -177,13 +177,23 @@ class SearchIndex:
             return q
 
         # Vector leg — cosine distance via pgvector. Literal is float-only (safe).
-        embedding = self._get_embedder().embed(query_text)
-        emb_literal = f"[{','.join(str(x) for x in embedding)}]"
-        vec_q = _with_type_filter(
-            sa.select(*cols)
-            .order_by(sa.text(f"embedding <=> '{emb_literal}'::vector"))
-            .limit(limit)
-        )
+        # Best-effort: the embedding provider can be unavailable (e.g. no
+        # cached model under TRANSFORMERS_OFFLINE=1, per ADP-jyu) -- that
+        # must degrade to keyword-only results, never fail the whole search.
+        vec_rows: Any = []
+        try:
+            embedding = self._get_embedder().embed(query_text)
+            emb_literal = f"[{','.join(str(x) for x in embedding)}]"
+            vec_q = _with_type_filter(
+                sa.select(*cols)
+                .order_by(sa.text(f"embedding <=> '{emb_literal}'::vector"))
+                .limit(limit)
+            )
+            vec_rows = (await session.execute(vec_q)).fetchall()
+        except Exception as exc:  # pragma: no cover - defensive, exercised via mock in tests
+            _logger.warning(
+                "hybrid_search: vector leg unavailable, falling back to keyword-only: %s", exc
+            )
 
         # Keyword leg — PostgreSQL full-text on the generated `fts` column.
         kw_q = _with_type_filter(
@@ -193,7 +203,6 @@ class SearchIndex:
             .limit(limit)
         ).params(q=query_text)
 
-        vec_rows = (await session.execute(vec_q)).fetchall()
         kw_rows = (await session.execute(kw_q)).fetchall()
 
         return rrf_fuse(

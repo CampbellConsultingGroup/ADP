@@ -36,6 +36,17 @@ class _FakeEmbedder:
         return [self.embed(t) for t in texts]
 
 
+class _FailingEmbedder:
+    """Simulates an unavailable embedding provider (e.g. no cached model
+    under TRANSFORMERS_OFFLINE=1 -- the exact failure mode ADP-jyu hit)."""
+
+    def embed(self, text: str) -> list[float]:
+        raise OSError("model not found (offline mode)")
+
+    def embed_batch(self, texts: list[str]) -> list[list[float]]:
+        raise OSError("model not found (offline mode)")
+
+
 async def test_upsert_and_hybrid_search_round_trip(db_session):
     idx = SearchIndex(embedder=_FakeEmbedder())
     await idx.upsert(ENTITY_BUSINESS_CAPABILITY, "A", "Alpha order management", db_session)
@@ -67,6 +78,20 @@ async def test_keyword_leg_matches_by_text(db_session):
     await idx.upsert(ENTITY_BUSINESS_CAPABILITY, "A", "Distinctive fulfilment routing", db_session)
 
     hits = await idx.hybrid_search("fulfilment routing", db_session, limit=5)
+    assert any(h.entity_id == "A" for h in hits)
+
+
+async def test_hybrid_search_falls_back_to_keyword_only_when_embedder_fails(db_session):
+    """ADP-jyu: the vector leg failing (embedding provider unavailable, e.g.
+    under TRANSFORMERS_OFFLINE with no cached model) must not fail the whole
+    search -- the keyword leg should still return results, not a 500."""
+    seed_idx = SearchIndex(embedder=_FakeEmbedder())
+    await seed_idx.upsert(
+        ENTITY_BUSINESS_CAPABILITY, "A", "Distinctive fulfilment routing", db_session
+    )
+
+    broken_idx = SearchIndex(embedder=_FailingEmbedder())
+    hits = await broken_idx.hybrid_search("fulfilment routing", db_session, limit=5)
     assert any(h.entity_id == "A" for h in hits)
 
 
