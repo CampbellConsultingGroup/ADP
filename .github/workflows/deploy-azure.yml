@@ -1,0 +1,81 @@
+name: Deploy to Azure
+
+# Builds the API image and rolls it out to the already-provisioned adp-api
+# Container App (ADP-fnv.6/.10). Does NOT run `az deployment sub create` --
+# infrastructure changes (Bicep) are applied manually via infra/azure/deploy.sh;
+# this workflow only updates the running app's image, matching
+# `az acr build` + `az containerapp update`, the same two commands
+# deploy.sh itself uses for an app-only rollout.
+#
+# Authenticates via OIDC federated credential (no stored client secret) --
+# see the Azure AD app "adp-github-actions-deploy", federated credential
+# "adp-github-main-branch", scoped to only this repo's main branch pushes.
+# Its RBAC is minimal and scoped: AcrPush on adpacr7egbnqct354iu only,
+# Container Apps Contributor on the adp-rg resource group only -- no
+# access to Postgres, Key Vault, or networking.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "web/**"
+      - "Dockerfile"
+      - "pyproject.toml"
+      - "alembic.ini"
+      - ".github/workflows/deploy-azure.yml"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  RESOURCE_GROUP: adp-rg
+  ACR_NAME: adpacr7egbnqct354iu
+  CONTAINER_APP: adp-api
+
+jobs:
+  deploy:
+    name: Build + Deploy API image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Build + push image to ACR
+        run: |
+          az acr build \
+            --registry "${{ env.ACR_NAME }}" \
+            --image "adp-api:${{ github.sha }}" \
+            .
+
+      - name: Roll out new image to adp-api
+        run: |
+          az containerapp update \
+            --name "${{ env.CONTAINER_APP }}" \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --image "${{ env.ACR_NAME }}.azurecr.io/adp-api:${{ github.sha }}"
+
+      - name: Smoke test /health
+        run: |
+          API_FQDN=$(az containerapp show --name "${{ env.CONTAINER_APP }}" \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+          for i in $(seq 1 12); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://$API_FQDN/health" || true)
+            if [ "$code" = "200" ]; then
+              echo "Healthy: https://$API_FQDN/health"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $code, retrying..."
+            sleep 10
+          done
+          echo "API did not become healthy after rollout"
+          exit 1
