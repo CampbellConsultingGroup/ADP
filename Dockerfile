@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install Python dependencies
 COPY pyproject.toml ./
+COPY alembic.ini ./
 COPY src/ ./src/
 RUN pip install --no-cache-dir -e .
 

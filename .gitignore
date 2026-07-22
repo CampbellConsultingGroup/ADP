@@ -66,3 +66,4 @@ web/test-results/
 
 # Windows NTFS alternate-data-stream artifacts (WSL copies)
 *Zone.Identifier*
+infra/azure/.secrets/
