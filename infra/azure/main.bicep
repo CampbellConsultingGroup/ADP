@@ -86,6 +86,13 @@ module containerAppsEnv 'modules/containerappsenv.bicep' = {
   }
 }
 
+// Public URL the browser reaches Keycloak through (ADP-cm9) -- adp-api's own
+// external FQDN, plus /auth. Constructed from the environment's default
+// domain (stable, known before apiApp itself deploys) rather than
+// apiApp.outputs.fqdn, to avoid a keycloak <-> apiApp circular dependency
+// (each needs to know the other's address).
+var keycloakPublicBaseUrl = 'https://adp-api.${containerAppsEnv.outputs.environmentDefaultDomain}/auth'
+
 module keycloak 'modules/keycloak.bicep' = {
   name: 'keycloakDeploy'
   scope: rg
@@ -99,6 +106,7 @@ module keycloak 'modules/keycloak.bicep' = {
     keyVaultUri: keyVault.outputs.keyVaultUri
     postgresFqdn: postgres.outputs.serverFqdn
     keycloakDatabaseName: postgres.outputs.keycloakDatabaseName
+    keycloakPublicBaseUrl: keycloakPublicBaseUrl
   }
 }
 
@@ -113,6 +121,7 @@ module apiApp 'modules/apiapp.bicep' = {
     apiImageTag: apiImageTag
     keyVaultUri: keyVault.outputs.keyVaultUri
     keycloakFqdn: keycloak.outputs.fqdn
+    keycloakPublicBaseUrl: keycloakPublicBaseUrl
   }
 }
 
@@ -126,6 +135,21 @@ module migrationJob 'modules/migrationjob.bicep' = {
     acrLoginServer: acr.outputs.loginServer
     apiImageTag: apiImageTag
     keyVaultUri: keyVault.outputs.keyVaultUri
+  }
+}
+
+module keycloakAdminJob 'modules/keycloakadminjob.bicep' = {
+  name: 'keycloakAdminJobDeploy'
+  scope: rg
+  params: {
+    location: location
+    environmentId: containerAppsEnv.outputs.environmentId
+    identityId: keyVault.outputs.identityId
+    acrLoginServer: acr.outputs.loginServer
+    apiImageTag: apiImageTag
+    keyVaultUri: keyVault.outputs.keyVaultUri
+    keycloakFqdn: keycloak.outputs.fqdn
+    keycloakRealm: 'ADPRealm'
   }
 }
 
@@ -144,3 +168,4 @@ output containerAppsEnvironmentName string = containerAppsEnv.outputs.environmen
 output keycloakFqdn string = keycloak.outputs.fqdn
 output apiFqdn string = apiApp.outputs.fqdn
 output migrationJobName string = migrationJob.outputs.jobName
+output keycloakAdminJobName string = keycloakAdminJob.outputs.jobName

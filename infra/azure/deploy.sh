@@ -68,6 +68,17 @@ fi
 
 EXISTING_KEY_VAULT="$(az keyvault list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv 2>/dev/null || true)"
 EXISTING_ACR="$(az acr list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv 2>/dev/null || true)"
+# Public URL the browser reaches Keycloak through (ADP-cm9, matches
+# main.bicep's keycloakPublicBaseUrl). Only knowable once the Container Apps
+# environment exists -- on a genuine from-scratch bootstrap (no environment
+# yet) the API image builds with Dockerfile's own local-dev ARG default
+# instead; re-run this script once the environment exists to pick up the
+# real value and redeploy with it.
+EXISTING_ENV_DOMAIN="$(az containerapp env show --resource-group "$RESOURCE_GROUP" --name adp-env --query "properties.defaultDomain" -o tsv 2>/dev/null || true)"
+VITE_KEYCLOAK_URL_ARG=""
+if [[ -n "$EXISTING_ENV_DOMAIN" ]]; then
+  VITE_KEYCLOAK_URL_ARG="https://adp-api.${EXISTING_ENV_DOMAIN}/auth"
+fi
 
 if [[ -n "$EXISTING_KEY_VAULT" ]]; then
   echo "== Pre-seeding secrets into existing Key Vault ($EXISTING_KEY_VAULT) =="
@@ -106,7 +117,14 @@ if [[ -n "$EXISTING_ACR" ]]; then
   az acr build --registry "$EXISTING_ACR" --image adp-keycloak:latest "$SCRIPT_DIR/../keycloak" --output none
 
   echo "== Building API image (repo root Dockerfile) to $EXISTING_ACR, tag $API_IMAGE_TAG =="
-  az acr build --registry "$EXISTING_ACR" --image "adp-api:${API_IMAGE_TAG}" "$REPO_ROOT" --output none
+  if [[ -n "$VITE_KEYCLOAK_URL_ARG" ]]; then
+    echo "   VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL_ARG}"
+    az acr build --registry "$EXISTING_ACR" --image "adp-api:${API_IMAGE_TAG}" \
+      --build-arg VITE_KEYCLOAK_URL="$VITE_KEYCLOAK_URL_ARG" "$REPO_ROOT" --output none
+  else
+    echo "   No Container Apps environment yet -- building with the local-dev default; re-run after this deploy to pick up the real URL."
+    az acr build --registry "$EXISTING_ACR" --image "adp-api:${API_IMAGE_TAG}" "$REPO_ROOT" --output none
+  fi
 else
   echo "== No existing ACR found -- skipping image builds (first-ever run) =="
 fi

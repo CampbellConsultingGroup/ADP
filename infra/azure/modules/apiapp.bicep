@@ -28,8 +28,11 @@ param apiImageTag string
 @description('Key Vault URI (used to build secret references).')
 param keyVaultUri string
 
-@description('Keycloak container app FQDN (internal-only) from modules/keycloak.bicep.')
+@description('Keycloak container app FQDN (internal-only) from modules/keycloak.bicep -- adp-api proxies /auth/* to this.')
 param keycloakFqdn string
+
+@description('Public base URL the browser reaches Keycloak through (ADP-cm9): https://<this-api-fqdn>/auth. Keycloak is configured (KC_HOSTNAME) to believe this is its own address, so its issuer claim and generated URLs already match this exactly.')
+param keycloakPublicBaseUrl string
 
 @description('Keycloak realm name.')
 param keycloakRealm string = 'ADPRealm'
@@ -87,8 +90,15 @@ resource apiApp 'Microsoft.App/containerApps@2025-01-01' = {
             { name: 'ADP_WORKERS', value: '2' }
             { name: 'ADP_MAX_DESIGNS', value: '1000' }
             { name: 'ADP_AUTH_ENABLED', value: 'true' }
-            { name: 'ADP_KEYCLOAK_ISSUER', value: 'https://${keycloakFqdn}/realms/${keycloakRealm}' }
+            // Public issuer -- must exactly match the "iss" claim Keycloak
+            // emits (KC_HOSTNAME points Keycloak at this same public URL),
+            // since adp/auth/tokens.py validates iss as an exact string match.
+            { name: 'ADP_KEYCLOAK_ISSUER', value: '${keycloakPublicBaseUrl}/realms/${keycloakRealm}' }
             { name: 'ADP_KEYCLOAK_CLIENT_ID', value: keycloakClientId }
+            // Internal target for the /auth/* reverse proxy (adp.api.routers.auth_proxy,
+            // ADP-cm9) -- Keycloak has internal-only ingress, unreachable by a
+            // real browser directly.
+            { name: 'ADP_KEYCLOAK_INTERNAL_URL', value: 'https://${keycloakFqdn}' }
             { name: 'ADP_DATABASE_URL', secretRef: 'postgres-connection-string' }
             { name: 'ADP_LLM_API_KEY', secretRef: 'adp-llm-api-key' }
           ]

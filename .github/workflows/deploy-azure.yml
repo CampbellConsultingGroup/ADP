@@ -51,10 +51,35 @@ jobs:
 
       - name: Build + push image to ACR
         run: |
+          # VITE_KEYCLOAK_URL (ADP-cm9): Vite bakes this into the static bundle
+          # at build time. Without it, the deployed frontend ships the
+          # Dockerfile's local-dev default and real users can never log in --
+          # this exact bug shipped once already. Computed from the Container
+          # Apps environment's default domain (stable, known before adp-api's
+          # own FQDN is), matching infra/azure/main.bicep's keycloakPublicBaseUrl.
+          ENV_DOMAIN=$(az containerapp env show \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --name adp-env \
+            --query "properties.defaultDomain" -o tsv)
           az acr build \
             --registry "${{ env.ACR_NAME }}" \
             --image "adp-api:${{ github.sha }}" \
+            --build-arg VITE_KEYCLOAK_URL="https://adp-api.${ENV_DOMAIN}/auth" \
             .
+
+      - name: Container image CVE scan (Trivy, report-only)
+        # ADP-cm9: not yet gating -- expect noise from the third-party
+        # keycloak base image and OS packages we don't control on the spot;
+        # this is visibility first, blocking later once triaged.
+        continue-on-error: true
+        run: |
+          az acr login --name "${{ env.ACR_NAME }}"
+          docker pull "${{ env.ACR_NAME }}.azurecr.io/adp-api:${{ github.sha }}"
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:latest image \
+            --severity HIGH,CRITICAL \
+            "${{ env.ACR_NAME }}.azurecr.io/adp-api:${{ github.sha }}"
 
       - name: Roll out new image to adp-api
         run: |

@@ -4,6 +4,17 @@ WORKDIR /app/web
 COPY web/package*.json ./
 RUN npm ci
 COPY web/ ./
+# web/.env (checked in) sets VITE_KEYCLOAK_URL=http://127.0.0.1:8080 -- correct
+# for local dev, but Vite bakes it into the static bundle at build time, so a
+# deploy build must override it or every deployed environment ships a
+# Keycloak URL that only resolves on a developer's own machine (ADP-cm9: this
+# shipped to production for the whole ADP-fnv deployment before being caught
+# here). Default matches web/.env's own local-dev value -- an empty-string
+# default would instead be treated by Vite as an explicit (broken) override,
+# since process.env presence wins over .env file values regardless of value.
+# deploy.sh / the CI workflow always pass the real deployed URL explicitly.
+ARG VITE_KEYCLOAK_URL="http://127.0.0.1:8080"
+ENV VITE_KEYCLOAK_URL=${VITE_KEYCLOAK_URL}
 RUN npm run build
 
 # Stage 2: Python API + static files

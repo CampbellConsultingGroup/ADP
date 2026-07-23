@@ -64,6 +64,53 @@ jobs:
         #   release; ADP validates RS256 (RSA) tokens, not ECDSA. Revisit when a fix ships.
         run: pip-audit --skip-editable --ignore-vuln PYSEC-2026-1325
 
+  # ── Frontend dependency CVE scan (ADP-cm9) ────────────────────────────────
+  # Report-only for now: 8 known vulnerabilities (3 moderate, 2 high, 3
+  # critical) exist in dev/build tooling today (vite/vitest chain) and
+  # haven't been triaged yet -- continue-on-error so adding this gate doesn't
+  # itself block unrelated PRs. Flip to blocking once the existing findings
+  # are resolved or explicitly accepted.
+  npm-audit:
+    name: Frontend Dependency CVE Scan (npm audit)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: npm audit (report-only, not yet gating)
+        working-directory: web
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+  # ── IaC misconfiguration scan (ADP-cm9) ────────────────────────────────────
+  # Checkov over the Bicep files under infra/azure -- report-only until a
+  # first baseline of findings has been triaged.
+  checkov-iac-scan:
+    name: IaC Security Scan (Checkov)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@v12
+        continue-on-error: true
+        with:
+          directory: infra/azure
+          framework: bicep
+          compact: true
+
   # ── ZAP API security scan ─────────────────────────────────────────────────
   # Runs the full OpenAPI-driven active scan against a live ADP instance.
   # Requires PostgreSQL (via service container) so operations and reasoning

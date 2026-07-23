@@ -58,6 +58,12 @@ def test_every_mutating_route_maps_to_an_action(app: FastAPI) -> None:
     """Guards against a new mutating route shipping without an authz mapping."""
     unmapped: list[tuple[str, str]] = []
     for route in _iter_api_routes(app):
+        # /auth/{path} (ADP-cm9) is a transparent reverse proxy to Keycloak,
+        # not an ADP business action -- Keycloak enforces its own security for
+        # these paths, and AuthMiddleware only ever gates /api/v1/. Out of
+        # scope for this action-based model by design, same as /health.
+        if route.path.startswith("/auth/"):
+            continue
         for method in route.methods:
             if method in SAFE_METHODS:
                 continue

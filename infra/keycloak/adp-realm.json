@@ -19,8 +19,8 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["*"],
-      "webOrigins": ["*"],
+      "redirectUris": ["https://adp-api.salmonfield-18335dd4.eastus2.azurecontainerapps.io/*"],
+      "webOrigins": ["https://adp-api.salmonfield-18335dd4.eastus2.azurecontainerapps.io"],
       "protocolMappers": [
         {
           "name": "groups",

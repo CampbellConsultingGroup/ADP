@@ -39,6 +39,9 @@ param keycloakDatabaseName string = 'keycloak'
 @description('Postgres admin username -- Keycloak connects with the same single admin login as the app (per ADP-fnv.2 simplification).')
 param postgresAdminUsername string = 'adp_admin'
 
+@description('Public base URL the browser reaches Keycloak through, e.g. https://adp-api.<domain>/auth (ADP-cm9). Keycloak has internal-only ingress -- a real browser can never reach it directly, so adp-api reverse-proxies /auth/* to it. KC_HOSTNAME tells Keycloak this is its own address so it emits correct absolute URLs/issuer claims itself, rather than leaking its internal FQDN.')
+param keycloakPublicBaseUrl string
+
 resource acrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(acrId, identityId, 'AcrPull')
   scope: resourceGroup()
@@ -103,6 +106,26 @@ resource keycloakApp 'Microsoft.App/containerApps@2025-01-01' = {
             // from prior restarts, causing startup instability. --cache=local
             // is Keycloak's documented setting for exactly this case.
             '--cache=local'
+            // Container Apps ingress terminates TLS and forwards internally
+            // over plain HTTP with X-Forwarded-Proto -- without this flag
+            // Keycloak doesn't trust that header, so it sees every request
+            // (even ones that were HTTPS at the edge) as plain HTTP. That
+            // trips the built-in master realm's default sslRequired=external
+            // policy (HTTPS required for anything not a recognized private
+            // IP) with a 403 "HTTPS required", discovered when the
+            // keycloak-admin job's admin-cli token request hit exactly this
+            // (ADP-cm9). The realm-JSON import only sets sslRequired=none on
+            // the custom ADPRealm, not the built-in master realm, so this is
+            // the correct fix -- trust the proxy, don't weaken master's
+            // policy.
+            '--proxy-headers=xforwarded'
+            // Serve everything under /auth so paths line up 1:1 with
+            // adp-api's transparent reverse proxy at /auth/* (no rewriting
+            // needed on either side). Paired with --hostname below so
+            // Keycloak's own issuer/redirect/resource URLs are all correct
+            // through the proxy (ADP-cm9).
+            '--http-relative-path=/auth'
+            '--hostname=${keycloakPublicBaseUrl}'
           ]
           env: [
             { name: 'KC_DB', value: 'postgres' }
