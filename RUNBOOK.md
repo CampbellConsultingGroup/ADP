@@ -617,3 +617,136 @@ docker compose exec db psql -U adp_user -d adp -c "\d operations"
 
 **Port conflict**:
 Edit `.env` and set `ADP_PORT=8002` (or another available port), then `docker compose up -d`.
+
+---
+
+## Azure Deployment (Container Apps)
+
+The alternative to the single-VM docker-compose path above: Azure Container Apps
+(API + Keycloak), Postgres Flexible Server + pgvector, Key Vault + managed
+identity, ACR. All infra is Bicep under `infra/azure/`. Built and hardened
+across ADP-fnv (epic) and ADP-cm9 (security review). This is `az`-CLI + Bicep,
+not docker-compose.
+
+**Scripts** (all in `infra/azure/`):
+- `deploy.sh` — build images + deploy/update the whole environment
+- `destroy.sh` — full teardown (deletes the resource group + purges Key Vault)
+- `pause.sh` / `resume.sh` — stop/start compute without losing data (cheaper idle)
+
+### Get the live site URL
+
+The API app serves the built SPA from the same origin, so one URL is both UI and API:
+```bash
+az containerapp show -g adp-rg -n adp-api \
+  --query "properties.configuration.ingress.fqdn" -o tsv
+# → https://adp-api.<env-domain>.eastus2.azurecontainerapps.io
+```
+
+### Redeploy from scratch (after a destroy)
+
+A brand-new environment is a **two-pass bootstrap** — this is expected, not a bug
+(documented in `deploy.sh`'s own header):
+
+```bash
+cd infra/azure
+
+# If a prior Key Vault was left soft-deleted (destroy.sh purges it, but a manual
+# `az group delete` does NOT), the name is reserved and the deploy fails with
+# "A vault with the same name already exists in deleted state". Purge it first:
+az keyvault list-deleted --query "[?starts_with(name,'adp-kv-')].name" -o tsv
+# az keyvault purge --name <adp-kv-...> --location eastus2
+
+./deploy.sh   # PASS 1: creates RG/network/Postgres/Key Vault/ACR/Container Apps env.
+              # Keycloak/API/jobs FAIL here — their Key Vault secrets don't exist
+              # in the brand-new vault yet. This is expected.
+
+./deploy.sh   # PASS 2: secrets are now seeded, so everything provisions. Also picks
+              # up the real Container Apps env domain and bakes it into the API
+              # image's VITE_KEYCLOAK_URL build-arg (see "frontend auth" below).
+```
+
+Then run the DB migrations (one-off Container Apps Job):
+```bash
+az containerapp job start -g adp-rg -n adp-migrate
+```
+
+### CRITICAL: patch the Keycloak realm for the new domain
+
+Every fresh deploy gets a **new** env domain (e.g. `salmonfield-…`,
+`lemondesert-…`). But `infra/keycloak/adp-realm.json`'s `redirectUris`/`webOrigins`
+are pinned to a *specific* domain, and Keycloak's `--import-realm` uses
+`IGNORE_EXISTING` — so the realm is imported once with whatever domain the JSON
+had, and **login redirect validation will fail on the new domain** until patched.
+Fix it via the `adp-keycloak-admin` job (built for exactly this, ADP-cm9):
+
+```bash
+API_FQDN=$(az containerapp show -g adp-rg -n adp-api \
+  --query "properties.configuration.ingress.fqdn" -o tsv)
+KC_FQDN=$(az containerapp show -g adp-rg -n adp-keycloak \
+  --query "properties.configuration.ingress.fqdn" -o tsv)   # internal .internal. FQDN
+
+PATCH_BODY="{\"redirectUris\":[\"https://${API_FQDN}/*\"],\"webOrigins\":[\"https://${API_FQDN}\"]}"
+
+az containerapp job start -g adp-rg -n adp-keycloak-admin \
+  --image "<acr-login-server>/adp-api:<tag>" \
+  --container-name keycloak-admin \
+  --command "python3" "/app/src/adp/ops/keycloak_admin_patch.py" \
+  --env-vars \
+    KEYCLOAK_URL="https://${KC_FQDN}/auth" \
+    KEYCLOAK_REALM=ADPRealm \
+    KEYCLOAK_ADMIN_USERNAME=admin \
+    "KEYCLOAK_ADMIN_PASSWORD=secretref:keycloak-admin-password" \
+    KC_PATCH_TARGET=client KC_PATCH_CLIENT_ID=adp-frontend \
+    "KC_PATCH_BODY=${PATCH_BODY}"
+```
+Note `KEYCLOAK_URL` must include the `/auth` path — Keycloak serves everything
+under `/auth` (`--http-relative-path=/auth`); without it the admin token endpoint
+404s. Also commit the corrected `redirectUris`/`webOrigins` back into
+`adp-realm.json` so the next from-scratch deploy imports them right.
+
+Verify the realm patch landed (checks the /auth reverse proxy end to end):
+```bash
+curl -s "https://${API_FQDN}/auth/realms/ADPRealm/.well-known/openid-configuration" | head -c 200
+```
+
+### Frontend auth must stay ON in the deployed build
+
+The deployed frontend and backend must agree on auth. The backend hardcodes
+`ADP_AUTH_ENABLED=true` (`apiapp.bicep`). The frontend's `VITE_AUTH_ENABLED` and
+`VITE_KEYCLOAK_URL` are **baked into the static bundle at build time** by Vite,
+so `deploy.sh`/the CI workflow pass them as `--build-arg`s and the root
+`.dockerignore` + `Dockerfile` pin `VITE_AUTH_ENABLED=true` (ADP-cm9). If the
+deployed site shows a **black screen**: the frontend likely built with auth
+disabled (e.g. a stray `web/.env.local` leaked into the image) — it then sends no
+token, every API call 401s, and the SPA fails to render. Confirm the bundle is
+correct:
+```bash
+# In a freshly built image / dist: the local dev URL must NOT appear, and the
+# real deploy Keycloak URL must be present.
+grep -c "127.0.0.1:8080" web/dist/assets/*.js   # want 0
+```
+
+### Pause / resume (cheaper idle, keeps data)
+
+```bash
+cd infra/azure
+./pause.sh    # scales both apps toward zero, stops Postgres. Keeps all data + config.
+./resume.sh   # starts Postgres, restores replicas. Same URL, no redeploy needed.
+```
+Postgres storage, ACR, and Key Vault still bill a few $/mo while paused; only
+compute is paused. Azure auto-restarts a stopped Flexible Server after 7 days.
+
+### Full teardown (destroys ALL data)
+
+```bash
+cd infra/azure
+./destroy.sh   # type the resource-group name to confirm; deletes the RG and purges
+               # the Key Vault. Local infra/azure/.secrets/ is kept for a rebuild.
+```
+
+### CI/CD
+
+Push to `main` triggers `.github/workflows/deploy-azure.yml` (OIDC federated
+credential, no stored secret) — it rebuilds the API image and rolls out
+`adp-api`. Infra (Bicep) changes are applied manually via `deploy.sh`, not by the
+workflow.
