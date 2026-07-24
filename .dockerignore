@@ -1,0 +1,40 @@
+# Build-context excludes for `az acr build` / `docker build` (ADP-cm9 follow-up).
+#
+# WHY THIS FILE EXISTS: without it, `COPY web/ ./` in the root Dockerfile pulls
+# in web/.env.local -- a gitignored local-dev override that sets
+# VITE_AUTH_ENABLED=false. Vite loads .env.local at higher priority than .env
+# in a production build, so that "false" got baked into the DEPLOYED bundle,
+# disabling frontend auth while the backend required it -> every API call 401'd
+# with no token -> the SPA failed to render -> black screen. `az acr build`
+# only auto-excludes .git/.gitignore, NOT arbitrary gitignored files, so the
+# exclusion has to be explicit here.
+#
+# Deliberately conservative: nothing here is read by either Docker stage
+# (frontend `npm ci` + `tsc && vite build`, or the python `pip install`), so
+# excluding these cannot change build output -- only prevent the leak and
+# shrink the upload.
+
+# Local-only env overrides -- MUST never enter a deploy build (the black-screen bug)
+**/.env.local
+**/.env.*.local
+
+# Secrets cache (Postgres/Keycloak admin passwords) -- must never be baked into an image
+infra/azure/.secrets/
+
+# Dependencies + prior build output -- rebuilt fresh inside the image
+**/node_modules
+web/dist
+dist/
+
+# VCS + tooling metadata (not needed to build the image)
+.git
+.gitignore
+.github
+.beads
+.gitnexus
+.claude
+.codex
+.mypy_cache
+.ruff_cache
+.pytest_cache
+**/__pycache__
