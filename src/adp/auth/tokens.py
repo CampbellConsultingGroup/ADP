@@ -104,12 +104,35 @@ class JwksCache:
 _cache: JwksCache | None = None
 
 
+def _jwks_uri_for(issuer: str) -> str:
+    """Return the endpoint to FETCH Keycloak's signing keys from.
+
+    Prefer the internal Keycloak URL (ADP_KEYCLOAK_INTERNAL_URL) so the API
+    fetches keys over the Container Apps environment's private network, rather
+    than hairpinning back through its OWN public FQDN + the /auth reverse proxy.
+    That self-loop does not route inside Container Apps, so the JWKS fetch fails
+    and every otherwise-valid token is rejected with 401 -- which, with no
+    frontend error boundary, shows up as a black screen AFTER a successful
+    login (ADP-cm9). Only the key-fetch location changes here; issuer
+    VALIDATION still uses the public issuer (matching the token's `iss` claim).
+
+    Falls back to deriving the JWKS URI from the issuer when no internal URL is
+    set (local dev: Keycloak on 127.0.0.1:8080 with no /auth path prefix).
+    """
+    internal = os.environ.get("ADP_KEYCLOAK_INTERNAL_URL")
+    if internal:
+        realm = issuer.rstrip("/").rsplit("/realms/", 1)[-1]
+        # Internal Keycloak serves under /auth (--http-relative-path=/auth,
+        # see infra/azure/modules/keycloak.bicep), same as the /auth proxy.
+        return f"{internal.rstrip('/')}/auth/realms/{realm}/protocol/openid-connect/certs"
+    return f"{issuer.rstrip('/')}/protocol/openid-connect/certs"
+
+
 def _get_cache() -> JwksCache:
     global _cache
     if _cache is None:
         issuer = os.environ.get("ADP_KEYCLOAK_ISSUER", "http://127.0.0.1:8080/realms/ADPRealm")
-        jwks_uri = f"{issuer.rstrip('/')}/protocol/openid-connect/certs"
-        _cache = JwksCache(jwks_uri)
+        _cache = JwksCache(_jwks_uri_for(issuer))
     return _cache
 
 
