@@ -12,7 +12,7 @@ export class ApiError extends Error {
 
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED !== "false";
 
-async function getAuthHeader(): Promise<Record<string, string>> {
+export async function getAuthHeader(): Promise<Record<string, string>> {
   if (!AUTH_ENABLED) return {};
   try {
     const { getValidToken } = await import("../auth/keycloak");

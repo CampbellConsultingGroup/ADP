@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { getAuthHeader } from "./client";
 
 const API = "/api/v1";
 
@@ -350,7 +351,15 @@ export interface ApplicationDesignLink {
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(path, { ...init, headers: { "Content-Type": "application/json", ...init?.headers } });
+  // ADP-cm9: this module shipped its own fetch helper that omitted the Bearer
+  // token, so every /api/v1/applications* call 401'd once auth was enabled in
+  // a real deployment (it only ever ran with VITE_AUTH_ENABLED=false locally).
+  // Attach the same Keycloak auth header the rest of the client uses.
+  const authHeader = await getAuthHeader();
+  const res = await fetch(path, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...authHeader, ...init?.headers },
+  });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   if (res.status === 204) return undefined as T;
   return res.json();

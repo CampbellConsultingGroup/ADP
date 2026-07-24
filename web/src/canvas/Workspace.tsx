@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import type { C4Level } from "../types";
 import { useDesign, useLayout } from "../api/designs";
 import { useC4Theme } from "../api/theme";
+import { getAuthHeader } from "../api/client";
 import { useWorkspaceStore } from "../store/workspace-store";
 import type { AppView } from "../shell";
 import C4Canvas from "./C4Canvas";
@@ -30,7 +31,8 @@ export default function Workspace({ designId }: WorkspaceProps): React.ReactElem
     setCalmExporting(true);
     setCalmError(null);
     try {
-      const resp = await fetch(`/api/v1/designs/${designId}/export/calm`);
+      const authHeader = await getAuthHeader();
+      const resp = await fetch(`/api/v1/designs/${designId}/export/calm`, { headers: authHeader });
       if (!resp.ok) throw new Error(`Export failed: ${resp.status}`);
       const blob = await resp.blob();
       const url = URL.createObjectURL(blob);
