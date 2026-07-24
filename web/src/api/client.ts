@@ -17,8 +17,12 @@ async function getAuthHeader(): Promise<Record<string, string>> {
   try {
     const { getValidToken } = await import("../auth/keycloak");
     const token = await getValidToken(30);
+    // Don't fail silently: a missing token here is why authed API calls 401
+    // and the app shows an error instead of data (ADP-cm9). Surface it.
+    if (!token) console.error("getAuthHeader: no Keycloak token available; request will be unauthenticated");
     return token ? { Authorization: `Bearer ${token}` } : {};
-  } catch {
+  } catch (err) {
+    console.error("getAuthHeader: failed to obtain Keycloak token", err);
     return {};
   }
 }

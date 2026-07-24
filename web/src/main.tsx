@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactFlowProvider } from "@xyflow/react";
 import AuthProvider from "./auth/AuthProvider";
 import App from "./App";
+import ErrorBoundary from "./ui/ErrorBoundary";
 import "./ui/tokens.css";
 import "./ui/ui.css";
 import { initTheme } from "./ui/theme";
@@ -21,12 +22,14 @@ const queryClient = new QueryClient({
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <AuthProvider>
-      <QueryClientProvider client={queryClient}>
-        <ReactFlowProvider>
-          <App />
-        </ReactFlowProvider>
-      </QueryClientProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <QueryClientProvider client={queryClient}>
+          <ReactFlowProvider>
+            <App />
+          </ReactFlowProvider>
+        </QueryClientProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 );
