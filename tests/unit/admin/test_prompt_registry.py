@@ -63,6 +63,31 @@ async def test_falls_back_when_no_override_exists(sqlite_factory, agent_id: str)
     assert result.text.strip() != ""
 
 
+async def test_falls_back_gracefully_when_db_unreachable(monkeypatch) -> None:
+    """A DB error (unreachable host, timeout, missing table -- anything, not
+    just 'no row found') must NEVER propagate out of get_effective_prompt();
+    it must fall back exactly as if no override existed. This is what keeps
+    a transient DB blip from taking down every AI feature platform-wide
+    (chat/recommendation/intake all call this with no try/except of their
+    own), and incidentally what makes this module safe to import in an
+    environment with no reachable Postgres at all (e.g. CI's unit-test job,
+    which runs with no ADP_DATABASE_URL and no Postgres service)."""
+    engine = create_async_engine("postgresql+asyncpg://nobody:nobody@127.0.0.1:1/nope")
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    monkeypatch.setattr(prompt_registry, "_session_factory", factory)
+    monkeypatch.setattr(prompt_registry, "_engine_loop", asyncio.get_running_loop())
+
+    registration = prompt_registry.get_registration("chat_assistant")
+    assert registration is not None
+
+    result = await get_effective_prompt("chat_assistant")
+
+    assert result.is_override is False
+    assert result.version == 0
+    assert result.text == registration.fallback_provider()
+    await engine.dispose()
+
+
 async def test_agent_review_fallback_matches_load_system_prompt(sqlite_factory) -> None:
     """agent_review_business_capability's fallback provider IS
     _load_system_prompt itself (file-then-string), not a bare constant."""

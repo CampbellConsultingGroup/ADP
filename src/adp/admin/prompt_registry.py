@@ -22,10 +22,24 @@ Fallback providers are deferred (imported inside the function body, not at
 module load time) to avoid a circular import: each of the five other call
 sites imports `get_effective_prompt` from here, so this module cannot import
 their constants at its own top level.
+
+get_effective_prompt() falls back to the registration's fallback_provider()
+on ANY error resolving the override (unreachable DB, timeout, missing
+table), not just "no row found" -- mirroring this codebase's existing
+resilience patterns (adp.auth.tokens.JwksCache falls back to cached keys on
+a refresh failure; agent_review._load_system_prompt falls back to a
+hardcoded string on a file-read failure). This is a hard requirement, not
+just defensive style: every one of the five other call sites invokes this
+function directly, with no try/except of their own and no DB-availability
+precondition -- a transient DB blip must not take down chat, recommendation,
+and intake extraction platform-wide just because one admin-editable lookup
+failed. It also happens to be what keeps this module safe to import in
+tests/CI environments with no reachable Postgres at all.
 """
 
 from __future__ import annotations
 
+import logging
 import os
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -33,6 +47,8 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+_logger = logging.getLogger("adp.admin.prompt_registry")
 
 _metadata = sa.MetaData()
 
@@ -180,12 +196,22 @@ async def get_effective_prompt(agent_id: str) -> EffectivePrompt:
 
     Raises KeyError for an unregistered agent_id -- callers are the fixed set
     of six registrations plus the admin list/history endpoints, never
-    arbitrary user input.
+    arbitrary user input. Any OTHER failure resolving the override (DB
+    unreachable, timeout, etc.) is caught and treated as "no override" --
+    see the module docstring for why this fallback is load-bearing, not
+    just defensive.
     """
     registration = _REGISTRATIONS_BY_ID[agent_id]
-    factory = _get_session_factory()
-    async with factory() as session:
-        row = await _fetch_override(agent_id, session)
+    try:
+        factory = _get_session_factory()
+        async with factory() as session:
+            row = await _fetch_override(agent_id, session)
+    except Exception:
+        _logger.warning(
+            "prompt_registry: could not resolve override for %r, using fallback", agent_id,
+            exc_info=True,
+        )
+        row = None
     if row is not None:
         return EffectivePrompt(text=row.prompt_text, is_override=True, version=row.version)
     return EffectivePrompt(text=registration.fallback_provider(), is_override=False, version=0)
