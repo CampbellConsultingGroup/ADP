@@ -27,6 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from adp.admin import prompt_registry
 from adp.agents.grounding import verify_references
 from adp.agents.models import GroundingCitation
 from adp.agents.provenance import write_suggestion_reasoning
@@ -718,7 +719,12 @@ async def run_portfolio_review(
 
             context = await assemble_portfolio_context(biz_session)
 
-            system_prompt = _load_system_prompt()
+            # ADP-SPEC-042: resolve via the admin-editable registry (falls
+            # back to _load_system_prompt() -- file, then _FALLBACK_SYSTEM_PROMPT
+            # -- when no admin override exists).
+            system_prompt = (
+                await prompt_registry.get_effective_prompt("agent_review_business_capability")
+            ).text
             user_prompt = _build_portfolio_user_prompt(context)
             response = await llm_client.chat(
                 system=system_prompt, user=user_prompt, correlation_id=operation_id
@@ -798,7 +804,12 @@ async def run_review(
                 )
                 return
 
-            system_prompt = _load_system_prompt()
+            # ADP-SPEC-042: resolve via the admin-editable registry (falls
+            # back to _load_system_prompt() -- file, then _FALLBACK_SYSTEM_PROMPT
+            # -- when no admin override exists).
+            system_prompt = (
+                await prompt_registry.get_effective_prompt("agent_review_business_capability")
+            ).text
             user_prompt = _build_user_prompt(context)
             response = await llm_client.chat(
                 system=system_prompt, user=user_prompt, correlation_id=operation_id

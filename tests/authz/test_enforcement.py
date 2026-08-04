@@ -312,3 +312,38 @@ def test_portfolio_agent_review_routes_map_to_expected_actions() -> None:
         )
         == ActionType.CONFIRM_AGENT_SUGGESTION
     )
+
+
+# ── ADP-SPEC-042: admin prompt management is gated for reads too (the
+# exception, like risk/cost/governance) -- but unlike those, an ordinary
+# Enterprise Architect is denied, not just Reviewer (Clarification Session
+# 2026-07-24 Q1: no architect role gains this by virtue of that role alone).
+
+def test_enterprise_architect_denied_admin_prompts_read(app: FastAPI) -> None:
+    resp = _client_as(app, PersonaRole.ENTERPRISE_ARCHITECT).get(
+        "/api/v1/admin/agent-prompts"
+    )
+    assert resp.status_code == 403
+
+
+def test_reviewer_denied_admin_prompts_read(app: FastAPI) -> None:
+    resp = _client_as(app, PersonaRole.REVIEWER).get("/api/v1/admin/agent-prompts")
+    assert resp.status_code == 403
+
+
+def test_admin_prompts_route_maps_to_manage_agent_prompts_action() -> None:
+    from adp.authz.roles import ActionType
+    assert (
+        required_action_for("POST", "/api/v1/admin/agent-prompts/{agent_id}/confirm")
+        == ActionType.MANAGE_AGENT_PROMPTS
+    )
+
+
+def test_admin_prompts_action_grant_matrix() -> None:
+    from adp.authz.permissions import is_permitted
+    from adp.authz.roles import ActionType
+    assert is_permitted(PersonaRole.PLATFORM_ADMIN, ActionType.MANAGE_AGENT_PROMPTS)
+    assert not is_permitted(PersonaRole.ENTERPRISE_ARCHITECT, ActionType.MANAGE_AGENT_PROMPTS)
+    assert not is_permitted(PersonaRole.SOLUTION_ARCHITECT, ActionType.MANAGE_AGENT_PROMPTS)
+    assert not is_permitted(PersonaRole.TECHNICAL_ARCHITECT, ActionType.MANAGE_AGENT_PROMPTS)
+    assert not is_permitted(PersonaRole.REVIEWER, ActionType.MANAGE_AGENT_PROMPTS)

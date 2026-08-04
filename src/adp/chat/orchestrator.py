@@ -17,6 +17,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.admin import prompt_registry
 from adp.agents.grounding import verify_references
 from adp.agents.models import GroundingCitation
 from adp.authz.roles import PersonaRole
@@ -153,7 +154,10 @@ async def run_turn(
         context_block = "\n".join(
             f"- ({h.entity_type}:{h.entity_id}) {h.text}" for h in hits
         ) or "(no directly relevant context found)"
-        system_prompt = f"{_SYSTEM_PROMPT}\n\nContext:\n{context_block}"
+        # ADP-SPEC-042: resolve via the admin-editable registry (falls back to
+        # _SYSTEM_PROMPT above when no override exists).
+        effective_prompt = (await prompt_registry.get_effective_prompt("chat_assistant")).text
+        system_prompt = f"{effective_prompt}\n\nContext:\n{context_block}"
 
         messages = _messages_for_llm(_windowed_history(history), user_content)
         tool_sessions = {

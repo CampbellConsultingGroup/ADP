@@ -40,14 +40,27 @@ _logger = logging.getLogger("adp.authz")
 #           gates a read-only feature, not a consequential write, so it is
 #           NOT in REQUIRES_CONFIRMATION; sensitive application data is
 #           filtered per-question inside the chat's tool layer instead.
-PERMISSIONS_VERSION = "1.6.0"
+#   1.7.0 — added PersonaRole.PLATFORM_ADMIN and ActionType.MANAGE_AGENT_PROMPTS
+#           (ADP-SPEC-042). PLATFORM_ADMIN holds every action Enterprise
+#           Architect held today, plus this new one (least-surprise for
+#           existing ADPAdministrator group members). ENTERPRISE_ARCHITECT's
+#           previously-unconditional "all actions" wildcard grant is
+#           DELIBERATELY narrowed to exclude MANAGE_AGENT_PROMPTS -- per
+#           Clarification Session 2026-07-24 Q1, no architect role, including
+#           Enterprise Architect, may gain admin-screen access solely by
+#           virtue of that role. This is the one place a prior "has every
+#           action" invariant is intentionally weakened, not just extended.
+PERMISSIONS_VERSION = "1.7.0"
 
 # ── Permission table ─────────────────────────────────────────────────────────
 # Maps each PersonaRole to the frozenset of ActionTypes it may perform.
 # This is the machine-executable form of the spec's governance table.
 
 PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
-    PersonaRole.ENTERPRISE_ARCHITECT: frozenset(ActionType),  # all actions
+    # All actions EXCEPT MANAGE_AGENT_PROMPTS (v1.7.0) -- see changelog above.
+    PersonaRole.ENTERPRISE_ARCHITECT: frozenset(ActionType) - {ActionType.MANAGE_AGENT_PROMPTS},
+    # Everything Enterprise Architect has, plus MANAGE_AGENT_PROMPTS (v1.7.0).
+    PersonaRole.PLATFORM_ADMIN: frozenset(ActionType),
     PersonaRole.SOLUTION_ARCHITECT: frozenset({
         ActionType.READ_DESIGN,
         ActionType.WRITE_DESIGN,
@@ -103,6 +116,7 @@ REQUIRES_CONFIRMATION: frozenset[ActionType] = frozenset({
     ActionType.MANAGE_ROLES,
     ActionType.EXPORT_DESIGN,
     ActionType.CONFIRM_AGENT_SUGGESTION,
+    ActionType.MANAGE_AGENT_PROMPTS,
 })
 
 

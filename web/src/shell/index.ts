@@ -9,4 +9,5 @@ export type AppView =
   | "portfolio"
   | "governance"
   | "business"
-  | "applications";
+  | "applications"
+  | "admin";

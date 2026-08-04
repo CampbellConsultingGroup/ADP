@@ -32,6 +32,12 @@ const DESIGN_SCOPED: NavDef[] = [
   { view: "recommend", label: "Recommendations", icon: "spark" },
   { view: "canvas", label: "Canvas", icon: "sol" },
 ];
+// ADP-SPEC-042: gated at the route/nav level on the distinct platform_admin
+// role, not folded into ARCHITECTURE — this surface has its own permission
+// (MANAGE_AGENT_PROMPTS), not implied by any architect role.
+const ADMIN: NavDef[] = [
+  { view: "admin", label: "Agent Prompts", icon: "shield" },
+];
 
 const TITLES: Record<AppView, string> = {
   overview: "Overview",
@@ -44,6 +50,7 @@ const TITLES: Record<AppView, string> = {
   intake: "Requirements Intake",
   recommend: "Recommendations",
   canvas: "Design Canvas",
+  admin: "Agent Prompt Management",
 };
 
 const HUE_VARS: Record<string, string> = {
@@ -102,6 +109,13 @@ export function AppShell({ currentView, onNavigate, designId, children }: AppShe
 
         <div className="shell-navlabel">Architecture</div>
         {ARCHITECTURE.map((d) => <NavItem key={d.view} def={d} current={currentView} onNavigate={onNavigate} />)}
+
+        {user?.role === "platform_admin" && (
+          <>
+            <div className="shell-navlabel">Administration</div>
+            {ADMIN.map((d) => <NavItem key={d.view} def={d} current={currentView} onNavigate={onNavigate} />)}
+          </>
+        )}
 
         {inDesign && (
           <>

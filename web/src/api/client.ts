@@ -4,6 +4,12 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    // Parsed JSON response body, when the error response had one -- ADP-SPEC-042
+    // needs this to surface a 409 conflict's current_active_text/current_version
+    // (FastAPI nests structured detail under `.detail`) without a bespoke fetch
+    // call per endpoint. Optional and additive: every existing ApiError call
+    // site ignores it.
+    public readonly body?: unknown,
   ) {
     super(message);
     this.name = "ApiError";
@@ -50,7 +56,13 @@ export async function apiMutation<T, B = unknown>(
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (!res.ok) {
-    throw new ApiError(res.status, `${method} ${path} failed: ${res.status}`);
+    let parsedBody: unknown;
+    try {
+      parsedBody = await res.json();
+    } catch {
+      // Non-JSON error body — leave parsedBody undefined.
+    }
+    throw new ApiError(res.status, `${method} ${path} failed: ${res.status}`, parsedBody);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;

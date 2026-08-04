@@ -10,6 +10,10 @@ class PersonaRole(StrEnum):
     SOLUTION_ARCHITECT = "solution_architect"
     TECHNICAL_ARCHITECT = "technical_architect"
     REVIEWER = "reviewer"
+    # ADP-SPEC-042: distinct from every architect role -- no architect role,
+    # including Enterprise Architect, gains MANAGE_AGENT_PROMPTS by virtue of
+    # that role alone (Clarification Session 2026-07-24, Q1).
+    PLATFORM_ADMIN = "platform_admin"
 
 
 class ActionType(StrEnum):
@@ -46,3 +50,7 @@ class ActionType(StrEnum):
     # application categories are filtered per-question inside the chat's
     # tool layer against READ_APPLICATION_{RISK,COST,GOVERNANCE} instead).
     USE_CHAT_ASSISTANT = "use_chat_assistant"
+    # ADP-SPEC-042: editing/confirming/restoring an AI agent's system prompt.
+    # Granted only to PLATFORM_ADMIN -- see permissions.py for the deliberate
+    # narrowing of ENTERPRISE_ARCHITECT's wildcard grant this required.
+    MANAGE_AGENT_PROMPTS = "manage_agent_prompts"
