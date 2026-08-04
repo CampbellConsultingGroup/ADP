@@ -159,6 +159,39 @@ _EXPECTED: dict[tuple[PersonaRole, ActionType], bool] = {
     (PersonaRole.SOLUTION_ARCHITECT, ActionType.USE_CHAT_ASSISTANT): True,
     (PersonaRole.TECHNICAL_ARCHITECT, ActionType.USE_CHAT_ASSISTANT): True,
     (PersonaRole.REVIEWER, ActionType.USE_CHAT_ASSISTANT): True,
+    # manage_agent_prompts (v1.7.0, ADP-SPEC-042): PLATFORM_ADMIN only.
+    # ENTERPRISE_ARCHITECT is now explicitly False -- Clarification Session
+    # 2026-07-24 Q1 requires that no architect role gains admin-screen access
+    # solely by virtue of that role, which required narrowing Enterprise
+    # Architect's formerly all-actions wildcard grant for this one action.
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.MANAGE_AGENT_PROMPTS): False,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.MANAGE_AGENT_PROMPTS): False,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.MANAGE_AGENT_PROMPTS): False,
+    (PersonaRole.REVIEWER, ActionType.MANAGE_AGENT_PROMPTS): False,
+    # platform_admin (v1.7.0, ADP-SPEC-042): everything Enterprise Architect
+    # has today, plus MANAGE_AGENT_PROMPTS -- least-surprise for existing
+    # ADPAdministrator group members (research.md Decision 1).
+    (PersonaRole.PLATFORM_ADMIN, ActionType.READ_DESIGN): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_DESIGN): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.SUBMIT_AI_OPERATION): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.CONFIRM_RECOMMENDATION): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.OVERRIDE_VERDICT): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.ADD_FINDING): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.AMEND_STANDARD): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.MANAGE_ROLES): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.EXPORT_DESIGN): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_BUSINESS_ARCH): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_APPLICATION): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.MANAGE_CONFIG): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.READ_APPLICATION_RISK): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_APPLICATION_RISK): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.READ_APPLICATION_COST): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_APPLICATION_COST): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.READ_APPLICATION_GOVERNANCE): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_APPLICATION_GOVERNANCE): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.CONFIRM_AGENT_SUGGESTION): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.USE_CHAT_ASSISTANT): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.MANAGE_AGENT_PROMPTS): True,
 }
 
 
@@ -210,8 +243,8 @@ def test_require_action_logs_warning_on_denial(caplog: pytest.LogCaptureFixture)
 
 
 def test_permissions_version_constant() -> None:
-    """PERMISSIONS_VERSION exists and is 1.6.0 — any permission change must bump it."""
-    assert PERMISSIONS_VERSION == "1.6.0"
+    """PERMISSIONS_VERSION exists and is 1.7.0 — any permission change must bump it."""
+    assert PERMISSIONS_VERSION == "1.7.0"
 
 
 # ── US3: Per-action confirmation requirements ────────────────────────────────
@@ -237,6 +270,7 @@ _CONFIRMATION_EXPECTED: dict[ActionType, bool] = {
     ActionType.WRITE_APPLICATION_GOVERNANCE: False,
     ActionType.CONFIRM_AGENT_SUGGESTION: True,
     ActionType.USE_CHAT_ASSISTANT: False,
+    ActionType.MANAGE_AGENT_PROMPTS: True,
 }
 
 

@@ -19,6 +19,8 @@ from typing import Any
 
 import httpx
 
+from adp.admin import prompt_registry
+
 _logger = logging.getLogger("adp.llm")
 
 _EXTRACTION_SYSTEM_PROMPT = """\
@@ -385,10 +387,13 @@ class LLMClient:
             "anthropic-version": "2023-06-01",
             "content-type": "application/json",
         }
+        # ADP-SPEC-042: resolve via the admin-editable registry (falls back to
+        # _EXTRACTION_SYSTEM_PROMPT above when no override exists).
+        extraction_prompt = (await prompt_registry.get_effective_prompt("intake_extraction")).text
         body = {
             "model": self._model,
             "max_tokens": 4096,
-            "system": _EXTRACTION_SYSTEM_PROMPT,
+            "system": extraction_prompt,
             "messages": [
                 {
                     "role": "user",
@@ -433,10 +438,13 @@ class LLMClient:
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
+        # ADP-SPEC-042: resolve via the admin-editable registry (falls back to
+        # _EXTRACTION_SYSTEM_PROMPT above when no override exists).
+        extraction_prompt = (await prompt_registry.get_effective_prompt("intake_extraction")).text
         body = {
             "model": self._model,
             "messages": [
-                {"role": "system", "content": _EXTRACTION_SYSTEM_PROMPT},
+                {"role": "system", "content": extraction_prompt},
                 {
                     "role": "user",
                     "content": (

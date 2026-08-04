@@ -15,6 +15,7 @@ import { initKeycloak, keycloak } from "./keycloak";
 // ── Role display labels ────────────────────────────────────────────────────────
 
 const ROLE_LABELS: Record<string, string> = {
+  platform_admin: "Platform Admin",
   enterprise_architect: "Enterprise Architect",
   solution_architect: "Solution Architect",
   technical_architect: "Technical Architect",
@@ -22,6 +23,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_COLORS: Record<string, { bg: string; text: string }> = {
+  platform_admin: { bg: "#FEF3C7", text: "#92400E" },
   enterprise_architect: { bg: "#EDE9FE", text: "#5B21B6" },
   solution_architect: { bg: "#DBEAFE", text: "#1E40AF" },
   technical_architect: { bg: "#D1FAE5", text: "#065F46" },
@@ -55,11 +57,15 @@ export function useAuth(): AuthContextValue {
 
 // ── Group → ADP role mapping (mirrors server-side logic) ──────────────────────
 
-function groupsToRole(groups: string[]): string {
-  const priority = ["EnterpriseArchitect", "ADPAdministrator", "SolutionArchitect", "TechnicalArchitect"];
+export function groupsToRole(groups: string[]): string {
+  // ADP-SPEC-042: ADPAdministrator is checked first -- it now maps to the
+  // distinct "platform_admin" role, which must outrank "enterprise_architect"
+  // when a user carries both groups (was a no-op distinction before, since
+  // both groups mapped to the same role).
+  const priority = ["ADPAdministrator", "EnterpriseArchitect", "SolutionArchitect", "TechnicalArchitect"];
   const roleMap: Record<string, string> = {
+    ADPAdministrator: "platform_admin",
     EnterpriseArchitect: "enterprise_architect",
-    ADPAdministrator: "enterprise_architect",
     SolutionArchitect: "solution_architect",
     TechnicalArchitect: "technical_architect",
   };

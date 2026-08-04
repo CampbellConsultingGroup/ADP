@@ -26,12 +26,18 @@ _logger = logging.getLogger("adp.auth")
 
 _GROUP_ROLE_PRIORITY: list[tuple[str, PersonaRole]] = [
     ("EnterpriseArchitect", PersonaRole.ENTERPRISE_ARCHITECT),
-    ("ADPAdministrator", PersonaRole.ENTERPRISE_ARCHITECT),
+    # ADP-SPEC-042: was ENTERPRISE_ARCHITECT; remapped to the distinct
+    # PLATFORM_ADMIN role so this group carries MANAGE_AGENT_PROMPTS
+    # (Clarification Session 2026-07-24 Q1).
+    ("ADPAdministrator", PersonaRole.PLATFORM_ADMIN),
     ("SolutionArchitect", PersonaRole.SOLUTION_ARCHITECT),
     ("TechnicalArchitect", PersonaRole.TECHNICAL_ARCHITECT),
 ]
 
 _ROLE_PRIORITY_ORDER = [
+    # PLATFORM_ADMIN holds every action ENTERPRISE_ARCHITECT does, plus one
+    # more (MANAGE_AGENT_PROMPTS) -- it must outrank ENTERPRISE_ARCHITECT.
+    PersonaRole.PLATFORM_ADMIN,
     PersonaRole.ENTERPRISE_ARCHITECT,
     PersonaRole.SOLUTION_ARCHITECT,
     PersonaRole.TECHNICAL_ARCHITECT,

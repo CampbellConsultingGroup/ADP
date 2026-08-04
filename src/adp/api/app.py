@@ -11,6 +11,7 @@ from typing import AsyncGenerator
 from fastapi import Depends, FastAPI, Request, Response
 
 from adp.api.routers import (
+    admin_prompts_router,
     auth_proxy,
     calm,
     config,
@@ -196,6 +197,7 @@ def create_app() -> FastAPI:
     app.include_router(initiatives_router)
     app.include_router(chat_router_module.router)
     app.include_router(auth_proxy.router)
+    app.include_router(admin_prompts_router.router)
 
     # Serve Vite-built frontend static files when running in Docker (ADP-SPEC-025)
     import os

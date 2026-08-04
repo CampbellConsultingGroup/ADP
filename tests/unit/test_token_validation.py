@@ -124,14 +124,17 @@ async def test_no_group_defaults_to_technical_architect(rsa_key_pair, jwks_from_
     assert user.role == PersonaRole.TECHNICAL_ARCHITECT
 
 
-# ── T005: ADPAdministrator maps to enterprise_architect ──────────────────────
+# ── T005: ADPAdministrator maps to platform_admin (ADP-SPEC-042) ────────────
+# Was enterprise_architect prior to ADP-SPEC-042; remapped per Clarification
+# Session 2026-07-24 Q1 -- no architect role, including Enterprise Architect,
+# gains admin-screen access solely by virtue of that role.
 
 @pytest.mark.asyncio
-async def test_admin_group_maps_to_enterprise_architect(rsa_key_pair, jwks_from_key):
+async def test_admin_group_maps_to_platform_admin(rsa_key_pair, jwks_from_key):
     token = _make_token(rsa_key_pair, groups=["ADPAdministrator"])
     cache = await _make_cache(jwks_from_key)
     user = await decode_token(token, jwks_cache=cache)
-    assert user.role == PersonaRole.ENTERPRISE_ARCHITECT
+    assert user.role == PersonaRole.PLATFORM_ADMIN
 
 
 # ── T006: highest privilege wins ─────────────────────────────────────────────
@@ -142,6 +145,16 @@ async def test_highest_privilege_wins(rsa_key_pair, jwks_from_key):
     cache = await _make_cache(jwks_from_key)
     user = await decode_token(token, jwks_cache=cache)
     assert user.role == PersonaRole.SOLUTION_ARCHITECT
+
+
+@pytest.mark.asyncio
+async def test_platform_admin_outranks_enterprise_architect(rsa_key_pair, jwks_from_key):
+    """PLATFORM_ADMIN holds every action ENTERPRISE_ARCHITECT does, plus one more --
+    it must win when a token carries both groups (ADP-SPEC-042)."""
+    token = _make_token(rsa_key_pair, groups=["EnterpriseArchitect", "ADPAdministrator"])
+    cache = await _make_cache(jwks_from_key)
+    user = await decode_token(token, jwks_cache=cache)
+    assert user.role == PersonaRole.PLATFORM_ADMIN
 
 
 # ── Additional: _map_groups_to_role unit tests ────────────────────────────────

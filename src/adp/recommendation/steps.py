@@ -11,6 +11,7 @@ import time
 import uuid
 from typing import TYPE_CHECKING, Any
 
+from adp.admin import prompt_registry
 from adp.knowledge.schema import CitationRef, RetrievalQuery
 from adp.models import ElementKind
 from adp.recommendation.models import (
@@ -23,9 +24,6 @@ from adp.recommendation.models import (
     TradeOffStance,
 )
 from adp.recommendation.prompts import (
-    GENERATION_SYSTEM_PROMPT,
-    GENERATION_SYSTEM_PROMPT_NO_KB,
-    TRADEOFF_SYSTEM_PROMPT,
     generation_user_prompt,
     tradeoff_user_prompt,
 )
@@ -315,10 +313,14 @@ async def generate_step(
 
     # ADP-SPEC-019: use requirements-only prompt when KB is empty
     has_knowledge = bool(retrieved)
+    # ADP-SPEC-042: resolve via the admin-editable registry (falls back to the
+    # original GENERATION_SYSTEM_PROMPT[_NO_KB] constants when no override
+    # exists) -- .format() applies to the *resolved* text, not the raw constant.
     if has_knowledge:
-        system = GENERATION_SYSTEM_PROMPT.format(option_count=option_count)
+        effective = await prompt_registry.get_effective_prompt("recommendation_generation")
     else:
-        system = GENERATION_SYSTEM_PROMPT_NO_KB.format(option_count=option_count)
+        effective = await prompt_registry.get_effective_prompt("recommendation_generation_no_kb")
+    system = effective.text.format(option_count=option_count)
     user = generation_user_prompt(
         req_list, knowledge_summary, option_count, has_knowledge=has_knowledge,
         reuse_summary=_reuse_summary(reuse_candidates), has_reuse=has_reuse,
@@ -455,9 +457,13 @@ async def analyze_tradeoffs_step(
     total_input = 0
     total_output = 0
 
+    # ADP-SPEC-042: resolved once, not per-option -- avoids N redundant lookups
+    # for N candidate options in a single request.
+    tradeoff_prompt = (await prompt_registry.get_effective_prompt("recommendation_tradeoff")).text
+
     for option in candidates:
         element_names = ", ".join(pe.name for pe in option.proposed_elements) or "none"
-        system = TRADEOFF_SYSTEM_PROMPT
+        system = tradeoff_prompt
         user = tradeoff_user_prompt(
             option.title, option.rationale, element_names, criteria_list
         )
@@ -510,7 +516,7 @@ async def analyze_tradeoffs_step(
                     option=opt,
                     step_name="analyze_tradeoffs",
                     reasoning_text=tradeoff_text,
-                    system_prompt=TRADEOFF_SYSTEM_PROMPT,
+                    system_prompt=tradeoff_prompt,
                     user_prompt=tradeoff_user_prompt(
                         opt.title, opt.rationale,
                         ", ".join(pe.name for pe in opt.proposed_elements) or "none",

@@ -126,6 +126,9 @@ _EXPLICIT_ROUTE_ACTIONS: dict[tuple[str, str], ActionType] = {
 # For routers whose every mutation maps to a single action. Order matters only
 # if prefixes overlap; these are disjoint. Checked after the explicit map.
 _PREFIX_ROUTE_ACTIONS: tuple[tuple[str, ActionType], ...] = (
+    # ADP-SPEC-042: one rule covers every method under this prefix, since
+    # FR-009 gates the whole admin surface -- reads included, not just writes.
+    ("/api/v1/admin/agent-prompts", ActionType.MANAGE_AGENT_PROMPTS),
     ("/api/v1/knowledge", ActionType.AMEND_STANDARD),
     ("/api/v1/business/", ActionType.WRITE_BUSINESS_ARCH),
     ("/api/v1/applications", ActionType.WRITE_APPLICATION),
