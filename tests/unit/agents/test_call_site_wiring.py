@@ -42,7 +42,9 @@ async def sqlite_factory(tmp_path, monkeypatch):
 async def _set_override(sqlite_factory, agent_id: str, text: str) -> None:
     async with sqlite_factory() as session:
         await session.execute(
-            prompt_registry._overrides.insert().values(agent_id=agent_id, prompt_text=text, version=1)
+            prompt_registry._overrides.insert().values(
+                agent_id=agent_id, prompt_text=text, version=1
+            )
         )
         await session.commit()
 
@@ -105,7 +107,11 @@ async def test_chat_assistant_uses_override(sqlite_factory) -> None:
 async def test_recommendation_generation_uses_override(sqlite_factory) -> None:
     from adp.models import Requirement
     from adp.recommendation.steps import generate_step
-    from tests.recommendation.test_steps import _llm_generation_response, _make_entry, _mock_telemetry
+    from tests.recommendation.test_steps import (
+        _llm_generation_response,
+        _make_entry,
+        _mock_telemetry,
+    )
 
     await _set_override(
         sqlite_factory, "recommendation_generation", "CUSTOM GENERATION MARKER {option_count}"

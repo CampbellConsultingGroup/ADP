@@ -45,6 +45,13 @@ Thumbs.db
 # Environment
 .env
 .env.*
+# ...except the shared template itself -- .env.* above was accidentally
+# excluding .env.example too, so it had NEVER actually been committed
+# (confirmed via `git log --all -- .env.example`: empty history). That
+# silently defeated its whole purpose as the "copy this file to .env"
+# onboarding starting point RUNBOOK.md and this project's own docs assume
+# exists in the repo. Found while adding ADP-SPEC-044's env vars to it.
+!.env.example
 
 # Keep generated schema committed (it IS a source artifact per ART-II)
 # generated/architecture-description.schema.json  ← NOT ignored

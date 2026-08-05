@@ -14,7 +14,8 @@ import httpx
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from adp.admin import prompt_registry, service as admin_service
+from adp.admin import prompt_registry
+from adp.admin import service as admin_service
 from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
 from adp.authz.roles import PersonaRole
@@ -234,7 +235,9 @@ async def test_restore_creates_new_history_entry_not_a_rewrite(client) -> None:
     history_items = (await c.get(
         "/api/v1/admin/agent-prompts/chat_assistant/history"
     )).json()["items"]
-    original_entry_id = next(i["id"] for i in history_items if i["new_text"] == "Original override.")
+    original_entry_id = next(
+        i["id"] for i in history_items if i["new_text"] == "Original override."
+    )
 
     resp = await c.post(
         f"/api/v1/admin/agent-prompts/chat_assistant/restore/{original_entry_id}",
