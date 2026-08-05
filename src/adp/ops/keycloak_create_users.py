@@ -7,6 +7,14 @@ Container Apps Job (`adp-keycloak-admin`, overriding --command) inside the VNet,
 since Keycloak has internal-only ingress. Same env-driven shape as
 keycloak_admin_patch.py.
 
+MFA (ADP-odp) gotcha: a realm's `requiredActions[].defaultAction` only gets
+assigned to users created through Keycloak's own self-registration/first-login
+flows -- users created via this admin-API POST do NOT inherit it automatically
+(registration is disabled here anyway, so every user goes through this script).
+New users are therefore given CONFIGURE_TOTP explicitly below so MFA enrollment
+is actually enforced on first login, not just nominally configured at the realm
+level. Existing users are left alone on re-run (no forced re-enrollment).
+
 Required env vars:
   KEYCLOAK_URL              Base URL incl. /auth, e.g. https://adp-keycloak.internal.../auth
   KEYCLOAK_REALM            Realm name, e.g. ADPRealm
@@ -99,6 +107,7 @@ def main() -> None:
                         "email": u.get("email", ""),
                         "emailVerified": True,
                         "enabled": True,
+                        "requiredActions": ["CONFIGURE_TOTP"],
                     },
                     headers=hdr,
                 )

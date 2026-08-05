@@ -3,6 +3,25 @@
   "enabled": true,
   "sslRequired": "none",
   "registrationAllowed": false,
+  "otpPolicyType": "totp",
+  "otpPolicyAlgorithm": "HmacSHA1",
+  "otpPolicyDigits": 6,
+  "otpPolicyPeriod": 30,
+  "otpPolicyInitialCounter": 0,
+  "otpPolicyLookAheadWindow": 1,
+  "otpPolicyCodeReusable": false,
+  "otpSupportedApplications": ["FreeOTP", "Google Authenticator"],
+  "requiredActions": [
+    {
+      "alias": "CONFIGURE_TOTP",
+      "name": "Configure OTP",
+      "providerId": "CONFIGURE_TOTP",
+      "enabled": true,
+      "defaultAction": true,
+      "priority": 10,
+      "config": {}
+    }
+  ],
   "groups": [
     { "name": "EnterpriseArchitect", "path": "/EnterpriseArchitect" },
     { "name": "ADPAdministrator", "path": "/ADPAdministrator" },

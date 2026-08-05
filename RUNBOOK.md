@@ -721,6 +721,41 @@ Verify the realm patch landed (checks the /auth reverse proxy end to end):
 curl -s "https://${API_FQDN}/auth/realms/ADPRealm/.well-known/openid-configuration" | head -c 200
 ```
 
+### Enabling MFA (TOTP) on an already-provisioned realm (ADP-odp)
+
+`adp-realm.json`'s `otpPolicy*`/`requiredActions` fields (added for ADP-odp)
+only take effect on a **fresh** realm import — the same `IGNORE_EXISTING`
+limitation as above means they're inert against an already-provisioned
+`ADPRealm`. Apply live with the identical `keycloak_admin_patch.py` mechanism,
+just targeting the realm instead of the client:
+
+```bash
+PATCH_BODY='{"otpPolicyType":"totp","otpPolicyAlgorithm":"HmacSHA1","otpPolicyDigits":6,"otpPolicyPeriod":30,"otpPolicyInitialCounter":0,"otpPolicyLookAheadWindow":1,"otpPolicyCodeReusable":false,"requiredActions":[{"alias":"CONFIGURE_TOTP","name":"Configure OTP","providerId":"CONFIGURE_TOTP","enabled":true,"defaultAction":true,"priority":10,"config":{}}]}'
+
+az containerapp job start -g adp-rg -n adp-keycloak-admin \
+  --image "<acr-login-server>/adp-api:<tag>" \
+  --container-name keycloak-admin \
+  --command "python3" "/app/src/adp/ops/keycloak_admin_patch.py" \
+  --env-vars \
+    KEYCLOAK_URL="https://${KC_FQDN}/auth" \
+    KEYCLOAK_REALM=ADPRealm \
+    KEYCLOAK_ADMIN_USERNAME=admin \
+    "KEYCLOAK_ADMIN_PASSWORD=secretref:keycloak-admin-password" \
+    KC_PATCH_TARGET=realm \
+    "KC_PATCH_BODY=${PATCH_BODY}"
+```
+
+Note `requiredActions[].defaultAction` only auto-assigns to users created via
+Keycloak's own self-registration/first-login flow — **not** to users created
+through the admin REST API (which is how every user in this deployment is
+created, since self-registration is disabled). `keycloak_create_users.py`
+already sets `"requiredActions": ["CONFIGURE_TOTP"]` explicitly on new-user
+creation for this reason; existing users are left alone on re-run (no forced
+re-enrollment on already-provisioned accounts).
+
+Verify with a real browser login (not curl) — confirm the OTP enrollment
+screen actually appears on first login for a newly-created user.
+
 ### Frontend auth must stay ON in the deployed build
 
 The deployed frontend and backend must agree on auth. The backend hardcodes
