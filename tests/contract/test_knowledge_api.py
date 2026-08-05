@@ -2,15 +2,23 @@
 
 Tests are isolated — no real DB. The knowledge router's DB session dependency
 is overridden with an in-memory SQLite database per test.
+
+The client fixture is async and uses httpx.ASGITransport (matching every
+other contract test's convention, e.g. tests/contract/test_apm_cost_api.py)
+rather than the sync TestClient + asyncio.get_event_loop().run_until_complete(...)
+this file used previously — that legacy pattern relied on an implicit
+current event loop existing in the fixture's thread, which some CI runners'
+pytest-asyncio/anyio versions no longer create automatically (ADP-s3j: 17
+"no current event loop" setup errors in CI, not reproducible locally).
 """
 
 from __future__ import annotations
 
 from unittest.mock import patch
 
+import httpx
 import pytest
 import sqlalchemy as sa
-from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 
@@ -35,31 +43,32 @@ async def _create_tables(engine):
 
 
 @pytest.fixture()
-def client():
-    """Provide a TestClient with an in-memory SQLite DB injected as the session dependency."""
+async def client(tmp_path):
+    """Provide an async client with an in-memory SQLite DB injected as the session dependency."""
     from adp.api.app import create_app
+    from adp.api.deps import get_kb_session
     from adp.api.routers import knowledge as kb_module
 
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/kb.db", echo=False)
+    await _create_tables(engine)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-
-    import asyncio
-    asyncio.get_event_loop().run_until_complete(_create_tables(engine))
 
     async def _fake_session():
         async with factory() as session:
             yield session
 
     # Patch embed so tests don't need sentence-transformers
-    from adp.api.deps import get_kb_session
     with patch.object(kb_module, "_embed", return_value=[0.0] * 384):
         app = create_app()
         app.dependency_overrides[get_kb_session] = _fake_session
-        yield TestClient(app, raise_server_exceptions=True)
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+            yield c
+    await engine.dispose()
 
 
-def _seed_item(client, item_id: str = "TEST-001", kind: str = "principle") -> None:
-    resp = client.post("/api/v1/knowledge", json={
+async def _seed_item(client, item_id: str = "TEST-001", kind: str = "principle") -> None:
+    resp = await client.post("/api/v1/knowledge", json={
         "id": item_id,
         "kind": kind,
         "title": f"Test Principle {item_id}",
@@ -71,17 +80,17 @@ def _seed_item(client, item_id: str = "TEST-001", kind: str = "principle") -> No
 
 # ── US1: Browse ───────────────────────────────────────────────────────────────
 
-def test_list_knowledge_items_empty_returns_empty_list(client):
-    resp = client.get("/api/v1/knowledge")
+async def test_list_knowledge_items_empty_returns_empty_list(client):
+    resp = await client.get("/api/v1/knowledge")
     assert resp.status_code == 200
     body = resp.json()
     assert body["items"] == []
     assert body["total"] == 0
 
 
-def test_list_knowledge_items_returns_seeded_item(client):
-    _seed_item(client, "PRIN-001", "principle")
-    resp = client.get("/api/v1/knowledge")
+async def test_list_knowledge_items_returns_seeded_item(client):
+    await _seed_item(client, "PRIN-001", "principle")
+    resp = await client.get("/api/v1/knowledge")
     assert resp.status_code == 200
     items = resp.json()["items"]
     assert len(items) == 1
@@ -92,17 +101,17 @@ def test_list_knowledge_items_returns_seeded_item(client):
     assert "full_text" not in items[0]  # summary endpoint omits full_text
 
 
-def test_list_knowledge_items_multiple(client):
-    _seed_item(client, "PRIN-001", "principle")
-    _seed_item(client, "PAT-001", "pattern")
-    resp = client.get("/api/v1/knowledge")
+async def test_list_knowledge_items_multiple(client):
+    await _seed_item(client, "PRIN-001", "principle")
+    await _seed_item(client, "PAT-001", "pattern")
+    resp = await client.get("/api/v1/knowledge")
     assert resp.status_code == 200
     assert resp.json()["total"] == 2
 
 
-def test_get_knowledge_item_returns_full_text(client):
-    _seed_item(client, "PRIN-001", "principle")
-    resp = client.get("/api/v1/knowledge/PRIN-001")
+async def test_get_knowledge_item_returns_full_text(client):
+    await _seed_item(client, "PRIN-001", "principle")
+    resp = await client.get("/api/v1/knowledge/PRIN-001")
     assert resp.status_code == 200
     body = resp.json()
     assert body["id"] == "PRIN-001"
@@ -110,15 +119,15 @@ def test_get_knowledge_item_returns_full_text(client):
     assert len(body["full_text"]) > 0
 
 
-def test_get_knowledge_item_not_found_returns_404(client):
-    resp = client.get("/api/v1/knowledge/NONEXISTENT")
+async def test_get_knowledge_item_not_found_returns_404(client):
+    resp = await client.get("/api/v1/knowledge/NONEXISTENT")
     assert resp.status_code == 404
 
 
 # ── US2: Create ───────────────────────────────────────────────────────────────
 
-def test_create_knowledge_item_returns_201(client):
-    resp = client.post("/api/v1/knowledge", json={
+async def test_create_knowledge_item_returns_201(client):
+    resp = await client.post("/api/v1/knowledge", json={
         "id": "NEW-001",
         "kind": "pattern",
         "title": "Circuit Breaker",
@@ -132,8 +141,8 @@ def test_create_knowledge_item_returns_201(client):
     assert body["title"] == "Circuit Breaker"
 
 
-def test_create_knowledge_item_without_id_generates_uuid(client):
-    resp = client.post("/api/v1/knowledge", json={
+async def test_create_knowledge_item_without_id_generates_uuid(client):
+    resp = await client.post("/api/v1/knowledge", json={
         "kind": "standard",
         "title": "OAuth2",
         "full_text": "Industry standard authorisation framework.",
@@ -145,8 +154,8 @@ def test_create_knowledge_item_without_id_generates_uuid(client):
     assert len(body["id"]) > 0
 
 
-def test_create_knowledge_item_blank_title_returns_422(client):
-    resp = client.post("/api/v1/knowledge", json={
+async def test_create_knowledge_item_blank_title_returns_422(client):
+    resp = await client.post("/api/v1/knowledge", json={
         "kind": "principle",
         "title": "",
         "full_text": "Some content.",
@@ -155,8 +164,8 @@ def test_create_knowledge_item_blank_title_returns_422(client):
     assert resp.status_code == 422
 
 
-def test_create_knowledge_item_blank_full_text_returns_422(client):
-    resp = client.post("/api/v1/knowledge", json={
+async def test_create_knowledge_item_blank_full_text_returns_422(client):
+    resp = await client.post("/api/v1/knowledge", json={
         "kind": "principle",
         "title": "Valid Title",
         "full_text": "",
@@ -165,8 +174,8 @@ def test_create_knowledge_item_blank_full_text_returns_422(client):
     assert resp.status_code == 422
 
 
-def test_create_knowledge_item_invalid_kind_returns_422(client):
-    resp = client.post("/api/v1/knowledge", json={
+async def test_create_knowledge_item_invalid_kind_returns_422(client):
+    resp = await client.post("/api/v1/knowledge", json={
         "kind": "not_a_real_kind",
         "title": "Title",
         "full_text": "Content.",
@@ -177,47 +186,47 @@ def test_create_knowledge_item_invalid_kind_returns_422(client):
 
 # ── US3: Update ───────────────────────────────────────────────────────────────
 
-def test_update_knowledge_item_returns_200(client):
-    _seed_item(client, "PRIN-001")
-    resp = client.put("/api/v1/knowledge/PRIN-001", json={"title": "Updated Title"})
+async def test_update_knowledge_item_returns_200(client):
+    await _seed_item(client, "PRIN-001")
+    resp = await client.put("/api/v1/knowledge/PRIN-001", json={"title": "Updated Title"})
     assert resp.status_code == 200
     assert resp.json()["title"] == "Updated Title"
 
 
-def test_update_knowledge_item_not_found_returns_404(client):
-    resp = client.put("/api/v1/knowledge/NONEXISTENT", json={"title": "Updated"})
+async def test_update_knowledge_item_not_found_returns_404(client):
+    resp = await client.put("/api/v1/knowledge/NONEXISTENT", json={"title": "Updated"})
     assert resp.status_code == 404
 
 
-def test_update_knowledge_item_blank_title_returns_422(client):
-    _seed_item(client, "PRIN-001")
-    resp = client.put("/api/v1/knowledge/PRIN-001", json={"title": ""})
+async def test_update_knowledge_item_blank_title_returns_422(client):
+    await _seed_item(client, "PRIN-001")
+    resp = await client.put("/api/v1/knowledge/PRIN-001", json={"title": ""})
     assert resp.status_code == 422
 
 
 # ── US4: Delete ───────────────────────────────────────────────────────────────
 
-def test_delete_knowledge_item_returns_204(client):
-    _seed_item(client, "PRIN-001")
-    resp = client.delete("/api/v1/knowledge/PRIN-001")
+async def test_delete_knowledge_item_returns_204(client):
+    await _seed_item(client, "PRIN-001")
+    resp = await client.delete("/api/v1/knowledge/PRIN-001")
     assert resp.status_code == 204
 
 
-def test_delete_knowledge_item_not_in_list_after_delete(client):
-    _seed_item(client, "PRIN-001")
-    client.delete("/api/v1/knowledge/PRIN-001")
-    resp = client.get("/api/v1/knowledge")
+async def test_delete_knowledge_item_not_in_list_after_delete(client):
+    await _seed_item(client, "PRIN-001")
+    await client.delete("/api/v1/knowledge/PRIN-001")
+    resp = await client.get("/api/v1/knowledge")
     ids = [item["id"] for item in resp.json()["items"]]
     assert "PRIN-001" not in ids
 
 
-def test_delete_knowledge_item_not_found_returns_404(client):
-    resp = client.delete("/api/v1/knowledge/NONEXISTENT")
+async def test_delete_knowledge_item_not_found_returns_404(client):
+    resp = await client.delete("/api/v1/knowledge/NONEXISTENT")
     assert resp.status_code == 404
 
 
-def test_delete_already_deleted_returns_404(client):
-    _seed_item(client, "PRIN-001")
-    client.delete("/api/v1/knowledge/PRIN-001")
-    resp = client.delete("/api/v1/knowledge/PRIN-001")
+async def test_delete_already_deleted_returns_404(client):
+    await _seed_item(client, "PRIN-001")
+    await client.delete("/api/v1/knowledge/PRIN-001")
+    resp = await client.delete("/api/v1/knowledge/PRIN-001")
     assert resp.status_code == 404
