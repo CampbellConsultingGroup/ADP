@@ -804,9 +804,33 @@ cd infra/azure
                # the Key Vault. Local infra/azure/.secrets/ is kept for a rebuild.
 ```
 
+### Seeding data from local dev into Azure
+
+```bash
+cd infra/azure
+./seed-data.sh   # or ./seed-data.sh "postgresql://user:pass@host:5432/dbname" for a non-default source
+```
+
+Copies data from a local Postgres database into the already-deployed Azure
+Postgres instance. **Deliberately a manual, on-demand script — not part of
+`deploy.sh` or the CD pipeline below.** Unlike infrastructure provisioning or
+an app-image rollout, this is *not* idempotent: re-running it against
+already-seeded data will duplicate rows or hit unique-constraint errors. Runs
+from your own authenticated `az` session, not CI — the CI service principal
+is deliberately scoped to zero Postgres access (see CI/CD below), and this
+script doesn't change that.
+
+Excludes `alembic_version` (already correct on the target from its own
+migration run), `audit_entries`, and `operations` — environment-specific
+bookkeeping/audit records, not content data that should follow you between
+environments. Handles the two self-referencing hierarchy tables
+(`business_capabilities`, `technical_capabilities`) by reordering rows by
+`level` ascending rather than using `pg_dump --disable-triggers`, which
+requires superuser privileges Azure's admin login doesn't have.
+
 ### CI/CD
 
 Push to `main` triggers `.github/workflows/deploy-azure.yml` (OIDC federated
 credential, no stored secret) — it rebuilds the API image and rolls out
 `adp-api`. Infra (Bicep) changes are applied manually via `deploy.sh`, not by the
-workflow.
+workflow. **Data is never part of this pipeline** — see "Seeding data" above.
