@@ -38,8 +38,8 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["https://adp-api.bluetree-6fc1a2ef.eastus2.azurecontainerapps.io/*"],
-      "webOrigins": ["https://adp-api.bluetree-6fc1a2ef.eastus2.azurecontainerapps.io"],
+      "redirectUris": ["https://adp-api.lemonrock-efb4b112.eastus2.azurecontainerapps.io/*"],
+      "webOrigins": ["https://adp-api.lemonrock-efb4b112.eastus2.azurecontainerapps.io"],
       "protocolMappers": [
         {
           "name": "groups",
