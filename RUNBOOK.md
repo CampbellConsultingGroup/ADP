@@ -64,12 +64,24 @@ export ADP_LLM_MODEL="claude-sonnet-4-6"   # Optional default model
 # export ADP_AUTH_ENABLED=true
 # export ADP_KEYCLOAK_ISSUER="http://127.0.0.1:8080/realms/ADPRealm"
 # export ADP_KEYCLOAK_CLIENT_ID="adp-frontend"
+# Optional — continuous Business Architecture export to versioned JSON files
+# (ADP-SPEC-044). Unset (the default) disables the feature entirely — no
+# background task runs, nothing is written to disk.
+# export ADP_BUSINESS_ARCH_EXPORT_ROOT="/path/to/git-tracked/export/root"
+# export ADP_BUSINESS_ARCH_EXPORT_INTERVAL_SECONDS=60
 uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 ```
 
 When `ADP_AUTH_ENABLED=true`, every `/api/v1/*` route requires a valid Keycloak
 bearer token; roles on the token drive RBAC. Leave it unset (or `false`) for
 local development without a Keycloak instance.
+
+When `ADP_BUSINESS_ARCH_EXPORT_ROOT` is set, business capabilities, value
+streams, value stream stages, and business domains are continuously
+reconciled to one JSON file per entity under
+`$ADP_BUSINESS_ARCH_EXPORT_ROOT/business-architecture/` — see
+`specs/044-business-arch-export/contracts/exported-file-formats.md` for the
+file layout and guarantees.
 
 ### Web canvas (development)
 

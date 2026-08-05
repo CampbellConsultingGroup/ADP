@@ -18,7 +18,8 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _reset_admin_module_state(db_url, monkeypatch):
-    from adp.admin import prompt_registry, service as admin_service
+    from adp.admin import prompt_registry
+    from adp.admin import service as admin_service
 
     monkeypatch.setenv("ADP_DATABASE_URL", db_url)
     for mod in (prompt_registry, admin_service):
@@ -72,11 +73,12 @@ async def test_confirmed_edit_takes_effect_for_next_chat_turn(db_engine) -> None
     # end-to-end against a real DB, not just the SQLite-mocked unit test.
     from unittest.mock import AsyncMock, patch
 
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
     from adp.authz.roles import PersonaRole
     from adp.business import store as bstore
     from adp.chat import orchestrator
     from adp.chat import store as chat_store
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
     chat_engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with chat_engine.begin() as conn:

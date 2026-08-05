@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
@@ -41,9 +42,27 @@ from adp.application.router import (
 from adp.auth.middleware import AuthMiddleware
 from adp.authz.enforcement import enforce_route_permission
 from adp.business import router as business_router_module
+from adp.business import store as bstore
 from adp.chat import router as chat_router_module
+from adp.export import business_arch
 from adp.telemetry.context import TraceIdFilter, generate_trace_id, set_trace_id
 from adp.telemetry.metrics import ACTIVE_REQUESTS, ERROR_COUNTER, REQUEST_COUNTER, REQUEST_LATENCY
+
+
+def start_business_arch_export() -> asyncio.Task[None] | None:
+    """ADP-SPEC-044: start the continuous business architecture export sync.
+    No-op unless ADP_BUSINESS_ARCH_EXPORT_ROOT is set (research.md Decision 4
+    — opt-in, never a silent default write)."""
+    export_root = os.environ.get("ADP_BUSINESS_ARCH_EXPORT_ROOT")
+    interval = float(os.environ.get("ADP_BUSINESS_ARCH_EXPORT_INTERVAL_SECONDS", "60"))
+    return business_arch.start_background_sync(
+        export_root, interval, bstore._get_session_factory()
+    )
+
+
+async def stop_business_arch_export(task: asyncio.Task[None] | None) -> None:
+    """ADP-SPEC-044: stop the continuous business architecture export sync."""
+    await business_arch.stop_background_sync(task)
 
 
 def _install_trace_id_logging() -> None:
@@ -59,7 +78,9 @@ def _install_trace_id_logging() -> None:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Startup: mark stale operations failed + schedule cleanup. Shutdown: cancel cleanup."""
+    """Startup: mark stale operations failed + schedule cleanup + start the
+    business architecture export sync (ADP-SPEC-044, opt-in). Shutdown: cancel
+    both background tasks."""
     from adp.api.deps import get_operation_store
 
     _cleanup_task: asyncio.Task | None = None
@@ -88,10 +109,16 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # DB may not be configured — log and continue (graceful degradation)
         logging.getLogger(__name__).warning("lifespan startup skipped: %s", exc)
 
+    # ADP-SPEC-044: opt-in continuous export of business architecture data to
+    # versioned files. start_business_arch_export is a no-op (returns None,
+    # writes nothing) unless ADP_BUSINESS_ARCH_EXPORT_ROOT is set.
+    _export_task = start_business_arch_export()
+
     yield
 
     if _cleanup_task:
         _cleanup_task.cancel()
+    await stop_business_arch_export(_export_task)
 
 
 def create_app() -> FastAPI:
