@@ -33,6 +33,7 @@ from adp.api.routers import (
     tags,
     theme,
 )
+from adp.application import store as astore
 from adp.application.router import (
     applications_router,
     initiatives_router,
@@ -44,7 +45,7 @@ from adp.authz.enforcement import enforce_route_permission
 from adp.business import router as business_router_module
 from adp.business import store as bstore
 from adp.chat import router as chat_router_module
-from adp.export import business_arch
+from adp.export import application_arch, business_arch
 from adp.telemetry.context import TraceIdFilter, generate_trace_id, set_trace_id
 from adp.telemetry.metrics import ACTIVE_REQUESTS, ERROR_COUNTER, REQUEST_COUNTER, REQUEST_LATENCY
 
@@ -63,6 +64,23 @@ def start_business_arch_export() -> asyncio.Task[None] | None:
 async def stop_business_arch_export(task: asyncio.Task[None] | None) -> None:
     """ADP-SPEC-044: stop the continuous business architecture export sync."""
     await business_arch.stop_background_sync(task)
+
+
+def start_application_arch_export() -> asyncio.Task[None] | None:
+    """ADP-SPEC-045: start the continuous Application registry export sync.
+    Reuses the SAME ADP_BUSINESS_ARCH_EXPORT_ROOT/_INTERVAL_SECONDS env vars
+    as ADP-SPEC-044 -- no new configuration surface for this feature. No-op
+    unless that root is set."""
+    export_root = os.environ.get("ADP_BUSINESS_ARCH_EXPORT_ROOT")
+    interval = float(os.environ.get("ADP_BUSINESS_ARCH_EXPORT_INTERVAL_SECONDS", "60"))
+    return application_arch.start_background_sync(
+        export_root, interval, astore._get_session_factory()
+    )
+
+
+async def stop_application_arch_export(task: asyncio.Task[None] | None) -> None:
+    """ADP-SPEC-045: stop the continuous Application registry export sync."""
+    await application_arch.stop_background_sync(task)
 
 
 def _install_trace_id_logging() -> None:
@@ -113,12 +131,16 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # versioned files. start_business_arch_export is a no-op (returns None,
     # writes nothing) unless ADP_BUSINESS_ARCH_EXPORT_ROOT is set.
     _export_task = start_business_arch_export()
+    # ADP-SPEC-045: opt-in continuous export of the Application registry,
+    # sharing the same env vars/root as ADP-SPEC-044 above.
+    _app_export_task = start_application_arch_export()
 
     yield
 
     if _cleanup_task:
         _cleanup_task.cancel()
     await stop_business_arch_export(_export_task)
+    await stop_application_arch_export(_app_export_task)
 
 
 def create_app() -> FastAPI:

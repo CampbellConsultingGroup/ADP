@@ -12,18 +12,18 @@ Sync mechanism (research.md Decision 1): a periodic full-reconciliation scan,
 not event-driven write-path hooks -- deliberately touches nothing in
 adp.business.store. Change detection (Decision 2) compares candidate file
 content against what's already on disk; no new database table is introduced.
+
+The domain-agnostic mechanics (path safety, atomic writes, content-diff-aware
+writes, orphan cleanup, background-loop lifecycle) live in `adp.export.common`
+as of ADP-SPEC-045 (research.md Decision 5) -- imported here rather than
+redefined, so this module's own tests (which reference these names as
+`business_arch._write_file_atomic` etc.) keep working unchanged.
 """
 
 from __future__ import annotations
 
 import asyncio
-import contextlib
-import json
 import logging
-import os
-import re
-import shutil
-import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -35,29 +35,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.business import store as bstore
 from adp.business.models import BusinessCapability, BusinessDomain, ValueStream, ValueStreamStage
+from adp.export.common import (
+    _cleanup_orphan_dirs,
+    _cleanup_orphan_files,
+    _safe_filename,
+    _safe_path_component,
+    _write_entity_file,
+    _write_file_atomic,  # noqa: F401 -- re-exported for existing test references
+    stop_background_sync,  # noqa: F401 -- re-exported
+)
+from adp.export.common import start_background_sync as _common_start_background_sync
 
 _logger = logging.getLogger("adp.export.business_arch")
-
-# File/directory names are always derived from an entity's own internal ID,
-# never its user-editable name -- IDs from adp.business.store are UUIDs
-# (str(uuid.uuid4())), so this is a defense-in-depth check, not the only
-# thing standing between a crafted name and a path-traversal write.
-_SAFE_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
-
-
-def _safe_path_component(entity_id: str) -> str:
-    """Validate entity_id is safe to use as a path component (directory or
-    filename stem), raising if not (Threat Model: never build a path from
-    user-supplied text)."""
-    if not _SAFE_ID_RE.match(entity_id):
-        raise ValueError(f"Unsafe entity id for a file path: {entity_id!r}")
-    return entity_id
-
-
-def _safe_filename(entity_id: str) -> str:
-    """Return f"{entity_id}.json", raising if entity_id isn't a safe path
-    component."""
-    return f"{_safe_path_component(entity_id)}.json"
 
 
 # ── Serialization (data-model.md §2) ─────────────────────────────────────────
@@ -98,26 +87,6 @@ def _serialize_value_stream(vs: ValueStream) -> dict[str, Any]:
         "stakeholder": vs.stakeholder,
         "position": vs.position,
     }
-
-
-def _write_file_atomic(path: Path, content: str) -> None:
-    """Write `content` to `path` via temp-file-then-`os.replace` (FR-007) --
-    a crash or failure mid-write never leaves a partially-written file in
-    place of a previously-good one. The temp file lives in the SAME
-    directory as `path` so the final `os.replace` is a same-filesystem
-    rename (atomic), not a cross-filesystem copy."""
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            f.write(content)
-        os.replace(tmp_name, path)
-    except Exception:
-        try:
-            os.unlink(tmp_name)
-        except OSError:
-            pass
-        raise
 
 
 def _serialize_stage(
@@ -177,50 +146,8 @@ async def _fetch_all(session: AsyncSession) -> BusinessArchSnapshot:
 
 
 # ── Reconciliation orchestration ─────────────────────────────────────────────
-
-def _write_entity_file(path: Path, data: dict[str, Any], now: datetime) -> None:
-    """Stamp `exported_at` and write via `_write_file_atomic` -- unless the
-    file already exists with identical content (ignoring `exported_at`),
-    in which case do nothing at all, not even touch its mtime (research.md
-    Decision 2, FR-009)."""
-    if path.exists():
-        try:
-            existing = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            existing = None
-        if existing is not None:
-            existing.pop("exported_at", None)
-            if existing == data:
-                return
-    stamped = {**data, "exported_at": now.isoformat()}
-    content = json.dumps(stamped, indent=2, sort_keys=True) + "\n"
-    _write_file_atomic(path, content)
-
-
-def _cleanup_orphan_files(dir_path: Path, live_ids: set[str]) -> None:
-    """Remove any `<id>.json` file in `dir_path` whose id is no longer live
-    (FR-004). A no-op if `dir_path` doesn't exist (nothing was ever exported
-    here, or it was already removed by _cleanup_orphan_dirs)."""
-    if not dir_path.is_dir():
-        return
-    for f in dir_path.glob("*.json"):
-        if f.stem not in live_ids:
-            f.unlink()
-
-
-def _cleanup_orphan_dirs(parent_dir: Path, live_ids: set[str]) -> None:
-    """Remove any immediate subdirectory of `parent_dir` whose name (an
-    entity id) is no longer live -- used for value streams, where a deleted
-    value stream's whole directory (value-stream.json + its stages/ subtree)
-    is removed in one step rather than reconciled as an empty stage set
-    against a value-stream.json that's about to be deleted anyway
-    (data-model.md §3 step 5)."""
-    if not parent_dir.is_dir():
-        return
-    for d in parent_dir.iterdir():
-        if d.is_dir() and d.name not in live_ids:
-            shutil.rmtree(d)
-
+# _write_entity_file / _cleanup_orphan_files / _cleanup_orphan_dirs are now
+# defined in adp.export.common (imported above) and used here unchanged.
 
 async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSession) -> None:
     """One full reconciliation pass: read everything live, write every
@@ -277,20 +204,9 @@ async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSessio
 
 
 # ── Background task lifecycle (User Story 1) ─────────────────────────────────
-# No module-level task handle -- the caller (adp.api.app's lifespan) owns the
-# returned Task and passes it back to stop_background_sync, so there's no
-# shared mutable state to reset between app instances/tests.
-
-async def _background_loop(
-    export_root: Path,
-    interval_seconds: float,
-    session_factory: Callable[[], Any],
-) -> None:
-    while True:
-        async with session_factory() as session:
-            await run_reconciliation_cycle(export_root, session)
-        await asyncio.sleep(interval_seconds)
-
+# The generic loop/lifecycle now lives in adp.export.common (imported above);
+# this is a thin, domain-bound wrapper so existing call sites/tests keep the
+# exact same 3-arg signature (no reconcile_fn parameter to pass themselves).
 
 def start_background_sync(
     export_root: str | None,
@@ -301,19 +217,10 @@ def start_background_sync(
     nothing, writes nothing) when `export_root` is falsy -- this feature is
     opt-in, never a silent default write to some assumed path (research.md
     Decision 4)."""
-    if not export_root:
-        _logger.info("business_arch_export.disabled (ADP_BUSINESS_ARCH_EXPORT_ROOT not set)")
-        return None
-    return asyncio.create_task(
-        _background_loop(Path(export_root), interval_seconds, session_factory)
+    return _common_start_background_sync(
+        export_root,
+        interval_seconds,
+        session_factory,
+        run_reconciliation_cycle,
+        logger_name="adp.export.business_arch",
     )
-
-
-async def stop_background_sync(task: asyncio.Task[None] | None) -> None:
-    """Cancel and await the background task started by start_background_sync.
-    A no-op if `task` is None (the feature was never started)."""
-    if task is None:
-        return
-    task.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await task

@@ -64,9 +64,11 @@ export ADP_LLM_MODEL="claude-sonnet-4-6"   # Optional default model
 # export ADP_AUTH_ENABLED=true
 # export ADP_KEYCLOAK_ISSUER="http://127.0.0.1:8080/realms/ADPRealm"
 # export ADP_KEYCLOAK_CLIENT_ID="adp-frontend"
-# Optional — continuous Business Architecture export to versioned JSON files
-# (ADP-SPEC-044). Unset (the default) disables the feature entirely — no
-# background task runs, nothing is written to disk.
+# Optional — continuous Business Architecture + Application registry export
+# to versioned JSON files (ADP-SPEC-044 / ADP-SPEC-045). Unset (the default)
+# disables BOTH features entirely — no background task runs for either,
+# nothing is written to disk. One pair of env vars controls both; there is
+# no separate on/off switch or interval for the Application registry export.
 # export ADP_BUSINESS_ARCH_EXPORT_ROOT="/path/to/git-tracked/export/root"
 # export ADP_BUSINESS_ARCH_EXPORT_INTERVAL_SECONDS=60
 uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
@@ -76,12 +78,23 @@ When `ADP_AUTH_ENABLED=true`, every `/api/v1/*` route requires a valid Keycloak
 bearer token; roles on the token drive RBAC. Leave it unset (or `false`) for
 local development without a Keycloak instance.
 
-When `ADP_BUSINESS_ARCH_EXPORT_ROOT` is set, business capabilities, value
-streams, value stream stages, and business domains are continuously
-reconciled to one JSON file per entity under
-`$ADP_BUSINESS_ARCH_EXPORT_ROOT/business-architecture/` — see
-`specs/044-business-arch-export/contracts/exported-file-formats.md` for the
-file layout and guarantees.
+When `ADP_BUSINESS_ARCH_EXPORT_ROOT` is set, two independent background syncs
+start:
+
+- Business capabilities, value streams, value stream stages, and business
+  domains are reconciled to one JSON file per entity under
+  `$ADP_BUSINESS_ARCH_EXPORT_ROOT/business-architecture/` — see
+  `specs/044-business-arch-export/contracts/exported-file-formats.md`.
+- Applications, technical capabilities, transformation initiatives, and
+  application-to-application integrations are reconciled to one JSON file per
+  entity under `$ADP_BUSINESS_ARCH_EXPORT_ROOT/applications/` — see
+  `specs/045-application-export/contracts/exported-file-formats.md`.
+  **Unlike the Business Architecture export, this one includes an
+  application's risk, cost, and governance data unredacted** — data the live
+  API otherwise gates behind dedicated read permissions. If you enable this,
+  treat `$ADP_BUSINESS_ARCH_EXPORT_ROOT` (and any git remote it's pushed to)
+  as equivalently sensitive to those gated endpoints — this feature applies
+  no access control of its own to the exported files.
 
 ### Web canvas (development)
 
