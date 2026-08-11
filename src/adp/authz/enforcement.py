@@ -135,6 +135,10 @@ _PREFIX_ROUTE_ACTIONS: tuple[tuple[str, ActionType], ...] = (
     ("/api/v1/technical-capabilities", ActionType.WRITE_APPLICATION),
     ("/api/v1/integrations", ActionType.WRITE_APPLICATION),
     ("/api/v1/transformation-initiatives", ActionType.WRITE_APPLICATION),
+    # ADP-SPEC-046: one rule covers every mutating method under this prefix
+    # (create/update/delete/export) -- reads are ungated (nothing about a
+    # diagram's content is sensitive the way READ_APPLICATION_RISK etc. are).
+    ("/api/v1/diagrams", ActionType.WRITE_DIAGRAM),
 )
 
 

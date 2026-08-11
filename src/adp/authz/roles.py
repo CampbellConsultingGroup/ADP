@@ -54,3 +54,8 @@ class ActionType(StrEnum):
     # Granted only to PLATFORM_ADMIN -- see permissions.py for the deliberate
     # narrowing of ENTERPRISE_ARCHITECT's wildcard grant this required.
     MANAGE_AGENT_PROMPTS = "manage_agent_prompts"
+    # ADP-SPEC-046: creating/editing/deleting a non-C4 diagram (flowchart,
+    # sequence, ER, UML, cloud-architecture). Reads are ungated -- only this
+    # one write action exists, matching WRITE_APPLICATION/WRITE_BUSINESS_ARCH's
+    # shape (research.md Decision 5).
+    WRITE_DIAGRAM = "write_diagram"

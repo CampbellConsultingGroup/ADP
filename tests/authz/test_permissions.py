@@ -168,6 +168,13 @@ _EXPECTED: dict[tuple[PersonaRole, ActionType], bool] = {
     (PersonaRole.SOLUTION_ARCHITECT, ActionType.MANAGE_AGENT_PROMPTS): False,
     (PersonaRole.TECHNICAL_ARCHITECT, ActionType.MANAGE_AGENT_PROMPTS): False,
     (PersonaRole.REVIEWER, ActionType.MANAGE_AGENT_PROMPTS): False,
+    # write_diagram (v1.8.0, ADP-SPEC-046): the three architect roles author
+    # non-C4 diagrams; reviewer cannot -- same grant shape as
+    # write_business_arch/write_application (research.md Decision 5).
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.WRITE_DIAGRAM): True,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.WRITE_DIAGRAM): True,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.WRITE_DIAGRAM): True,
+    (PersonaRole.REVIEWER, ActionType.WRITE_DIAGRAM): False,
     # platform_admin (v1.7.0, ADP-SPEC-042): everything Enterprise Architect
     # has today, plus MANAGE_AGENT_PROMPTS -- least-surprise for existing
     # ADPAdministrator group members (research.md Decision 1).
@@ -192,6 +199,7 @@ _EXPECTED: dict[tuple[PersonaRole, ActionType], bool] = {
     (PersonaRole.PLATFORM_ADMIN, ActionType.CONFIRM_AGENT_SUGGESTION): True,
     (PersonaRole.PLATFORM_ADMIN, ActionType.USE_CHAT_ASSISTANT): True,
     (PersonaRole.PLATFORM_ADMIN, ActionType.MANAGE_AGENT_PROMPTS): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_DIAGRAM): True,
 }
 
 
@@ -243,8 +251,8 @@ def test_require_action_logs_warning_on_denial(caplog: pytest.LogCaptureFixture)
 
 
 def test_permissions_version_constant() -> None:
-    """PERMISSIONS_VERSION exists and is 1.7.0 — any permission change must bump it."""
-    assert PERMISSIONS_VERSION == "1.7.0"
+    """PERMISSIONS_VERSION exists and is 1.8.0 — any permission change must bump it."""
+    assert PERMISSIONS_VERSION == "1.8.0"
 
 
 # ── US3: Per-action confirmation requirements ────────────────────────────────
@@ -271,6 +279,10 @@ _CONFIRMATION_EXPECTED: dict[ActionType, bool] = {
     ActionType.CONFIRM_AGENT_SUGGESTION: True,
     ActionType.USE_CHAT_ASSISTANT: False,
     ActionType.MANAGE_AGENT_PROMPTS: True,
+    # write_diagram (v1.8.0, ADP-SPEC-046): an ordinary CRUD write, not a
+    # consequential AI-originated action -- no confirmation_id gate (plan.md
+    # Constitution Check, ART-VIII does not apply).
+    ActionType.WRITE_DIAGRAM: False,
 }
 
 

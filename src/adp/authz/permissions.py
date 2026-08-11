@@ -50,7 +50,13 @@ _logger = logging.getLogger("adp.authz")
 #           Enterprise Architect, may gain admin-screen access solely by
 #           virtue of that role. This is the one place a prior "has every
 #           action" invariant is intentionally weakened, not just extended.
-PERMISSIONS_VERSION = "1.7.0"
+#   1.8.0 — added WRITE_DIAGRAM (ADP-SPEC-046) to gate creating/editing/
+#           deleting a non-C4 diagram, granted to the three architect roles
+#           (same shape as WRITE_BUSINESS_ARCH/WRITE_APPLICATION); Reviewer
+#           does not hold it. Enterprise Architect and Platform Admin receive
+#           it automatically via their existing wildcard grants -- no change
+#           needed to either of those two entries below.
+PERMISSIONS_VERSION = "1.8.0"
 
 # ── Permission table ─────────────────────────────────────────────────────────
 # Maps each PersonaRole to the frozenset of ActionTypes it may perform.
@@ -79,6 +85,7 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.WRITE_APPLICATION_GOVERNANCE,
         ActionType.CONFIRM_AGENT_SUGGESTION,
         ActionType.USE_CHAT_ASSISTANT,
+        ActionType.WRITE_DIAGRAM,
     }),
     PersonaRole.TECHNICAL_ARCHITECT: frozenset({
         ActionType.READ_DESIGN,
@@ -96,6 +103,7 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.WRITE_APPLICATION_GOVERNANCE,
         ActionType.CONFIRM_AGENT_SUGGESTION,
         ActionType.USE_CHAT_ASSISTANT,
+        ActionType.WRITE_DIAGRAM,
     }),
     PersonaRole.REVIEWER: frozenset({
         ActionType.READ_DESIGN,
