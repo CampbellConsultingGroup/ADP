@@ -33,11 +33,13 @@
     "test:e2e:flows": "ADP_API_URL=http://127.0.0.1:8001 ADP_WEB_URL=http://localhost:5173 playwright test --project=fullstack"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^3.1.0",
     "@tanstack/react-query": "^5.0.0",
     "@xyflow/react": "^12.0.0",
     "keycloak-js": "^26.2.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "yaml": "^2.9.0",
     "zustand": "^4.5.0"
   },
   "devDependencies": {

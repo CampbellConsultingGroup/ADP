@@ -385,6 +385,59 @@ access, check `PERMISSIONS_VERSION` in `adp.authz.permissions` matches
 
 ---
 
+## Diagram types beyond C4
+
+Standalone flowchart/sequence/ER/UML/cloud-architecture diagrams (ADP-SPEC-046),
+additive alongside the existing C4 workspace — no relationship to
+`ArchitectureDescription`, `web/src/canvas/` (C4), or `adp.renderer`.
+
+```bash
+# Create
+curl -X POST http://localhost:8001/api/v1/diagrams \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Claims Intake","diagram_type":"flowchart"}'
+
+# List (global, not scoped to any Design -- see spec.md FR-011)
+curl http://localhost:8001/api/v1/diagrams
+
+# Read one (includes dsl_source), update, delete
+curl http://localhost:8001/api/v1/diagrams/{id}
+curl -X PUT http://localhost:8001/api/v1/diagrams/{id} -d '{"dsl_source":"flowchart LR\nA-->B\n"}'
+curl -X DELETE http://localhost:8001/api/v1/diagrams/{id}
+
+# PNG export (cairosvg-backed; the {id} in the path is only for the
+# existence/permission check -- send the browser-rendered SVG directly, the
+# backend never re-derives it from the stored dsl_source)
+curl -X POST http://localhost:8001/api/v1/diagrams/{id}/export \
+  -H "Content-Type: application/json" -d '{"svg":"<svg>...</svg>"}' -o out.png
+```
+
+Requires `WRITE_DIAGRAM` for mutations (granted to Enterprise/Solution/Technical
+Architect, not Reviewer); reads are ungated.
+
+**Frontend architecture, not just an API note**: parsing, DSL validation, and
+SVG rendering happen *entirely client-side* in `web/src/diagrams/core/` — a
+vendored (copied, not npm-linked) mirror of a sibling project's diagramming
+library at `/home/jmuir/projects/canvas/packages/diagram-core`. The backend
+never parses `dsl_source`; it's opaque, size-capped text as far as the API is
+concerned (specs/046-diagram-type-support/research.md Decision 2).
+
+**Re-syncing the vendored code**: if the upstream sibling project gains a fix
+or feature ADP needs, re-copy the relevant files from
+`/home/jmuir/projects/canvas/packages/diagram-core/src/` (and
+`apps/web/src/canvas/` for editor components) into `web/src/diagrams/core/`
+(`editor/`) and re-run `web/src/diagrams/core/dsl/families.test.ts` — see
+`web/src/diagrams/README.md` for the full do/don't list. There is no
+automated sync; this is a deliberate one-time-copy-then-diverge choice
+(research.md Decision 1), not an oversight.
+
+**Known follow-up**: the sibling project's design-token CSS system
+(`tokens.css`/`base.css`/`components.css`/`layout.css`) was not vendored —
+the editor is functionally complete but not visually polished to match the
+upstream project's own styling yet.
+
+---
+
 ## CALM export
 
 Export a design as a FINOS CALM document (ADP-SPEC-021):
