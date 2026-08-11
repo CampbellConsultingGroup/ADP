@@ -13,6 +13,8 @@ import { DslPanel } from "./editor/DslPanel";
 import { ExportAction } from "./editor/ExportAction";
 import { useDslSync } from "./editor/useDslSync";
 import { createEmptyDiagramModel, type DiagramModel } from "./core/index";
+import { useAuth } from "../auth/AuthProvider";
+import { getRecommendedDiagramType } from "./persona";
 import {
   createDiagram,
   getDiagram,
@@ -42,10 +44,17 @@ export function DiagramEditorPage({
   // so ExportAction (which needs a real id to export against) becomes
   // available without requiring a page navigation.
   const [savedId, setSavedId] = useState<string | undefined>(diagramId);
-  const [diagramType, setDiagramType] = useState<DiagramType>(newDiagramType ?? "flowchart");
-  const [model, setModel] = useState<DiagramModel>(() =>
-    createEmptyDiagramModel(newDiagramType ?? "flowchart"),
-  );
+  // ADP-914.6: an explicit `newDiagramType` prop always wins (FR-004); absent
+  // that, a new diagram defaults to the signed-in architect's mapped type
+  // (FR-002/FR-003), falling back to today's pre-feature "flowchart" default
+  // when the role is unrecognized (FR-006). Computed once and reused for both
+  // `diagramType` and the initial `model` below so they never start out of
+  // sync with each other.
+  const { user } = useAuth();
+  const recommended = getRecommendedDiagramType(user?.role);
+  const initialType = newDiagramType ?? recommended ?? "flowchart";
+  const [diagramType, setDiagramType] = useState<DiagramType>(initialType);
+  const [model, setModel] = useState<DiagramModel>(() => createEmptyDiagramModel(initialType));
   const [loading, setLoading] = useState(Boolean(diagramId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +128,7 @@ export function DiagramEditorPage({
             {DIAGRAM_TYPES.map((t) => (
               <option key={t} value={t}>
                 {t}
+                {t === recommended ? " (Recommended for your role)" : ""}
               </option>
             ))}
           </select>

@@ -36,7 +36,27 @@ don't assume the sibling project's own Fastify backend exists).
   exist in ADP. Rebuilt from scratch as `ExportAction.tsx`, targeting ADP's
   own `cairosvg`-backed export endpoint instead (research.md Decision 3).
 
-## `DiagramEditorPage.tsx`, `DiagramListPage.tsx`, `api.ts`
+## `DiagramEditorPage.tsx`, `DiagramListPage.tsx`, `DiagramsPage.tsx`, `api.ts`
 
 ADP-authored, not vendored — the integration surface between the vendored
 `core`/`editor` pieces and ADP's own backend (`src/adp/diagrams/`).
+`DiagramsPage.tsx` (ADP-914.5) owns list↔editor navigation state and is what's
+wired into `App.tsx`'s "Diagrams" nav entry — neither sub-page is imported
+from `App.tsx` directly.
+
+## `persona.ts` — persona-aware default diagram type (ADP-914.6)
+
+A small, static `PERSONA_DEFAULT_TYPE` constant (mirroring the
+`ROLE_LABELS`/`ROLE_COLORS` pattern in `web/src/auth/AuthProvider.tsx`)
+mapping each architect role to the diagram type `DiagramEditorPage.tsx`
+pre-selects when starting a brand-new diagram, and visually flags as
+"(Recommended for your role)" in the type selector. **Steering only** — every
+role can still pick any of the 5 types; this never restricts `WRITE_DIAGRAM`.
+Roles with no entry (`reviewer`, `platform_admin`, unrecognized/undefined)
+fall back to today's pre-feature default (`flowchart`), no badge shown.
+
+Changing a role's default is a one-line edit to the constant in `persona.ts`
+— it is a deliberately judgment-call mapping (no in-codebase usage data
+existed yet when it was chosen; see
+[specs/047-persona-diagram-experience/research.md](../../../specs/047-persona-diagram-experience/research.md)
+Decision 2), expected to be revisited once real usage patterns emerge.
