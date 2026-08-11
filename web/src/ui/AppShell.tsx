@@ -26,6 +26,10 @@ const ARCHITECTURE: NavDef[] = [
   { view: "portfolio", label: "Portfolio", icon: "chart", hue: "ent" },
   { view: "governance", label: "Governance", icon: "shield" },
   { view: "knowledge", label: "Knowledge", icon: "book", hue: "tec" },
+  // ADP-SPEC-046 / ADP-914.5: standalone diagrams (flowchart/sequence/ERD/
+  // UML/architecture) have no relationship to a Design (FR-011), so they sit
+  // here alongside Business/Applications rather than under DESIGN_SCOPED.
+  { view: "diagrams", label: "Diagrams", icon: "layers", hue: "tec" },
 ];
 const DESIGN_SCOPED: NavDef[] = [
   { view: "intake", label: "Intake", icon: "inbox" },
@@ -50,6 +54,7 @@ const TITLES: Record<AppView, string> = {
   intake: "Requirements Intake",
   recommend: "Recommendations",
   canvas: "Design Canvas",
+  diagrams: "Diagrams",
   admin: "Agent Prompt Management",
 };
 

@@ -10,4 +10,5 @@ export type AppView =
   | "governance"
   | "business"
   | "applications"
+  | "diagrams"
   | "admin";
