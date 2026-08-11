@@ -28,6 +28,14 @@ export interface DiagramEditorPageProps {
   diagramId?: string;
   /** Required when diagramId is undefined -- the type chosen for a new diagram. */
   newDiagramType?: DiagramType;
+  /**
+   * ADP-914.7: pre-filled title + model for a diagram generated from ADP's own
+   * business data (a value stream's stages, a capability's subtree). Only
+   * consulted when `diagramId` is undefined (a genuinely new diagram) and
+   * takes priority over `newDiagramType`/the persona-aware default below --
+   * a seed already carries real content, so there is nothing to steer.
+   */
+  seed?: { title: string; model: DiagramModel };
   onSaved?: (diagram: Diagram) => void;
 }
 
@@ -36,9 +44,10 @@ const DIAGRAM_TYPES: DiagramType[] = ["flowchart", "sequence", "erd", "uml", "ar
 export function DiagramEditorPage({
   diagramId,
   newDiagramType,
+  seed,
   onSaved,
 }: DiagramEditorPageProps) {
-  const [title, setTitle] = useState("Untitled diagram");
+  const [title, setTitle] = useState(seed?.title ?? "Untitled diagram");
   // Tracks the persisted id -- starts as the `diagramId` prop (editing an
   // existing diagram) and gets set once a brand-new diagram is first saved,
   // so ExportAction (which needs a real id to export against) becomes
@@ -49,12 +58,13 @@ export function DiagramEditorPage({
   // (FR-002/FR-003), falling back to today's pre-feature "flowchart" default
   // when the role is unrecognized (FR-006). Computed once and reused for both
   // `diagramType` and the initial `model` below so they never start out of
-  // sync with each other.
+  // sync with each other. ADP-914.7: a `seed` (generated content) takes
+  // priority over both -- see the prop doc above.
   const { user } = useAuth();
   const recommended = getRecommendedDiagramType(user?.role);
-  const initialType = newDiagramType ?? recommended ?? "flowchart";
+  const initialType = (seed?.model.diagramTypeId as DiagramType | undefined) ?? newDiagramType ?? recommended ?? "flowchart";
   const [diagramType, setDiagramType] = useState<DiagramType>(initialType);
-  const [model, setModel] = useState<DiagramModel>(() => createEmptyDiagramModel(initialType));
+  const [model, setModel] = useState<DiagramModel>(() => seed?.model ?? createEmptyDiagramModel(initialType));
   const [loading, setLoading] = useState(Boolean(diagramId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);

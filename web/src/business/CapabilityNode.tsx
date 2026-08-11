@@ -1,7 +1,10 @@
 import React, { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MATURITY_LEVEL_LABEL, STRATEGIC_RELEVANCE_LABEL, useDeleteCapability, useUpdateCapability } from "../api/business";
-import type { BusinessCapability, MaturityLevel, StrategicRelevance } from "../api/business";
+import type { MaturityLevel, StrategicRelevance } from "../api/business";
+import type { CapabilityTreeNode } from "./CapabilityTree";
+import { generateFromCapabilitySubtree } from "../diagrams/generators";
+import type { DiagramSeed } from "../diagrams/generators";
 import CapabilityForm from "./CapabilityForm";
 import DesignLinkEditor from "./DesignLinkEditor";
 import { LEVEL_STYLE } from "./classification";
@@ -9,13 +12,20 @@ import AgentReviewButton from "../agent-review/AgentReviewButton";
 import { renderCapabilitySuggestionDetail } from "./agentReviewDetail";
 
 interface CapabilityNodeProps {
-  capability: BusinessCapability;
+  // ADP-914.7: widened from BusinessCapability to CapabilityTreeNode (a
+  // strict superset -- all existing field access below still compiles) so
+  // this node has its own full subtree on hand for "Generate Diagram"
+  // (research.md Decision 1), without needing a second data-fetch/lookup.
+  capability: CapabilityTreeNode;
   children: React.ReactNode;
+  /** ADP-914.7: opens the Diagrams screen pre-filled with a flowchart
+   *  generated from this capability's own subtree. */
+  onGenerateDiagram?: (seed: DiagramSeed) => void;
 }
 
 const LEVEL_LABELS: Record<number, string> = { 1: "L1", 2: "L2", 3: "L3" };
 
-export default function CapabilityNode({ capability, children }: CapabilityNodeProps): React.ReactElement {
+export default function CapabilityNode({ capability, children, onGenerateDiagram }: CapabilityNodeProps): React.ReactElement {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(capability.name);
@@ -127,6 +137,7 @@ export default function CapabilityNode({ capability, children }: CapabilityNodeP
                 <option key={v} value={v}>{MATURITY_LEVEL_LABEL[v]}</option>
               ))}
             </select>
+            <button onClick={() => onGenerateDiagram?.(generateFromCapabilitySubtree(capability))} title="Generate Diagram" style={actionBtn}>⛶</button>
             <button onClick={() => setEditing(true)} title="Edit" style={actionBtn}>✎</button>
             {canAddChild && (
               <button onClick={() => setAddingChild(!addingChild)} title="Add child capability" style={{ ...actionBtn, color: "var(--good)" }}>+</button>
