@@ -31,22 +31,24 @@ import {
 import { getAddableShapes, nodeSize, renderNodeShape, SELECTION_STROKE } from './shapes';
 import { ConfirmDialog } from './ConfirmDialog';
 import { getLibraryIcons } from './icon-libraries.js';
-import { Icon } from './ui/Icon';
+import { Icon, type IconName } from './ui/Icon';
 
-/** Compact glyphs for the shape grid — each button still carries an aria-label and title, so the
- *  glyph is decorative and the control keeps its accessible name. */
-const SHAPE_GLYPHS: Partial<Record<NodeShape, string>> = {
-  rectangle: '▭',
-  'rounded-rectangle': '▢',
-  circle: '○',
-  diamond: '◇',
-  stadium: '⬭',
-  subroutine: '⊟',
-  'double-circle': '◎',
-  hexagon: '⬡',
-  parallelogram: '▱',
-  trapezoid: '⏢',
-  asymmetric: '⌂',
+/** ADP-SPEC-052 FR-004: real icons for the shape grid, replacing the previous single-character
+ *  Unicode glyphs — each button still carries an aria-label and title, so the icon is decorative
+ *  and the control keeps its accessible name. `diamond` reuses the icon already defined for other
+ *  toolbars (data-model.md); the rest are the new `shape-*` entries added alongside it. */
+const SHAPE_ICONS: Partial<Record<NodeShape, IconName>> = {
+  rectangle: 'shape-rectangle',
+  'rounded-rectangle': 'shape-rounded',
+  circle: 'shape-circle',
+  diamond: 'diamond',
+  stadium: 'shape-stadium',
+  subroutine: 'shape-subroutine',
+  'double-circle': 'shape-double-circle',
+  hexagon: 'shape-hexagon',
+  parallelogram: 'shape-parallelogram',
+  trapezoid: 'shape-trapezoid',
+  asymmetric: 'shape-asymmetric',
 };
 
 // Grouping B: default visual treatment per lineStyle, mirroring svg-renderer.ts exactly so the
@@ -715,7 +717,7 @@ export function Canvas({ model, onChange, dslFamily, toolbarContainer }: CanvasP
               aria-label={`Add ${label}`}
               onClick={() => handleAddShape(shape)}
             >
-              {SHAPE_GLYPHS[shape] ?? label}
+              {SHAPE_ICONS[shape] ? <Icon name={SHAPE_ICONS[shape]!} /> : label}
             </button>
           ))}
         </div>
@@ -1194,7 +1196,7 @@ export function Canvas({ model, onChange, dslFamily, toolbarContainer }: CanvasP
             y={marqueeRect.y}
             width={marqueeRect.width}
             height={marqueeRect.height}
-            fill="rgba(37, 99, 235, 0.08)"
+            fill="var(--accent-wash)"
             stroke={SELECTION_STROKE}
             strokeDasharray="4 2"
             pointerEvents="none"

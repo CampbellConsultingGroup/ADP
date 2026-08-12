@@ -11,7 +11,7 @@ export interface UnsupportedElementNoticeProps {
 export function UnsupportedElementNotice({ errors }: UnsupportedElementNoticeProps) {
   if (errors.length === 0) return null;
   return (
-    <div role="alert" data-testid="unsupported-element-notice" style={{ color: '#b00020' }}>
+    <div role="alert" data-testid="unsupported-element-notice" className="ui-alert crit">
       <p>The DSL could not be applied — the following could not be interpreted:</p>
       <ul>
         {errors.map((error, index) => (

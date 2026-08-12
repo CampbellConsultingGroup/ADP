@@ -5,6 +5,7 @@
 // of bug that caused the "black screen" incident documented in this
 // project's own history (application.ts/Workspace.tsx, ADP-cm9).
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "../api/client";
 
 export type DiagramType = "flowchart" | "sequence" | "erd" | "uml" | "architecture";
@@ -62,6 +63,29 @@ export function updateDiagram(id: string, body: DiagramUpdateBody): Promise<Diag
 
 export function deleteDiagram(id: string): Promise<void> {
   return apiMutation<void>("DELETE", `${BASE}/${id}`);
+}
+
+// ── ADP-SPEC-052 (research.md Decision 2): TanStack Query hooks for
+// DiagramListPage.tsx, mirroring web/src/api/strategy.ts's useThemes/
+// useDeleteObjective shape — replaces that page's previous ad hoc
+// useState/useEffect fetch, bringing it in line with every other ADP list
+// screen (e.g. web/src/designs/DesignsPage.tsx's useDesignList).
+
+export function useDiagrams() {
+  return useQuery<DiagramListResponse>({
+    queryKey: ["diagrams"],
+    queryFn: () => listDiagrams(),
+  });
+}
+
+export function useDeleteDiagram() {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (id) => deleteDiagram(id),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["diagrams"] });
+    },
+  });
 }
 
 export function exportDiagramPng(id: string, svg: string): Promise<Blob> {

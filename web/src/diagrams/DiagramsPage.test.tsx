@@ -2,6 +2,10 @@
 // single navigable screen (the same list-owns-mode-state convention as
 // web/src/application/ApplicationPage.tsx), since neither sub-page was
 // previously reachable from App.tsx / the AppShell nav rail at all.
+//
+// ADP-SPEC-052: DiagramListPage (rendered here) now reads via api.ts's
+// useDiagrams()/useDeleteDiagram() hooks rather than calling listDiagrams()
+// directly -- mocked accordingly below.
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
@@ -31,27 +35,35 @@ const LOADED: Diagram = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedApi.listDiagrams.mockResolvedValue({ items: ITEMS, total: 1 });
+  mockedApi.useDiagrams.mockReturnValue({
+    data: { items: ITEMS, total: 1 },
+    isLoading: false,
+    error: null,
+  } as unknown as ReturnType<typeof api.useDiagrams>);
+  mockedApi.useDeleteDiagram.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof api.useDeleteDiagram>);
 });
 
 describe("DiagramsPage: navigation wiring (ADP-914.5)", () => {
-  it("shows the diagram list by default", async () => {
+  it("shows the diagram list by default", () => {
     render(<DiagramsPage />);
-    await screen.findByText("Claims Flow");
+    screen.getByText("Claims Flow");
   });
 
   it("opens the editor for a new diagram and back returns to the list", async () => {
     const user = userEvent.setup();
     render(<DiagramsPage />);
-    await screen.findByText("Claims Flow");
+    screen.getByText("Claims Flow");
 
-    await user.click(screen.getByText("+ New Diagram"));
+    await user.click(screen.getByText("New Diagram"));
     await screen.findByLabelText("Diagram title");
     // Creating a new diagram exposes the type selector (no diagramId yet).
     screen.getByLabelText("Diagram type");
 
     await user.click(screen.getByText("← Back to diagrams"));
-    await screen.findByText("Claims Flow");
+    screen.getByText("Claims Flow");
     expect(screen.queryByLabelText("Diagram title")).toBeNull();
   });
 
@@ -59,7 +71,7 @@ describe("DiagramsPage: navigation wiring (ADP-914.5)", () => {
     mockedApi.getDiagram.mockResolvedValue(LOADED);
     const user = userEvent.setup();
     render(<DiagramsPage />);
-    await user.click(await screen.findByText("Claims Flow"));
+    await user.click(screen.getByText("Claims Flow"));
 
     await waitFor(() => expect(mockedApi.getDiagram).toHaveBeenCalledWith("d-1"));
     const titleInput = (await screen.findByLabelText("Diagram title")) as HTMLInputElement;
@@ -85,8 +97,8 @@ describe("DiagramsPage: seed hand-off from a generator (ADP-914.7)", () => {
     expect(onSeedConsumed).toHaveBeenCalledTimes(1);
   });
 
-  it("shows the list as usual when no seed is given", async () => {
+  it("shows the list as usual when no seed is given", () => {
     render(<DiagramsPage seed={null} onSeedConsumed={vi.fn()} />);
-    await screen.findByText("Claims Flow");
+    screen.getByText("Claims Flow");
   });
 });

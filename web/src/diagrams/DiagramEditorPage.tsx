@@ -18,6 +18,7 @@ import { getRecommendedDiagramType } from "./persona";
 import ChatButton from "../chat/ChatButton";
 import ChatPanel from "../chat/ChatPanel";
 import { extractProposedDsl } from "./editor/extractProposedDsl";
+import { Button, StatusBadge } from "../ui/primitives";
 import {
   createDiagram,
   getDiagram,
@@ -25,6 +26,12 @@ import {
   type Diagram,
   type DiagramType,
 } from "./api";
+
+/** ADP-SPEC-052 FR-003: a persistent save-state indication, distinct from the Save button's own
+ *  momentary label swap. Derived from the pre-existing `saving`/`error` state plus one new
+ *  "has this diagram been successfully saved at least once" flag (data-model.md), rather than
+ *  introducing a second source of truth. */
+type SaveState = "idle" | "saving" | "saved" | "error";
 
 export interface DiagramEditorPageProps {
   /** Existing diagram id to load, or undefined to author a brand-new one. */
@@ -71,6 +78,18 @@ export function DiagramEditorPage({
   const [loading, setLoading] = useState(Boolean(diagramId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // ADP-SPEC-052 FR-003: reopening an existing diagram already counts as "saved" -- its content
+  // came from a successful prior save, even though this fresh page load hasn't triggered one.
+  const [hasSavedOnce, setHasSavedOnce] = useState(Boolean(diagramId));
+  const saveState: SaveState = saving ? "saving" : error ? "error" : hasSavedOnce ? "saved" : "idle";
+  // ADP-SPEC-052 FR-012 (research.md Decision 5): a state-backed ref (not useRef) so Canvas's
+  // `toolbarContainer` portal target is available the render after the palette DOM node mounts,
+  // rather than staying null forever. Canvas already supports portalling its toolbar into an
+  // external container -- no vendored-file change needed (see CanvasProps.toolbarContainer).
+  const [paletteEl, setPaletteEl] = useState<HTMLDivElement | null>(null);
+  // Closed by default -- only visually meaningful below the shell's 900px breakpoint, where the
+  // palette becomes a toggleable drawer rather than a permanent grid column.
+  const [paletteCollapsed, setPaletteCollapsed] = useState(true);
   // ADP-914.8: embedded AI assistant, mirrors CapabilityTree.tsx's showChat
   // toggle pattern exactly.
   const [showChat, setShowChat] = useState(false);
@@ -129,6 +148,7 @@ export function DiagramEditorPage({
         ? await updateDiagram(savedId, { title, dsl_source: dsl })
         : await createDiagram({ title, diagram_type: diagramType, dsl_source: dsl });
       setSavedId(saved.id);
+      setHasSavedOnce(true);
       onSaved?.(saved);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -137,18 +157,23 @@ export function DiagramEditorPage({
     }
   }
 
-  if (loading) return <div>Loading…</div>;
+  if (loading) {
+    return <div style={{ padding: 32, textAlign: "center", color: "var(--ink-3)" }}>Loading diagram…</div>;
+  }
 
   return (
     <div>
-      <div>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
         <input
+          className="ui-input"
+          style={{ maxWidth: 320 }}
           aria-label="Diagram title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
         {!diagramId && (
           <select
+            className="ui-select"
             aria-label="Diagram type"
             value={diagramType}
             onChange={(e) => {
@@ -165,9 +190,17 @@ export function DiagramEditorPage({
             ))}
           </select>
         )}
-        <button onClick={handleSave} disabled={saving}>
+        <Button variant="primary" onClick={handleSave} disabled={saving}>
           {saving ? "Saving…" : "Save"}
-        </button>
+        </Button>
+        {/* ADP-SPEC-052 FR-003: persistent, distinct from the Save button's own transient label. */}
+        {saveState !== "idle" && (
+          <span data-testid="save-state-indicator">
+            <StatusBadge tone={saveState === "saved" ? "good" : saveState === "error" ? "crit" : "info"}>
+              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Error saving"}
+            </StatusBadge>
+          </span>
+        )}
         <ChatButton active={showChat} onToggle={() => setShowChat(!showChat)} label="Chat" />
       </div>
       {showChat && (
@@ -179,9 +212,9 @@ export function DiagramEditorPage({
           onStreamingChange={setChatBusy}
         />
       )}
-      {error && <p role="alert">{error}</p>}
+      {error && <div className="ui-alert crit" role="alert">{error}</div>}
       {parseErrors.length > 0 && (
-        <ul role="alert">
+        <ul className="ui-alert crit" role="alert">
           {parseErrors.map((e, i) => (
             <li key={i}>
               Line {e.line}: {e.message}
@@ -191,11 +224,39 @@ export function DiagramEditorPage({
       )}
       {/* FR-011: locks Canvas (a large vendored+adapted component, research.md's
           own reasoning for not modifying its internals) via a non-invasive
-          wrapper rather than threading a new prop through it. */}
-      <div style={chatBusy ? { pointerEvents: "none", opacity: 0.6 } : undefined}>
-        <Canvas model={model} onChange={setModel} dslFamily={diagramType} />
+          wrapper rather than threading a new prop through it.
+          ADP-SPEC-052 FR-012: palette rail / canvas / DSL panel simultaneously visible, using
+          Canvas's existing toolbarContainer portal target rather than any vendored JSX change. */}
+      <div
+        className="diagram-workspace"
+        style={chatBusy ? { pointerEvents: "none", opacity: 0.6 } : undefined}
+      >
+        <div className="diagram-workspace__palette" data-collapsed={paletteCollapsed}>
+          <button
+            type="button"
+            className="btn btn--secondary diagram-workspace__palette-toggle"
+            data-testid="palette-toggle"
+            aria-expanded={!paletteCollapsed}
+            onClick={() => setPaletteCollapsed((v) => !v)}
+          >
+            Shapes
+          </button>
+          <div className="diagram-workspace__palette-content" ref={setPaletteEl} />
+        </div>
+        <div className="diagram-workspace__canvas">
+          <Canvas model={model} onChange={setModel} dslFamily={diagramType} toolbarContainer={paletteEl} />
+        </div>
+        <div className="diagram-workspace__dsl">
+          <div className="diagram-workspace__dsl-header">
+            <span className="ui-label" style={{ margin: 0 }}>Mermaid DSL</span>
+            {/* FR-014: canvas edits reflect here automatically -- distinct from the Apply-required
+                direction communicated by the hint below the panel. */}
+            <StatusBadge tone="info">Synced from canvas</StatusBadge>
+          </div>
+          <DslPanel dsl={dsl} parseErrors={parseErrors} onApply={applyDsl} disabled={chatBusy} />
+          <p className="diagram-workspace__dsl-hint">Editing here? Click Apply to send changes to the canvas.</p>
+        </div>
       </div>
-      <DslPanel dsl={dsl} parseErrors={parseErrors} onApply={applyDsl} disabled={chatBusy} />
       {savedId && <ExportAction diagramId={savedId} model={model} />}
     </div>
   );

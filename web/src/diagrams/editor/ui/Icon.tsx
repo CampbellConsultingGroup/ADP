@@ -31,7 +31,20 @@ export type IconName =
   | 'pencil'
   | 'palette'
   | 'layout'
-  | 'info';
+  | 'info'
+  // ADP-SPEC-052 FR-004: shape-picker palette glyphs — one per addable NodeShape
+  // (data-model.md's exact mapping), replacing the single-character Unicode glyphs
+  // Canvas.tsx's SHAPE_GLYPHS previously used.
+  | 'shape-rectangle'
+  | 'shape-rounded'
+  | 'shape-circle'
+  | 'shape-stadium'
+  | 'shape-subroutine'
+  | 'shape-double-circle'
+  | 'shape-hexagon'
+  | 'shape-parallelogram'
+  | 'shape-trapezoid'
+  | 'shape-asymmetric';
 
 /** Path data only — the wrapper supplies sizing, colour, and ARIA. `diamond` and `check` are
  *  filled; the rest are 1.5px strokes on a 16-unit grid. */
@@ -65,6 +78,22 @@ const PATHS: Record<IconName, { d: string; filled?: boolean }[]> = {
   // canvas-hbk: Diagram Details trigger — a circled "i", distinct from `warning`'s triangle. The
   // dot is a zero-length stroked segment, rendered as a circle by the shared strokeLinecap="round".
   info: [{ d: 'M8 14.5a6.5 6.5 0 1 0 0-13 6.5 6.5 0 0 0 0 13ZM8 7.25v4M8 5.25v.01' }],
+  // ADP-SPEC-052 FR-004: literal outline renderings of the NodeShape they name (data-model.md), on
+  // the same 16-unit grid every icon above uses. Coordinates mirror shapes.tsx's renderNodeShape
+  // point math at icon scale, so a shape's toolbar glyph reads as a small version of the shape
+  // itself, not an abstract symbol.
+  'shape-rectangle': [{ d: 'M2.5 4.5h11v7h-11Z' }],
+  'shape-rounded': [{ d: 'M4.5 4.5H11.5A2 2 0 0 1 13.5 6.5V9.5A2 2 0 0 1 11.5 11.5H4.5A2 2 0 0 1 2.5 9.5V6.5A2 2 0 0 1 4.5 4.5Z' }],
+  'shape-circle': [{ d: 'M2.5 8a5.5 5.5 0 1 0 11 0 5.5 5.5 0 1 0 -11 0Z' }],
+  'shape-stadium': [{ d: 'M6 4.5h4a3.5 3.5 0 0 1 0 7h-4a3.5 3.5 0 0 1 0-7Z' }],
+  'shape-subroutine': [{ d: 'M2.5 4.5h11v7h-11ZM5 4.5v7M11 4.5v7' }],
+  'shape-double-circle': [{ d: 'M2.5 8a5.5 5.5 0 1 0 11 0 5.5 5.5 0 1 0 -11 0ZM4.5 8a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0 -7 0Z' }],
+  // Wider notch than shapes.tsx's own proportions (2px -> 3px here) so the two side points stay
+  // visually distinct from a circle/stadium once the shared strokeLinejoin="round" softens them.
+  'shape-hexagon': [{ d: 'M5.5 4.5 10.5 4.5 13.5 8 10.5 11.5 5.5 11.5 2.5 8Z' }],
+  'shape-parallelogram': [{ d: 'M5 4.5 13.5 4.5 11 11.5 2.5 11.5Z' }],
+  'shape-trapezoid': [{ d: 'M5 4.5 11 4.5 13.5 11.5 2.5 11.5Z' }],
+  'shape-asymmetric': [{ d: 'M2.5 4.5 11 4.5 13.5 8 11 11.5 2.5 11.5Z' }],
 };
 
 export interface IconProps {

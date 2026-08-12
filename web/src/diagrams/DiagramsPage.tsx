@@ -5,12 +5,19 @@
 // the same convention as web/src/application/ApplicationPage.tsx, rather than
 // introducing a second AppView (diagrams aren't Design-scoped, so there's no
 // existing "select a design first" screen to piggyback on the way Canvas does).
+//
+// ADP-SPEC-052: page chrome moved from bare <div style={{...}}> to ADP's
+// .ui-page/.ui-toolbar/.ui-h1 convention (mirrors web/src/designs/
+// DesignsPage.tsx), and this is diagrams.css's entry point (research.md
+// Decision 6 -- imported once, here, not per-component).
 
 import { useEffect, useState } from "react";
 import { DiagramListPage } from "./DiagramListPage";
 import { DiagramEditorPage } from "./DiagramEditorPage";
+import { Button } from "../ui";
 import type { DiagramSeed } from "./generators";
 import type { Diagram } from "./api";
+import "./diagrams.css";
 
 type Mode = { kind: "list" } | { kind: "edit"; diagramId?: string; seed?: DiagramSeed };
 
@@ -41,10 +48,10 @@ export function DiagramsPage({ seed, onSeedConsumed }: DiagramsPageProps = {}) {
 
   if (mode.kind === "edit") {
     return (
-      <div style={{ padding: 16 }}>
-        <button type="button" onClick={() => setMode({ kind: "list" })} style={{ marginBottom: 12 }}>
+      <div className="ui-page">
+        <Button variant="ghost" onClick={() => setMode({ kind: "list" })} style={{ marginBottom: 16 }}>
           ← Back to diagrams
-        </button>
+        </Button>
         <DiagramEditorPage
           diagramId={mode.diagramId}
           seed={mode.seed}
@@ -55,12 +62,12 @@ export function DiagramsPage({ seed, onSeedConsumed }: DiagramsPageProps = {}) {
   }
 
   return (
-    <div style={{ padding: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <h2 style={{ margin: 0 }}>Diagrams</h2>
-        <button type="button" onClick={() => setMode({ kind: "edit" })}>
-          + New Diagram
-        </button>
+    <div className="ui-page">
+      <div className="ui-toolbar">
+        <h1 className="ui-h1">Diagrams</h1>
+        <Button variant="primary" icon="plus" onClick={() => setMode({ kind: "edit" })}>
+          New Diagram
+        </Button>
       </div>
       <DiagramListPage onOpen={(diagramId) => setMode({ kind: "edit", diagramId })} />
     </div>
