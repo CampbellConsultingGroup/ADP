@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import OverviewPage from "./overview/OverviewPage";
 import DesignsPage from "./designs/DesignsPage";
 import Workspace from "./canvas/Workspace";
+import { C4DesignView } from "./canvas-v2/C4DesignView";
 import IntakePage from "./intake/IntakePage";
 import KnowledgePage from "./knowledge/KnowledgePage";
 import RecommendationPage from "./recommend/RecommendationPage";
@@ -81,6 +82,10 @@ export default function App(): React.ReactElement {
     }
     if (view === "intake") {
       return <IntakePage designId={currentDesignId} onNavigate={onNavigate} />;
+    }
+    // ADP-SPEC-054 (research.md Decision 8): additive, alongside "canvas" -- not a replacement.
+    if (view === "canvas-v2") {
+      return <C4DesignView designId={currentDesignId} />;
     }
     return <Workspace designId={currentDesignId} onNavigate={onNavigate} />;
   }

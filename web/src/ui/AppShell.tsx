@@ -40,6 +40,10 @@ const DESIGN_SCOPED: NavDef[] = [
   { view: "intake", label: "Intake", icon: "inbox" },
   { view: "recommend", label: "Recommendations", icon: "spark" },
   { view: "canvas", label: "Canvas", icon: "sol" },
+  // ADP-SPEC-054 (research.md Decision 8): a genuinely new, separate entry point, additive
+  // alongside "Canvas" -- not a replacement. Swapping/removing the "Canvas" item is explicitly
+  // ADP-914.13's job, gated on this view being confirmed equivalent-or-better first.
+  { view: "canvas-v2", label: "C4 Design (Preview)", icon: "sol" },
 ];
 // ADP-SPEC-042: gated at the route/nav level on the distinct platform_admin
 // role, not folded into ARCHITECTURE — this surface has its own permission
@@ -59,6 +63,7 @@ const TITLES: Record<AppView, string> = {
   intake: "Requirements Intake",
   recommend: "Recommendations",
   canvas: "Design Canvas",
+  "canvas-v2": "C4 Design (Preview)",
   diagrams: "Diagrams",
   strategy: "Strategy",
   admin: "Agent Prompt Management",

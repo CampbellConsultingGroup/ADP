@@ -11,6 +11,7 @@ import type {
   DiagramLayout,
   DrawRelationshipInput,
   Element,
+  ElementKind,
   PlaceElementInput,
   Relationship,
   SaveLayoutInput,
@@ -305,6 +306,83 @@ export function useTransitionLifecycle(designId: string) {
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["designs"] });
+    },
+  });
+}
+
+// ── ADP-SPEC-054: Element/Relationship CRUD ──────────────────────────────────
+// Granular, per-entity mutations replacing the broken whole-design PUT
+// usePlaceElement/useDrawRelationship call (that PUT route has never existed --
+// see contracts/elements-api-contract.md). Added alongside, NOT replacing,
+// usePlaceElement/useDrawRelationship/useSaveLayout above, which stay exactly as
+// they are -- still used by the untouched C4Canvas.tsx.
+
+export interface ElementCreateBody {
+  kind: ElementKind;
+  name: string;
+}
+
+export interface ElementUpdateBody {
+  name: string;
+}
+
+export interface RelationshipCreateBody {
+  source: string;
+  target: string;
+  label?: string;
+}
+
+export function useCreateElement(designId: string): UseMutationResult<Element, Error, ElementCreateBody> {
+  const qc = useQueryClient();
+  return useMutation<Element, Error, ElementCreateBody>({
+    mutationFn: (body) =>
+      apiMutation<Element, ElementCreateBody>("POST", `/api/v1/designs/${designId}/elements`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: designKey(designId) });
+    },
+  });
+}
+
+export function useUpdateElement(designId: string): UseMutationResult<Element, Error, { elementId: string; body: ElementUpdateBody }> {
+  const qc = useQueryClient();
+  return useMutation<Element, Error, { elementId: string; body: ElementUpdateBody }>({
+    mutationFn: ({ elementId, body }) =>
+      apiMutation<Element, ElementUpdateBody>("PATCH", `/api/v1/designs/${designId}/elements/${elementId}`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: designKey(designId) });
+    },
+  });
+}
+
+export function useDeleteElement(designId: string): UseMutationResult<void, Error, string> {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (elementId) =>
+      apiMutation<void>("DELETE", `/api/v1/designs/${designId}/elements/${elementId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: designKey(designId) });
+    },
+  });
+}
+
+export function useCreateRelationship(designId: string): UseMutationResult<Relationship, Error, RelationshipCreateBody> {
+  const qc = useQueryClient();
+  return useMutation<Relationship, Error, RelationshipCreateBody>({
+    mutationFn: (body) =>
+      apiMutation<Relationship, RelationshipCreateBody>("POST", `/api/v1/designs/${designId}/relationships`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: designKey(designId) });
+    },
+  });
+}
+
+export function useDeleteRelationship(designId: string): UseMutationResult<void, Error, string> {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (relationshipId) =>
+      apiMutation<void>("DELETE", `/api/v1/designs/${designId}/relationships/${relationshipId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: designKey(designId) });
     },
   });
 }

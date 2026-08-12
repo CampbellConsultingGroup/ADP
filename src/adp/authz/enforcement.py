@@ -44,6 +44,15 @@ _EXPLICIT_ROUTE_ACTIONS: dict[tuple[str, str], ActionType] = {
     ("POST", "/api/v1/designs/{design_id}/requirements"): ActionType.WRITE_DESIGN,
     ("PUT", "/api/v1/designs/{design_id}/elements/{element_id}/tags"): ActionType.WRITE_DESIGN,
     ("PUT", "/api/v1/designs/{design_id}/layout/{level}"): ActionType.WRITE_DESIGN,
+    # ADP-SPEC-054: granular element/relationship CRUD, replacing the broken whole-design PUT.
+    ("POST", "/api/v1/designs/{design_id}/elements"): ActionType.WRITE_DESIGN,
+    ("PATCH", "/api/v1/designs/{design_id}/elements/{element_id}"): ActionType.WRITE_DESIGN,
+    ("DELETE", "/api/v1/designs/{design_id}/elements/{element_id}"): ActionType.WRITE_DESIGN,
+    ("POST", "/api/v1/designs/{design_id}/relationships"): ActionType.WRITE_DESIGN,
+    (
+        "DELETE",
+        "/api/v1/designs/{design_id}/relationships/{relationship_id}",
+    ): ActionType.WRITE_DESIGN,
     ("PATCH", "/api/v1/designs/{design_id}/lifecycle"): ActionType.WRITE_DESIGN,
     (
         "POST",
