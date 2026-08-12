@@ -1,0 +1,238 @@
+/* ADP-SPEC-052: Diagram Editor Visual & Workspace Redesign.
+ *
+ * Scoped to web/src/diagrams/ only (mirrors web/src/overview/overview.css's own scoping to
+ * OverviewPage — research.md Decision 6). Every selector below styles a className the six vendored
+ * editor files (web/src/diagrams/editor/{Canvas,shapes,DslPanel,useDslSync,ConfirmDialog}.tsx —
+ * see README.md) already emit today, plus the ADP-authored (not vendored) Modal.tsx and this
+ * feature's new workspace-layout wrapper. The exhaustive, grepped-from-source class inventory this
+ * file must satisfy lives in specs/052-diagram-editor-redesign/contracts/diagram-css-contract.md.
+ *
+ * Depends on web/src/ui/tokens.css (imported globally via main.tsx) for every color/spacing value
+ * — no new custom properties are introduced here (research.md Decision 3). */
+
+/* ── Buttons (Canvas.tsx, DslPanel.tsx, ConfirmDialog.tsx) ─────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1;
+  padding: 7px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  transition: border-color .12s, background .12s, color .12s;
+}
+.btn:hover { border-color: var(--border-strong); background: var(--surface-2); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+.btn--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn--primary:hover:not(:disabled) { background: var(--accent-2); border-color: var(--accent-2); }
+
+.btn--secondary { background: var(--surface); border-color: var(--border); color: var(--ink); }
+
+.btn--tertiary { background: none; border-color: transparent; color: var(--ink-2); }
+.btn--tertiary:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+
+.btn--danger { color: var(--crit); border-color: color-mix(in srgb, var(--crit) 40%, var(--border)); }
+.btn--danger:hover:not(:disabled) { background: var(--crit-wash); }
+
+.btn--compact { padding: 5px 9px; font-size: 12px; }
+
+/* ── Modal (editor/ui/Modal.tsx — ADP-authored, not vendored; research.md Decision 6) ───────── */
+
+.modal {
+  border: none;
+  padding: 0;
+  margin: auto;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  background: var(--surface);
+  color: var(--ink);
+  width: min(420px, calc(100vw - 32px));
+}
+.modal::backdrop { background: rgba(10, 15, 22, .45); }
+.modal--wide { width: min(640px, calc(100vw - 32px)); }
+.modal__header { padding: var(--space-4) var(--space-4) var(--space-2); border-bottom: 1px solid var(--border); }
+.modal__title { margin: 0; font-size: 16px; font-weight: 700; color: var(--ink); }
+.modal__body { padding: var(--space-4); font-size: 13.5px; color: var(--ink-2); line-height: 1.5; }
+.modal__body p { margin: 0; }
+.modal__footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-3) var(--space-4) var(--space-4); border-top: 1px solid var(--border); }
+
+/* ── Canvas surface (Canvas.tsx) — User Story 2, FR-006/FR-007 ──────────────────────────────── */
+/* research.md Decision 3: reuses --surface-2/--border, no new custom properties. The dot-grid is a
+ * radial-gradient keyed to --border at low density and low opacity, so it reads as a spatial
+ * reference mark rather than visual noise, and adapts automatically with the rest of the theme. */
+.canvas-root {
+  position: relative;
+  display: flex;
+  gap: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: auto;
+}
+.canvas-root:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.canvas-svg {
+  background-color: var(--surface-2);
+  background-image: radial-gradient(circle, var(--border-strong) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* ── Canvas toolbar (Canvas.tsx) ─────────────────────────────────────────────────────────────── */
+.rail-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.section-label,
+.rail-section__label {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.shape-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-1); }
+.shape-grid .btn { padding: 6px; }
+.tool-list { display: flex; flex-direction: column; gap: var(--space-1); align-items: stretch; }
+.tool-list .btn { justify-content: flex-start; }
+.field__label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  color: var(--ink-2);
+}
+.field__label select { font-family: var(--font); font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; }
+
+/* ── Node hover/style affordances (Canvas.tsx) ───────────────────────────────────────────────── */
+.canvas-edit-affordance {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.canvas-edit-affordance:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-wash); }
+
+/* Style popover (Canvas.tsx's renderStylePopup) — reuses .ui-card's shape under its own name since
+ * the vendored markup emits "card cluster", not "ui-card". */
+.card.cluster {
+  display: flex;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-md);
+}
+
+/* ── DSL panel (DslPanel.tsx) — User Story 2 (theme-correct chrome) / FR-008 ─────────────────── */
+.panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.panel__body { padding: var(--space-3); }
+.panel__body--flush { padding: 0; }
+.panel__footer {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--space-2) var(--space-3);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.dsl-panel { display: flex; flex-direction: column; flex: 1; min-height: 160px; }
+.dsl-panel__editor {
+  flex: 1;
+  width: 100%;
+  min-height: 160px;
+  padding: var(--space-3);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--surface-2);
+  border: none;
+  resize: none;
+}
+.dsl-panel__editor:focus { outline: none; box-shadow: inset 0 0 0 2px var(--accent-wash); }
+.dsl-panel__editor:disabled { opacity: .6; }
+
+/* ── Connect-tool active state (Canvas.tsx already emits aria-pressed — User Story 3, FR-013) ── */
+.btn--secondary[aria-pressed="true"] {
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--accent-2);
+}
+
+/* ── Workspace layout (DiagramEditorPage.tsx) — User Story 3, FR-012 ────────────────────────────
+ * research.md Decision 5: three regions simultaneously visible at desktop widths via CSS Grid;
+ * below 900px (ui.css lines 42-48's own existing shell breakpoint), the palette becomes a
+ * toggleable drawer overlaying the canvas rather than the regions stacking. */
+.diagram-workspace {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) 340px;
+  gap: var(--space-3);
+  align-items: start;
+}
+.diagram-workspace__palette-toggle { display: none; }
+.diagram-workspace__palette-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.diagram-workspace__canvas { min-width: 0; }
+.diagram-workspace__canvas .canvas-root { min-height: 520px; height: 100%; }
+.diagram-workspace__dsl { display: flex; flex-direction: column; gap: var(--space-2); min-height: 520px; }
+.diagram-workspace__dsl .panel { flex: 1; }
+.diagram-workspace__dsl-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.diagram-workspace__dsl-hint { margin: 0; font-size: 11.5px; color: var(--ink-3); }
+
+@media (max-width: 900px) {
+  .diagram-workspace { grid-template-columns: 1fr; position: relative; }
+  .diagram-workspace__palette-toggle {
+    display: inline-flex;
+    align-self: flex-start;
+    margin-bottom: var(--space-2);
+  }
+  .diagram-workspace__palette-content {
+    position: absolute;
+    top: 44px;
+    left: 0;
+    z-index: 20;
+    width: 220px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow-md);
+    padding: var(--space-3);
+    transform: translateX(-110%);
+    transition: transform .15s ease;
+  }
+  .diagram-workspace__palette[data-collapsed="false"] .diagram-workspace__palette-content {
+    transform: translateX(0);
+  }
+  .diagram-workspace__dsl { margin-top: var(--space-3); }
+}

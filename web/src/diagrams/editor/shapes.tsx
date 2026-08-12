@@ -19,8 +19,14 @@ export function nodeSize(node: DiagramNode): { width: number; height: number } {
  *
  * Node fill, stroke, and label styling are untouched — those come from admin-defined standards
  * and are produced by both renderers, which must agree for exports to match the canvas (SC-004).
+ *
+ * ADP-SPEC-052 FR-009 (documented one-line vendored-file exception, research.md Decision 1): the
+ * literal hex value is swapped for ADP's actual `--accent` token so selection reads correctly in
+ * both themes — SVG presentation attributes resolve `var()` the same as a CSS declaration would,
+ * so `stroke={SELECTION_STROKE}` (an attribute, not inline `style`) still works unchanged. This is
+ * a value-only change, not a JSX/structural edit — no className or markup here is touched.
  */
-export const SELECTION_STROKE = '#2563eb';
+export const SELECTION_STROKE = 'var(--accent)';
 
 export function renderNodeShape(node: DiagramNode, selected: boolean): JSX.Element {
   const { x, y } = node.position;

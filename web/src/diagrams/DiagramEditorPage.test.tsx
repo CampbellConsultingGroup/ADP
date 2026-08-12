@@ -78,6 +78,101 @@ describe("DiagramEditorPage: create -> author -> save (User Story 1)", () => {
     expect(call.dsl_source).toContain("A[Start]");
     expect(onSaved).toHaveBeenCalledWith(SAVED);
   });
+
+  it("shows a persistent save-state indicator that survives after the save completes (FR-003)", async () => {
+    mockedApi.createDiagram.mockResolvedValue(SAVED);
+    const user = userEvent.setup();
+
+    render(<DiagramEditorPage newDiagramType="flowchart" />);
+
+    // Nothing shown before any save has been attempted.
+    expect(screen.queryByTestId("save-state-indicator")).toBeNull();
+
+    await user.click(screen.getByText("Save"));
+
+    // Persistent, not just the Save button's own momentary label -- still present after the
+    // mutation resolves and the button itself has reverted from "Saving…" back to "Save".
+    const indicator = await screen.findByTestId("save-state-indicator");
+    expect(indicator.textContent).toBe("Saved");
+    screen.getByText("Save");
+  });
+
+  it("shows an error save-state indicator when the save fails, distinct from the Save button", async () => {
+    mockedApi.createDiagram.mockRejectedValue(new Error("network down"));
+    const user = userEvent.setup();
+
+    render(<DiagramEditorPage newDiagramType="flowchart" />);
+    await user.click(screen.getByText("Save"));
+
+    const indicator = await screen.findByTestId("save-state-indicator");
+    expect(indicator.textContent).toBe("Error saving");
+  });
+});
+
+describe("DiagramEditorPage: workspace layout (ADP-SPEC-052, User Story 3)", () => {
+  it("renders the palette, canvas, and DSL panel simultaneously, none conditionally unmounted (FR-012)", () => {
+    const { container } = render(<DiagramEditorPage newDiagramType="flowchart" />);
+
+    expect(container.querySelector(".diagram-workspace")).toBeTruthy();
+    expect(container.querySelector(".diagram-workspace__palette")).toBeTruthy();
+    expect(container.querySelector(".diagram-workspace__canvas .canvas-root")).toBeTruthy();
+    expect(screen.getByTestId("dsl-panel")).toBeTruthy();
+  });
+
+  it("toggles the palette-collapsed state via its disclosure control", async () => {
+    const user = userEvent.setup();
+    const { container } = render(<DiagramEditorPage newDiagramType="flowchart" />);
+
+    const palette = container.querySelector(".diagram-workspace__palette") as HTMLElement;
+    expect(palette.getAttribute("data-collapsed")).toBe("true");
+
+    await user.click(screen.getByTestId("palette-toggle"));
+    expect(palette.getAttribute("data-collapsed")).toBe("false");
+
+    await user.click(screen.getByTestId("palette-toggle"));
+    expect(palette.getAttribute("data-collapsed")).toBe("true");
+  });
+
+  it("shows a clear active/pressed state on the Connect tool while engaged (FR-013)", async () => {
+    const user = userEvent.setup();
+    render(<DiagramEditorPage newDiagramType="flowchart" />);
+
+    const connectToggle = screen.getByTestId("connect-mode-toggle");
+    expect(connectToggle.getAttribute("aria-pressed")).toBe("false");
+
+    await user.click(connectToggle);
+    expect(connectToggle.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("communicates the canvas→DSL live-sync direction distinctly from the DSL→canvas Apply requirement (FR-014)", () => {
+    render(<DiagramEditorPage newDiagramType="flowchart" />);
+
+    screen.getByText("Synced from canvas");
+    screen.getByText(/Click Apply to send changes to the canvas/);
+  });
+});
+
+describe("DiagramEditorPage: theme-adaptive canvas surface (ADP-SPEC-052, User Story 2)", () => {
+  it("renders the canvas root with the theme-token-driven surface class (FR-006/FR-007)", () => {
+    const { container } = render(<DiagramEditorPage newDiagramType="flowchart" />);
+
+    // .canvas-root/.canvas-svg's background comes from diagrams.css's var(--surface-2)/
+    // var(--border-strong) rules (contracts/diagram-css-contract.md) -- token-driven, so it
+    // resolves per-theme automatically via tokens.css's own light/dark blocks, with no
+    // theme-specific class or inline color on the element itself.
+    expect(container.querySelector(".canvas-root")).toBeTruthy();
+    expect(container.querySelector(".canvas-svg")).toBeTruthy();
+  });
+});
+
+describe("DiagramEditorPage: ADP-styled chrome (ADP-SPEC-052, User Story 1)", () => {
+  it("renders the title field, type selector, and Save action with ADP's styled controls", () => {
+    render(<DiagramEditorPage newDiagramType="flowchart" />);
+
+    expect(screen.getByLabelText("Diagram title").className).toContain("ui-input");
+    expect(screen.getByLabelText("Diagram type").className).toContain("ui-select");
+    expect(screen.getByText("Save").className).toContain("ui-btn");
+  });
 });
 
 describe("DiagramEditorPage: reopen with content intact (User Story 1)", () => {

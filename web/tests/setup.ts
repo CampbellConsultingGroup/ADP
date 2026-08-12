@@ -8,6 +8,20 @@ class MockResizeObserver {
 }
 global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
+// ADP-SPEC-052: editor/ui/Modal.tsx (web/src/diagrams) uses the native <dialog> element's
+// showModal()/close() — jsdom doesn't implement either, so calling showModal() throws
+// "dialog.showModal is not a function". Minimal polyfill: just enough behavior for React's own
+// effect (open the element; on close, fire the "close" event some code may listen for).
+if (typeof HTMLDialogElement !== "undefined" && !HTMLDialogElement.prototype.showModal) {
+  HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
+    this.setAttribute("open", "");
+  };
+  HTMLDialogElement.prototype.close = function (this: HTMLDialogElement) {
+    this.removeAttribute("open");
+    this.dispatchEvent(new Event("close"));
+  };
+}
+
 // React Flow uses DOMMatrix for transforms — polyfill for jsdom
 if (typeof global.DOMMatrix === "undefined") {
   global.DOMMatrix = class {
