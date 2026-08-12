@@ -40,7 +40,7 @@ def test_create_accepts_dsl_source_at_cap() -> None:
 
 
 @pytest.mark.parametrize(
-    "diagram_type", ["flowchart", "sequence", "erd", "uml", "architecture"]
+    "diagram_type", ["flowchart", "sequence", "erd", "uml", "architecture", "c4"]
 )
 def test_create_accepts_each_supported_type(diagram_type: str) -> None:
     body = DiagramCreate(title="T", diagram_type=diagram_type)  # type: ignore[arg-type]
@@ -48,8 +48,11 @@ def test_create_accepts_each_supported_type(diagram_type: str) -> None:
 
 
 def test_create_rejects_unsupported_type() -> None:
+    # ADP-SPEC-053: "c4" used to be the example of an unsupported type here -- it isn't anymore
+    # (see test_create_accepts_each_supported_type above), so this now exercises a genuinely
+    # unsupported value instead. The test's purpose (reject unknown types) is unchanged.
     with pytest.raises(ValidationError):
-        DiagramCreate(title="T", diagram_type="c4")  # type: ignore[arg-type]
+        DiagramCreate(title="T", diagram_type="gantt")  # type: ignore[arg-type]
 
 
 def test_create_rejects_unknown_fields() -> None:

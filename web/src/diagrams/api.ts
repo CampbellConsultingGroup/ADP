@@ -8,7 +8,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "../api/client";
 
-export type DiagramType = "flowchart" | "sequence" | "erd" | "uml" | "architecture";
+export type DiagramType = "flowchart" | "sequence" | "erd" | "uml" | "architecture" | "c4";
 
 export interface Diagram {
   id: string;

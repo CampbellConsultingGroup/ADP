@@ -1,11 +1,15 @@
 // ADP-SPEC-046: User Story 1 (create/author/save) + reopen for editing.
 //
 // `diagramTypeId` is stamped identically to the ADP DiagramType / dslFamily
-// registry key for all 5 supported types -- confirmed by reading
-// core/dsl/architecture.ts (and the other 4 families) that none of them
+// registry key for 5 of the 6 supported types -- confirmed by reading
+// core/dsl/architecture.ts (and flowchart/erd/sequence/uml) that none of them
 // branch on diagramTypeId during parse/serialize, so there's no need to
 // special-case a different internal label the way the upstream test suite's
 // own convention does ('cloud-infrastructure' for the architecture family).
+// ADP-SPEC-053: `c4` is the one exception -- it's a multi-level family, so its
+// diagramTypeId must be a level-specific value ('c4-context', matching
+// core/dsl/c4.ts's own HEADER_TO_LEVEL), not the bare "c4" selector value.
+// See INITIAL_DIAGRAM_TYPE_ID below.
 
 import { useEffect, useState } from "react";
 import { Canvas } from "./editor/Canvas";
@@ -49,7 +53,14 @@ export interface DiagramEditorPageProps {
   onSaved?: (diagram: Diagram) => void;
 }
 
-const DIAGRAM_TYPES: DiagramType[] = ["flowchart", "sequence", "erd", "uml", "architecture"];
+const DIAGRAM_TYPES: DiagramType[] = ["flowchart", "sequence", "erd", "uml", "architecture", "c4"];
+
+/** ADP-SPEC-053 (research.md Decision 1): a brand-new diagram's `diagramTypeId` is the selected
+ *  `DiagramType` value itself for every family except `c4`, which is multi-level -- a new C4
+ *  diagram starts at the Context level (spec.md FR-004), the top of the C4 hierarchy. */
+function initialDiagramTypeId(type: DiagramType): string {
+  return type === "c4" ? "c4-context" : type;
+}
 
 export function DiagramEditorPage({
   diagramId,
@@ -74,7 +85,7 @@ export function DiagramEditorPage({
   const recommended = getRecommendedDiagramType(user?.role);
   const initialType = (seed?.model.diagramTypeId as DiagramType | undefined) ?? newDiagramType ?? recommended ?? "flowchart";
   const [diagramType, setDiagramType] = useState<DiagramType>(initialType);
-  const [model, setModel] = useState<DiagramModel>(() => seed?.model ?? createEmptyDiagramModel(initialType));
+  const [model, setModel] = useState<DiagramModel>(() => seed?.model ?? createEmptyDiagramModel(initialDiagramTypeId(initialType)));
   const [loading, setLoading] = useState(Boolean(diagramId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,6 +123,19 @@ export function DiagramEditorPage({
     if (proposed !== null) applyDsl(proposed);
   }
 
+  // ADP-SPEC-053 bugfix (found while testing C4 reopen, not c4-specific -- affects every type):
+  // the loaded DSL text is staged here rather than applied directly, and a *separate* effect
+  // below actually applies it. Applying it inline in this same .then() would use the `applyDsl`
+  // closure bound to whatever `diagramType` was when this effect first ran (the initial default,
+  // e.g. "flowchart" or the signed-in architect's persona-recommended type) -- calling
+  // `setDiagramType` in the same callback only schedules a *future* render with a freshly-bound
+  // `applyDsl`; it does not retroactively change the reference already captured here. Reopening
+  // any diagram whose real type differed from that initial default therefore parsed the loaded
+  // text through the wrong DSL family and surfaced spurious errors instead of rendering it --
+  // undetected until this feature's own reopen test was the first to combine "reopening" with a
+  // type that differs from the "flowchart" default every prior fixture happened to share.
+  const [pendingDslSource, setPendingDslSource] = useState<string | null>(null);
+
   useEffect(() => {
     if (!diagramId) return;
     let cancelled = false;
@@ -122,7 +146,7 @@ export function DiagramEditorPage({
         setTitle(diagram.title);
         setDiagramType(diagram.diagram_type);
         if (diagram.dsl_source) {
-          applyDsl(diagram.dsl_source);
+          setPendingDslSource(diagram.dsl_source);
         }
       })
       .catch((err: unknown) => {
@@ -134,11 +158,15 @@ export function DiagramEditorPage({
     return () => {
       cancelled = true;
     };
-    // applyDsl intentionally omitted -- it's derived fresh each render from
-    // `model`/`diagramType` and re-running this effect on every model change
-    // (which applyDsl itself causes) would create a load loop.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [diagramId]);
+
+  // Runs on the render *after* `setDiagramType` above has committed, so `applyDsl` (derived from
+  // the now-current `diagramType`) is correctly bound to the loaded diagram's real family.
+  useEffect(() => {
+    if (pendingDslSource === null) return;
+    applyDsl(pendingDslSource);
+    setPendingDslSource(null);
+  }, [pendingDslSource, applyDsl]);
 
   async function handleSave() {
     setSaving(true);
@@ -179,7 +207,7 @@ export function DiagramEditorPage({
             onChange={(e) => {
               const next = e.target.value as DiagramType;
               setDiagramType(next);
-              setModel(createEmptyDiagramModel(next));
+              setModel(createEmptyDiagramModel(initialDiagramTypeId(next)));
             }}
           >
             {DIAGRAM_TYPES.map((t) => (
