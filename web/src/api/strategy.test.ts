@@ -11,6 +11,7 @@ import {
   useCreateObjective,
   useCreateTheme,
   useLinkObjectiveCapability,
+  useStrategySummary,
   useThemes,
 } from "./strategy";
 
@@ -128,6 +129,37 @@ describe("useLinkObjectiveCapability", () => {
     expect(call[0]).toBe("/api/v1/strategy/objectives/obj-1/capabilities");
     expect(JSON.parse((call[1] as RequestInit).body as string)).toEqual({
       capability_id: "cap-1",
+    });
+  });
+});
+
+describe("useStrategySummary", () => {
+  it("GETs /api/v1/strategy/summary and returns the typed response", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue(
+      jsonResponse({
+        total_objectives: 12,
+        total_themes: 4,
+        linked_count: 9,
+        unlinked_count: 3,
+        current_period_count: 5,
+        upcoming_count: 4,
+        past_due_count: 3,
+      }),
+    );
+    const { result } = renderHook(() => useStrategySummary(), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/strategy/summary");
+    expect(result.current.data).toEqual({
+      total_objectives: 12,
+      total_themes: 4,
+      linked_count: 9,
+      unlinked_count: 3,
+      current_period_count: 5,
+      upcoming_count: 4,
+      past_due_count: 3,
     });
   });
 });

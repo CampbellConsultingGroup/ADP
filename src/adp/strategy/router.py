@@ -33,6 +33,7 @@ from adp.strategy.models import (
     StrategicObjectiveCreate,
     StrategicObjectiveListResponse,
     StrategicObjectiveUpdate,
+    StrategicSummaryResponse,
     StrategicTheme,
     StrategicThemeCreate,
     StrategicThemeListResponse,
@@ -224,3 +225,14 @@ async def unlink_objective_value_stream(
     except sstore.LinkNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     await session.commit()
+
+
+# ── Overview dashboard summary (051-strategy-landing-card) ────────────────────
+
+
+@router.get("/summary", response_model=StrategicSummaryResponse)
+async def get_summary(session: AsyncSession = Depends(_get_session)):
+    """Read-only; no ActionType gate (enforce_route_permission is a no-op
+    for GET; spec.md FR-012) -- normal authentication still applies via
+    AuthMiddleware, same as every other route."""
+    return await sstore.get_summary_stats(session)

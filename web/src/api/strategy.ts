@@ -211,3 +211,23 @@ export function useUnlinkObjectiveValueStream(objectiveId: string) {
     },
   });
 }
+
+// ── Overview dashboard summary (051-strategy-landing-card) ────────────────────
+
+export interface StrategicSummary {
+  total_objectives: number;
+  total_themes: number;
+  linked_count: number;
+  unlinked_count: number;
+  current_period_count: number;
+  upcoming_count: number;
+  past_due_count: number;
+}
+
+export function useStrategySummary() {
+  return useQuery<StrategicSummary>({
+    queryKey: ["strategy-summary"],
+    queryFn: () => apiGet("/api/v1/strategy/summary"),
+    staleTime: 60_000,
+  });
+}

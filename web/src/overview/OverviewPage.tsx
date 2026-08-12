@@ -12,6 +12,7 @@ import { useApplications, useTechCaps, useIntegrations } from "../api/applicatio
 import { useCapabilities, useValueStreams, useDomains } from "../api/business";
 import { usePortfolioSummary } from "../api/portfolio";
 import { useKnowledgeItems } from "../api/knowledge";
+import { useStrategySummary } from "../api/strategy";
 import "./overview.css";
 
 interface OverviewPageProps {
@@ -70,6 +71,10 @@ interface Domain {
   wash: string;
   metrics: { n: string; l: string }[];
   tiles: DomainTile[];
+  /** Optional extra content rendered below the mini-stat row and above the
+   *  tiles (051-strategy-landing-card's linkage-health/fiscal-breakdown
+   *  bars) -- undefined for the four pre-existing cards. */
+  extra?: React.ReactNode;
 }
 
 export default function OverviewPage({ onNavigate }: OverviewPageProps): React.ReactElement {
@@ -81,6 +86,7 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
   const knowledge = useKnowledgeItems();
   const integrations = useIntegrations();
   const summary = usePortfolioSummary();
+  const strategySummary = useStrategySummary();
 
   const appItems = apps.data?.items ?? [];
   const appCount = apps.data?.total ?? appItems.length;
@@ -107,9 +113,57 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
   const knowledgeCount = knowledge.data?.total;
   const integrationCount = integrations.data?.total;
 
-  const anyError = [apps, caps, streams, domains, techCaps, knowledge, integrations, summary].some((q) => q.isError);
+  const anyError = [apps, caps, streams, domains, techCaps, knowledge, integrations, summary, strategySummary].some((q) => q.isError);
+
+  const stratTotalObjectives = strategySummary.data?.total_objectives;
+  const stratTotalThemes = strategySummary.data?.total_themes;
+  const stratLinked = strategySummary.data?.linked_count ?? 0;
+  const stratUnlinked = strategySummary.data?.unlinked_count ?? 0;
+  const stratLinkTotal = Math.max(1, stratLinked + stratUnlinked);
+  const stratCurrent = strategySummary.data?.current_period_count ?? 0;
+  const stratUpcoming = strategySummary.data?.upcoming_count ?? 0;
+  const stratPastDue = strategySummary.data?.past_due_count ?? 0;
+  const stratFiscalTotal = Math.max(1, stratCurrent + stratUpcoming + stratPastDue);
 
   const DOMAINS: Domain[] = [
+    {
+      key: "strategy", eyebrow: "Strategy", title: "Where the business is headed",
+      desc: "Strategic themes and objectives, linked to the capabilities and value streams that realize them.",
+      icon: "spark", hue: "var(--biz)", wash: "var(--biz-wash)",
+      metrics: [
+        { n: num(stratTotalObjectives), l: "Objectives" },
+        { n: num(stratTotalThemes), l: "Themes" },
+      ],
+      tiles: [
+        { name: "Objectives", icon: "spark", metric: `${num(stratTotalObjectives)} objectives`, view: "strategy" },
+      ],
+      extra: strategySummary.data && (
+        <>
+          <div className="ovw-strat-row">
+            <div className={`ovw-strat-label${stratUnlinked > 0 ? " alert" : ""}`}>
+              <span>{stratLinked} linked</span>
+              <span>{stratUnlinked} unlinked</span>
+            </div>
+            <div className="ovw-strat-bar">
+              <div className="ovw-strat-seg-good" style={{ width: `${(stratLinked / stratLinkTotal) * 100}%` }} />
+              <div className="ovw-strat-seg-warn" style={{ width: `${(stratUnlinked / stratLinkTotal) * 100}%` }} />
+            </div>
+          </div>
+          <div className="ovw-strat-row">
+            <div className={`ovw-strat-label${stratPastDue > 0 ? " alert" : ""}`}>
+              <span>{stratPastDue} past due</span>
+              <span>{stratCurrent} current</span>
+              <span>{stratUpcoming} upcoming</span>
+            </div>
+            <div className="ovw-strat-bar">
+              <div className="ovw-strat-seg-warn" style={{ width: `${(stratPastDue / stratFiscalTotal) * 100}%` }} />
+              <div className="ovw-strat-seg-good" style={{ width: `${(stratCurrent / stratFiscalTotal) * 100}%` }} />
+              <div className="ovw-strat-seg-upcoming" style={{ width: `${(stratUpcoming / stratFiscalTotal) * 100}%` }} />
+            </div>
+          </div>
+        </>
+      ),
+    },
     {
       key: "business", eyebrow: "Business Architecture", title: "What the business does",
       desc: "Capabilities, value streams, and domains — the outcome view.",
@@ -303,6 +357,7 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
                     <div className="ovw-metric" key={m.l}><div className="m-n">{m.n}</div><div className="m-l">{m.l}</div></div>
                   ))}
                 </div>
+                {d.extra}
                 <div className="ovw-tiles">
                   {d.tiles.map((t) => (
                     <button className="ovw-tile" key={t.name} onClick={() => onNavigate(t.view)}
