@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   useConversation,
   useConversations,
@@ -20,9 +20,30 @@ interface Props {
    * onClose convention. Optional so ChatPanel can still be embedded without
    * a close affordance if a screen manages visibility some other way. */
   onClose?: () => void;
+  /** ADP-914.8: a getter (not a static value) so it's called fresh at send
+   * time -- avoids the exact stale-closure bug class useSendMessage's own
+   * doc comment already warns about (a value captured once would go stale
+   * as the diagram is edited between sends). */
+  getDiagramContext?: () => string | undefined;
+  /** ADP-914.8: fires with the completed assistant reply text after a
+   * successful send (wired straight through to useSendMessage's own
+   * onComplete) -- lets an embedding page (e.g. the diagram editor) react
+   * to a reply without needing its own copy of the conversation state. */
+  onAssistantReply?: (text: string) => void;
+  /** ADP-914.8: fires whenever useSendMessage's isStreaming changes -- lets
+   * an embedding page lock its own UI for the duration of a request
+   * (Clarifications, FR-011), without needing to reimplement isStreaming
+   * tracking itself. */
+  onStreamingChange?: (isStreaming: boolean) => void;
 }
 
-export default function ChatPanel({ basePath, onClose }: Props): React.ReactElement {
+export default function ChatPanel({
+  basePath,
+  onClose,
+  getDiagramContext,
+  onAssistantReply,
+  onStreamingChange,
+}: Props): React.ReactElement {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [input, setInput] = useState("");
@@ -31,6 +52,13 @@ export default function ChatPanel({ basePath, onClose }: Props): React.ReactElem
   const { data: conversation } = useConversation(basePath, conversationId);
   const { data: pastConversations } = useConversations(basePath, showHistory);
   const { sendMessage, isStreaming, streamedText, error } = useSendMessage(basePath);
+
+  useEffect(() => {
+    onStreamingChange?.(isStreaming);
+    // onStreamingChange intentionally omitted -- report only on isStreaming
+    // transitions, not whenever the caller passes a new closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isStreaming]);
 
   async function handleSend() {
     const text = input.trim();
@@ -43,7 +71,7 @@ export default function ChatPanel({ basePath, onClose }: Props): React.ReactElem
       targetId = conv.id;
       setConversationId(conv.id);
     }
-    await sendMessage(targetId, text);
+    await sendMessage(targetId, text, getDiagramContext?.(), onAssistantReply);
   }
 
   const messages: ChatMessage[] = conversation?.messages ?? [];

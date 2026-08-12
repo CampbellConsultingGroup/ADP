@@ -95,19 +95,28 @@ export function useSendMessage(basePath: string) {
   const abortRef = useRef<AbortController | null>(null);
 
   const sendMessage = useCallback(
-    async (conversationId: string, content: string) => {
+    async (
+      conversationId: string,
+      content: string,
+      diagramContext?: string,
+      onComplete?: (fullText: string) => void,
+    ) => {
       setIsStreaming(true);
       setStreamedText("");
       setError(null);
       const controller = new AbortController();
       abortRef.current = controller;
+      let fullText = "";
+      let hadError = false;
 
       try {
         const authHeader = await getAuthHeader();
         const res = await fetch(`${basePath}/conversations/${conversationId}/messages`, {
           method: "POST",
           headers: { ...authHeader, "Content-Type": "application/json" },
-          body: JSON.stringify({ content }),
+          body: JSON.stringify(
+            diagramContext !== undefined ? { content, diagram_context: diagramContext } : { content },
+          ),
           signal: controller.signal,
         });
         if (!res.ok || !res.body) {
@@ -127,20 +136,24 @@ export function useSendMessage(basePath: string) {
             if (!line.startsWith("data:")) continue;
             const event = JSON.parse(line.slice("data:".length).trim());
             if (event.type === "text_delta") {
+              fullText += event.text;
               setStreamedText((prev) => prev + event.text);
             } else if (event.type === "error") {
+              hadError = true;
               setError(event.detail ?? "The assistant hit an error.");
             }
           }
         }
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
+          hadError = true;
           setError((err as Error).message);
         }
       } finally {
         setIsStreaming(false);
         setStreamedText("");
         void qc.invalidateQueries({ queryKey: ["chat-conversation", basePath, conversationId] });
+        if (!hadError) onComplete?.(fullText);
       }
     },
     [basePath, qc],

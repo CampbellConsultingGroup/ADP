@@ -66,6 +66,11 @@ class SendMessageRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str
+    # ADP-914.8: optional diagram context (title/type/current DSL), supplied
+    # by the frontend when this endpoint is called from the diagram editor.
+    # Never persisted (research.md Decision 2) -- consumed only by
+    # orchestrator.run_turn for that one turn's system-prompt assembly.
+    diagram_context: str | None = None
 
     @field_validator("content")
     @classmethod

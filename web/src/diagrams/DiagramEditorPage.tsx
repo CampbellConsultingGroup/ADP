@@ -15,6 +15,9 @@ import { useDslSync } from "./editor/useDslSync";
 import { createEmptyDiagramModel, type DiagramModel } from "./core/index";
 import { useAuth } from "../auth/AuthProvider";
 import { getRecommendedDiagramType } from "./persona";
+import ChatButton from "../chat/ChatButton";
+import ChatPanel from "../chat/ChatPanel";
+import { extractProposedDsl } from "./editor/extractProposedDsl";
 import {
   createDiagram,
   getDiagram,
@@ -68,8 +71,27 @@ export function DiagramEditorPage({
   const [loading, setLoading] = useState(Boolean(diagramId));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // ADP-914.8: embedded AI assistant, mirrors CapabilityTree.tsx's showChat
+  // toggle pattern exactly.
+  const [showChat, setShowChat] = useState(false);
+  // FR-011 / Clarifications: manual editing is locked while a chat request
+  // is in flight, mirroring this file's own existing disabled={saving}
+  // convention on the Save button (research.md Decision 4).
+  const [chatBusy, setChatBusy] = useState(false);
 
   const { dsl, parseErrors, applyDsl } = useDslSync(model, setModel, diagramType);
+
+  function getDiagramContext(): string {
+    return `Diagram title: ${title}\nDiagram type: ${diagramType}\n\nCurrent DSL:\n${dsl}`;
+  }
+
+  // ADP-914.8 User Story 2: a proposed edit is applied to the live,
+  // reviewable model via the same applyDsl() reopening an existing diagram
+  // already uses -- nothing here is ever auto-saved (FR-006/FR-007).
+  function handleAssistantReply(text: string) {
+    const proposed = extractProposedDsl(text, diagramType);
+    if (proposed !== null) applyDsl(proposed);
+  }
 
   useEffect(() => {
     if (!diagramId) return;
@@ -146,7 +168,17 @@ export function DiagramEditorPage({
         <button onClick={handleSave} disabled={saving}>
           {saving ? "Saving…" : "Save"}
         </button>
+        <ChatButton active={showChat} onToggle={() => setShowChat(!showChat)} label="Chat" />
       </div>
+      {showChat && (
+        <ChatPanel
+          basePath="/api/v1/chat"
+          onClose={() => setShowChat(false)}
+          getDiagramContext={getDiagramContext}
+          onAssistantReply={handleAssistantReply}
+          onStreamingChange={setChatBusy}
+        />
+      )}
       {error && <p role="alert">{error}</p>}
       {parseErrors.length > 0 && (
         <ul role="alert">
@@ -157,8 +189,13 @@ export function DiagramEditorPage({
           ))}
         </ul>
       )}
-      <Canvas model={model} onChange={setModel} dslFamily={diagramType} />
-      <DslPanel dsl={dsl} parseErrors={parseErrors} onApply={applyDsl} />
+      {/* FR-011: locks Canvas (a large vendored+adapted component, research.md's
+          own reasoning for not modifying its internals) via a non-invasive
+          wrapper rather than threading a new prop through it. */}
+      <div style={chatBusy ? { pointerEvents: "none", opacity: 0.6 } : undefined}>
+        <Canvas model={model} onChange={setModel} dslFamily={diagramType} />
+      </div>
+      <DslPanel dsl={dsl} parseErrors={parseErrors} onApply={applyDsl} disabled={chatBusy} />
       {savedId && <ExportAction diagramId={savedId} model={model} />}
     </div>
   );

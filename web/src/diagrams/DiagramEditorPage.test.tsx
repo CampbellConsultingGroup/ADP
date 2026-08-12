@@ -13,6 +13,22 @@ vi.mock("../auth/AuthProvider", () => ({
   useAuth: vi.fn(),
 }));
 
+// ADP-914.8: lightweight stubs capturing the props DiagramEditorPage passes
+// down, rather than exercising the real ChatButton/ChatPanel (already
+// covered by their own tests).
+let lastChatPanelProps: Record<string, unknown> | null = null;
+vi.mock("../chat/ChatButton", () => ({
+  default: ({ onToggle }: { onToggle: () => void }) => (
+    <button onClick={onToggle}>Chat</button>
+  ),
+}));
+vi.mock("../chat/ChatPanel", () => ({
+  default: (props: Record<string, unknown>) => {
+    lastChatPanelProps = props;
+    return <div data-testid="chat-panel" />;
+  },
+}));
+
 const mockedApi = vi.mocked(api);
 const mockedUseAuth = vi.mocked(useAuth);
 
@@ -35,6 +51,7 @@ function mockRole(role: string | undefined) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  lastChatPanelProps = null;
   // Default: no recognized role -- matches today's pre-feature behavior
   // (fallback to "flowchart", no recommendation badge) unless a test
   // explicitly calls mockRole() with an architect role (ADP-914.6).
@@ -191,5 +208,75 @@ describe("DiagramEditorPage: seed prop pre-fills a new diagram (ADP-914.7)", () 
 
     const select = screen.getByLabelText("Diagram type") as HTMLSelectElement;
     expect(select.value).toBe("flowchart");
+  });
+});
+
+describe("DiagramEditorPage: embedded AI assistant (ADP-914.8, User Story 1)", () => {
+  it("passes a getDiagramContext function reflecting the current title/type/DSL", async () => {
+    const user = userEvent.setup();
+    render(<DiagramEditorPage newDiagramType="flowchart" />);
+
+    await user.click(screen.getByText("Chat"));
+    await screen.findByTestId("chat-panel");
+
+    expect(lastChatPanelProps).not.toBeNull();
+    const getDiagramContext = lastChatPanelProps!.getDiagramContext as () => string;
+    expect(typeof getDiagramContext).toBe("function");
+
+    const context = getDiagramContext();
+    expect(context).toContain("Untitled diagram");
+    expect(context).toContain("flowchart");
+  });
+});
+
+describe("DiagramEditorPage: applying a proposed edit (ADP-914.8, User Story 2)", () => {
+  async function openChat() {
+    const user = userEvent.setup();
+    render(<DiagramEditorPage newDiagramType="flowchart" />);
+    await user.click(screen.getByText("Chat"));
+    await screen.findByTestId("chat-panel");
+    return lastChatPanelProps!;
+  }
+
+  it("applies an extracted fenced DSL block to the DSL panel", async () => {
+    const props = await openChat();
+    const onAssistantReply = props.onAssistantReply as (text: string) => void;
+
+    onAssistantReply(
+      "Sure, here's the updated diagram:\n```flowchart\nflowchart LR\n  A[Start] --> B[Renamed]\n```",
+    );
+
+    const dslPanel = await screen.findByTestId("dsl-panel") as HTMLTextAreaElement;
+    await waitFor(() => expect(dslPanel.value).toContain("Renamed"));
+  });
+
+  it("leaves the DSL panel unchanged for a plain conversational reply with no fenced block", async () => {
+    const props = await openChat();
+    const onAssistantReply = props.onAssistantReply as (text: string) => void;
+    const dslPanel = screen.getByTestId("dsl-panel") as HTMLTextAreaElement;
+    const before = dslPanel.value;
+
+    onAssistantReply("This diagram currently has zero nodes.");
+
+    expect(dslPanel.value).toBe(before);
+  });
+});
+
+describe("DiagramEditorPage: manual-edit lockout while streaming (ADP-914.8, User Story 2, FR-011)", () => {
+  it("disables the DSL panel while onStreamingChange(true), re-enables on false", async () => {
+    const user = userEvent.setup();
+    render(<DiagramEditorPage newDiagramType="flowchart" />);
+    await user.click(screen.getByText("Chat"));
+    await screen.findByTestId("chat-panel");
+    const onStreamingChange = lastChatPanelProps!.onStreamingChange as (s: boolean) => void;
+
+    const dslPanel = screen.getByTestId("dsl-panel") as HTMLTextAreaElement;
+    expect(dslPanel.disabled).toBe(false);
+
+    onStreamingChange(true);
+    await waitFor(() => expect(dslPanel.disabled).toBe(true));
+
+    onStreamingChange(false);
+    await waitFor(() => expect(dslPanel.disabled).toBe(false));
   });
 });

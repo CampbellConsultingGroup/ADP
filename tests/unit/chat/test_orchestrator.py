@@ -262,3 +262,78 @@ async def test_run_turn_sends_only_windowed_history_to_the_llm_but_persists_all(
     # (2) -- nothing was ever discarded from what's persisted/shown, only
     # from what was sent to the model.
     assert len(detail_after.messages) == 25 + 2
+
+
+class _SystemRecordingLLMClient:
+    """Captures the `system` prompt each call is made with (ADP-914.8)."""
+
+    def __init__(self) -> None:
+        self.seen_system: str | None = None
+
+    async def chat_stream(self, *, messages, system, tools=None, correlation_id=None):
+        self.seen_system = system
+        for event in _text_events("noted."):
+            yield event
+
+
+async def test_run_turn_appends_diagram_context_to_system_prompt_when_present(sessions):
+    chat_factory, biz_factory = sessions
+
+    async with chat_factory() as chat_session:
+        conv = await chat_store.create_conversation("alice", chat_session)
+        await chat_session.commit()
+
+    llm = _SystemRecordingLLMClient()
+    diagram_context = (
+        "Diagram title: Quote to Bind\nDiagram type: flowchart\n\n"
+        "Current DSL:\nflowchart LR\n  A[Start] --> B[End]\n"
+    )
+    with patch("adp.chat.retrieval.retrieve_context", new=AsyncMock(return_value=[])):
+        async with chat_factory() as chat_session, biz_factory() as biz_session:
+            async for _ in orchestrator.run_turn(
+                conversation_id=conv.id, history=[], user_content="rename Start to Begin",
+                diagram_context=diagram_context,
+                chat_session=chat_session, biz_session=biz_session, app_session=biz_session,
+                kb_session=biz_session, role=PersonaRole.ENTERPRISE_ARCHITECT,
+                llm_client=llm,
+            ):
+                pass
+
+    assert llm.seen_system is not None
+    assert diagram_context in llm.seen_system
+
+
+async def test_run_turn_system_prompt_unchanged_when_diagram_context_absent(sessions):
+    """Regression guard: every existing, non-diagram chat caller (e.g. the
+    Capabilities page) must see byte-for-byte identical system-prompt
+    assembly to before this feature -- confirmed by comparing two calls that
+    differ only in whether diagram_context is passed at all."""
+    chat_factory, biz_factory = sessions
+
+    async with chat_factory() as chat_session:
+        conv = await chat_store.create_conversation("alice", chat_session)
+        await chat_session.commit()
+
+    llm_without_kwarg = _SystemRecordingLLMClient()
+    llm_with_none = _SystemRecordingLLMClient()
+    with patch("adp.chat.retrieval.retrieve_context", new=AsyncMock(return_value=[])):
+        async with chat_factory() as chat_session, biz_factory() as biz_session:
+            async for _ in orchestrator.run_turn(
+                conversation_id=conv.id, history=[], user_content="hello",
+                chat_session=chat_session, biz_session=biz_session, app_session=biz_session,
+                kb_session=biz_session, role=PersonaRole.ENTERPRISE_ARCHITECT,
+                llm_client=llm_without_kwarg,
+            ):
+                pass
+        async with chat_factory() as chat_session, biz_factory() as biz_session:
+            async for _ in orchestrator.run_turn(
+                conversation_id=conv.id, history=[], user_content="hello",
+                diagram_context=None,
+                chat_session=chat_session, biz_session=biz_session, app_session=biz_session,
+                kb_session=biz_session, role=PersonaRole.ENTERPRISE_ARCHITECT,
+                llm_client=llm_with_none,
+            ):
+                pass
+
+    assert llm_without_kwarg.seen_system == llm_with_none.seen_system
+    assert "Diagram title:" not in llm_without_kwarg.seen_system
