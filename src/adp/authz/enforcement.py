@@ -139,6 +139,10 @@ _PREFIX_ROUTE_ACTIONS: tuple[tuple[str, ActionType], ...] = (
     # (create/update/delete/export) -- reads are ungated (nothing about a
     # diagram's content is sensitive the way READ_APPLICATION_RISK etc. are).
     ("/api/v1/diagrams", ActionType.WRITE_DIAGRAM),
+    # ADP-d8u.1: reads are ungated (matches /api/v1/business/'s own convention
+    # for capabilities/value streams/domains); write endpoints reuse
+    # WRITE_BUSINESS_ARCH (research.md Decision 3), no new ActionType.
+    ("/api/v1/strategy/", ActionType.WRITE_BUSINESS_ARCH),
 )
 
 

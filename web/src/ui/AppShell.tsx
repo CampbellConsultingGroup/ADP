@@ -21,6 +21,11 @@ const PRIMARY: NavDef[] = [
   { view: "designs", label: "Designs", icon: "sol" },
 ];
 const ARCHITECTURE: NavDef[] = [
+  // ADP-d8u.1: strategic objectives are a distinct entity with their own
+  // lifecycle (plan.md's Structure Decision) -- a new top-level section,
+  // not nested under Business Architecture. Placed first, ahead of
+  // Business, per explicit nav-ordering request.
+  { view: "strategy", label: "Strategy", icon: "spark", hue: "biz" },
   { view: "business", label: "Business", icon: "biz", hue: "biz" },
   { view: "applications", label: "Applications", icon: "ent", hue: "ent" },
   { view: "portfolio", label: "Portfolio", icon: "chart", hue: "ent" },
@@ -55,6 +60,7 @@ const TITLES: Record<AppView, string> = {
   recommend: "Recommendations",
   canvas: "Design Canvas",
   diagrams: "Diagrams",
+  strategy: "Strategy",
   admin: "Agent Prompt Management",
 };
 
