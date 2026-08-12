@@ -247,19 +247,20 @@ describe("DiagramEditorPage: persona-aware default type (ADP-914.6, User Story 1
 });
 
 describe("DiagramEditorPage: 'Recommended for your role' label (ADP-914.6, User Story 2)", () => {
-  it("labels only the Enterprise Architect's mapped option as recommended, leaving the other 4 unlabeled and selectable", () => {
+  it("labels only the Enterprise Architect's mapped option as recommended, leaving the other 5 unlabeled and selectable", () => {
     mockRole("enterprise_architect");
     render(<DiagramEditorPage />);
     const select = screen.getByLabelText("Diagram type") as HTMLSelectElement;
     const options = Array.from(select.options);
 
-    expect(options).toHaveLength(5);
+    // ADP-SPEC-053: "c4" joins the other 5 types (FR-001).
+    expect(options).toHaveLength(6);
     const recommendedOptions = options.filter((o) => o.text.includes("(Recommended for your role)"));
     expect(recommendedOptions).toHaveLength(1);
     expect(recommendedOptions[0].value).toBe("architecture");
 
     // Every option remains present and selectable regardless of the label (FR-005).
-    for (const type of ["flowchart", "sequence", "erd", "uml", "architecture"]) {
+    for (const type of ["flowchart", "sequence", "erd", "uml", "architecture", "c4"]) {
       expect(options.some((o) => o.value === type)).toBe(true);
     }
   });
@@ -373,5 +374,96 @@ describe("DiagramEditorPage: manual-edit lockout while streaming (ADP-914.8, Use
 
     onStreamingChange(false);
     await waitFor(() => expect(dslPanel.disabled).toBe(false));
+  });
+});
+
+describe("DiagramEditorPage: C4 diagram type (ADP-SPEC-053, User Story 1)", () => {
+  it("seeds a new C4 diagram with a valid, empty Context-level starting point (FR-004)", () => {
+    render(<DiagramEditorPage newDiagramType="c4" />);
+    const dslPanel = screen.getByTestId("dsl-panel") as HTMLTextAreaElement;
+    // The serialized empty c4-context model -- just the header line, no elements yet, and no
+    // front-matter block (joinFrontMatter omits it when there's nothing to carry).
+    expect(dslPanel.value).toBe("C4Context\n");
+  });
+
+  it("renders Person/System elements and a relationship authored via the DSL panel (FR-002/FR-003)", async () => {
+    const user = userEvent.setup();
+    render(<DiagramEditorPage newDiagramType="c4" />);
+
+    const dslPanel = screen.getByTestId("dsl-panel") as HTMLTextAreaElement;
+    fireEvent.change(dslPanel, {
+      target: {
+        value: 'C4Context\nPerson(user, "Customer")\nSystem(sys, "Payments Service")\nRel(user, sys, "Uses")\n',
+      },
+    });
+    await user.click(screen.getByTestId("apply-dsl"));
+
+    const personNode = await screen.findByTestId("node-user");
+    const systemNode = screen.getByTestId("node-sys");
+    // Label text may wrap across multiple <tspan> lines, so check concatenated textContent
+    // rather than a single-node text match.
+    expect(personNode.textContent).toContain("Customer");
+    // Label wraps across separate <tspan> lines ("Payments" / "Service"), so textContent has no
+    // space between them -- check each word rather than the exact phrase.
+    expect(systemNode.textContent).toContain("Payments");
+    expect(systemNode.textContent).toContain("Service");
+
+    // The Person element renders via the canvas's existing default-shape fallback (a plain
+    // <rect>) -- shapes.tsx (vendored, unchanged) has no dedicated 'person' case. This is
+    // pre-existing, latent behavior this feature is the first to make reachable, not a defect
+    // (svg-renderer.ts's separate export path does have a dedicated case -- see ExportAction.test.tsx).
+    expect(personNode.querySelector("rect")).not.toBeNull();
+    expect(systemNode.querySelector("rect")).not.toBeNull();
+  });
+
+  it("reports a line/content error for malformed C4 text, consistent with every other type (FR-007)", async () => {
+    const user = userEvent.setup();
+    render(<DiagramEditorPage newDiagramType="c4" />);
+
+    const dslPanel = screen.getByTestId("dsl-panel") as HTMLTextAreaElement;
+    fireEvent.change(dslPanel, {
+      target: { value: 'C4Context\nPersn(oops, "Typo")\n' },
+    });
+    await user.click(screen.getByTestId("apply-dsl"));
+
+    const notice = await screen.findByTestId("unsupported-element-notice");
+    expect(notice.textContent).toContain("Line");
+    expect(notice.textContent).toContain("2");
+    expect(notice.textContent).toContain("Persn");
+  });
+});
+
+describe("DiagramEditorPage: C4 diagram save/reopen (ADP-SPEC-053, User Story 2)", () => {
+  const SAVED_C4: Diagram = {
+    id: "diag-c4-1",
+    title: "Payments Context",
+    diagram_type: "c4",
+    dsl_source:
+      '---\ncanvas:\n  positions:\n    user:\n      x: 40\n      y: 40\n    sys:\n      x: 240\n      y: 40\n  styles: {}\n  edgeStyles: {}\n  containers: {}\n---\nC4Context\nPerson(user, "Customer")\nSystem(sys, "Payments Service")\nRel(user, sys, "Uses")\n',
+    created_by: "alice",
+    created_at: "2026-08-12T00:00:00Z",
+    updated_at: "2026-08-12T00:00:00Z",
+  };
+
+  it("reopens a saved C4 diagram with its full content restored (FR-005, SC-003)", async () => {
+    mockedApi.getDiagram.mockResolvedValue(SAVED_C4);
+
+    render(<DiagramEditorPage diagramId="diag-c4-1" />);
+
+    await waitFor(() => expect(mockedApi.getDiagram).toHaveBeenCalledWith("diag-c4-1"));
+
+    const titleInput = (await screen.findByLabelText("Diagram title")) as HTMLInputElement;
+    expect(titleInput.value).toBe("Payments Context");
+
+    const dslPanel = (await screen.findByTestId("dsl-panel")) as HTMLTextAreaElement;
+    await waitFor(() => expect(dslPanel.value).toContain('Person(user, "Customer")'));
+    expect(dslPanel.value).toContain('System(sys, "Payments Service")');
+    expect(dslPanel.value).toContain('Rel(user, sys, "Uses")');
+
+    // Both elements render on the canvas -- not just present in the reloaded text.
+    const personNode = await screen.findByTestId("node-user");
+    const systemNode = screen.getByTestId("node-sys");
+    expect(personNode.textContent).toContain("Customer");
+    expect(systemNode.textContent).toContain("Payments");
   });
 });

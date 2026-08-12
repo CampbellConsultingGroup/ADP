@@ -43,7 +43,7 @@ async def client(tmp_path):
 # ── User Story 1: create / read / update ─────────────────────────────────────
 
 @pytest.mark.parametrize(
-    "diagram_type", ["flowchart", "sequence", "erd", "uml", "architecture"]
+    "diagram_type", ["flowchart", "sequence", "erd", "uml", "architecture", "c4"]
 )
 async def test_create_persists_each_supported_type(client, diagram_type) -> None:
     resp = await client.post(
@@ -113,8 +113,11 @@ async def test_create_422_oversized_dsl_source(client) -> None:
 
 
 async def test_create_422_unsupported_type(client) -> None:
+    # ADP-SPEC-053: "c4" used to be the example of an unsupported type here -- it isn't anymore
+    # (see test_create_persists_each_supported_type above), so this now exercises a genuinely
+    # unsupported value instead. The test's purpose (reject unknown types) is unchanged.
     resp = await client.post(
-        "/api/v1/diagrams", json={"title": "T", "diagram_type": "c4"}
+        "/api/v1/diagrams", json={"title": "T", "diagram_type": "gantt"}
     )
     assert resp.status_code == 422
 
@@ -159,7 +162,7 @@ async def test_export_422_for_invalid_svg(client) -> None:
 # ── User Story 3: browse / manage ────────────────────────────────────────────
 
 async def test_list_returns_summaries_across_all_types(client) -> None:
-    for diagram_type in ("flowchart", "sequence", "erd", "uml", "architecture"):
+    for diagram_type in ("flowchart", "sequence", "erd", "uml", "architecture", "c4"):
         await client.post(
             "/api/v1/diagrams", json={"title": f"T-{diagram_type}", "diagram_type": diagram_type}
         )
@@ -167,9 +170,9 @@ async def test_list_returns_summaries_across_all_types(client) -> None:
     resp = await client.get("/api/v1/diagrams")
     assert resp.status_code == 200, resp.text
     body = resp.json()
-    assert body["total"] == 5
+    assert body["total"] == 6
     types = {item["diagram_type"] for item in body["items"]}
-    assert types == {"flowchart", "sequence", "erd", "uml", "architecture"}
+    assert types == {"flowchart", "sequence", "erd", "uml", "architecture", "c4"}
     assert all("dsl_source" not in item for item in body["items"])
 
 

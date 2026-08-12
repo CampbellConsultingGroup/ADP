@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-DiagramType = Literal["flowchart", "sequence", "erd", "uml", "architecture"]
+DiagramType = Literal["flowchart", "sequence", "erd", "uml", "architecture", "c4"]
 
 _DSL_SOURCE_MAX_CHARS = 50_000
 
