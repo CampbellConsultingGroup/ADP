@@ -178,6 +178,7 @@ async def send_message(
                 conversation_id=conversation_id,
                 history=history,
                 user_content=body.content,
+                diagram_context=body.diagram_context,
                 chat_session=chat_session,
                 biz_session=biz_session,
                 app_session=app_session,

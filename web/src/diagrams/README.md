@@ -97,3 +97,38 @@ lifts that into a `pendingDiagramSeed` state and switches `view` to
 Decision 3), not a new state-sharing mechanism. `DiagramsPage.tsx` consumes
 the seed on receipt (opens the editor pre-filled) and reports it consumed so
 `App.tsx` can clear it.
+
+## AI-assisted diagram editing (ADP-914.8)
+
+`DiagramEditorPage.tsx` embeds `adp.chat`'s existing `ChatButton`/`ChatPanel`
+(the same components already used on the Capabilities page) — the first AI-
+*generative* capability in this diagram feature line (046/914.6/914.7 all had
+zero AI-generated content). Three new `ChatPanel` props, added incrementally:
+
+- **`getDiagramContext`** — a getter (called fresh at send time, never a
+  captured value) returning the diagram's current title/type/DSL, threaded to
+  `adp.chat`'s backend as an optional `diagram_context` request field,
+  appended to that turn's system prompt. **Deliberately not a new
+  `adp.chat.tools.TOOL_REGISTRY` entry** — a tool the model calls needs an id
+  to call it *with*, but an ADP-914.7-generated, not-yet-saved diagram has
+  none. `adp.chat`'s mechanically-enforced read-only tool boundary
+  (`tests/unit/chat/test_tools_boundary.py`) needed zero changes for this
+  feature.
+- **`onAssistantReply`** — fires with the completed response text.
+  `DiagramEditorPage.tsx` runs it through `extractProposedDsl()` (a fenced
+  DSL code block, per the system prompt's instructions) and, when found,
+  calls the *existing* `applyDsl()` — the same mechanism already used when
+  reopening a saved diagram. Nothing is ever auto-saved; the existing Save
+  button remains the only persistence gate (no new accept/reject UI).
+- **`onStreamingChange`** — fires on every `isStreaming` transition;
+  `DiagramEditorPage.tsx` uses it to disable `DslPanel` (a new `disabled`
+  prop) and visually lock `Canvas` (a non-invasive wrapper, not a prop
+  threaded into that large vendored+adapted component) for the duration of a
+  request — eliminating the race between a manual edit and an incoming
+  proposal (Clarifications, FR-011), mirroring this file's own pre-existing
+  `disabled={saving}` convention on the Save button.
+
+See [specs/049-ai-diagram-editing/research.md](../../../specs/049-ai-diagram-editing/research.md)
+for the full reasoning, including two designs considered and rejected (a
+`get_diagram` tool; a JSON/diff-shaped proposal instead of a fenced DSL
+block).
