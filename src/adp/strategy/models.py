@@ -188,3 +188,26 @@ class ObjectiveCapabilityLinkCreate(BaseModel):
 class ObjectiveValueStreamLinkCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     value_stream_id: str
+
+
+# ── Overview dashboard summary (051-strategy-landing-card) ────────────────────
+
+
+class StrategicSummaryResponse(BaseModel):
+    """Aggregate counts for the Overview dashboard's Strategy domain card.
+
+    All seven fields come from one atomic query (adp.strategy.store.
+    get_summary_stats, research.md Decision 3) -- linked_count +
+    unlinked_count == total_objectives and current_period_count +
+    upcoming_count + past_due_count == total_objectives always hold
+    (data-model.md's invariants).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    total_objectives: int
+    total_themes: int
+    linked_count: int
+    unlinked_count: int
+    current_period_count: int
+    upcoming_count: int
+    past_due_count: int

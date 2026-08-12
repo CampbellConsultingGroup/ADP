@@ -56,6 +56,9 @@ Thumbs.db
 # Keep generated schema committed (it IS a source artifact per ART-II)
 # generated/architecture-description.schema.json  ← NOT ignored
 
+# Playwright MCP tool output (screenshots/snapshots from ad-hoc browser sessions)
+.playwright-mcp/
+
 # Node.js / TypeScript (web/)
 web/node_modules/
 web/dist/

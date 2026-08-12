@@ -32,6 +32,7 @@ from adp.strategy.models import (
     StrategicObjectiveListResponse,
     StrategicObjectiveSummary,
     StrategicObjectiveUpdate,
+    StrategicSummaryResponse,
     StrategicTheme,
     StrategicThemeCreate,
     StrategicThemeListResponse,
@@ -357,3 +358,86 @@ async def unlink_objective_value_stream(
     )
     if _rowcount(result) == 0:
         raise LinkNotFoundError(f"Link ({objective_id!r}, {value_stream_id!r}) not found")
+
+
+# ── Overview dashboard summary (051-strategy-landing-card) ────────────────────
+
+# Raw SQL, mirroring adp.api.routers.portfolio.get_portfolio_summary's own
+# established pattern for this exact class of read (research.md Decision 3):
+# Postgres-only syntax (NOW()/EXTRACT()/FILTER), so this is verified directly
+# against a real Postgres instance rather than through the SQLite-backed unit
+# tests (which mock session.execute() instead, matching
+# tests/contract/test_portfolio_api.py's own precedent).
+#
+# One atomic pass: the inner subquery classifies each objective's linkage
+# (EXISTS against either join table) and fiscal bucket (a CASE expression
+# implementing the FY-aware past-due rule -- research.md Decision 4 / spec.md
+# Edge Cases: an FY-period objective is past due only once its whole fiscal
+# year has elapsed, never partway through it); the outer query aggregates
+# both with COUNT(*) FILTER (WHERE ...) in one round trip.
+_SUMMARY_STATS_SQL = sa.text(
+    """
+    SELECT
+        (SELECT COUNT(*) FROM strategic_themes) AS total_themes,
+        COUNT(*) AS total_objectives,
+        COUNT(*) FILTER (WHERE linked) AS linked_count,
+        COUNT(*) FILTER (WHERE NOT linked) AS unlinked_count,
+        COUNT(*) FILTER (WHERE period_bucket = 'current') AS current_period_count,
+        COUNT(*) FILTER (WHERE period_bucket = 'upcoming') AS upcoming_count,
+        COUNT(*) FILTER (WHERE period_bucket = 'past_due') AS past_due_count
+    FROM (
+        SELECT
+            o.id,
+            (
+                EXISTS (
+                    SELECT 1 FROM strategic_objective_capabilities c
+                    WHERE c.objective_id = o.id
+                )
+                OR EXISTS (
+                    SELECT 1 FROM strategic_objective_value_streams v
+                    WHERE v.objective_id = o.id
+                )
+            ) AS linked,
+            CASE
+                WHEN o.period = 'FY' THEN
+                    CASE
+                        WHEN o.fiscal_year < EXTRACT(YEAR FROM NOW())::int THEN 'past_due'
+                        WHEN o.fiscal_year > EXTRACT(YEAR FROM NOW())::int THEN 'upcoming'
+                        ELSE 'current'
+                    END
+                ELSE
+                    CASE
+                        WHEN (o.fiscal_year, CAST(SUBSTRING(o.period FROM 2) AS INT))
+                             < (EXTRACT(YEAR FROM NOW())::int, EXTRACT(QUARTER FROM NOW())::int)
+                            THEN 'past_due'
+                        WHEN (o.fiscal_year, CAST(SUBSTRING(o.period FROM 2) AS INT))
+                             > (EXTRACT(YEAR FROM NOW())::int, EXTRACT(QUARTER FROM NOW())::int)
+                            THEN 'upcoming'
+                        ELSE 'current'
+                    END
+            END AS period_bucket
+        FROM strategic_objectives o
+    ) sub
+    """
+)
+
+
+async def get_summary_stats(session: AsyncSession) -> StrategicSummaryResponse:
+    """Overview dashboard's Strategy card aggregate (051-strategy-landing-card).
+
+    Computes mini-stats, the linkage-health split (FR-004/005), and the
+    fiscal-period split (FR-007) in one query. "Now" is the database
+    server's own clock, never Python's (FR-008).
+    """
+    result = await session.execute(_SUMMARY_STATS_SQL)
+    row = result.mappings().first()
+    assert row is not None  # a plain aggregate always returns exactly one row
+    return StrategicSummaryResponse(
+        total_objectives=row["total_objectives"],
+        total_themes=row["total_themes"],
+        linked_count=row["linked_count"],
+        unlinked_count=row["unlinked_count"],
+        current_period_count=row["current_period_count"],
+        upcoming_count=row["upcoming_count"],
+        past_due_count=row["past_due_count"],
+    )

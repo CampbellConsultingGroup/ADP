@@ -17,6 +17,7 @@ if /api/v1/strategy/ isn't present in _PREFIX_ROUTE_ACTIONS.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock
 
 import httpx
 import pytest
@@ -354,3 +355,103 @@ async def test_delete_objective_then_get_404(client) -> None:
 async def test_delete_objective_404_unknown_id(client) -> None:
     resp = await client.delete(f"{BASE}/objectives/nonexistent")
     assert resp.status_code == 404
+
+
+# ── GET /strategy/summary (051-strategy-landing-card) ──────────────────────────
+#
+# A dedicated fixture, not the module's real-SQLite `client` fixture above:
+# get_summary_stats's raw SQL uses NOW()/EXTRACT(), which is Postgres-only
+# syntax SQLite can't execute -- mirrors tests/contract/test_portfolio_api.py's
+# own session-mock pattern for the exact same class of endpoint.
+
+@pytest.fixture()
+async def summary_client(mocked_summary_session):
+    from adp.api.app import create_app
+
+    app = create_app()
+
+    async def _override():
+        yield mocked_summary_session
+
+    app.dependency_overrides[srouter._get_session] = _override
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c
+
+
+def _mock_row(**fields):
+    row = MagicMock()
+    row.__getitem__.side_effect = lambda k: fields[k]
+    return row
+
+
+@pytest.fixture()
+def mocked_summary_session():
+    session = AsyncMock()
+    result = MagicMock()
+    result.mappings.return_value.first = MagicMock(
+        return_value=_mock_row(
+            total_themes=4,
+            total_objectives=12,
+            linked_count=9,
+            unlinked_count=3,
+            current_period_count=5,
+            upcoming_count=4,
+            past_due_count=3,
+        )
+    )
+    session.execute = AsyncMock(return_value=result)
+    return session
+
+
+async def test_get_summary_200_with_all_fields(summary_client) -> None:
+    resp = await summary_client.get(f"{BASE}/summary")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body == {
+        "total_themes": 4,
+        "total_objectives": 12,
+        "linked_count": 9,
+        "unlinked_count": 3,
+        "current_period_count": 5,
+        "upcoming_count": 4,
+        "past_due_count": 3,
+    }
+
+
+async def test_get_summary_rejects_unexpected_fields(summary_client) -> None:
+    # extra="forbid" on StrategicSummaryResponse -- confirms the endpoint
+    # never leaks a stray field, mirroring every other ADP boundary model.
+    resp = await summary_client.get(f"{BASE}/summary")
+    assert resp.status_code == 200
+    assert set(resp.json().keys()) == {
+        "total_themes", "total_objectives", "linked_count", "unlinked_count",
+        "current_period_count", "upcoming_count", "past_due_count",
+    }
+
+
+async def test_get_summary_all_zero_on_empty_database() -> None:
+    session = AsyncMock()
+    result = MagicMock()
+    result.mappings.return_value.first = MagicMock(
+        return_value=_mock_row(
+            total_themes=0, total_objectives=0, linked_count=0, unlinked_count=0,
+            current_period_count=0, upcoming_count=0, past_due_count=0,
+        )
+    )
+    session.execute = AsyncMock(return_value=result)
+
+    from adp.api.app import create_app
+
+    app = create_app()
+
+    async def _override():
+        yield session
+
+    app.dependency_overrides[srouter._get_session] = _override
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        resp = await c.get(f"{BASE}/summary")
+
+    assert resp.status_code == 200, resp.text
+    assert all(v == 0 for v in resp.json().values())

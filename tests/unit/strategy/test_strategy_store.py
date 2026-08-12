@@ -13,6 +13,7 @@ checking happens one layer up, in the router).
 from __future__ import annotations
 
 from decimal import Decimal
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import sqlalchemy as sa
@@ -271,6 +272,66 @@ async def test_unlink_capability_not_found_raises(session) -> None:
     await session.commit()
     with pytest.raises(sstore.LinkNotFoundError):
         await sstore.unlink_objective_capability(created.id, "nonexistent-cap", session)
+
+
+# ── get_summary_stats (051-strategy-landing-card) ──────────────────────────────
+#
+# Mirrors adp.api.routers.portfolio's own established test pattern
+# (tests/contract/test_portfolio_api.py's client_factory/_make_session_mock)
+# for a Postgres-only-syntax aggregate: mocks session.execute()'s return value
+# rather than running the real query -- the query itself uses NOW()/EXTRACT(),
+# which SQLite (this file's other fixture) can't execute. The actual SQL text
+# is verified separately against a real local Postgres instance (T005), the
+# same way migration 025's schema was verified via direct psql inspection
+# rather than a SQLite-backed pytest.
+
+
+def _mock_session_returning(row: MagicMock) -> AsyncMock:
+    session = AsyncMock()
+    result = MagicMock()
+    result.mappings.return_value.first = MagicMock(return_value=row)
+    session.execute = AsyncMock(return_value=result)
+    return session
+
+
+async def test_get_summary_stats_maps_all_seven_fields() -> None:
+    row = MagicMock()
+    row.__getitem__.side_effect = lambda k: {
+        "total_themes": 4,
+        "total_objectives": 12,
+        "linked_count": 9,
+        "unlinked_count": 3,
+        "current_period_count": 5,
+        "upcoming_count": 4,
+        "past_due_count": 3,
+    }[k]
+    session = _mock_session_returning(row)
+
+    result = await sstore.get_summary_stats(session)
+
+    assert result.total_themes == 4
+    assert result.total_objectives == 12
+    assert result.linked_count == 9
+    assert result.unlinked_count == 3
+    assert result.current_period_count == 5
+    assert result.upcoming_count == 4
+    assert result.past_due_count == 3
+
+
+async def test_get_summary_stats_all_zero_on_empty_database() -> None:
+    row = MagicMock()
+    row.__getitem__.side_effect = lambda k: 0
+    session = _mock_session_returning(row)
+
+    result = await sstore.get_summary_stats(session)
+
+    assert result.total_objectives == 0
+    assert result.total_themes == 0
+    assert result.linked_count == 0
+    assert result.unlinked_count == 0
+    assert result.current_period_count == 0
+    assert result.upcoming_count == 0
+    assert result.past_due_count == 0
 
 
 async def test_link_and_unlink_value_stream_round_trip(session) -> None:

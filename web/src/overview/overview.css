@@ -73,6 +73,15 @@
 .ovw-metric .m-n { font-family: var(--mono); font-size: 22px; font-weight: 600; letter-spacing: -.02em; line-height: 1; }
 .ovw-metric .m-l { font-size: 11.5px; color: var(--ink-3); margin-top: 5px; }
 
+/* Strategy card governance-signal bars (051-strategy-landing-card) */
+.ovw-strat-row { margin-bottom: 12px; }
+.ovw-strat-label { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-3); margin-bottom: 4px; }
+.ovw-strat-label.alert { color: var(--crit); font-weight: 650; }
+.ovw-strat-bar { display: flex; height: 7px; border-radius: 4px; overflow: hidden; background: var(--surface-3); }
+.ovw-strat-seg-good { background: var(--good); }
+.ovw-strat-seg-warn { background: var(--crit); }
+.ovw-strat-seg-upcoming { background: var(--ink-3); }
+
 /* capability tiles inside a domain card */
 .ovw-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .ovw-tile { display: flex; align-items: center; gap: 11px; text-align: left; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; cursor: pointer; transition: border-color .12s, background .12s, transform .12s; width: 100%; color: inherit; font: inherit; }

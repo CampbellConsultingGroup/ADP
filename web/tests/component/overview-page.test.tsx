@@ -28,6 +28,15 @@ const OK_ROUTES: Record<string, unknown> = {
   "GET /api/v1/business/domains": { items: [], total: 3 },
   "GET /api/v1/portfolio/summary": { by_status: { current: 2, proposed: 1, draft: 1 }, total_designs: 17 },
   "GET /api/v1/knowledge": { items: [], total: 8 },
+  "GET /api/v1/strategy/summary": {
+    total_objectives: 9,
+    total_themes: 3,
+    linked_count: 6,
+    unlinked_count: 3,
+    current_period_count: 4,
+    upcoming_count: 3,
+    past_due_count: 2,
+  },
 };
 
 const ERROR_TEXT = /Some metrics failed to load/;
