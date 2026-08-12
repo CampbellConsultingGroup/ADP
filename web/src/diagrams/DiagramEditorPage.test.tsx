@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { DiagramEditorPage } from "./DiagramEditorPage";
 import { useAuth } from "../auth/AuthProvider";
 import type { AuthUser } from "../auth/AuthProvider";
+import type { DiagramModel } from "./core/index";
 import * as api from "./api";
 import type { Diagram } from "./api";
 
@@ -157,5 +158,38 @@ describe("DiagramEditorPage: 'Recommended for your role' label (ADP-914.6, User 
     const select = screen.getByLabelText("Diagram type") as HTMLSelectElement;
     const options = Array.from(select.options);
     expect(options.some((o) => o.text.includes("(Recommended for your role)"))).toBe(false);
+  });
+});
+
+describe("DiagramEditorPage: seed prop pre-fills a new diagram (ADP-914.7)", () => {
+  const SEED_MODEL: DiagramModel = {
+    diagramTypeId: "flowchart",
+    nodes: [
+      { id: "n1", label: "Intake", shape: "rectangle", position: { x: 0, y: 0 } },
+      { id: "n2", label: "Review", shape: "rectangle", position: { x: 160, y: 0 } },
+    ],
+    edges: [{ id: "e1", sourceId: "n1", targetId: "n2" }],
+    containers: [],
+  };
+
+  it("initializes the title and model from the seed when creating a new diagram", () => {
+    render(<DiagramEditorPage seed={{ title: "Quote to Bind", model: SEED_MODEL }} />);
+
+    const titleInput = screen.getByLabelText("Diagram title") as HTMLInputElement;
+    expect(titleInput.value).toBe("Quote to Bind");
+
+    const dslPanel = screen.getByTestId("dsl-panel") as HTMLTextAreaElement;
+    expect(dslPanel.value).toContain("Intake");
+    expect(dslPanel.value).toContain("Review");
+  });
+
+  it("an explicit seed takes priority over the persona-aware default (ADP-914.6)", () => {
+    // Technical Architect's persona default would be "sequence" -- confirm a
+    // seed's own flowchart model wins instead.
+    mockRole("technical_architect");
+    render(<DiagramEditorPage seed={{ title: "Quote to Bind", model: SEED_MODEL }} />);
+
+    const select = screen.getByLabelText("Diagram type") as HTMLSelectElement;
+    expect(select.value).toBe("flowchart");
   });
 });

@@ -7,6 +7,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { DiagramsPage } from "./DiagramsPage";
+import type { DiagramSeed } from "./generators";
 import * as api from "./api";
 import type { DiagramSummary, Diagram } from "./api";
 
@@ -65,5 +66,27 @@ describe("DiagramsPage: navigation wiring (ADP-914.5)", () => {
     await waitFor(() => expect(titleInput.value).toBe("Claims Flow"));
     // Editing an existing diagram has no type selector (immutable after creation).
     expect(screen.queryByLabelText("Diagram type")).toBeNull();
+  });
+});
+
+describe("DiagramsPage: seed hand-off from a generator (ADP-914.7)", () => {
+  const SEED: DiagramSeed = {
+    title: "Quote to Bind",
+    diagramType: "flowchart",
+    model: { diagramTypeId: "flowchart", nodes: [], edges: [], containers: [] },
+  };
+
+  it("opens directly in the editor pre-filled from a seed prop, and reports it consumed", async () => {
+    const onSeedConsumed = vi.fn();
+    render(<DiagramsPage seed={SEED} onSeedConsumed={onSeedConsumed} />);
+
+    const titleInput = (await screen.findByLabelText("Diagram title")) as HTMLInputElement;
+    expect(titleInput.value).toBe("Quote to Bind");
+    expect(onSeedConsumed).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the list as usual when no seed is given", async () => {
+    render(<DiagramsPage seed={null} onSeedConsumed={vi.fn()} />);
+    await screen.findByText("Claims Flow");
   });
 });

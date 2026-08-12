@@ -6,15 +6,38 @@
 // introducing a second AppView (diagrams aren't Design-scoped, so there's no
 // existing "select a design first" screen to piggyback on the way Canvas does).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DiagramListPage } from "./DiagramListPage";
 import { DiagramEditorPage } from "./DiagramEditorPage";
+import type { DiagramSeed } from "./generators";
 import type { Diagram } from "./api";
 
-type Mode = { kind: "list" } | { kind: "edit"; diagramId?: string };
+type Mode = { kind: "list" } | { kind: "edit"; diagramId?: string; seed?: DiagramSeed };
 
-export function DiagramsPage() {
+export interface DiagramsPageProps {
+  /** ADP-914.7: a pending seed from a "Generate Diagram" click elsewhere in
+   *  the app (e.g. a value stream or capability page), lifted in App.tsx --
+   *  mirrors the existing currentDesignId/onSelectDesign pattern. */
+  seed?: DiagramSeed | null;
+  /** Called once the seed above has been consumed (opened in the editor), so
+   *  the caller can clear its pending state and avoid re-triggering on the
+   *  next unrelated render. */
+  onSeedConsumed?: () => void;
+}
+
+export function DiagramsPage({ seed, onSeedConsumed }: DiagramsPageProps = {}) {
   const [mode, setMode] = useState<Mode>({ kind: "list" });
+
+  useEffect(() => {
+    if (!seed) return;
+    setMode({ kind: "edit", seed });
+    onSeedConsumed?.();
+    // onSeedConsumed intentionally omitted -- it's expected to be a fresh
+    // closure each render from the caller's state setter; re-running this
+    // effect whenever it changes identity (rather than only when `seed`
+    // itself changes) would risk consuming the same seed twice.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed]);
 
   if (mode.kind === "edit") {
     return (
@@ -24,6 +47,7 @@ export function DiagramsPage() {
         </button>
         <DiagramEditorPage
           diagramId={mode.diagramId}
+          seed={mode.seed}
           onSaved={(diagram: Diagram) => setMode({ kind: "edit", diagramId: diagram.id })}
         />
       </div>

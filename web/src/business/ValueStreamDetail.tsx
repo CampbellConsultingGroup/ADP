@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { useDeleteValueStream, useValueStream } from "../api/business";
+import { generateFromValueStream } from "../diagrams/generators";
+import type { DiagramSeed } from "../diagrams/generators";
 import ValueStreamStageEditor from "./ValueStreamStageEditor";
 import ValueStreamForm from "./ValueStreamForm";
 import DesignLinkEditor from "./DesignLinkEditor";
@@ -7,9 +9,12 @@ import DesignLinkEditor from "./DesignLinkEditor";
 interface ValueStreamDetailProps {
   vsId: string;
   onBack: () => void;
+  /** ADP-914.7: opens the Diagrams screen pre-filled with a flowchart
+   *  generated from this value stream's ordered stages. */
+  onGenerateDiagram?: (seed: DiagramSeed) => void;
 }
 
-export default function ValueStreamDetail({ vsId, onBack }: ValueStreamDetailProps): React.ReactElement {
+export default function ValueStreamDetail({ vsId, onBack, onGenerateDiagram }: ValueStreamDetailProps): React.ReactElement {
   const { data: vs, isLoading, error } = useValueStream(vsId);
   const deleteMut = useDeleteValueStream();
   const [editing, setEditing] = useState(false);
@@ -48,6 +53,7 @@ export default function ValueStreamDetail({ vsId, onBack }: ValueStreamDetailPro
               )}
             </div>
             <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => onGenerateDiagram?.(generateFromValueStream(vs))} style={outlineBtn}>Generate Diagram</button>
               <button onClick={() => setEditing(true)} style={outlineBtn}>Edit</button>
               <button onClick={() => setConfirmDelete(true)} style={{ ...outlineBtn, color: "var(--crit)", borderColor: "var(--crit)" }}>Delete</button>
             </div>

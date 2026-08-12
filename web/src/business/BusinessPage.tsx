@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { AppView } from "../shell";
+import type { DiagramSeed } from "../diagrams/generators";
 import CapabilityTree from "./CapabilityTree";
 import ValueStreamList from "./ValueStreamList";
 import ValueStreamDetail from "./ValueStreamDetail";
@@ -11,9 +12,13 @@ type BusinessTab = "capabilities" | "value-streams" | "domains";
 interface BusinessPageProps {
   onNavigate: (view: AppView) => void;
   designId?: string | null;
+  /** ADP-914.7: opens the Diagrams screen pre-filled with a generated diagram
+   *  (from a value stream's stages or a capability's subtree). Threaded down
+   *  to ValueStreamDetail (US1) and CapabilityTree (US2). */
+  onGenerateDiagram?: (seed: DiagramSeed) => void;
 }
 
-export default function BusinessPage(_props: BusinessPageProps): React.ReactElement {
+export default function BusinessPage({ onGenerateDiagram }: BusinessPageProps): React.ReactElement {
   const [tab, setTab] = useState<BusinessTab>("capabilities");
   const [selectedVsId, setSelectedVsId] = useState<string | null>(null);
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
@@ -53,11 +58,11 @@ export default function BusinessPage(_props: BusinessPageProps): React.ReactElem
         </div>
 
         {/* Tab content */}
-        {tab === "capabilities" && <CapabilityTree />}
+        {tab === "capabilities" && <CapabilityTree onGenerateDiagram={onGenerateDiagram} />}
 
         {tab === "value-streams" && (
           selectedVsId
-            ? <ValueStreamDetail vsId={selectedVsId} onBack={() => setSelectedVsId(null)} />
+            ? <ValueStreamDetail vsId={selectedVsId} onBack={() => setSelectedVsId(null)} onGenerateDiagram={onGenerateDiagram} />
             : <ValueStreamList onSelect={setSelectedVsId} />
         )}
 

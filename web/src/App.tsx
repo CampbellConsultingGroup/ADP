@@ -10,6 +10,7 @@ import GovernancePage from "./governance/GovernancePage";
 import BusinessPage from "./business/BusinessPage";
 import ApplicationPage from "./application/ApplicationPage";
 import { DiagramsPage } from "./diagrams/DiagramsPage";
+import type { DiagramSeed } from "./diagrams/generators";
 import AdminPage from "./admin/AdminPage";
 import { AppShell } from "./ui";
 import type { AppView } from "./shell";
@@ -21,12 +22,21 @@ import type { AppView } from "./shell";
 export default function App(): React.ReactElement {
   const [view, setView] = useState<AppView>("overview");
   const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
+  // ADP-914.7: a diagram generated from a value stream/capability elsewhere in
+  // the app, waiting to be opened in the Diagrams editor -- mirrors
+  // currentDesignId/onSelectDesign below exactly (research.md Decision 3).
+  const [pendingDiagramSeed, setPendingDiagramSeed] = useState<DiagramSeed | null>(null);
 
   const onNavigate = (nextView: AppView) => setView(nextView);
 
   const onSelectDesign = (id: string) => {
     setCurrentDesignId(id);
     setView("intake");
+  };
+
+  const onGenerateDiagram = (seed: DiagramSeed) => {
+    setPendingDiagramSeed(seed);
+    setView("diagrams");
   };
 
   function renderPage(): React.ReactElement {
@@ -39,11 +49,16 @@ export default function App(): React.ReactElement {
       case "governance":
         return <GovernancePage onNavigate={onNavigate} onSelectDesign={onSelectDesign} />;
       case "business":
-        return <BusinessPage onNavigate={onNavigate} designId={currentDesignId} />;
+        return <BusinessPage onNavigate={onNavigate} designId={currentDesignId} onGenerateDiagram={onGenerateDiagram} />;
       case "applications":
         return <ApplicationPage />;
       case "diagrams":
-        return <DiagramsPage />;
+        return (
+          <DiagramsPage
+            seed={pendingDiagramSeed}
+            onSeedConsumed={() => setPendingDiagramSeed(null)}
+          />
+        );
       case "admin":
         return <AdminPage />;
       case "knowledge":

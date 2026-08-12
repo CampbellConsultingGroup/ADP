@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCapabilities } from "../api/business";
 import type { BusinessCapability } from "../api/business";
+import type { DiagramSeed } from "../diagrams/generators";
 import CapabilityNode from "./CapabilityNode";
 import CapabilityForm from "./CapabilityForm";
 import AgentReviewButton from "../agent-review/AgentReviewButton";
@@ -42,15 +43,24 @@ export function buildTree(items: BusinessCapability[]): CapabilityTreeNode[] {
   return roots;
 }
 
-function renderTree(nodes: CapabilityTreeNode[]): React.ReactElement[] {
+function renderTree(nodes: CapabilityTreeNode[], onGenerateDiagram?: (seed: DiagramSeed) => void): React.ReactElement[] {
   return nodes.map((node) => (
-    <CapabilityNode key={node.id} capability={node}>
-      {renderTree(node.children)}
+    <CapabilityNode key={node.id} capability={node} onGenerateDiagram={onGenerateDiagram}>
+      {renderTree(node.children, onGenerateDiagram)}
     </CapabilityNode>
   ));
 }
 
-export default function CapabilityTree(): React.ReactElement {
+export interface CapabilityTreeProps {
+  /** ADP-914.7: opens the Diagrams screen pre-filled with a flowchart
+   *  generated from a capability's own subtree. `CapabilityNode` itself
+   *  calls generateFromCapabilitySubtree() on click and passes the finished
+   *  DiagramSeed up through this callback unchanged -- CapabilityTree only
+   *  threads it through, it never touches a raw CapabilityTreeNode itself. */
+  onGenerateDiagram?: (seed: DiagramSeed) => void;
+}
+
+export default function CapabilityTree({ onGenerateDiagram }: CapabilityTreeProps): React.ReactElement {
   const { data, isLoading, error } = useCapabilities();
   const [showRootForm, setShowRootForm] = useState(false);
   const [showPortfolioReview, setShowPortfolioReview] = useState(false);
@@ -139,7 +149,7 @@ export default function CapabilityTree(): React.ReactElement {
         </div>
       )}
 
-      {renderTree(tree)}
+      {renderTree(tree, onGenerateDiagram)}
     </div>
   );
 }

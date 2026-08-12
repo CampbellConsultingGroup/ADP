@@ -60,3 +60,40 @@ Changing a role's default is a one-line edit to the constant in `persona.ts`
 existed yet when it was chosen; see
 [specs/047-persona-diagram-experience/research.md](../../../specs/047-persona-diagram-experience/research.md)
 Decision 2), expected to be revisited once real usage patterns emerge.
+
+## `generators.ts` — generate a diagram from ADP's own business data (ADP-914.7)
+
+Two pure functions, `generateFromValueStream(vs)` and
+`generateFromCapabilitySubtree(node)`, each `(source data) -> DiagramSeed`
+(`{ title, diagramType, model }`). Both build a typed `DiagramModel` via the
+vendored `core`'s `addNode`/`addEdge` — **never hand-write DSL text** (the
+existing `useDslSync` machinery in `DiagramEditorPage.tsx` derives the DSL
+panel from the model automatically, exactly as it does for a user's own
+manual edits).
+
+`addNode` assigns each node's id internally — a generator cannot pre-assign
+one from the source entity's own id, so `generateFromValueStream` builds a
+`stage.id → generated node id` map while creating nodes, then resolves edges
+through it. `generateFromCapabilitySubtree` needs no such map: its top-down
+recursive walk always has the parent's just-created id on hand via closure,
+since a parent node is created before its children (see
+[specs/048-generate-diagrams-from-data/research.md](../../../specs/048-generate-diagrams-from-data/research.md)
+Decision 2 for the full reasoning, including why this was *not* obvious from
+the vendored `diagram-ops.ts` API alone).
+
+**One-way only, by design (FR-008)** — a generated diagram, once saved, is
+stored identically to a hand-authored one; no provenance link back to its
+source value stream/capability is kept, and there is no re-sync. "Generate
+Diagram" always produces a brand-new, unsaved diagram — clicking it again is
+just starting over.
+
+**Cross-page hand-off**: "Generate Diagram" lives on the source entity's own
+page (`ValueStreamDetail.tsx`, `CapabilityNode.tsx`, inside the Business
+Architecture screen), which calls the generator directly and hands the
+resulting `DiagramSeed` up through an `onGenerateDiagram` callback. `App.tsx`
+lifts that into a `pendingDiagramSeed` state and switches `view` to
+`"diagrams"` in one action — deliberately mirroring the **existing**
+`currentDesignId`/`onSelectDesign` pattern already there (research.md
+Decision 3), not a new state-sharing mechanism. `DiagramsPage.tsx` consumes
+the seed on receipt (opens the editor pre-filled) and reports it consumed so
+`App.tsx` can clear it.
