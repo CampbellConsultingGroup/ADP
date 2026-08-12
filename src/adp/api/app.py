@@ -47,6 +47,7 @@ from adp.business import store as bstore
 from adp.chat import router as chat_router_module
 from adp.diagrams import router as diagrams_router
 from adp.export import application_arch, business_arch
+from adp.strategy import router as strategy_router
 from adp.telemetry.context import TraceIdFilter, generate_trace_id, set_trace_id
 from adp.telemetry.metrics import ACTIVE_REQUESTS, ERROR_COUNTER, REQUEST_COUNTER, REQUEST_LATENCY
 
@@ -249,6 +250,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_proxy.router)
     app.include_router(admin_prompts_router.router)
     app.include_router(diagrams_router.router)
+    app.include_router(strategy_router.router)
 
     # Serve Vite-built frontend static files when running in Docker (ADP-SPEC-025)
     import os
