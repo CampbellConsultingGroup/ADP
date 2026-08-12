@@ -5,6 +5,7 @@ export type AppView =
   | "intake"
   | "recommend"
   | "canvas"
+  | "canvas-v2"
   | "knowledge"
   | "portfolio"
   | "governance"

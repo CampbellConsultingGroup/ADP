@@ -18,6 +18,7 @@ from adp.api.routers import (
     config,
     designs,
     documents,
+    elements,
     export_router,
     governance,
     health,
@@ -239,6 +240,7 @@ def create_app() -> FastAPI:
     app.include_router(portfolio.router)
     app.include_router(reasoning.router)
     app.include_router(tags.router)
+    app.include_router(elements.router)
     app.include_router(config.router)
     app.include_router(business_router_module.router)
     app.include_router(search.router)
