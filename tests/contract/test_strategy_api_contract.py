@@ -33,6 +33,7 @@ _STRATEGY_UNIQUE_DDL = [
     "CREATE UNIQUE INDEX uq_soc ON strategic_objective_capabilities(objective_id, capability_id)",
     "CREATE UNIQUE INDEX uq_sovs "
     "ON strategic_objective_value_streams(objective_id, value_stream_id)",
+    "CREATE UNIQUE INDEX uq_progress ON strategic_objective_progress(objective_id, as_of_date)",
 ]
 
 
@@ -455,3 +456,221 @@ async def test_get_summary_all_zero_on_empty_database() -> None:
 
     assert resp.status_code == 200, resp.text
     assert all(v == 0 for v in resp.json().values())
+
+
+# ── User Story 1 (ADP-d8u.5): objective progress + computed status ────────────
+
+
+async def _mk_objective_with_target(client, theme_id: str, direction="increase") -> dict:
+    return await _mk_objective(
+        client, theme_id,
+        metric_name="Metric", target_value=100, target_unit="%", direction=direction,
+    )
+
+
+async def test_get_objective_includes_proposed_status_with_no_progress(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective_with_target(client, theme_id)
+    resp = await client.get(f"{BASE}/objectives/{created['id']}")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "proposed"
+
+
+async def test_create_progress_entry_201(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective_with_target(client, theme_id)
+    resp = await client.post(
+        f"{BASE}/objectives/{created['id']}/progress",
+        json={"as_of_date": "2026-08-01", "actual_value": 40},
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["as_of_date"] == "2026-08-01"
+    assert body["actual_value"] == "40.00"
+    assert body["recorded_by"]
+
+    # And the objective now reads a non-"proposed" computed status.
+    obj_resp = await client.get(f"{BASE}/objectives/{created['id']}")
+    assert obj_resp.json()["status"] == "active"
+
+
+async def test_create_progress_entry_404_unknown_objective(client) -> None:
+    resp = await client.post(
+        f"{BASE}/objectives/nonexistent/progress",
+        json={"as_of_date": "2026-08-01", "actual_value": 40},
+    )
+    assert resp.status_code == 404
+
+
+async def test_create_progress_entry_409_duplicate_date(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective_with_target(client, theme_id)
+    await client.post(
+        f"{BASE}/objectives/{created['id']}/progress",
+        json={"as_of_date": "2026-08-01", "actual_value": 40},
+    )
+    resp = await client.post(
+        f"{BASE}/objectives/{created['id']}/progress",
+        json={"as_of_date": "2026-08-01", "actual_value": 99},
+    )
+    assert resp.status_code == 409
+
+
+async def test_list_progress_entries_200(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective_with_target(client, theme_id)
+    await client.post(
+        f"{BASE}/objectives/{created['id']}/progress",
+        json={"as_of_date": "2026-08-01", "actual_value": 40},
+    )
+    await client.post(
+        f"{BASE}/objectives/{created['id']}/progress",
+        json={"as_of_date": "2026-08-08", "actual_value": 55},
+    )
+    resp = await client.get(f"{BASE}/objectives/{created['id']}/progress")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 2
+    assert [e["as_of_date"] for e in body["items"]] == ["2026-08-01", "2026-08-08"]
+
+
+async def test_list_progress_entries_404_unknown_objective(client) -> None:
+    resp = await client.get(f"{BASE}/objectives/nonexistent/progress")
+    assert resp.status_code == 404
+
+
+async def test_patch_progress_entry_200_edits_in_place(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective_with_target(client, theme_id)
+    await client.post(
+        f"{BASE}/objectives/{created['id']}/progress",
+        json={"as_of_date": "2026-08-01", "actual_value": 40},
+    )
+    resp = await client.patch(
+        f"{BASE}/objectives/{created['id']}/progress/2026-08-01",
+        json={"actual_value": 100, "note": "corrected"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["actual_value"] == "100.00"
+    assert body["note"] == "corrected"
+    assert body["as_of_date"] == "2026-08-01"
+
+
+async def test_patch_progress_entry_404_unknown_date(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective_with_target(client, theme_id)
+    resp = await client.patch(
+        f"{BASE}/objectives/{created['id']}/progress/2099-01-01",
+        json={"actual_value": 1},
+    )
+    assert resp.status_code == 404
+
+
+# ── User Story 2 (ADP-d8u.5): abandon ─────────────────────────────────────────
+
+
+async def test_abandon_objective_200_with_reason(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective_with_target(client, theme_id)
+    resp = await client.patch(
+        f"{BASE}/objectives/{created['id']}/abandon",
+        json={"status_reason": "Superseded by a broader objective"},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["status"] == "abandoned"
+    assert body["status_reason"] == "Superseded by a broader objective"
+
+
+async def test_abandon_objective_400_no_reason(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective_with_target(client, theme_id)
+    resp = await client.patch(f"{BASE}/objectives/{created['id']}/abandon", json={})
+    assert resp.status_code == 422  # extra="forbid" + min_length=1 -- FastAPI validation, not 400
+
+
+async def test_abandon_objective_404_unknown_id(client) -> None:
+    resp = await client.patch(
+        f"{BASE}/objectives/nonexistent/abandon", json={"status_reason": "X"}
+    )
+    assert resp.status_code == 404
+
+
+async def test_abandon_objective_wins_over_achieved_progress(client) -> None:
+    # FR-011: abandoned always short-circuits compute_status, even if the
+    # progress trend would otherwise read "achieved".
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective_with_target(client, theme_id)
+    await client.post(
+        f"{BASE}/objectives/{created['id']}/progress",
+        json={"as_of_date": "2026-08-01", "actual_value": 100},
+    )
+    await client.patch(
+        f"{BASE}/objectives/{created['id']}/abandon", json={"status_reason": "Cancelled"}
+    )
+    resp = await client.get(f"{BASE}/objectives/{created['id']}")
+    assert resp.json()["status"] == "abandoned"
+
+
+# ── User Story 3 (ADP-d8u.5): theme lifecycle completion ──────────────────────
+
+
+async def test_create_theme_accepts_description_owner_priority(client) -> None:
+    resp = await client.post(
+        f"{BASE}/themes",
+        json={
+            "name": "Digital Channels",
+            "description": "Customer-facing digital experience",
+            "owner": "jane.architect",
+            "priority": 2,
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["description"] == "Customer-facing digital experience"
+    assert body["owner"] == "jane.architect"
+    assert body["priority"] == 2
+
+
+async def test_get_theme_200(client) -> None:
+    theme_id = await _mk_theme(client, "Growth")
+    resp = await client.get(f"{BASE}/themes/{theme_id}")
+    assert resp.status_code == 200
+    assert resp.json()["name"] == "Growth"
+
+
+async def test_get_theme_404_unknown_id(client) -> None:
+    resp = await client.get(f"{BASE}/themes/nonexistent")
+    assert resp.status_code == 404
+
+
+async def test_patch_theme_200_updates_fields(client) -> None:
+    theme_id = await _mk_theme(client, "Growth")
+    resp = await client.patch(f"{BASE}/themes/{theme_id}", json={"priority": 1})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["priority"] == 1
+
+
+async def test_patch_theme_404_unknown_id(client) -> None:
+    resp = await client.patch(f"{BASE}/themes/nonexistent", json={"priority": 1})
+    assert resp.status_code == 404
+
+
+async def test_delete_theme_204_when_unused(client) -> None:
+    theme_id = await _mk_theme(client, "Unused Theme")
+    resp = await client.delete(f"{BASE}/themes/{theme_id}")
+    assert resp.status_code == 204
+    assert (await client.get(f"{BASE}/themes/{theme_id}")).status_code == 404
+
+
+async def test_delete_theme_409_when_referenced(client) -> None:
+    theme_id = await _mk_theme(client, "In Use")
+    await _mk_objective(client, theme_id)
+    resp = await client.delete(f"{BASE}/themes/{theme_id}")
+    assert resp.status_code == 409
+
+
+async def test_delete_theme_404_unknown_id(client) -> None:
+    resp = await client.delete(f"{BASE}/themes/nonexistent")
+    assert resp.status_code == 404

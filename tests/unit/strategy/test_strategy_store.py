@@ -12,6 +12,7 @@ checking happens one layer up, in the router).
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
@@ -21,9 +22,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from adp.strategy import store as sstore
 from adp.strategy.models import (
+    ObjectiveProgressCreate,
+    ObjectiveProgressUpdate,
     StrategicObjectiveCreate,
     StrategicObjectiveUpdate,
     StrategicThemeCreate,
+    StrategicThemeUpdate,
 )
 
 # Composite PKs from migration 025 (store metadata omits them, mirroring
@@ -34,6 +38,7 @@ _UNIQUE_DDL = [
     "CREATE UNIQUE INDEX uq_soc ON strategic_objective_capabilities(objective_id, capability_id)",
     "CREATE UNIQUE INDEX uq_sovs "
     "ON strategic_objective_value_streams(objective_id, value_stream_id)",
+    "CREATE UNIQUE INDEX uq_progress ON strategic_objective_progress(objective_id, as_of_date)",
 ]
 
 
@@ -67,6 +72,71 @@ async def test_create_theme_duplicate_name_raises(session) -> None:
     await session.commit()
     with pytest.raises(sstore.DuplicateThemeNameError):
         await sstore.create_theme(StrategicThemeCreate(name="Growth"), session)
+
+
+async def test_create_theme_with_description_owner_priority(session) -> None:
+    theme = await sstore.create_theme(
+        StrategicThemeCreate(
+            name="Digital Channels", description="Customer-facing", owner="jane", priority=2
+        ),
+        session,
+    )
+    await session.commit()
+    assert theme.description == "Customer-facing"
+    assert theme.owner == "jane"
+    assert theme.priority == 2
+
+
+async def test_get_theme_returns_row(session) -> None:
+    theme = await sstore.create_theme(StrategicThemeCreate(name="Growth"), session)
+    await session.commit()
+    fetched = await sstore.get_theme(theme.id, session)
+    assert fetched is not None
+    assert fetched.name == "Growth"
+
+
+async def test_get_theme_unknown_id_returns_none(session) -> None:
+    assert await sstore.get_theme("nonexistent", session) is None
+
+
+async def test_update_theme_persists_fields(session) -> None:
+    theme = await sstore.create_theme(StrategicThemeCreate(name="Growth"), session)
+    await session.commit()
+    updated = await sstore.update_theme(
+        theme.id, StrategicThemeUpdate(priority=1, owner="jane"), session
+    )
+    await session.commit()
+    assert updated is not None
+    assert updated.priority == 1
+    assert updated.owner == "jane"
+
+
+async def test_update_theme_unknown_id_returns_none(session) -> None:
+    result = await sstore.update_theme("nonexistent", StrategicThemeUpdate(priority=1), session)
+    assert result is None
+
+
+async def test_delete_theme_succeeds_when_unreferenced(session) -> None:
+    theme = await sstore.create_theme(StrategicThemeCreate(name="Unused"), session)
+    await session.commit()
+    await sstore.delete_theme(theme.id, session)
+    await session.commit()
+    assert await sstore.get_theme(theme.id, session) is None
+
+
+async def test_delete_theme_raises_when_referenced(session) -> None:
+    theme = await sstore.create_theme(StrategicThemeCreate(name="In Use"), session)
+    await session.commit()
+    await sstore.create_objective(
+        StrategicObjectiveCreate(
+            theme_id=theme.id, owner="Owner", statement="Statement",
+            fiscal_year=2026, period="Q1",
+        ),
+        session,
+    )
+    await session.commit()
+    with pytest.raises(sstore.ThemeInUseError):
+        await sstore.delete_theme(theme.id, session)
 
 
 # ── Objectives ────────────────────────────────────────────────────────────────
@@ -215,6 +285,139 @@ async def test_delete_objective_removes_row(session) -> None:
 
 async def test_delete_objective_unknown_id_returns_false(session) -> None:
     assert await sstore.delete_objective("nonexistent", session) is False
+
+
+# ── Progress (ADP-d8u.5) ────────────────────────────────────────────────────
+#
+# Cascade-delete-removes-progress-rows (FR-016) is NOT re-verified here --
+# mirrors test_delete_objective_removes_row's own established precedent
+# above: the real ON DELETE CASCADE FK exists only in the migration (store
+# metadata deliberately omits FK/PK objects), already confirmed directly
+# against Postgres (pg_constraint.confdeltype = 'c', T007). This file's
+# SQLite fixture has no FK enforcement to meaningfully re-test that against.
+
+
+async def _mk_objective_with_target(session, direction="increase") -> str:
+    theme_id = await _mk_theme(session, name=f"Theme-{direction}")
+    created = await sstore.create_objective(
+        StrategicObjectiveCreate(
+            theme_id=theme_id,
+            owner="Owner",
+            statement="Statement",
+            metric_name="Metric",
+            target_value=Decimal("100"),
+            target_unit="%",
+            direction=direction,
+            fiscal_year=2026,
+            period="Q1",
+        ),
+        session,
+    )
+    await session.commit()
+    return created.id
+
+
+async def test_create_progress_entry_round_trips(session) -> None:
+    obj_id = await _mk_objective_with_target(session)
+    entry = await sstore.create_progress_entry(
+        obj_id,
+        ObjectiveProgressCreate(as_of_date=date(2026, 8, 1), actual_value=Decimal("40")),
+        actor="jane",
+        session=session,
+    )
+    await session.commit()
+    assert entry.objective_id == obj_id
+    assert entry.as_of_date == date(2026, 8, 1)
+    assert entry.actual_value == Decimal("40.00")
+    assert entry.recorded_by == "jane"
+
+
+async def test_create_progress_entry_duplicate_date_raises(session) -> None:
+    obj_id = await _mk_objective_with_target(session)
+    await sstore.create_progress_entry(
+        obj_id,
+        ObjectiveProgressCreate(as_of_date=date(2026, 8, 1), actual_value=Decimal("40")),
+        actor="jane",
+        session=session,
+    )
+    await session.commit()
+    with pytest.raises(sstore.DuplicateProgressEntryError):
+        await sstore.create_progress_entry(
+            obj_id,
+            ObjectiveProgressCreate(as_of_date=date(2026, 8, 1), actual_value=Decimal("99")),
+            actor="jane",
+            session=session,
+        )
+
+
+async def test_update_progress_entry_edits_value_and_note_in_place(session) -> None:
+    obj_id = await _mk_objective_with_target(session)
+    await sstore.create_progress_entry(
+        obj_id,
+        ObjectiveProgressCreate(as_of_date=date(2026, 8, 1), actual_value=Decimal("40")),
+        actor="jane",
+        session=session,
+    )
+    await session.commit()
+    updated = await sstore.update_progress_entry(
+        obj_id,
+        date(2026, 8, 1),
+        ObjectiveProgressUpdate(actual_value=Decimal("55"), note="corrected typo"),
+        session,
+    )
+    await session.commit()
+    assert updated is not None
+    assert updated.actual_value == Decimal("55.00")
+    assert updated.note == "corrected typo"
+    assert updated.as_of_date == date(2026, 8, 1)  # unchanged
+
+
+async def test_update_progress_entry_unknown_date_returns_none(session) -> None:
+    obj_id = await _mk_objective_with_target(session)
+    result = await sstore.update_progress_entry(
+        obj_id, date(2099, 1, 1), ObjectiveProgressUpdate(actual_value=Decimal("1")), session
+    )
+    assert result is None
+
+
+async def test_list_progress_entries_ordered_by_date_ascending(session) -> None:
+    obj_id = await _mk_objective_with_target(session)
+    for day, value in [(15, "70"), (1, "40"), (8, "55")]:
+        await sstore.create_progress_entry(
+            obj_id,
+            ObjectiveProgressCreate(as_of_date=date(2026, 8, day), actual_value=Decimal(value)),
+            actor="jane",
+            session=session,
+        )
+        await session.commit()
+    listed = await sstore.list_progress_entries(obj_id, session)
+    assert listed.total == 3
+    assert [e.as_of_date.day for e in listed.items] == [1, 8, 15]
+
+
+async def test_get_objective_includes_computed_status(session) -> None:
+    obj_id = await _mk_objective_with_target(session, direction="increase")
+    fetched = await sstore.get_objective(obj_id, session)
+    assert fetched is not None
+    assert fetched.status == "proposed"  # no progress yet
+
+    await sstore.create_progress_entry(
+        obj_id,
+        ObjectiveProgressCreate(as_of_date=date(2026, 8, 1), actual_value=Decimal("100")),
+        actor="jane",
+        session=session,
+    )
+    await session.commit()
+    fetched = await sstore.get_objective(obj_id, session)
+    assert fetched is not None
+    assert fetched.status == "achieved"
+
+
+async def test_list_objectives_summary_includes_computed_status(session) -> None:
+    await _mk_objective_with_target(session, direction="increase")
+    listed = await sstore.list_objectives(session)
+    assert listed.total == 1
+    assert listed.items[0].status == "proposed"
 
 
 # ── Links ─────────────────────────────────────────────────────────────────────

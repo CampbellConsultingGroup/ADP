@@ -9,15 +9,30 @@ import { apiGet, apiMutation } from "./client";
 
 export type ObjectiveDirection = "increase" | "decrease" | "reach";
 export type ObjectivePeriod = "Q1" | "Q2" | "Q3" | "Q4" | "FY";
+// ADP-d8u.5: proposed/active/at_risk/achieved are always computed server-side
+// (never set directly) -- abandoned is the one value a human sets.
+export type ObjectiveStatus = "proposed" | "active" | "at_risk" | "achieved" | "abandoned";
 
 export interface StrategicTheme {
   id: string;
   name: string;
+  description: string | null;
+  owner: string | null;
+  priority: number | null;
   created_at: string;
 }
 
 export interface StrategicThemeCreate {
   name: string;
+  description?: string | null;
+  owner?: string | null;
+  priority?: number | null;
+}
+
+export interface StrategicThemeUpdate {
+  description?: string | null;
+  owner?: string | null;
+  priority?: number | null;
 }
 
 export interface StrategicObjective {
@@ -33,6 +48,8 @@ export interface StrategicObjective {
   period: ObjectivePeriod;
   capability_ids: string[];
   value_stream_ids: string[];
+  status: ObjectiveStatus;
+  status_reason: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -44,6 +61,7 @@ export interface StrategicObjectiveSummary {
   statement: string;
   fiscal_year: number;
   period: ObjectivePeriod;
+  status: ObjectiveStatus;
   updated_at: string;
 }
 
@@ -85,6 +103,31 @@ export function useCreateTheme() {
   return useMutation<StrategicTheme, Error & { status?: number }, StrategicThemeCreate>({
     mutationFn: (body) =>
       apiMutation<StrategicTheme, StrategicThemeCreate>("POST", "/api/v1/strategy/themes", body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-themes"] });
+    },
+  });
+}
+
+export function useUpdateTheme(themeId: string) {
+  const qc = useQueryClient();
+  return useMutation<StrategicTheme, Error & { status?: number }, StrategicThemeUpdate>({
+    mutationFn: (body) =>
+      apiMutation<StrategicTheme, StrategicThemeUpdate>(
+        "PATCH",
+        `/api/v1/strategy/themes/${themeId}`,
+        body,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-themes"] });
+    },
+  });
+}
+
+export function useDeleteTheme() {
+  const qc = useQueryClient();
+  return useMutation<void, Error & { status?: number }, string>({
+    mutationFn: (themeId) => apiMutation<void>("DELETE", `/api/v1/strategy/themes/${themeId}`),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["strategy-themes"] });
     },
@@ -145,6 +188,94 @@ export function useDeleteObjective() {
     mutationFn: (objectiveId) =>
       apiMutation<void>("DELETE", `/api/v1/strategy/objectives/${objectiveId}`),
     onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objectives"] });
+    },
+  });
+}
+
+// ── Objective progress (ADP-d8u.5) ─────────────────────────────────────────────
+
+export interface ObjectiveProgressEntry {
+  objective_id: string;
+  as_of_date: string;
+  actual_value: number;
+  note: string | null;
+  recorded_by: string;
+  created_at: string;
+}
+
+export interface ObjectiveProgressCreate {
+  as_of_date: string;
+  actual_value: number;
+  note?: string | null;
+}
+
+export interface ObjectiveProgressUpdate {
+  actual_value: number;
+  note?: string | null;
+}
+
+export function useObjectiveProgress(objectiveId: string | null) {
+  return useQuery<{ items: ObjectiveProgressEntry[]; total: number }>({
+    queryKey: ["strategy-objective-progress", objectiveId],
+    queryFn: () => apiGet(`/api/v1/strategy/objectives/${objectiveId}/progress`),
+    enabled: !!objectiveId,
+  });
+}
+
+export function useCreateProgress(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<ObjectiveProgressEntry, Error & { status?: number }, ObjectiveProgressCreate>({
+    mutationFn: (body) =>
+      apiMutation<ObjectiveProgressEntry, ObjectiveProgressCreate>(
+        "POST",
+        `/api/v1/strategy/objectives/${objectiveId}/progress`,
+        body,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective-progress", objectiveId] });
+      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: ["strategy-objectives"] });
+    },
+  });
+}
+
+export function useUpdateProgress(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<
+    ObjectiveProgressEntry,
+    Error & { status?: number },
+    { asOfDate: string; body: ObjectiveProgressUpdate }
+  >({
+    mutationFn: ({ asOfDate, body }) =>
+      apiMutation<ObjectiveProgressEntry, ObjectiveProgressUpdate>(
+        "PATCH",
+        `/api/v1/strategy/objectives/${objectiveId}/progress/${asOfDate}`,
+        body,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective-progress", objectiveId] });
+      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: ["strategy-objectives"] });
+    },
+  });
+}
+
+export interface AbandonRequest {
+  status_reason: string;
+}
+
+export function useAbandonObjective(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<StrategicObjective, Error & { status?: number }, AbandonRequest>({
+    mutationFn: (body) =>
+      apiMutation<StrategicObjective, AbandonRequest>(
+        "PATCH",
+        `/api/v1/strategy/objectives/${objectiveId}/abandon`,
+        body,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
       void qc.invalidateQueries({ queryKey: ["strategy-objectives"] });
     },
   });

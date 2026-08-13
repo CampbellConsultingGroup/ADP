@@ -1,10 +1,14 @@
-"""Strategic Objective Capture API — ADP-d8u.1.
+"""Strategic Objective Capture API — ADP-d8u.1, extended by ADP-d8u.5.
 
 POST/GET /api/v1/strategy/themes
+GET/PATCH/DELETE /api/v1/strategy/themes/{id}
 POST/GET /api/v1/strategy/objectives
 GET/PUT/DELETE /api/v1/strategy/objectives/{id}
 POST/DELETE /api/v1/strategy/objectives/{id}/capabilities[/{capability_id}]
 POST/DELETE /api/v1/strategy/objectives/{id}/value-streams[/{value_stream_id}]
+POST/GET /api/v1/strategy/objectives/{id}/progress
+PATCH /api/v1/strategy/objectives/{id}/progress/{as_of_date}
+PATCH /api/v1/strategy/objectives/{id}/abandon
 
 Write endpoints are gated by ActionType.WRITE_BUSINESS_ARCH via the app-level
 `/api/v1/strategy/` prefix rule in adp.authz.enforcement (research.md
@@ -18,16 +22,30 @@ Cross-package validation (research.md Decision 2): the link endpoints take a
 `_get_application_session` and adp.chat.router's `_get_biz_session_factory`)
 and call adp.business.store.get_capability/get_value_stream directly before
 writing a link row -- never a duplicated or bypassed existence check.
+
+ADP-d8u.5 plan.md Ground-Truth Correction 4: there is no design_id/design_
+version here for a real AuditEntry row (audit_entries is tightly coupled to
+those). Consistent with adp.business/adp.application's own established
+precedent (adp.agents.provenance's documented rationale), ART-IX here is
+satisfied by structured logger.info(...) calls -- this module's first.
 """
 
 from __future__ import annotations
+
+import logging
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.strategy import store as sstore
 from adp.strategy.models import (
+    AbandonRequest,
     ObjectiveCapabilityLinkCreate,
+    ObjectiveProgressCreate,
+    ObjectiveProgressEntry,
+    ObjectiveProgressListResponse,
+    ObjectiveProgressUpdate,
     ObjectiveValueStreamLinkCreate,
     StrategicObjective,
     StrategicObjectiveCreate,
@@ -37,7 +55,10 @@ from adp.strategy.models import (
     StrategicTheme,
     StrategicThemeCreate,
     StrategicThemeListResponse,
+    StrategicThemeUpdate,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/strategy", tags=["strategy"])
 
@@ -91,6 +112,40 @@ async def list_themes(session: AsyncSession = Depends(_get_session)):
     return await sstore.list_themes(session)
 
 
+@router.get("/themes/{theme_id}", response_model=StrategicTheme)
+async def get_theme(theme_id: str, session: AsyncSession = Depends(_get_session)):
+    theme = await sstore.get_theme(theme_id, session)
+    if theme is None:
+        raise HTTPException(status_code=404, detail=f"Theme {theme_id!r} not found")
+    return theme
+
+
+@router.patch("/themes/{theme_id}", response_model=StrategicTheme)
+async def update_theme(
+    theme_id: str, body: StrategicThemeUpdate, session: AsyncSession = Depends(_get_session)
+):
+    theme = await sstore.update_theme(theme_id, body, session)
+    if theme is None:
+        raise HTTPException(status_code=404, detail=f"Theme {theme_id!r} not found")
+    await session.commit()
+    return theme
+
+
+@router.delete("/themes/{theme_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_theme(
+    theme_id: str, raw_request: Request, session: AsyncSession = Depends(_get_session)
+):
+    if await sstore.get_theme(theme_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Theme {theme_id!r} not found")
+    try:
+        await sstore.delete_theme(theme_id, session)
+    except sstore.ThemeInUseError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    await session.commit()
+    actor = _get_actor(raw_request)
+    logger.info("strategy.theme.delete theme_id=%s actor=%s", theme_id, actor)
+
+
 # ── Objectives ────────────────────────────────────────────────────────────────
 
 
@@ -141,6 +196,89 @@ async def delete_objective(objective_id: str, session: AsyncSession = Depends(_g
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Objective {objective_id!r} not found")
     await session.commit()
+
+
+# ── Progress (ADP-d8u.5) ─────────────────────────────────────────────────────
+
+
+@router.post(
+    "/objectives/{objective_id}/progress",
+    response_model=ObjectiveProgressEntry,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_progress_entry(
+    objective_id: str,
+    body: ObjectiveProgressCreate,
+    raw_request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    if await sstore.get_objective(objective_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Objective {objective_id!r} not found")
+    actor = _get_actor(raw_request)
+    try:
+        entry = await sstore.create_progress_entry(objective_id, body, actor, session)
+    except sstore.DuplicateProgressEntryError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    await session.commit()
+    return entry
+
+
+@router.get("/objectives/{objective_id}/progress", response_model=ObjectiveProgressListResponse)
+async def list_progress_entries(
+    objective_id: str, session: AsyncSession = Depends(_get_session)
+):
+    if await sstore.get_objective(objective_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Objective {objective_id!r} not found")
+    return await sstore.list_progress_entries(objective_id, session)
+
+
+@router.patch(
+    "/objectives/{objective_id}/progress/{as_of_date}", response_model=ObjectiveProgressEntry
+)
+async def update_progress_entry(
+    objective_id: str,
+    as_of_date: date,
+    body: ObjectiveProgressUpdate,
+    raw_request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    """FR-002a: the correction path -- date is fixed once recorded, only
+    actual_value/note are editable."""
+    entry = await sstore.update_progress_entry(objective_id, as_of_date, body, session)
+    if entry is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No progress entry for {as_of_date} on objective {objective_id!r}",
+        )
+    await session.commit()
+    actor = _get_actor(raw_request)
+    logger.info(
+        "strategy.objective.progress.update objective_id=%s as_of_date=%s actor=%s",
+        objective_id, as_of_date, actor,
+    )
+    return entry
+
+
+@router.patch("/objectives/{objective_id}/abandon", response_model=StrategicObjective)
+async def abandon_objective(
+    objective_id: str,
+    body: AbandonRequest,
+    raw_request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    """FR-009/FR-010/FR-011: named /abandon, not a generic /status, since
+    it's the only settable transition -- the URL itself communicates that
+    on-track/at-risk/achieved aren't reachable this way."""
+    objective = await sstore.abandon_objective(objective_id, body, session)
+    if objective is None:
+        raise HTTPException(status_code=404, detail=f"Objective {objective_id!r} not found")
+    await session.commit()
+    actor = _get_actor(raw_request)
+    logger.info(
+        "strategy.objective.abandon objective_id=%s actor=%s reason=%r",
+        objective_id, actor, body.status_reason,
+    )
+    return objective
 
 
 # ── Links: capabilities ────────────────────────────────────────────────────────

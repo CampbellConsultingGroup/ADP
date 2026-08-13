@@ -5,11 +5,11 @@ ART-XIII: extra="forbid" on all models; all boundary payloads are typed.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 # data-model.md: direction is semantic (increase/decrease/reach a value), not
 # an ordered scale like strategic_relevance/maturity_level -- a Literal string
@@ -17,18 +17,29 @@ from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 ObjectiveDirection = Literal["increase", "decrease", "reach"]
 ObjectivePeriod = Literal["Q1", "Q2", "Q3", "Q4", "FY"]
 
+# ADP-d8u.5, research.md Decision 1/2: proposed/active/at_risk/achieved are
+# NEVER persisted -- always computed on read from progress history + target
+# (ART-II). abandoned is the one value a human can actually set (the
+# strategic_objectives.status column itself only ever holds NULL or
+# 'abandoned' -- see migration 026).
+ObjectiveStatus = Literal["proposed", "active", "at_risk", "achieved", "abandoned"]
+
 
 # ── StrategicTheme ──────────────────────────────────────────────────────────
 
 
 class StrategicTheme(BaseModel):
-    """Read model. Minimal by design (FR-011's Assumption) -- create + list
-    only in v1, no description/classification field unlike BusinessDomain."""
+    """Read model. ADP-d8u.5 extends the original v1 minimal shape (FR-011's
+    Assumption: create + list only) with description/owner/priority (FR-012)
+    -- name stays the only required field, matching data-model.md."""
 
     model_config = ConfigDict(extra="forbid")
 
     id: str
     name: str
+    description: str | None = None
+    owner: str | None = None
+    priority: int | None = None
     created_at: datetime
 
 
@@ -36,6 +47,9 @@ class StrategicThemeCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
+    description: str | None = None
+    owner: str | None = None
+    priority: int | None = Field(default=None, ge=1, le=5)
 
     @field_validator("name")
     @classmethod
@@ -43,6 +57,19 @@ class StrategicThemeCreate(BaseModel):
         if not v.strip():
             raise ValueError("name must not be blank")
         return v
+
+
+class StrategicThemeUpdate(BaseModel):
+    """name is NOT editable in this version (FR-013 asks only for
+    description/owner/priority) -- avoids re-litigating the existing
+    DuplicateThemeNameError uniqueness path for a field nobody asked to
+    change (data-model.md)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    description: str | None = None
+    owner: str | None = None
+    priority: int | None = Field(default=None, ge=1, le=5)
 
 
 class StrategicThemeListResponse(BaseModel):
@@ -90,12 +117,17 @@ class StrategicObjective(BaseModel):
     period: ObjectivePeriod
     capability_ids: list[str] = []
     value_stream_ids: list[str] = []
+    status: ObjectiveStatus
+    status_reason: str | None = None
     created_at: datetime
     updated_at: datetime
 
 
 class StrategicObjectiveSummary(BaseModel):
-    """List-response item (FR-008: 'enough summary information,' not full detail)."""
+    """List-response item (FR-008: 'enough summary information,' not full detail).
+
+    status included per spec.md SC-001: "visible at a glance wherever the
+    objective appears" -- a list view is exactly such a place."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -105,6 +137,7 @@ class StrategicObjectiveSummary(BaseModel):
     statement: str
     fiscal_year: int
     period: ObjectivePeriod
+    status: ObjectiveStatus
     updated_at: datetime
 
 
@@ -175,6 +208,57 @@ class StrategicObjectiveListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[StrategicObjectiveSummary]
     total: int
+
+
+# ── Objective Progress (ADP-d8u.5) ───────────────────────────────────────────
+
+
+class ObjectiveProgressEntry(BaseModel):
+    """Read model. One dated, editable actual value against an objective's
+    target (data-model.md) -- the date is immutable once recorded (FR-002a);
+    only actual_value/note can be corrected in place."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    objective_id: str
+    as_of_date: date
+    actual_value: Decimal
+    note: str | None = None
+    recorded_by: str
+    created_at: datetime
+
+
+class ObjectiveProgressCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    as_of_date: date
+    actual_value: Decimal
+    note: str | None = Field(default=None, max_length=500)
+
+
+class ObjectiveProgressUpdate(BaseModel):
+    """No as_of_date field at all -- FR-002a: the date is fixed once recorded,
+    only the value/note can be corrected."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    actual_value: Decimal
+    note: str | None = Field(default=None, max_length=500)
+
+
+class ObjectiveProgressListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[ObjectiveProgressEntry]
+    total: int
+
+
+class AbandonRequest(BaseModel):
+    """No `status` field at all -- the action IS "abandon"; nothing else is
+    acceptable via this endpoint (FR-011)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status_reason: str = Field(min_length=1, max_length=500)
 
 
 # ── Links ─────────────────────────────────────────────────────────────────────

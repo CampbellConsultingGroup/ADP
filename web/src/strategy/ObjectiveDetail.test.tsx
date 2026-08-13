@@ -27,6 +27,8 @@ const OBJECTIVE: StrategicObjective = {
   period: "Q3",
   capability_ids: [],
   value_stream_ids: [],
+  status: "proposed",
+  status_reason: null,
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 };
@@ -47,6 +49,25 @@ beforeEach(() => {
     mutate: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof strategyApi.useDeleteObjective>);
+  mockedStrategyApi.useObjectiveProgress.mockReturnValue({
+    data: { items: [], total: 0 },
+    isLoading: false,
+  } as unknown as ReturnType<typeof strategyApi.useObjectiveProgress>);
+  mockedStrategyApi.useCreateProgress.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  } as unknown as ReturnType<typeof strategyApi.useCreateProgress>);
+  mockedStrategyApi.useUpdateProgress.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  } as unknown as ReturnType<typeof strategyApi.useUpdateProgress>);
+  mockedStrategyApi.useAbandonObjective.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  } as unknown as ReturnType<typeof strategyApi.useAbandonObjective>);
   mockedStrategyApi.useLinkObjectiveCapability.mockReturnValue({
     mutate: vi.fn(),
     isPending: false,
@@ -71,6 +92,44 @@ beforeEach(() => {
     data: { items: [], total: 0 },
     isLoading: false,
   } as unknown as ReturnType<typeof businessApi.useValueStreams>);
+});
+
+describe("ObjectiveDetail: status badge and progress history (ADP-d8u.5, T018)", () => {
+  it("shows the status badge label for the objective's computed status", () => {
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+    expect(screen.getByText("Not yet started")).toBeTruthy(); // OBJECTIVE.status === "proposed"
+  });
+
+  it("shows the abandoned reason when status is abandoned", () => {
+    mockedStrategyApi.useObjective.mockReturnValue({
+      data: { ...OBJECTIVE, status: "abandoned", status_reason: "Superseded" },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useObjective>);
+
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    expect(screen.getByText("Abandoned")).toBeTruthy();
+    expect(screen.getByText(/Superseded/)).toBeTruthy();
+  });
+
+  it("renders the recorded progress history", () => {
+    mockedStrategyApi.useObjectiveProgress.mockReturnValue({
+      data: {
+        items: [
+          { objective_id: "obj-1", as_of_date: "2026-08-01", actual_value: 40, note: "start", recorded_by: "jane", created_at: "" },
+        ],
+        total: 1,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useObjectiveProgress>);
+
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    expect(screen.getByText("2026-08-01")).toBeTruthy();
+    expect(screen.getByText("40")).toBeTruthy();
+    expect(screen.getByText("— start")).toBeTruthy();
+  });
 });
 
 describe("ObjectiveDetail: read-only display", () => {
@@ -126,5 +185,57 @@ describe("ObjectiveDetail: delete (T031)", () => {
 
     expect(mutate).toHaveBeenCalledWith("obj-1", expect.anything());
     vi.unstubAllGlobals();
+  });
+});
+
+describe("ObjectiveDetail: abandon (ADP-d8u.5 US2, T026)", () => {
+  it("prompts for a reason and calls useAbandonObjective's mutate with it", async () => {
+    const mutate = vi.fn();
+    mockedStrategyApi.useAbandonObjective.mockReturnValue({
+      mutate,
+      isPending: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useAbandonObjective>);
+    vi.stubGlobal("prompt", vi.fn(() => "Superseded by a broader objective"));
+
+    const user = userEvent.setup();
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    await user.click(screen.getByText("Abandon"));
+
+    expect(mutate).toHaveBeenCalledWith({
+      status_reason: "Superseded by a broader objective",
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("does not call mutate when the reason prompt is cancelled", async () => {
+    const mutate = vi.fn();
+    mockedStrategyApi.useAbandonObjective.mockReturnValue({
+      mutate,
+      isPending: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useAbandonObjective>);
+    vi.stubGlobal("prompt", vi.fn(() => null));
+
+    const user = userEvent.setup();
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    await user.click(screen.getByText("Abandon"));
+
+    expect(mutate).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("does not show the Abandon action once the objective is already abandoned", () => {
+    mockedStrategyApi.useObjective.mockReturnValue({
+      data: { ...OBJECTIVE, status: "abandoned", status_reason: "Cancelled" },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useObjective>);
+
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    expect(screen.queryByText("Abandon")).toBeNull();
   });
 });

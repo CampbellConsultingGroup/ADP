@@ -18,15 +18,23 @@ during unlink -- none needed) nothing else.
 
 from __future__ import annotations
 
+import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
+from decimal import Decimal
 from typing import Any, cast
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from adp.strategy.models import (
+    AbandonRequest,
+    ObjectiveProgressCreate,
+    ObjectiveProgressEntry,
+    ObjectiveProgressListResponse,
+    ObjectiveProgressUpdate,
+    ObjectiveStatus,
     StrategicObjective,
     StrategicObjectiveCreate,
     StrategicObjectiveListResponse,
@@ -36,7 +44,10 @@ from adp.strategy.models import (
     StrategicTheme,
     StrategicThemeCreate,
     StrategicThemeListResponse,
+    StrategicThemeUpdate,
 )
+
+logger = logging.getLogger(__name__)
 
 _metadata = sa.MetaData()
 
@@ -45,6 +56,9 @@ _themes = sa.Table(
     _metadata,
     sa.Column("id", sa.String(36), primary_key=True),
     sa.Column("name", sa.Text(), nullable=False),
+    sa.Column("description", sa.Text(), nullable=True),
+    sa.Column("owner", sa.Text(), nullable=True),
+    sa.Column("priority", sa.SmallInteger(), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
@@ -61,8 +75,25 @@ _objectives = sa.Table(
     sa.Column("direction", sa.Text(), nullable=True),
     sa.Column("fiscal_year", sa.SmallInteger(), nullable=False),
     sa.Column("period", sa.Text(), nullable=False),
+    sa.Column("status", sa.Text(), nullable=True),
+    sa.Column("status_reason", sa.Text(), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# ADP-d8u.5, migration 026: composite PK (objective_id, as_of_date) --
+# PK/FK constraints deliberately omitted here, matching the join-table
+# convention already established above (_objective_capabilities/
+# _objective_value_streams): those constraints live only in the migration.
+_progress = sa.Table(
+    "strategic_objective_progress",
+    _metadata,
+    sa.Column("objective_id", sa.String(36), nullable=False),
+    sa.Column("as_of_date", sa.Date(), nullable=False),
+    sa.Column("actual_value", sa.Numeric(14, 2), nullable=False),
+    sa.Column("note", sa.Text(), nullable=True),
+    sa.Column("recorded_by", sa.Text(), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
 _objective_capabilities = sa.Table(
@@ -94,6 +125,18 @@ class DuplicateThemeNameError(Exception):
     """Raised when a theme with that exact name already exists (contracts/
     strategy-api.md: case-sensitive uniqueness, backed by the `unique=True`
     constraint on strategic_themes.name in migration 025)."""
+
+
+class DuplicateProgressEntryError(Exception):
+    """Raised on a second POST for a date that already has a progress entry
+    (FR-002) -- the router maps this to 409, guiding the caller to PATCH
+    instead (FR-002a, the correction path)."""
+
+
+class ThemeInUseError(Exception):
+    """Raised when deleting a theme that any objective still references
+    (FR-014) -- mirrors the platform-wide "referenced entities are blocked
+    from deletion, never silently orphaned" pattern."""
 
 
 # ── Module-level session factory (set by deps or tests) ──────────────────────
@@ -131,7 +174,14 @@ def _rowcount(result: Any) -> int:
 
 
 def _row_to_theme(row: Any) -> StrategicTheme:
-    return StrategicTheme(id=row.id, name=row.name, created_at=row.created_at)
+    return StrategicTheme(
+        id=row.id,
+        name=row.name,
+        description=row.description,
+        owner=row.owner,
+        priority=row.priority,
+        created_at=row.created_at,
+    )
 
 
 async def create_theme(body: StrategicThemeCreate, session: AsyncSession) -> StrategicTheme:
@@ -139,7 +189,14 @@ async def create_theme(body: StrategicThemeCreate, session: AsyncSession) -> Str
     now = _now()
     try:
         await session.execute(
-            _themes.insert().values(id=theme_id, name=body.name, created_at=now)
+            _themes.insert().values(
+                id=theme_id,
+                name=body.name,
+                description=body.description,
+                owner=body.owner,
+                priority=body.priority,
+                created_at=now,
+            )
         )
     except Exception as exc:
         if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
@@ -147,7 +204,14 @@ async def create_theme(body: StrategicThemeCreate, session: AsyncSession) -> Str
                 f"Theme named {body.name!r} already exists"
             ) from exc
         raise
-    return StrategicTheme(id=theme_id, name=body.name, created_at=now)
+    return StrategicTheme(
+        id=theme_id,
+        name=body.name,
+        description=body.description,
+        owner=body.owner,
+        priority=body.priority,
+        created_at=now,
+    )
 
 
 async def list_themes(session: AsyncSession) -> StrategicThemeListResponse:
@@ -163,7 +227,114 @@ async def theme_exists(theme_id: str, session: AsyncSession) -> bool:
     return result.first() is not None
 
 
+async def get_theme(theme_id: str, session: AsyncSession) -> StrategicTheme | None:
+    result = await session.execute(sa.select(_themes).where(_themes.c.id == theme_id))
+    row = result.mappings().first()
+    return _row_to_theme(row) if row is not None else None
+
+
+async def update_theme(
+    theme_id: str, body: StrategicThemeUpdate, session: AsyncSession
+) -> StrategicTheme | None:
+    """FR-013. name is not editable here (StrategicThemeUpdate has no name
+    field at all -- data-model.md)."""
+    values: dict[str, Any] = {}
+    for field in ("description", "owner", "priority"):
+        value = getattr(body, field)
+        if value is not None:
+            values[field] = value
+    if not values:
+        return await get_theme(theme_id, session)
+
+    result = await session.execute(
+        _themes.update().where(_themes.c.id == theme_id).values(**values)
+    )
+    if _rowcount(result) == 0:
+        return None
+    return await get_theme(theme_id, session)
+
+
+async def delete_theme(theme_id: str, session: AsyncSession) -> bool:
+    """FR-014/FR-015: blocked (ThemeInUseError) while any objective
+    references the theme, never a silent orphan."""
+    referencing = await session.execute(
+        sa.select(_objectives.c.id).where(_objectives.c.theme_id == theme_id).limit(1)
+    )
+    if referencing.first() is not None:
+        raise ThemeInUseError(
+            f"Theme {theme_id!r} is still referenced by at least one objective"
+        )
+    result = await session.execute(_themes.delete().where(_themes.c.id == theme_id))
+    return _rowcount(result) > 0
+
+
 # ── Objectives ────────────────────────────────────────────────────────────────
+
+
+def compute_status(
+    status: str | None,
+    target_value: Decimal | None,
+    direction: str | None,
+    progress: list[tuple[date, Decimal]],
+    trend_window: int = 3,
+) -> ObjectiveStatus:
+    """Pure function, no I/O (ADP-d8u.5, research.md Decision 1, ART-II):
+    on-track/at-risk/achieved/proposed are NEVER persisted -- always derived
+    on read from the objective's own target/direction plus its progress
+    history. `abandoned` is the one value a human sets directly (the
+    `status` column only ever holds NULL or 'abandoned'; that is the only
+    non-derived input this function takes).
+
+    `progress` must be ordered ascending by date (list_progress_entries
+    already returns it that way -- this function does not re-sort).
+    """
+    if status == "abandoned":
+        return "abandoned"
+
+    if target_value is None or direction is None:
+        # FR-008: no target at all -- not measurable, not an error, not a guess.
+        return "proposed"
+
+    if not progress:
+        # FR-005: no progress yet is distinct from at-risk.
+        return "proposed"
+
+    latest_date, latest_value = progress[-1]
+
+    if direction == "increase" and latest_value >= target_value:
+        return "achieved"
+    if direction == "decrease" and latest_value <= target_value:
+        return "achieved"
+    if direction == "reach" and latest_value == target_value:
+        return "achieved"
+
+    recent = progress[-trend_window:]
+    if len(recent) < 2:
+        # A single entry has no prior point to compare a trend against.
+        return "active"
+
+    def _distance(value: Decimal) -> Decimal:
+        return abs(value - target_value)
+
+    consecutive_pairs = list(zip(recent, recent[1:]))
+    all_trending_away = all(
+        _distance(next_value) > _distance(prev_value)
+        for (_, prev_value), (_, next_value) in consecutive_pairs
+    )
+    return "at_risk" if all_trending_away else "active"
+
+
+async def _status_for_objective(
+    row: Any, session: AsyncSession
+) -> tuple[ObjectiveStatus, str | None]:
+    result = await session.execute(
+        sa.select(_progress.c.as_of_date, _progress.c.actual_value)
+        .where(_progress.c.objective_id == row["id"])
+        .order_by(_progress.c.as_of_date)
+    )
+    progress = [(r.as_of_date, r.actual_value) for r in result]
+    status = compute_status(row["status"], row["target_value"], row["direction"], progress)
+    return status, row["status_reason"] if status == "abandoned" else None
 
 
 async def _linked_capability_ids(objective_id: str, session: AsyncSession) -> list[str]:
@@ -184,7 +355,8 @@ async def _linked_value_stream_ids(objective_id: str, session: AsyncSession) -> 
     return [row.value_stream_id for row in result]
 
 
-def _row_to_summary(row: Any) -> StrategicObjectiveSummary:
+async def _row_to_summary(row: Any, session: AsyncSession) -> StrategicObjectiveSummary:
+    status, _reason = await _status_for_objective(row, session)
     return StrategicObjectiveSummary(
         id=row.id,
         theme_id=row.theme_id,
@@ -192,6 +364,7 @@ def _row_to_summary(row: Any) -> StrategicObjectiveSummary:
         statement=row.statement,
         fiscal_year=row.fiscal_year,
         period=row.period,
+        status=status,
         updated_at=row.updated_at,
     )
 
@@ -229,6 +402,7 @@ async def get_objective(objective_id: str, session: AsyncSession) -> StrategicOb
     row = result.mappings().first()
     if row is None:
         return None
+    status, status_reason = await _status_for_objective(row, session)
     return StrategicObjective(
         id=row["id"],
         theme_id=row["theme_id"],
@@ -240,6 +414,8 @@ async def get_objective(objective_id: str, session: AsyncSession) -> StrategicOb
         direction=row["direction"],
         fiscal_year=row["fiscal_year"],
         period=row["period"],
+        status=status,
+        status_reason=status_reason,
         capability_ids=await _linked_capability_ids(objective_id, session),
         value_stream_ids=await _linked_value_stream_ids(objective_id, session),
         created_at=row["created_at"],
@@ -251,7 +427,7 @@ async def list_objectives(session: AsyncSession) -> StrategicObjectiveListRespon
     result = await session.execute(
         sa.select(_objectives).order_by(_objectives.c.updated_at.desc())
     )
-    items = [_row_to_summary(row) for row in result.mappings().all()]
+    items = [await _row_to_summary(row, session) for row in result.mappings().all()]
     return StrategicObjectiveListResponse(items=items, total=len(items))
 
 
@@ -285,11 +461,128 @@ async def update_objective(
     return await get_objective(objective_id, session)
 
 
+async def abandon_objective(
+    objective_id: str, body: AbandonRequest, session: AsyncSession
+) -> StrategicObjective | None:
+    """FR-009/FR-010/FR-011: the only settable status transition -- writes
+    the persisted status='abandoned' column, which compute_status() then
+    short-circuits on before any trend logic runs (research.md Decision 1)."""
+    result = await session.execute(
+        _objectives.update()
+        .where(_objectives.c.id == objective_id)
+        .values(status="abandoned", status_reason=body.status_reason, updated_at=_now())
+    )
+    if _rowcount(result) == 0:
+        return None
+    return await get_objective(objective_id, session)
+
+
 async def delete_objective(objective_id: str, session: AsyncSession) -> bool:
     result = await session.execute(
         _objectives.delete().where(_objectives.c.id == objective_id)
     )
     return _rowcount(result) > 0
+
+
+# ── Progress (ADP-d8u.5) ─────────────────────────────────────────────────────
+
+
+def _row_to_progress_entry(row: Any) -> ObjectiveProgressEntry:
+    return ObjectiveProgressEntry(
+        objective_id=row.objective_id,
+        as_of_date=row.as_of_date,
+        actual_value=row.actual_value,
+        note=row.note,
+        recorded_by=row.recorded_by,
+        created_at=row.created_at,
+    )
+
+
+async def create_progress_entry(
+    objective_id: str,
+    body: ObjectiveProgressCreate,
+    actor: str,
+    session: AsyncSession,
+) -> ObjectiveProgressEntry:
+    """FR-001/FR-002. Caller (router) has already validated objective_id
+    exists. Raises DuplicateProgressEntryError (mapped to 409) if that date
+    already has an entry -- FR-002a's PATCH endpoint is the correction path."""
+    existing = await session.execute(
+        sa.select(_progress.c.objective_id).where(
+            _progress.c.objective_id == objective_id,
+            _progress.c.as_of_date == body.as_of_date,
+        )
+    )
+    if existing.first() is not None:
+        raise DuplicateProgressEntryError(
+            f"A progress entry for {body.as_of_date} already exists on objective "
+            f"{objective_id!r} -- edit it instead of recording a new one"
+        )
+
+    now = _now()
+    await session.execute(
+        _progress.insert().values(
+            objective_id=objective_id,
+            as_of_date=body.as_of_date,
+            actual_value=body.actual_value,
+            note=body.note,
+            recorded_by=actor,
+            created_at=now,
+        )
+    )
+    logger.info(
+        "strategy.objective.progress.create objective_id=%s as_of_date=%s actor=%s",
+        objective_id, body.as_of_date, actor,
+    )
+    # Re-fetch rather than construct in-process (mirrors create_objective's own
+    # convention) -- the DB's Numeric(14, 2) column normalizes actual_value's
+    # precision, which a hand-built response object wouldn't reflect.
+    fetched = await session.execute(
+        sa.select(_progress).where(
+            _progress.c.objective_id == objective_id, _progress.c.as_of_date == body.as_of_date
+        )
+    )
+    row = fetched.mappings().first()
+    assert row is not None  # just inserted
+    return _row_to_progress_entry(row)
+
+
+async def update_progress_entry(
+    objective_id: str,
+    as_of_date: date,
+    body: ObjectiveProgressUpdate,
+    session: AsyncSession,
+) -> ObjectiveProgressEntry | None:
+    """FR-002a: the correction path -- as_of_date is not editable (it's the
+    key), only actual_value/note."""
+    result = await session.execute(
+        _progress.update()
+        .where(_progress.c.objective_id == objective_id, _progress.c.as_of_date == as_of_date)
+        .values(actual_value=body.actual_value, note=body.note)
+    )
+    if _rowcount(result) == 0:
+        return None
+    fetched = await session.execute(
+        sa.select(_progress).where(
+            _progress.c.objective_id == objective_id, _progress.c.as_of_date == as_of_date
+        )
+    )
+    row = fetched.mappings().first()
+    assert row is not None  # just updated
+    return _row_to_progress_entry(row)
+
+
+async def list_progress_entries(
+    objective_id: str, session: AsyncSession
+) -> ObjectiveProgressListResponse:
+    """FR-003: full history, ordered oldest to newest."""
+    result = await session.execute(
+        sa.select(_progress)
+        .where(_progress.c.objective_id == objective_id)
+        .order_by(_progress.c.as_of_date)
+    )
+    items = [_row_to_progress_entry(row) for row in result.mappings().all()]
+    return ObjectiveProgressListResponse(items=items, total=len(items))
 
 
 # ── Links ─────────────────────────────────────────────────────────────────────
