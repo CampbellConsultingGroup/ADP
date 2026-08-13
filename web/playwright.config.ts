@@ -31,5 +31,16 @@ export default defineConfig({
         baseURL: WEB_URL,
       },
     },
+    {
+      // ADP-914.14: C4 Design View (canvas-v2) real-stack coverage, split into its
+      // own project (same real-backend requirements as "fullstack") so it can be
+      // run standalone via --project=canvas-v2.
+      name: "canvas-v2",
+      testMatch: "**/canvas-v2.spec.ts",
+      use: {
+        ...devices["Desktop Chrome"],
+        baseURL: WEB_URL,
+      },
+    },
   ],
 });
