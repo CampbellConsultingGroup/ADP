@@ -55,13 +55,6 @@ export interface DiagramLayout {
   positions: Record<string, { x: number; y: number }>;
 }
 
-export interface C4ElementStyle {
-  fill: string;
-  stroke: string;
-  color: string;
-  shape: "box" | "actor";
-}
-
 export interface ElementStyleEntry {
   fill: string;
   stroke: string;
