@@ -19,6 +19,15 @@ beforeEach(() => {
     isPending: false,
     isError: false,
   } as unknown as ReturnType<typeof strategyApi.useCreateTheme>);
+  mockedApi.useUpdateTheme.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    isError: false,
+  } as unknown as ReturnType<typeof strategyApi.useUpdateTheme>);
+  mockedApi.useDeleteTheme.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useDeleteTheme>);
 });
 
 describe("ThemeList (mirrors DomainList.tsx's convention)", () => {
@@ -26,8 +35,8 @@ describe("ThemeList (mirrors DomainList.tsx's convention)", () => {
     mockedApi.useThemes.mockReturnValue({
       data: {
         items: [
-          { id: "t1", name: "Growth", created_at: "2026-01-01T00:00:00Z" },
-          { id: "t2", name: "Efficiency", created_at: "2026-01-01T00:00:00Z" },
+          { id: "t1", name: "Growth", description: null, owner: null, priority: null, created_at: "2026-01-01T00:00:00Z" },
+          { id: "t2", name: "Efficiency", description: null, owner: null, priority: null, created_at: "2026-01-01T00:00:00Z" },
         ],
         total: 2,
       },
@@ -65,5 +74,104 @@ describe("ThemeList (mirrors DomainList.tsx's convention)", () => {
       { name: "Growth" },
       expect.anything(),
     );
+  });
+});
+
+describe("ThemeList: description/owner/priority (ADP-d8u.5, T034)", () => {
+  const THEME_WITH_METADATA = {
+    id: "t1",
+    name: "Digital Channels",
+    description: "Customer-facing digital experience",
+    owner: "jane.architect",
+    priority: 2,
+    created_at: "2026-01-01T00:00:00Z",
+  };
+
+  it("displays description, owner, and priority when present", () => {
+    mockedApi.useThemes.mockReturnValue({
+      data: { items: [THEME_WITH_METADATA], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useThemes>);
+
+    render(<ThemeList />);
+
+    expect(screen.getByText("Customer-facing digital experience")).toBeTruthy();
+    expect(screen.getByText(/jane.architect/)).toBeTruthy();
+    expect(screen.getByText(/Priority 2/)).toBeTruthy();
+  });
+
+  it("supports editing a theme's description/owner/priority", async () => {
+    mockedApi.useThemes.mockReturnValue({
+      data: { items: [THEME_WITH_METADATA], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useThemes>);
+    const mutate = vi.fn();
+    mockedApi.useUpdateTheme.mockReturnValue({
+      mutate,
+      isPending: false,
+      isError: false,
+    } as unknown as ReturnType<typeof strategyApi.useUpdateTheme>);
+
+    const user = userEvent.setup();
+    render(<ThemeList />);
+
+    await user.click(screen.getByText("Edit"));
+    const priorityInput = screen.getByLabelText(/Priority/) as HTMLInputElement;
+    await user.clear(priorityInput);
+    await user.type(priorityInput, "1");
+    await user.click(screen.getByText("Save"));
+
+    expect(mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ priority: 1 }),
+      expect.anything(),
+    );
+  });
+
+  it("deletes an unreferenced theme", async () => {
+    mockedApi.useThemes.mockReturnValue({
+      data: { items: [THEME_WITH_METADATA], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useThemes>);
+    const mutate = vi.fn();
+    mockedApi.useDeleteTheme.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useDeleteTheme>);
+    vi.stubGlobal("confirm", vi.fn(() => true));
+
+    const user = userEvent.setup();
+    render(<ThemeList />);
+
+    await user.click(screen.getByText("Delete"));
+
+    expect(mutate).toHaveBeenCalledWith("t1", expect.anything());
+    vi.unstubAllGlobals();
+  });
+
+  it("surfaces a clear message when deleting a still-referenced theme is blocked (409)", async () => {
+    mockedApi.useThemes.mockReturnValue({
+      data: { items: [THEME_WITH_METADATA], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useThemes>);
+    mockedApi.useDeleteTheme.mockReturnValue({
+      mutate: (
+        _id: string,
+        opts: { onError: (err: Error & { status?: number }) => void },
+      ) => opts.onError(Object.assign(new Error("DELETE failed: 409"), { status: 409 })),
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useDeleteTheme>);
+    vi.stubGlobal("confirm", vi.fn(() => true));
+
+    const user = userEvent.setup();
+    render(<ThemeList />);
+
+    await user.click(screen.getByText("Delete"));
+
+    expect(screen.getByText(/still assigned to at least one objective/)).toBeTruthy();
+    vi.unstubAllGlobals();
   });
 });

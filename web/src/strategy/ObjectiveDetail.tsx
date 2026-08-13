@@ -3,12 +3,16 @@ import {
   useObjective,
   useUpdateObjective,
   useDeleteObjective,
+  useObjectiveProgress,
+  useAbandonObjective,
   type ObjectiveDirection,
   type ObjectivePeriod,
+  type ObjectiveStatus,
 } from "../api/strategy";
 import ObjectiveCapabilityLinkEditor from "./ObjectiveCapabilityLinkEditor";
 import ObjectiveValueStreamLinkEditor from "./ObjectiveValueStreamLinkEditor";
-import { Button } from "../ui";
+import ObjectiveProgressForm from "./ObjectiveProgressForm";
+import { Button, StatusBadge, type BadgeTone } from "../ui";
 
 interface ObjectiveDetailProps {
   objectiveId: string;
@@ -22,10 +26,29 @@ const DIRECTIONS: { value: ObjectiveDirection; label: string }[] = [
   { value: "reach", label: "Reach" },
 ];
 
+// ADP-d8u.5: status is always computed server-side (never set directly,
+// except "abandoned") -- this is purely a display mapping.
+const STATUS_TONE: Record<ObjectiveStatus, BadgeTone> = {
+  proposed: "neutral",
+  active: "info",
+  at_risk: "warn",
+  achieved: "good",
+  abandoned: "crit",
+};
+const STATUS_LABEL: Record<ObjectiveStatus, string> = {
+  proposed: "Not yet started",
+  active: "On track",
+  at_risk: "At risk",
+  achieved: "Achieved",
+  abandoned: "Abandoned",
+};
+
 export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetailProps) {
   const { data: objective, isLoading, error } = useObjective(objectiveId);
+  const { data: progress } = useObjectiveProgress(objectiveId);
   const updateMutation = useUpdateObjective(objectiveId);
   const deleteMutation = useDeleteObjective();
+  const abandonMutation = useAbandonObjective(objectiveId);
   const [editing, setEditing] = useState(false);
 
   const [owner, setOwner] = useState("");
@@ -72,6 +95,15 @@ export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetail
     if (!objective) return;
     if (!confirm(`Delete objective "${objective.statement}"?`)) return;
     deleteMutation.mutate(objective.id, { onSuccess: onBack });
+  }
+
+  function handleAbandon() {
+    if (!objective) return;
+    const reason = prompt("Why is this objective being abandoned? (required)");
+    if (reason == null) return; // cancelled
+    const trimmed = reason.trim();
+    if (!trimmed) return; // FR-009: a reason is required -- nothing to submit without one
+    abandonMutation.mutate({ status_reason: trimmed });
   }
 
   if (isLoading) return <div style={{ padding: 16, color: "var(--ink-3)" }}>Loading objective…</div>;
@@ -142,9 +174,17 @@ export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetail
       ) : (
         <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-            <h3 style={{ margin: 0, fontSize: 16, color: "var(--ink)" }}>{objective.statement}</h3>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <h3 style={{ margin: 0, fontSize: 16, color: "var(--ink)" }}>{objective.statement}</h3>
+              <StatusBadge tone={STATUS_TONE[objective.status]}>
+                {STATUS_LABEL[objective.status]}
+              </StatusBadge>
+            </div>
             <div style={{ display: "flex", gap: 8 }}>
               <Button size="sm" onClick={startEdit}>Edit</Button>
+              {objective.status !== "abandoned" && (
+                <Button size="sm" variant="danger" onClick={handleAbandon}>Abandon</Button>
+              )}
               <Button size="sm" variant="danger" onClick={handleDelete}>Delete</Button>
             </div>
           </div>
@@ -158,6 +198,25 @@ export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetail
               {objective.target_unit}
             </div>
           )}
+          {objective.status === "abandoned" && objective.status_reason && (
+            <div className="ui-alert crit" style={{ fontSize: 12, marginBottom: 4 }}>
+              Abandoned: {objective.status_reason}
+            </div>
+          )}
+
+          <h4 style={{ fontSize: 14, marginTop: 20, marginBottom: 8, color: "var(--ink)" }}>Progress</h4>
+          {progress && progress.items.length > 0 && (
+            <ul style={{ listStyle: "none", padding: 0, margin: "0 0 12px", fontSize: 13 }}>
+              {progress.items.map((entry) => (
+                <li key={entry.as_of_date} style={{ display: "flex", gap: 8, marginBottom: 2, color: "var(--ink-2)" }}>
+                  <span style={{ color: "var(--ink-3)" }}>{entry.as_of_date}</span>
+                  <span>{entry.actual_value}</span>
+                  {entry.note && <span style={{ color: "var(--ink-3)" }}>— {entry.note}</span>}
+                </li>
+              ))}
+            </ul>
+          )}
+          <ObjectiveProgressForm objectiveId={objective.id} existingEntries={progress?.items ?? []} />
 
           <h4 style={{ fontSize: 14, marginTop: 20, marginBottom: 0, color: "var(--ink)" }}>Linked Capabilities</h4>
           <ObjectiveCapabilityLinkEditor objective={objective} />
