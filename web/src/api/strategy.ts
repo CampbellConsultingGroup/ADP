@@ -343,6 +343,220 @@ export function useUnlinkObjectiveValueStream(objectiveId: string) {
   });
 }
 
+// ── Strategy Initiatives (ADP-d8u.6) ───────────────────────────────────────────
+
+export type InitiativeStatus = "planned" | "in_progress" | "blocked" | "complete" | "cancelled";
+
+export interface StrategyInitiative {
+  id: string;
+  name: string;
+  description: string | null;
+  owner: string | null;
+  status: InitiativeStatus;
+  objective_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StrategyInitiativeCreate {
+  name: string;
+  description?: string | null;
+  owner?: string | null;
+  status?: InitiativeStatus;
+}
+
+export interface StrategyInitiativeUpdate {
+  name?: string;
+  description?: string | null;
+  owner?: string | null;
+  status?: InitiativeStatus;
+}
+
+export function useInitiatives() {
+  return useQuery<{ items: StrategyInitiative[]; total: number }>({
+    queryKey: ["strategy-initiatives"],
+    queryFn: () => apiGet("/api/v1/strategy/initiatives"),
+  });
+}
+
+export function useInitiative(id: string | null) {
+  return useQuery<StrategyInitiative>({
+    queryKey: ["strategy-initiative", id],
+    queryFn: () => apiGet(`/api/v1/strategy/initiatives/${id}`),
+    enabled: !!id,
+  });
+}
+
+export function useCreateInitiative() {
+  const qc = useQueryClient();
+  return useMutation<StrategyInitiative, Error & { status?: number }, StrategyInitiativeCreate>({
+    mutationFn: (body) =>
+      apiMutation<StrategyInitiative, StrategyInitiativeCreate>(
+        "POST",
+        "/api/v1/strategy/initiatives",
+        body,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
+    },
+  });
+}
+
+export function useUpdateInitiative(initiativeId: string) {
+  const qc = useQueryClient();
+  return useMutation<StrategyInitiative, Error & { status?: number }, StrategyInitiativeUpdate>({
+    mutationFn: (body) =>
+      apiMutation<StrategyInitiative, StrategyInitiativeUpdate>(
+        "PATCH",
+        `/api/v1/strategy/initiatives/${initiativeId}`,
+        body,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
+      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
+    },
+  });
+}
+
+export function useDeleteInitiative() {
+  const qc = useQueryClient();
+  return useMutation<void, Error & { status?: number }, string>({
+    mutationFn: (initiativeId) =>
+      apiMutation<void>("DELETE", `/api/v1/strategy/initiatives/${initiativeId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
+    },
+  });
+}
+
+export function useLinkInitiativeObjective(initiativeId: string) {
+  const qc = useQueryClient();
+  return useMutation<StrategyInitiative, Error & { status?: number }, string>({
+    mutationFn: (objectiveId) =>
+      apiMutation<StrategyInitiative>(
+        "POST",
+        `/api/v1/strategy/initiatives/${initiativeId}/objectives/${objectiveId}`,
+      ),
+    onSuccess: (_data, objectiveId) => {
+      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
+      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
+      void qc.invalidateQueries({ queryKey: ["strategy-objective-initiatives", objectiveId] });
+    },
+  });
+}
+
+export function useUnlinkInitiativeObjective(initiativeId: string) {
+  const qc = useQueryClient();
+  return useMutation<void, Error & { status?: number }, string>({
+    mutationFn: (objectiveId) =>
+      apiMutation<void>(
+        "DELETE",
+        `/api/v1/strategy/initiatives/${initiativeId}/objectives/${objectiveId}`,
+      ),
+    onSuccess: (_data, objectiveId) => {
+      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
+      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
+      void qc.invalidateQueries({ queryKey: ["strategy-objective-initiatives", objectiveId] });
+    },
+  });
+}
+
+export function useObjectiveInitiatives(objectiveId: string | null) {
+  return useQuery<{ items: StrategyInitiative[]; total: number }>({
+    queryKey: ["strategy-objective-initiatives", objectiveId],
+    queryFn: () => apiGet(`/api/v1/strategy/objectives/${objectiveId}/initiatives`),
+    enabled: !!objectiveId,
+  });
+}
+
+// Objective-side variants (fixed objectiveId, mutate variable = initiativeId)
+// for the "Linked Initiatives" panel on ObjectiveDetail.tsx -- same endpoint
+// as useLinkInitiativeObjective/useUnlinkInitiativeObjective above, just
+// bound the other way round, mirroring how ObjectiveCapabilityLinkEditor
+// links from the objective side.
+
+export function useLinkObjectiveToInitiative(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<StrategyInitiative, Error & { status?: number }, string>({
+    mutationFn: (initiativeId) =>
+      apiMutation<StrategyInitiative>(
+        "POST",
+        `/api/v1/strategy/initiatives/${initiativeId}/objectives/${objectiveId}`,
+      ),
+    onSuccess: (_data, initiativeId) => {
+      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
+      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
+      void qc.invalidateQueries({ queryKey: ["strategy-objective-initiatives", objectiveId] });
+    },
+  });
+}
+
+export function useUnlinkObjectiveFromInitiative(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<void, Error & { status?: number }, string>({
+    mutationFn: (initiativeId) =>
+      apiMutation<void>(
+        "DELETE",
+        `/api/v1/strategy/initiatives/${initiativeId}/objectives/${objectiveId}`,
+      ),
+    onSuccess: (_data, initiativeId) => {
+      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
+      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
+      void qc.invalidateQueries({ queryKey: ["strategy-objective-initiatives", objectiveId] });
+    },
+  });
+}
+
+// ── Objective Dependencies (ADP-d8u.6) ─────────────────────────────────────────
+
+export interface ObjectiveDependenciesResponse {
+  depends_on: string[];
+  blocks: string[];
+}
+
+export function useObjectiveDependencies(objectiveId: string | null) {
+  return useQuery<ObjectiveDependenciesResponse>({
+    queryKey: ["strategy-objective-dependencies", objectiveId],
+    queryFn: () => apiGet(`/api/v1/strategy/objectives/${objectiveId}/dependencies`),
+    enabled: !!objectiveId,
+  });
+}
+
+export function useAddObjectiveDependency(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<ObjectiveDependenciesResponse, Error & { status?: number }, string>({
+    mutationFn: (dependsOnObjectiveId) =>
+      apiMutation<ObjectiveDependenciesResponse, { depends_on_objective_id: string }>(
+        "POST",
+        `/api/v1/strategy/objectives/${objectiveId}/depends-on`,
+        { depends_on_objective_id: dependsOnObjectiveId },
+      ),
+    onSuccess: (_data, dependsOnObjectiveId) => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective-dependencies", objectiveId] });
+      void qc.invalidateQueries({
+        queryKey: ["strategy-objective-dependencies", dependsOnObjectiveId],
+      });
+    },
+  });
+}
+
+export function useRemoveObjectiveDependency(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<void, Error & { status?: number }, string>({
+    mutationFn: (dependsOnObjectiveId) =>
+      apiMutation<void>(
+        "DELETE",
+        `/api/v1/strategy/objectives/${objectiveId}/depends-on/${dependsOnObjectiveId}`,
+      ),
+    onSuccess: (_data, dependsOnObjectiveId) => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective-dependencies", objectiveId] });
+      void qc.invalidateQueries({
+        queryKey: ["strategy-objective-dependencies", dependsOnObjectiveId],
+      });
+    },
+  });
+}
+
 // ── Overview dashboard summary (051-strategy-landing-card) ────────────────────
 
 export interface StrategicSummary {

@@ -2,8 +2,9 @@ import React, { useState } from "react";
 import ThemeList from "./ThemeList";
 import ObjectiveList from "./ObjectiveList";
 import ObjectiveDetail from "./ObjectiveDetail";
+import InitiativeList from "./InitiativeList";
 
-type StrategyTab = "objectives" | "themes";
+type StrategyTab = "objectives" | "themes" | "initiatives";
 
 export default function StrategyPage(): React.ReactElement {
   const [tab, setTab] = useState<StrategyTab>("objectives");
@@ -21,7 +22,13 @@ export default function StrategyPage(): React.ReactElement {
 
         {/* Tab bar */}
         <div style={{ display: "flex", gap: 0, borderBottom: "2px solid var(--border)", marginBottom: 20 }}>
-          {([["objectives", "Objectives"], ["themes", "Themes"]] as [StrategyTab, string][]).map(([t, label]) => (
+          {(
+            [
+              ["objectives", "Objectives"],
+              ["themes", "Themes"],
+              ["initiatives", "Initiatives"],
+            ] as [StrategyTab, string][]
+          ).map(([t, label]) => (
             <button
               key={t}
               onClick={() => { setTab(t); setSelectedObjectiveId(null); }}
@@ -50,6 +57,8 @@ export default function StrategyPage(): React.ReactElement {
         )}
 
         {tab === "themes" && <ThemeList />}
+
+        {tab === "initiatives" && <InitiativeList />}
       </div>
     </div>
   );

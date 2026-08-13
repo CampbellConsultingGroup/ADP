@@ -1,12 +1,13 @@
 // ADP-d8u.1 (T024, extended in T031 with edit/delete cases).
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ObjectiveDetail from "./ObjectiveDetail";
 import * as strategyApi from "../api/strategy";
 import * as businessApi from "../api/business";
 import type { StrategicObjective } from "../api/strategy";
+import { ApiError } from "../api/client";
 
 vi.mock("../api/strategy");
 vi.mock("../api/business");
@@ -92,6 +93,38 @@ beforeEach(() => {
     data: { items: [], total: 0 },
     isLoading: false,
   } as unknown as ReturnType<typeof businessApi.useValueStreams>);
+  mockedStrategyApi.useInitiatives.mockReturnValue({
+    data: { items: [], total: 0 },
+    isLoading: false,
+  } as unknown as ReturnType<typeof strategyApi.useInitiatives>);
+  mockedStrategyApi.useObjectiveInitiatives.mockReturnValue({
+    data: { items: [], total: 0 },
+    isLoading: false,
+  } as unknown as ReturnType<typeof strategyApi.useObjectiveInitiatives>);
+  mockedStrategyApi.useLinkObjectiveToInitiative.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveToInitiative>);
+  mockedStrategyApi.useUnlinkObjectiveFromInitiative.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useUnlinkObjectiveFromInitiative>);
+  mockedStrategyApi.useObjectives.mockReturnValue({
+    data: { items: [], total: 0 },
+    isLoading: false,
+  } as unknown as ReturnType<typeof strategyApi.useObjectives>);
+  mockedStrategyApi.useObjectiveDependencies.mockReturnValue({
+    data: { depends_on: [], blocks: [] },
+    isLoading: false,
+  } as unknown as ReturnType<typeof strategyApi.useObjectiveDependencies>);
+  mockedStrategyApi.useAddObjectiveDependency.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useAddObjectiveDependency>);
+  mockedStrategyApi.useRemoveObjectiveDependency.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useRemoveObjectiveDependency>);
 });
 
 describe("ObjectiveDetail: status badge and progress history (ADP-d8u.5, T018)", () => {
@@ -237,5 +270,172 @@ describe("ObjectiveDetail: abandon (ADP-d8u.5 US2, T026)", () => {
     render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
 
     expect(screen.queryByText("Abandon")).toBeNull();
+  });
+});
+
+describe("ObjectiveDetail: linked initiatives panel (ADP-d8u.6, T018)", () => {
+  it("shows linked initiatives and supports linking a new one", async () => {
+    mockedStrategyApi.useObjectiveInitiatives.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: "init-1", name: "Claims Automation", description: null, owner: null,
+            status: "in_progress", objective_ids: ["obj-1"],
+            created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+        total: 1,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useObjectiveInitiatives>);
+    mockedStrategyApi.useInitiatives.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: "init-1", name: "Claims Automation", description: null, owner: null,
+            status: "in_progress", objective_ids: ["obj-1"],
+            created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+          },
+          {
+            id: "init-2", name: "Fraud Detection", description: null, owner: null,
+            status: "planned", objective_ids: [],
+            created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+        total: 2,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useInitiatives>);
+    const linkMutate = vi.fn();
+    mockedStrategyApi.useLinkObjectiveToInitiative.mockReturnValue({
+      mutate: linkMutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveToInitiative>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    expect(screen.getByText("Claims Automation")).toBeTruthy();
+
+    const select = screen.getByDisplayValue("— select initiative —");
+    await user.selectOptions(select, "init-2");
+    await user.click(within(select.parentElement as HTMLElement).getByText("Link"));
+
+    expect(linkMutate).toHaveBeenCalledWith("init-2", expect.anything());
+  });
+
+  it("supports unlinking an initiative", async () => {
+    mockedStrategyApi.useObjectiveInitiatives.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: "init-1", name: "Claims Automation", description: null, owner: null,
+            status: "in_progress", objective_ids: ["obj-1"],
+            created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+        total: 1,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useObjectiveInitiatives>);
+    const unlinkMutate = vi.fn();
+    mockedStrategyApi.useUnlinkObjectiveFromInitiative.mockReturnValue({
+      mutate: unlinkMutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useUnlinkObjectiveFromInitiative>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    await user.click(screen.getByText("Remove"));
+
+    expect(unlinkMutate).toHaveBeenCalledWith("init-1");
+  });
+});
+
+describe("ObjectiveDetail: dependencies panel (ADP-d8u.6, T027)", () => {
+  it("shows both depends-on and blocks directions", () => {
+    mockedStrategyApi.useObjectives.mockReturnValue({
+      data: {
+        items: [
+          { id: "obj-2", theme_id: "t1", owner: "A", statement: "Launch new product line", fiscal_year: 2026, period: "Q1", status: "active", updated_at: "" },
+          { id: "obj-3", theme_id: "t1", owner: "A", statement: "Expand into new market", fiscal_year: 2026, period: "Q1", status: "active", updated_at: "" },
+        ],
+        total: 2,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useObjectives>);
+    mockedStrategyApi.useObjectiveDependencies.mockReturnValue({
+      data: { depends_on: ["obj-2"], blocks: ["obj-3"] },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useObjectiveDependencies>);
+
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    // "Launch new product line" (obj-2) is the depends-on entry -- excluded
+    // from the add-dependency select, so it appears exactly once.
+    expect(screen.getByText("Launch new product line")).toBeTruthy();
+    // "Expand into new market" (obj-3) is the blocks entry, and also still
+    // an eligible option in the add-dependency select -- appears twice.
+    expect(screen.getAllByText("Expand into new market").length).toBeGreaterThan(0);
+  });
+
+  it("surfaces the server's cycle-rejection message on a 400 response", async () => {
+    mockedStrategyApi.useObjectives.mockReturnValue({
+      data: {
+        items: [
+          { id: "obj-2", theme_id: "t1", owner: "A", statement: "Launch new product line", fiscal_year: 2026, period: "Q1", status: "active", updated_at: "" },
+        ],
+        total: 1,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useObjectives>);
+    const addMutate = vi.fn((_id, opts) => {
+      opts.onError(
+        new ApiError(400, "POST failed: 400", {
+          detail: "Objective 'obj-1' cannot depend on 'obj-2' -- this would create a cycle",
+        }),
+      );
+    });
+    mockedStrategyApi.useAddObjectiveDependency.mockReturnValue({
+      mutate: addMutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useAddObjectiveDependency>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    await user.selectOptions(screen.getByDisplayValue("— select objective —"), "obj-2");
+    await user.click(screen.getByText("Add dependency"));
+
+    expect(screen.getByText(/would create a cycle/)).toBeTruthy();
+  });
+
+  it("supports removing a dependency", async () => {
+    mockedStrategyApi.useObjectives.mockReturnValue({
+      data: {
+        items: [
+          { id: "obj-2", theme_id: "t1", owner: "A", statement: "Launch new product line", fiscal_year: 2026, period: "Q1", status: "active", updated_at: "" },
+        ],
+        total: 1,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useObjectives>);
+    mockedStrategyApi.useObjectiveDependencies.mockReturnValue({
+      data: { depends_on: ["obj-2"], blocks: [] },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useObjectiveDependencies>);
+    const removeMutate = vi.fn();
+    mockedStrategyApi.useRemoveObjectiveDependency.mockReturnValue({
+      mutate: removeMutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useRemoveObjectiveDependency>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    await user.click(screen.getByText("Remove"));
+
+    expect(removeMutate).toHaveBeenCalledWith("obj-2");
   });
 });

@@ -34,6 +34,10 @@ _STRATEGY_UNIQUE_DDL = [
     "CREATE UNIQUE INDEX uq_sovs "
     "ON strategic_objective_value_streams(objective_id, value_stream_id)",
     "CREATE UNIQUE INDEX uq_progress ON strategic_objective_progress(objective_id, as_of_date)",
+    "CREATE UNIQUE INDEX uq_sio_links "
+    "ON strategy_initiative_objective_links(initiative_id, objective_id)",
+    "CREATE UNIQUE INDEX uq_objective_deps "
+    "ON strategic_objective_dependencies(objective_id, depends_on_objective_id)",
 ]
 
 
@@ -673,4 +677,137 @@ async def test_delete_theme_409_when_referenced(client) -> None:
 
 async def test_delete_theme_404_unknown_id(client) -> None:
     resp = await client.delete(f"{BASE}/themes/nonexistent")
+    assert resp.status_code == 404
+
+
+# ── User Story 1 (ADP-d8u.6): strategy initiatives + objective links ──────────
+
+
+async def _mk_initiative(client, name="Claims Automation", **overrides) -> dict:
+    body = {"name": name, **overrides}
+    resp = await client.post(f"{BASE}/initiatives", json=body)
+    assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+async def test_create_initiative_201(client) -> None:
+    body = await _mk_initiative(client, description="Q3-Q4", owner="jane", status="in_progress")
+    assert body["name"] == "Claims Automation"
+    assert body["description"] == "Q3-Q4"
+    assert body["owner"] == "jane"
+    assert body["status"] == "in_progress"
+    assert body["objective_ids"] == []
+
+
+async def test_create_initiative_defaults_status_to_planned(client) -> None:
+    body = await _mk_initiative(client)
+    assert body["status"] == "planned"
+
+
+async def test_get_initiative_200(client) -> None:
+    created = await _mk_initiative(client)
+    resp = await client.get(f"{BASE}/initiatives/{created['id']}")
+    assert resp.status_code == 200
+    assert resp.json()["id"] == created["id"]
+
+
+async def test_get_initiative_404_unknown_id(client) -> None:
+    resp = await client.get(f"{BASE}/initiatives/nonexistent")
+    assert resp.status_code == 404
+
+
+async def test_list_initiatives_200(client) -> None:
+    await _mk_initiative(client, name="A")
+    await _mk_initiative(client, name="B")
+    resp = await client.get(f"{BASE}/initiatives")
+    assert resp.status_code == 200
+    assert resp.json()["total"] == 2
+
+
+async def test_patch_initiative_200_updates_status(client) -> None:
+    created = await _mk_initiative(client)
+    resp = await client.patch(f"{BASE}/initiatives/{created['id']}", json={"status": "blocked"})
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["status"] == "blocked"
+
+
+async def test_patch_initiative_404_unknown_id(client) -> None:
+    resp = await client.patch(f"{BASE}/initiatives/nonexistent", json={"status": "blocked"})
+    assert resp.status_code == 404
+
+
+async def test_delete_initiative_204_unconditional_even_with_links(client) -> None:
+    created = await _mk_initiative(client)
+    theme_id = await _mk_theme(client, "Init-Delete-Theme")
+    objective = await _mk_objective(client, theme_id)
+    await client.post(f"{BASE}/initiatives/{created['id']}/objectives/{objective['id']}")
+
+    resp = await client.delete(f"{BASE}/initiatives/{created['id']}")
+    assert resp.status_code == 204
+    assert (await client.get(f"{BASE}/initiatives/{created['id']}")).status_code == 404
+
+
+async def test_delete_initiative_404_unknown_id(client) -> None:
+    resp = await client.delete(f"{BASE}/initiatives/nonexistent")
+    assert resp.status_code == 404
+
+
+async def test_link_initiative_objective_201_visible_both_directions(client) -> None:
+    created = await _mk_initiative(client)
+    theme_id = await _mk_theme(client, "Link-Theme")
+    objective = await _mk_objective(client, theme_id)
+
+    resp = await client.post(f"{BASE}/initiatives/{created['id']}/objectives/{objective['id']}")
+    assert resp.status_code == 201, resp.text
+    assert objective["id"] in resp.json()["objective_ids"]
+
+    reverse = await client.get(f"{BASE}/objectives/{objective['id']}/initiatives")
+    assert reverse.status_code == 200
+    assert any(i["id"] == created["id"] for i in reverse.json()["items"])
+
+
+async def test_link_initiative_objective_404_unknown_initiative(client) -> None:
+    theme_id = await _mk_theme(client, "Link-404-Theme")
+    objective = await _mk_objective(client, theme_id)
+    resp = await client.post(f"{BASE}/initiatives/nonexistent/objectives/{objective['id']}")
+    assert resp.status_code == 404
+
+
+async def test_link_initiative_objective_404_unknown_objective(client) -> None:
+    created = await _mk_initiative(client)
+    resp = await client.post(f"{BASE}/initiatives/{created['id']}/objectives/nonexistent")
+    assert resp.status_code == 404
+
+
+async def test_link_initiative_objective_409_duplicate(client) -> None:
+    created = await _mk_initiative(client)
+    theme_id = await _mk_theme(client, "Link-409-Theme")
+    objective = await _mk_objective(client, theme_id)
+    await client.post(f"{BASE}/initiatives/{created['id']}/objectives/{objective['id']}")
+    resp = await client.post(f"{BASE}/initiatives/{created['id']}/objectives/{objective['id']}")
+    assert resp.status_code == 409
+
+
+async def test_unlink_initiative_objective_204(client) -> None:
+    created = await _mk_initiative(client)
+    theme_id = await _mk_theme(client, "Unlink-Theme")
+    objective = await _mk_objective(client, theme_id)
+    await client.post(f"{BASE}/initiatives/{created['id']}/objectives/{objective['id']}")
+
+    resp = await client.delete(f"{BASE}/initiatives/{created['id']}/objectives/{objective['id']}")
+    assert resp.status_code == 204
+    fetched = await client.get(f"{BASE}/initiatives/{created['id']}")
+    assert objective["id"] not in fetched.json()["objective_ids"]
+
+
+async def test_unlink_initiative_objective_404_not_linked(client) -> None:
+    created = await _mk_initiative(client)
+    theme_id = await _mk_theme(client, "Unlink-404-Theme")
+    objective = await _mk_objective(client, theme_id)
+    resp = await client.delete(f"{BASE}/initiatives/{created['id']}/objectives/{objective['id']}")
+    assert resp.status_code == 404
+
+
+async def test_get_objective_initiatives_404_unknown_objective(client) -> None:
+    resp = await client.get(f"{BASE}/objectives/nonexistent/initiatives")
     assert resp.status_code == 404
