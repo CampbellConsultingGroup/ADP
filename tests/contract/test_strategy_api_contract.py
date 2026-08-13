@@ -38,6 +38,8 @@ _STRATEGY_UNIQUE_DDL = [
     "ON strategy_initiative_objective_links(initiative_id, objective_id)",
     "CREATE UNIQUE INDEX uq_objective_deps "
     "ON strategic_objective_dependencies(objective_id, depends_on_objective_id)",
+    "CREATE UNIQUE INDEX uq_odl ON objective_design_links(objective_id, design_id)",
+    "CREATE UNIQUE INDEX uq_oal ON objective_application_links(objective_id, application_id)",
 ]
 
 
@@ -70,6 +72,18 @@ async def client(tmp_path):
                 id="vs-1", name="Claim to Payout", position=0,
                 created_at=now, updated_at=now,
             )
+        )
+        await session.commit()
+
+    # Seed one real design + application to link against, in adp.strategy's
+    # own lightweight read-only mirror tables (research.md Decision 2 --
+    # these live in strategy's own _metadata, unlike cap-1/vs-1 above).
+    async with strategy_factory() as session:
+        await session.execute(
+            sstore._designs.insert().values(id="DSN-001", title="Test Design")
+        )
+        await session.execute(
+            sstore._applications.insert().values(id="app-1", name="Test App")
         )
         await session.commit()
 
@@ -313,6 +327,115 @@ async def test_unlink_value_stream_204(client) -> None:
     )
     resp = await client.delete(f"{BASE}/objectives/{created['id']}/value-streams/vs-1")
     assert resp.status_code == 204
+
+
+# ── ADP-d8u.2: link/unlink designs and applications ────────────────────────────
+
+
+async def test_link_design_201_returns_updated_list(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective(client, theme_id)
+    resp = await client.post(
+        f"{BASE}/objectives/{created['id']}/designs", json={"design_id": "DSN-001"}
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json() == ["DSN-001"]
+
+
+async def test_link_design_404_unknown_design(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective(client, theme_id)
+    resp = await client.post(
+        f"{BASE}/objectives/{created['id']}/designs", json={"design_id": "nonexistent-design"}
+    )
+    assert resp.status_code == 404
+
+
+async def test_link_design_404_unknown_objective(client) -> None:
+    resp = await client.post(
+        f"{BASE}/objectives/nonexistent/designs", json={"design_id": "DSN-001"}
+    )
+    assert resp.status_code == 404
+
+
+async def test_link_design_409_already_linked(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective(client, theme_id)
+    await client.post(f"{BASE}/objectives/{created['id']}/designs", json={"design_id": "DSN-001"})
+    resp = await client.post(
+        f"{BASE}/objectives/{created['id']}/designs", json={"design_id": "DSN-001"}
+    )
+    assert resp.status_code == 409
+
+
+async def test_unlink_design_204(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective(client, theme_id)
+    await client.post(f"{BASE}/objectives/{created['id']}/designs", json={"design_id": "DSN-001"})
+    resp = await client.delete(f"{BASE}/objectives/{created['id']}/designs/DSN-001")
+    assert resp.status_code == 204
+
+    objective_resp = await client.get(f"{BASE}/objectives/{created['id']}")
+    assert objective_resp.json()["design_ids"] == []
+
+
+async def test_unlink_design_404_not_linked(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective(client, theme_id)
+    resp = await client.delete(f"{BASE}/objectives/{created['id']}/designs/DSN-001")
+    assert resp.status_code == 404
+
+
+async def test_link_application_201_returns_updated_list(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective(client, theme_id)
+    resp = await client.post(
+        f"{BASE}/objectives/{created['id']}/applications", json={"application_id": "app-1"}
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json() == ["app-1"]
+
+
+async def test_link_application_404_unknown_application(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective(client, theme_id)
+    resp = await client.post(
+        f"{BASE}/objectives/{created['id']}/applications",
+        json={"application_id": "nonexistent-app"},
+    )
+    assert resp.status_code == 404
+
+
+async def test_link_application_409_already_linked(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective(client, theme_id)
+    await client.post(
+        f"{BASE}/objectives/{created['id']}/applications", json={"application_id": "app-1"}
+    )
+    resp = await client.post(
+        f"{BASE}/objectives/{created['id']}/applications", json={"application_id": "app-1"}
+    )
+    assert resp.status_code == 409
+
+
+async def test_unlink_application_204(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective(client, theme_id)
+    await client.post(
+        f"{BASE}/objectives/{created['id']}/applications", json={"application_id": "app-1"}
+    )
+    resp = await client.delete(f"{BASE}/objectives/{created['id']}/applications/app-1")
+    assert resp.status_code == 204
+
+    objective_resp = await client.get(f"{BASE}/objectives/{created['id']}")
+    assert objective_resp.json()["application_ids"] == []
+
+
+async def test_unlink_application_404_not_linked(client) -> None:
+    theme_id = await _mk_theme(client)
+    created = await _mk_objective(client, theme_id)
+    resp = await client.delete(f"{BASE}/objectives/{created['id']}/applications/app-1")
+    assert resp.status_code == 404
 
 
 # ── User Story 3: list / update / delete ───────────────────────────────────────

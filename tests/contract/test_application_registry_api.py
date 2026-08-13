@@ -443,3 +443,90 @@ async def test_integration_self_reference_rejected(client):
         json={"source_app_id": app["id"], "target_app_id": app["id"], "integration_type": "API"},
     )
     assert resp.status_code == 422
+
+
+# ── ADP-d8u.2: GET /applications/{id}/objectives (reverse lookup) ──────────────
+
+
+@pytest.fixture()
+async def objectives_lookup_client(tmp_path):
+    from adp.strategy import store as sstore
+
+    app_engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/app.db")
+    async with app_engine.begin() as conn:
+        await conn.run_sync(astore._metadata.create_all)
+        for ddl in _UNIQUE_DDL:
+            await conn.execute(sa.text(ddl))
+    app_factory = async_sessionmaker(app_engine, expire_on_commit=False)
+
+    strategy_engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/strategy.db")
+    async with strategy_engine.begin() as conn:
+        await conn.run_sync(sstore._metadata.create_all)
+        await conn.execute(
+            sa.text(
+                "CREATE UNIQUE INDEX uq_oal "
+                "ON objective_application_links(objective_id, application_id)"
+            )
+        )
+    strategy_factory = async_sessionmaker(strategy_engine, expire_on_commit=False)
+
+    from adp.api.app import create_app
+
+    app = create_app()
+
+    async def _app_override():
+        async with app_factory() as session:
+            yield session
+
+    async def _strategy_override():
+        async with strategy_factory() as session:
+            yield session
+
+    app.dependency_overrides[arouter._get_session] = _app_override
+    app.dependency_overrides[arouter._get_strategy_session] = _strategy_override
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c, app_factory, strategy_factory
+    await app_engine.dispose()
+    await strategy_engine.dispose()
+
+
+async def test_get_application_objectives_404_unknown_application(
+    objectives_lookup_client,
+) -> None:
+    c, _, _ = objectives_lookup_client
+    resp = await c.get("/api/v1/applications/nonexistent/objectives")
+    assert resp.status_code == 404
+
+
+async def test_get_application_objectives_200_reflects_real_links(
+    objectives_lookup_client,
+) -> None:
+    c, _app_factory, strategy_factory = objectives_lookup_client
+    from adp.strategy import store as sstore
+    from adp.strategy.models import StrategicObjectiveCreate, StrategicThemeCreate
+
+    # Create the application through the real endpoint (not a raw insert)
+    # so every NOT NULL column with a DB-level default gets populated
+    # correctly, matching _mk_app's own established convention.
+    app = await _mk_app(c, name="CRM")
+    application_id = app["id"]
+
+    async with strategy_factory() as session:
+        theme = await sstore.create_theme(StrategicThemeCreate(name="Growth"), session)
+        objective = await sstore.create_objective(
+            StrategicObjectiveCreate(
+                theme_id=theme.id, owner="Owner", statement="Statement",
+                fiscal_year=2026, period="Q1",
+            ),
+            session,
+        )
+        await session.commit()
+        await sstore.link_objective_application(objective.id, application_id, session)
+        await session.commit()
+
+    resp = await c.get(f"/api/v1/applications/{application_id}/objectives")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total"] == 1
+    assert body["items"][0]["id"] == objective.id

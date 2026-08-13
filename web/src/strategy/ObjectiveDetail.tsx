@@ -14,6 +14,8 @@ import ObjectiveValueStreamLinkEditor from "./ObjectiveValueStreamLinkEditor";
 import ObjectiveProgressForm from "./ObjectiveProgressForm";
 import ObjectiveInitiativeLinkEditor from "./ObjectiveInitiativeLinkEditor";
 import ObjectiveDependencyPanel from "./ObjectiveDependencyPanel";
+import ObjectiveDesignLinkEditor from "./ObjectiveDesignLinkEditor";
+import ObjectiveApplicationLinkEditor from "./ObjectiveApplicationLinkEditor";
 import { Button, StatusBadge, type BadgeTone } from "../ui";
 
 interface ObjectiveDetailProps {
@@ -225,6 +227,12 @@ export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetail
 
           <h4 style={{ fontSize: 14, marginTop: 20, marginBottom: 0, color: "var(--ink)" }}>Linked Value Streams</h4>
           <ObjectiveValueStreamLinkEditor objective={objective} />
+
+          <h4 style={{ fontSize: 14, marginTop: 20, marginBottom: 0, color: "var(--ink)" }}>Linked Designs</h4>
+          <ObjectiveDesignLinkEditor objective={objective} />
+
+          <h4 style={{ fontSize: 14, marginTop: 20, marginBottom: 0, color: "var(--ink)" }}>Linked Applications</h4>
+          <ObjectiveApplicationLinkEditor objective={objective} />
 
           <h4 style={{ fontSize: 14, marginTop: 20, marginBottom: 0, color: "var(--ink)" }}>Linked Initiatives</h4>
           <ObjectiveInitiativeLinkEditor objectiveId={objective.id} />

@@ -7,14 +7,17 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { C4DesignView } from "./C4DesignView";
 import * as api from "../api/designs";
+import * as strategyApi from "../api/strategy";
 import type { ArchitectureDescription } from "../types";
 
 vi.mock("../api/designs");
+vi.mock("../api/strategy");
 vi.mock("../api/client", () => ({
   getAuthHeader: vi.fn(async () => ({})),
 }));
 
 const mockedApi = vi.mocked(api);
+const mockedStrategyApi = vi.mocked(strategyApi);
 
 const DESIGN: ArchitectureDescription = {
   schema_version: "1.0.0",
@@ -75,6 +78,10 @@ beforeEach(() => {
     isPending: false,
     isError: false,
   } as unknown as ReturnType<typeof api.useUpdateElementTags>);
+  mockedStrategyApi.useDesignObjectives.mockReturnValue({
+    data: { items: [], total: 0 },
+    isLoading: false,
+  } as unknown as ReturnType<typeof strategyApi.useDesignObjectives>);
 
   global.fetch = vi.fn(async () => ({
     ok: true,
@@ -177,5 +184,33 @@ describe("C4DesignView: export reuses existing endpoints verbatim (User Story 3,
       "/api/v1/designs/DSN-001/export/calm",
       expect.anything(),
     ));
+  });
+});
+
+describe("C4DesignView: Traceability panel (ADP-d8u.2)", () => {
+  it("shows an empty state when no objectives are linked", () => {
+    render(<C4DesignView designId="DSN-001" />);
+    expect(screen.getByText("Traceability")).toBeTruthy();
+    expect(screen.getByText("No objectives linked to this design yet.")).toBeTruthy();
+  });
+
+  it("lists every objective linked to this design", () => {
+    mockedStrategyApi.useDesignObjectives.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: "obj-1", theme_id: "t1", owner: "Owner", statement: "Reduce claims cycle time",
+            fiscal_year: 2026, period: "Q3", status: "active", updated_at: "",
+          },
+        ],
+        total: 1,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useDesignObjectives>);
+
+    render(<C4DesignView designId="DSN-001" />);
+
+    expect(screen.getByText("Reduce claims cycle time")).toBeTruthy();
+    expect(screen.queryByText("No objectives linked to this design yet.")).toBeNull();
   });
 });
