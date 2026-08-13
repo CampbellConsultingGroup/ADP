@@ -179,6 +179,16 @@ class ValueStreamListResponse(BaseModel):
     total: int
 
 
+class OrphanReportResponse(BaseModel):
+    """918-strategy-rollups: capabilities/value streams with zero strategic-
+    objective linkage. Reuses BusinessCapability/ValueStream directly as list
+    items -- no new per-item model needed (research.md's design)."""
+
+    model_config = ConfigDict(extra="forbid")
+    orphan_capabilities: list[BusinessCapability]
+    orphan_value_streams: list[ValueStream]
+
+
 class ValueStreamCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

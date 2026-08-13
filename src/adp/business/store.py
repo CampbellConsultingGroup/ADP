@@ -90,6 +90,26 @@ _value_streams = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
 
+# Lightweight read-only mirrors of adp.strategy's link tables (918-strategy-
+# rollups, research.md Decision 4) -- the symmetric counterpart to
+# adp.strategy.store's own _designs/_applications mirrors: used purely to
+# determine which capability/value-stream ids are referenced by at least one
+# strategic-objective link, via a single session (same physical database, no
+# second cross-package session needed). Never written to from this module.
+_strategic_objective_capabilities = sa.Table(
+    "strategic_objective_capabilities",
+    _metadata,
+    sa.Column("objective_id", sa.String(36), nullable=False),
+    sa.Column("capability_id", sa.String(36), nullable=False),
+)
+
+_strategic_objective_value_streams = sa.Table(
+    "strategic_objective_value_streams",
+    _metadata,
+    sa.Column("objective_id", sa.String(36), nullable=False),
+    sa.Column("value_stream_id", sa.String(36), nullable=False),
+)
+
 _stages = sa.Table(
     "value_stream_stages",
     _metadata,
@@ -1102,3 +1122,30 @@ async def unlink_cap_from_stage(
     )
     if _rowcount(result) == 0:
         raise StageCapNotFoundError(f"Link ({stage_id!r}, {cap_id!r}) not found")
+
+
+# ── Orphan report (918-strategy-rollups) ─────────────────────────────────────
+
+
+async def list_orphan_capabilities(session: AsyncSession) -> list[BusinessCapability]:
+    """Every capability with zero strategic_objective_capabilities link rows."""
+    result = await session.execute(
+        _cap_with_domain_stmt().where(
+            ~_capabilities.c.id.in_(
+                sa.select(_strategic_objective_capabilities.c.capability_id)
+            )
+        ).order_by(_capabilities.c.level, _capabilities.c.position)
+    )
+    return [_row_to_capability(row) for row in result.mappings().all()]
+
+
+async def list_orphan_value_streams(session: AsyncSession) -> list[ValueStream]:
+    """Every value stream with zero strategic_objective_value_streams link rows."""
+    result = await session.execute(
+        sa.select(_value_streams).where(
+            ~_value_streams.c.id.in_(
+                sa.select(_strategic_objective_value_streams.c.value_stream_id)
+            )
+        ).order_by(_value_streams.c.position, _value_streams.c.created_at)
+    )
+    return [_row_to_vs(row) for row in result.mappings().all()]

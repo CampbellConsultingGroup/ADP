@@ -45,6 +45,8 @@ from adp.strategy.models import (
     StrategicThemeCreate,
     StrategicThemeListResponse,
     StrategicThemeUpdate,
+    StrategyHeatMapResponse,
+    ThemeStatusCounts,
 )
 
 logger = logging.getLogger(__name__)
@@ -851,6 +853,7 @@ _SUMMARY_STATS_SQL = sa.text(
     """
     SELECT
         (SELECT COUNT(*) FROM strategic_themes) AS total_themes,
+        (SELECT COUNT(*) FROM strategy_initiatives) AS initiative_count,
         COUNT(*) AS total_objectives,
         COUNT(*) FILTER (WHERE linked) AS linked_count,
         COUNT(*) FILTER (WHERE NOT linked) AS unlinked_count,
@@ -894,16 +897,35 @@ _SUMMARY_STATS_SQL = sa.text(
 )
 
 
-async def get_summary_stats(session: AsyncSession) -> StrategicSummaryResponse:
-    """Overview dashboard's Strategy card aggregate (051-strategy-landing-card).
+async def _tally_objective_statuses(session: AsyncSession) -> dict[str, int]:
+    """918-strategy-rollups: status isn't SQL-aggregable (it's derived from
+    progress-history trend, research.md Decision 1), so this reuses the same
+    per-row _status_for_objective() call list_objectives() already
+    establishes, tallied in Python. No Postgres-only SQL here -- runs
+    against any backend, including this package's SQLite test fixture."""
+    result = await session.execute(sa.select(_objectives))
+    counts = {"proposed": 0, "active": 0, "at_risk": 0, "achieved": 0, "abandoned": 0}
+    for row in result.mappings().all():
+        status, _reason = await _status_for_objective(row, session)
+        counts[status] += 1
+    return counts
 
-    Computes mini-stats, the linkage-health split (FR-004/005), and the
-    fiscal-period split (FR-007) in one query. "Now" is the database
-    server's own clock, never Python's (FR-008).
+
+async def get_summary_stats(session: AsyncSession) -> StrategicSummaryResponse:
+    """Overview dashboard's Strategy card aggregate (051-strategy-landing-card,
+    enriched by 918-strategy-rollups).
+
+    Computes mini-stats, the linkage-health split (FR-004/005), the
+    fiscal-period split (FR-007), and initiative_count in one atomic query.
+    "Now" is the database server's own clock, never Python's (FR-008). The
+    five status-count fields come from a second, Python-side pass
+    (_tally_objective_statuses, research.md Decision 1/2) since status isn't
+    a column that query's Postgres-only aggregate SQL can compute.
     """
     result = await session.execute(_SUMMARY_STATS_SQL)
     row = result.mappings().first()
     assert row is not None  # a plain aggregate always returns exactly one row
+    status_counts = await _tally_objective_statuses(session)
     return StrategicSummaryResponse(
         total_objectives=row["total_objectives"],
         total_themes=row["total_themes"],
@@ -912,4 +934,61 @@ async def get_summary_stats(session: AsyncSession) -> StrategicSummaryResponse:
         current_period_count=row["current_period_count"],
         upcoming_count=row["upcoming_count"],
         past_due_count=row["past_due_count"],
+        initiative_count=row["initiative_count"],
+        proposed_count=status_counts["proposed"],
+        active_count=status_counts["active"],
+        at_risk_count=status_counts["at_risk"],
+        achieved_count=status_counts["achieved"],
+        abandoned_count=status_counts["abandoned"],
     )
+
+
+# ── get_strategy_heatmap (918-strategy-rollups) ──────────────────────────────
+
+
+async def get_strategy_heatmap(
+    session: AsyncSession, theme_id: str | None = None
+) -> StrategyHeatMapResponse:
+    """Theme x status matrix of objective counts (research.md Decision 3).
+
+    Unlike get_summary_stats above, this has no Postgres-only NOW()/EXTRACT()
+    SQL: status isn't a SQL-aggregable column (it's computed from progress-
+    history trend), so this reuses the same per-row _status_for_objective()
+    call list_objectives() already establishes (research.md Decision 1), one
+    call per objective, tallied by theme in Python.
+    """
+    themes_result = await session.execute(
+        sa.select(_themes.c.id, _themes.c.name).order_by(_themes.c.name)
+    )
+    theme_rows = themes_result.mappings().all()
+    if theme_id is not None:
+        theme_rows = [row for row in theme_rows if row["id"] == theme_id]
+
+    counts: dict[str, dict[str, int]] = {
+        row["id"]: {"proposed": 0, "active": 0, "at_risk": 0, "achieved": 0, "abandoned": 0}
+        for row in theme_rows
+    }
+    wanted_theme_ids = set(counts.keys())
+
+    objectives_result = await session.execute(sa.select(_objectives))
+    total_objectives = 0
+    for obj_row in objectives_result.mappings().all():
+        if theme_id is not None and obj_row["theme_id"] not in wanted_theme_ids:
+            continue
+        status, _reason = await _status_for_objective(obj_row, session)
+        counts[obj_row["theme_id"]][status] += 1
+        total_objectives += 1
+
+    themes = [
+        ThemeStatusCounts(
+            theme_id=row["id"],
+            theme_name=row["name"],
+            proposed_count=counts[row["id"]]["proposed"],
+            active_count=counts[row["id"]]["active"],
+            at_risk_count=counts[row["id"]]["at_risk"],
+            achieved_count=counts[row["id"]]["achieved"],
+            abandoned_count=counts[row["id"]]["abandoned"],
+        )
+        for row in theme_rows
+    ]
+    return StrategyHeatMapResponse(themes=themes, total_objectives=total_objectives)

@@ -552,3 +552,17 @@ export function useUnlinkCapabilityFromStage(vsId: string, stageId: string) {
     },
   });
 }
+
+// ── Orphan report (918-strategy-rollups) ────────────────────────────────────────
+
+export interface OrphanReportResponse {
+  orphan_capabilities: BusinessCapability[];
+  orphan_value_streams: ValueStream[];
+}
+
+export function useOrphanReport() {
+  return useQuery<OrphanReportResponse>({
+    queryKey: ["business-orphans"],
+    queryFn: () => apiGet("/api/v1/business/orphans"),
+  });
+}

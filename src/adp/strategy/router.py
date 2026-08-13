@@ -67,6 +67,7 @@ from adp.strategy.models import (
     StrategicThemeCreate,
     StrategicThemeListResponse,
     StrategicThemeUpdate,
+    StrategyHeatMapResponse,
 )
 
 logger = logging.getLogger(__name__)
@@ -659,3 +660,12 @@ async def get_summary(session: AsyncSession = Depends(_get_session)):
     for GET; spec.md FR-012) -- normal authentication still applies via
     AuthMiddleware, same as every other route."""
     return await sstore.get_summary_stats(session)
+
+
+@router.get("/heatmap", response_model=StrategyHeatMapResponse)
+async def get_heatmap(
+    theme_id: str | None = None, session: AsyncSession = Depends(_get_session)
+):
+    """918-strategy-rollups: theme x status matrix, optionally narrowed to
+    one theme. Read-only, ungated, same as /summary above (spec.md FR-008)."""
+    return await sstore.get_strategy_heatmap(session, theme_id=theme_id)

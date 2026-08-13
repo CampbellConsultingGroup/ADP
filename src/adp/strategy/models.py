@@ -311,3 +311,34 @@ class StrategicSummaryResponse(BaseModel):
     current_period_count: int
     upcoming_count: int
     past_due_count: int
+    # 918-strategy-rollups: proposed_count + active_count + at_risk_count +
+    # achieved_count + abandoned_count == total_objectives always holds,
+    # joining the two existing invariants above.
+    proposed_count: int
+    active_count: int
+    at_risk_count: int
+    achieved_count: int
+    abandoned_count: int
+    initiative_count: int
+
+
+class ThemeStatusCounts(BaseModel):
+    """One row of the strategy heat map (918-strategy-rollups) -- a theme and
+    its objective count broken down by each of the 5 ObjectiveStatus values.
+    Explicit fields, not a dict[str, int], per ART-XIII (research.md Decision
+    3)."""
+
+    model_config = ConfigDict(extra="forbid")
+    theme_id: str
+    theme_name: str
+    proposed_count: int
+    active_count: int
+    at_risk_count: int
+    achieved_count: int
+    abandoned_count: int
+
+
+class StrategyHeatMapResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    themes: list[ThemeStatusCounts]
+    total_objectives: int

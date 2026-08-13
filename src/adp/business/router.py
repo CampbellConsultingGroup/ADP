@@ -38,6 +38,7 @@ from adp.business.models import (
     DuplicateLinkError,
     LinkedDesignsResponse,
     LinkNotFoundError,
+    OrphanReportResponse,
     SuggestionAcceptRequest,
     ValueStream,
     ValueStreamCreate,
@@ -113,6 +114,16 @@ def _make_agent_review_llm_client():
 
 
 # ── Business Capabilities ─────────────────────────────────────────────────────
+
+@router.get("/orphans", response_model=OrphanReportResponse)
+async def get_orphans(session: AsyncSession = Depends(_get_session)):
+    """918-strategy-rollups: capabilities/value streams with zero strategic-
+    objective linkage. Read-only, ungated (spec.md FR-008)."""
+    return OrphanReportResponse(
+        orphan_capabilities=await bstore.list_orphan_capabilities(session),
+        orphan_value_streams=await bstore.list_orphan_value_streams(session),
+    )
+
 
 @router.get("/capabilities", response_model=BusinessCapabilityListResponse)
 async def list_capabilities(session: AsyncSession = Depends(_get_session)):

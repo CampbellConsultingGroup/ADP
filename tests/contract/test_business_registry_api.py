@@ -437,3 +437,81 @@ async def test_stage_capability_links(client):
 
     assert (await client.delete(f"{base}/{cap['id']}")).status_code == 204
     assert (await client.delete(f"{base}/{cap['id']}")).status_code == 404
+
+
+# ── GET /business/orphans (918-strategy-rollups) ────────────────────────────────
+#
+# Reuses the module's main `client` fixture's engine-building shape, but
+# also exposes the session factory so the test can seed
+# strategic_objective_capabilities/strategic_objective_value_streams link
+# rows directly -- these are owned/written by adp.strategy in production,
+# so there's no adp.business endpoint to create them through, mirroring how
+# the fixture above already seeds _designs directly for the same reason.
+
+
+@pytest.fixture()
+async def orphans_client(tmp_path):
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/biz_orphans.db")
+    async with engine.begin() as conn:
+        await conn.run_sync(bstore._metadata.create_all)
+        for ddl in _UNIQUE_DDL:
+            await conn.execute(sa.text(ddl))
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    from adp.api.app import create_app
+
+    app = create_app()
+
+    async def _override():
+        async with factory() as session:
+            yield session
+
+    app.dependency_overrides[brouter._get_session] = _override
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+        yield c, factory
+    await engine.dispose()
+
+
+async def test_get_orphans_excludes_linked_capability_and_value_stream(orphans_client) -> None:
+    c, factory = orphans_client
+    cap = await _mk_cap(c, name="Linked Cap")
+    vs = await _mk_vs(c, name="Linked VS")
+
+    async with factory() as session:
+        await session.execute(
+            bstore._strategic_objective_capabilities.insert().values(
+                objective_id="obj-1", capability_id=cap["id"]
+            )
+        )
+        await session.execute(
+            bstore._strategic_objective_value_streams.insert().values(
+                objective_id="obj-1", value_stream_id=vs["id"]
+            )
+        )
+        await session.commit()
+
+    resp = await c.get(f"{BASE}/orphans")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert cap["id"] not in [c_["id"] for c_ in body["orphan_capabilities"]]
+    assert vs["id"] not in [v["id"] for v in body["orphan_value_streams"]]
+
+
+async def test_get_orphans_includes_unlinked_capability_and_value_stream(orphans_client) -> None:
+    c, _factory = orphans_client
+    cap = await _mk_cap(c, name="Orphan Cap")
+    vs = await _mk_vs(c, name="Orphan VS")
+
+    resp = await c.get(f"{BASE}/orphans")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert cap["id"] in [c_["id"] for c_ in body["orphan_capabilities"]]
+    assert vs["id"] in [v["id"] for v in body["orphan_value_streams"]]
+
+
+async def test_get_orphans_empty_database_returns_empty_lists(orphans_client) -> None:
+    c, _factory = orphans_client
+    resp = await c.get(f"{BASE}/orphans")
+    assert resp.status_code == 200
+    assert resp.json() == {"orphan_capabilities": [], "orphan_value_streams": []}

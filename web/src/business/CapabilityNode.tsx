@@ -21,11 +21,14 @@ interface CapabilityNodeProps {
   /** ADP-914.7: opens the Diagrams screen pre-filled with a flowchart
    *  generated from this capability's own subtree. */
   onGenerateDiagram?: (seed: DiagramSeed) => void;
+  /** 918-strategy-rollups: true when this capability has zero strategic-
+   *  objective linkage (spec.md FR-006). */
+  isOrphan?: boolean;
 }
 
 const LEVEL_LABELS: Record<number, string> = { 1: "L1", 2: "L2", 3: "L3" };
 
-export default function CapabilityNode({ capability, children, onGenerateDiagram }: CapabilityNodeProps): React.ReactElement {
+export default function CapabilityNode({ capability, children, onGenerateDiagram, isOrphan }: CapabilityNodeProps): React.ReactElement {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(capability.name);
@@ -112,6 +115,14 @@ export default function CapabilityNode({ capability, children, onGenerateDiagram
               {capability.level === 1 && capability.domain_name && (
                 <span style={{ marginLeft: 6, fontSize: 10, background: "var(--accent-wash)", color: "var(--accent-2)", padding: "1px 5px", borderRadius: 8, fontWeight: 500 }}>
                   {capability.domain_name}
+                </span>
+              )}
+              {isOrphan && (
+                <span
+                  title="Not referenced by any strategic objective"
+                  style={{ marginLeft: 6, fontSize: 10, background: "var(--warn-wash)", color: "var(--warn)", padding: "1px 5px", borderRadius: 8, fontWeight: 500 }}
+                >
+                  no strategic linkage
                 </span>
               )}
             </span>

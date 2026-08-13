@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from adp.strategy import store as sstore
 from adp.strategy.models import (
+    AbandonRequest,
     ObjectiveProgressCreate,
     ObjectiveProgressUpdate,
     StrategicObjectiveCreate,
@@ -653,9 +654,17 @@ async def test_list_objectives_for_application_returns_every_linked_objective(se
 
 
 def _mock_session_returning(row: MagicMock) -> AsyncMock:
+    """918-strategy-rollups: get_summary_stats now issues a *second*
+    session.execute() call (the Python-side status tally, research.md
+    Decision 1) after the atomic aggregate row -- this mock configures
+    .mappings().all() to return an empty list for that second call, so
+    these two tests continue to exercise only the atomic-row-mapping path
+    (the status tally itself is tested separately below, against a real
+    SQLite session, since it needs real objective rows to tally)."""
     session = AsyncMock()
     result = MagicMock()
     result.mappings.return_value.first = MagicMock(return_value=row)
+    result.mappings.return_value.all = MagicMock(return_value=[])
     session.execute = AsyncMock(return_value=result)
     return session
 
@@ -670,6 +679,7 @@ async def test_get_summary_stats_maps_all_seven_fields() -> None:
         "current_period_count": 5,
         "upcoming_count": 4,
         "past_due_count": 3,
+        "initiative_count": 2,
     }[k]
     session = _mock_session_returning(row)
 
@@ -682,6 +692,13 @@ async def test_get_summary_stats_maps_all_seven_fields() -> None:
     assert result.current_period_count == 5
     assert result.upcoming_count == 4
     assert result.past_due_count == 3
+    assert result.initiative_count == 2
+    # Status counts come from the second (empty-mocked) query -- all zero.
+    assert result.proposed_count == 0
+    assert result.active_count == 0
+    assert result.at_risk_count == 0
+    assert result.achieved_count == 0
+    assert result.abandoned_count == 0
 
 
 async def test_get_summary_stats_all_zero_on_empty_database() -> None:
@@ -698,6 +715,178 @@ async def test_get_summary_stats_all_zero_on_empty_database() -> None:
     assert result.current_period_count == 0
     assert result.upcoming_count == 0
     assert result.past_due_count == 0
+    assert result.initiative_count == 0
+    assert result.proposed_count == 0
+    assert result.active_count == 0
+    assert result.at_risk_count == 0
+    assert result.achieved_count == 0
+    assert result.abandoned_count == 0
+
+
+# ── _tally_objective_statuses (918-strategy-rollups) ────────────────────────
+#
+# The Python-side half of get_summary_stats' new status-count fields
+# (research.md Decision 1) -- unlike the atomic Postgres-only aggregate
+# above, this reuses _status_for_objective per row and runs fully against
+# this file's real SQLite `session` fixture, so it's tested directly here
+# rather than through the mocked-session tests above.
+
+
+async def test_tally_objective_statuses_counts_each_status_correctly(session) -> None:
+    theme_id = await _mk_theme(session)
+    await _mk_objective_with_status(session, theme_id, "proposed")
+    await _mk_objective_with_status(session, theme_id, "active")
+    await _mk_objective_with_status(session, theme_id, "active")
+    await _mk_objective_with_status(session, theme_id, "at_risk")
+    await _mk_objective_with_status(session, theme_id, "achieved")
+    await _mk_objective_with_status(session, theme_id, "abandoned")
+
+    counts = await sstore._tally_objective_statuses(session)
+
+    assert counts == {"proposed": 1, "active": 2, "at_risk": 1, "achieved": 1, "abandoned": 1}
+
+
+async def test_tally_objective_statuses_empty_database(session) -> None:
+    counts = await sstore._tally_objective_statuses(session)
+    assert counts == {"proposed": 0, "active": 0, "at_risk": 0, "achieved": 0, "abandoned": 0}
+
+
+# ── get_strategy_heatmap (918-strategy-rollups) ─────────────────────────────────
+#
+# Unlike get_summary_stats above, this has no Postgres-only NOW()/EXTRACT()
+# SQL -- it's a plain sa.select over _themes/_objectives plus the same
+# per-row _status_for_objective() call list_objectives() already uses
+# (research.md Decision 1), so it runs fully against this file's real
+# SQLite `session` fixture, no mocking needed.
+
+
+async def _mk_objective_with_status(session, theme_id: str, status: str) -> str:
+    """Seeds one objective under the given theme, driven to the requested
+    status via the exact recipes confirmed in test_objective_status.py:
+    proposed = target set, zero progress; active = one off-target entry;
+    at_risk = two entries trending away from target; achieved = one
+    on-target entry; abandoned = the manual terminal transition."""
+    created = await sstore.create_objective(
+        StrategicObjectiveCreate(
+            theme_id=theme_id, owner="Owner", statement=f"Obj-{status}-{theme_id}",
+            metric_name="Metric", target_value=Decimal("100"), target_unit="%",
+            direction="increase", fiscal_year=2026, period="Q1",
+        ),
+        session,
+    )
+    await session.commit()
+
+    if status == "proposed":
+        pass
+    elif status == "active":
+        await sstore.create_progress_entry(
+            created.id,
+            ObjectiveProgressCreate(as_of_date=date(2026, 8, 1), actual_value=Decimal("40")),
+            actor="jane", session=session,
+        )
+        await session.commit()
+    elif status == "at_risk":
+        await sstore.create_progress_entry(
+            created.id,
+            ObjectiveProgressCreate(as_of_date=date(2026, 8, 1), actual_value=Decimal("40")),
+            actor="jane", session=session,
+        )
+        await sstore.create_progress_entry(
+            created.id,
+            ObjectiveProgressCreate(as_of_date=date(2026, 8, 8), actual_value=Decimal("30")),
+            actor="jane", session=session,
+        )
+        await session.commit()
+    elif status == "achieved":
+        await sstore.create_progress_entry(
+            created.id,
+            ObjectiveProgressCreate(as_of_date=date(2026, 8, 1), actual_value=Decimal("100")),
+            actor="jane", session=session,
+        )
+        await session.commit()
+    elif status == "abandoned":
+        await sstore.abandon_objective(
+            created.id, AbandonRequest(status_reason="Superseded"), session
+        )
+        await session.commit()
+    else:
+        raise ValueError(f"unknown status {status!r}")
+
+    return created.id
+
+
+async def test_heatmap_every_theme_appears_with_correct_status_counts(session) -> None:
+    growth_id = await _mk_theme(session, name="Growth")
+    efficiency_id = await _mk_theme(session, name="Efficiency")
+    await _mk_objective_with_status(session, growth_id, "proposed")
+    await _mk_objective_with_status(session, growth_id, "active")
+    await _mk_objective_with_status(session, growth_id, "at_risk")
+    await _mk_objective_with_status(session, efficiency_id, "achieved")
+    await _mk_objective_with_status(session, efficiency_id, "abandoned")
+
+    result = await sstore.get_strategy_heatmap(session)
+
+    assert result.total_objectives == 5
+    rows = {row.theme_id: row for row in result.themes}
+    assert rows[growth_id].proposed_count == 1
+    assert rows[growth_id].active_count == 1
+    assert rows[growth_id].at_risk_count == 1
+    assert rows[growth_id].achieved_count == 0
+    assert rows[growth_id].abandoned_count == 0
+    assert rows[efficiency_id].achieved_count == 1
+    assert rows[efficiency_id].abandoned_count == 1
+    assert rows[efficiency_id].proposed_count == 0
+
+
+async def test_heatmap_zero_objective_theme_shows_all_zero_row_not_omitted(session) -> None:
+    empty_theme_id = await _mk_theme(session, name="Untouched")
+
+    result = await sstore.get_strategy_heatmap(session)
+
+    rows = {row.theme_id: row for row in result.themes}
+    assert empty_theme_id in rows
+    row = rows[empty_theme_id]
+    assert row.proposed_count == 0
+    assert row.active_count == 0
+    assert row.at_risk_count == 0
+    assert row.achieved_count == 0
+    assert row.abandoned_count == 0
+
+
+async def test_heatmap_theme_id_filter_narrows_to_one_row(session) -> None:
+    growth_id = await _mk_theme(session, name="Growth")
+    efficiency_id = await _mk_theme(session, name="Efficiency")
+    await _mk_objective_with_status(session, growth_id, "active")
+    await _mk_objective_with_status(session, efficiency_id, "achieved")
+
+    result = await sstore.get_strategy_heatmap(session, theme_id=growth_id)
+
+    assert [row.theme_id for row in result.themes] == [growth_id]
+    assert result.themes[0].active_count == 1
+
+
+async def test_heatmap_total_equals_sum_of_every_cell(session) -> None:
+    growth_id = await _mk_theme(session, name="Growth")
+    await _mk_objective_with_status(session, growth_id, "proposed")
+    await _mk_objective_with_status(session, growth_id, "active")
+    await _mk_objective_with_status(session, growth_id, "at_risk")
+    await _mk_objective_with_status(session, growth_id, "achieved")
+    await _mk_objective_with_status(session, growth_id, "abandoned")
+
+    result = await sstore.get_strategy_heatmap(session)
+
+    cell_sum = sum(
+        row.proposed_count + row.active_count + row.at_risk_count
+        + row.achieved_count + row.abandoned_count
+        for row in result.themes
+    )
+    assert cell_sum == result.total_objectives == 5
+
+
+async def test_heatmap_empty_database_returns_empty_themes_list(session) -> None:
+    result = await sstore.get_strategy_heatmap(session)
+    assert result.themes == []
+    assert result.total_objectives == 0
 
 
 async def test_link_and_unlink_value_stream_round_trip(session) -> None:

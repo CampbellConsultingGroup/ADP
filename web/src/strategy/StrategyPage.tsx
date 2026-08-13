@@ -3,8 +3,9 @@ import ThemeList from "./ThemeList";
 import ObjectiveList from "./ObjectiveList";
 import ObjectiveDetail from "./ObjectiveDetail";
 import InitiativeList from "./InitiativeList";
+import StrategyHeatMap from "./StrategyHeatMap";
 
-type StrategyTab = "objectives" | "themes" | "initiatives";
+type StrategyTab = "objectives" | "themes" | "initiatives" | "heatmap";
 
 export default function StrategyPage(): React.ReactElement {
   const [tab, setTab] = useState<StrategyTab>("objectives");
@@ -27,6 +28,7 @@ export default function StrategyPage(): React.ReactElement {
               ["objectives", "Objectives"],
               ["themes", "Themes"],
               ["initiatives", "Initiatives"],
+              ["heatmap", "Heat Map"],
             ] as [StrategyTab, string][]
           ).map(([t, label]) => (
             <button
@@ -59,6 +61,8 @@ export default function StrategyPage(): React.ReactElement {
         {tab === "themes" && <ThemeList />}
 
         {tab === "initiatives" && <InitiativeList />}
+
+        {tab === "heatmap" && <StrategyHeatMap />}
       </div>
     </div>
   );
