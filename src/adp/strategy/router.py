@@ -38,7 +38,16 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.strategy import initiatives as sinit
 from adp.strategy import store as sstore
+from adp.strategy.initiatives import (
+    ObjectiveDependenciesResponse,
+    ObjectiveDependencyCreate,
+    StrategyInitiative,
+    StrategyInitiativeCreate,
+    StrategyInitiativeListResponse,
+    StrategyInitiativeUpdate,
+)
 from adp.strategy.models import (
     AbandonRequest,
     ObjectiveCapabilityLinkCreate,
@@ -363,6 +372,184 @@ async def unlink_objective_value_stream(
     except sstore.LinkNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     await session.commit()
+
+
+# ── Strategy Initiatives (ADP-d8u.6) ───────────────────────────────────────────
+
+
+@router.post(
+    "/initiatives", response_model=StrategyInitiative, status_code=status.HTTP_201_CREATED
+)
+async def create_initiative(
+    body: StrategyInitiativeCreate, session: AsyncSession = Depends(_get_session)
+):
+    initiative = await sinit.create_initiative(body, session)
+    await session.commit()
+    return initiative
+
+
+@router.get("/initiatives", response_model=StrategyInitiativeListResponse)
+async def list_initiatives(session: AsyncSession = Depends(_get_session)):
+    return await sinit.list_initiatives(session)
+
+
+@router.get("/initiatives/{initiative_id}", response_model=StrategyInitiative)
+async def get_initiative(initiative_id: str, session: AsyncSession = Depends(_get_session)):
+    initiative = await sinit.get_initiative(initiative_id, session)
+    if initiative is None:
+        raise HTTPException(status_code=404, detail=f"Initiative {initiative_id!r} not found")
+    return initiative
+
+
+@router.patch("/initiatives/{initiative_id}", response_model=StrategyInitiative)
+async def update_initiative(
+    initiative_id: str,
+    body: StrategyInitiativeUpdate,
+    raw_request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    initiative = await sinit.update_initiative(initiative_id, body, session)
+    if initiative is None:
+        raise HTTPException(status_code=404, detail=f"Initiative {initiative_id!r} not found")
+    await session.commit()
+    actor = _get_actor(raw_request)
+    logger.info("strategy.initiative.update initiative_id=%s actor=%s", initiative_id, actor)
+    return initiative
+
+
+@router.delete("/initiatives/{initiative_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_initiative(
+    initiative_id: str, raw_request: Request, session: AsyncSession = Depends(_get_session)
+):
+    """FR-011: unconditional -- never blocked by existing links."""
+    deleted = await sinit.delete_initiative(initiative_id, session)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Initiative {initiative_id!r} not found")
+    await session.commit()
+    actor = _get_actor(raw_request)
+    logger.info("strategy.initiative.delete initiative_id=%s actor=%s", initiative_id, actor)
+
+
+@router.post(
+    "/initiatives/{initiative_id}/objectives/{objective_id}",
+    response_model=StrategyInitiative,
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_initiative_objective(
+    initiative_id: str, objective_id: str, session: AsyncSession = Depends(_get_session)
+):
+    if await sinit.get_initiative(initiative_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Initiative {initiative_id!r} not found")
+    if await sstore.get_objective(objective_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Objective {objective_id!r} not found")
+    try:
+        await sinit.link_initiative_objective(initiative_id, objective_id, session)
+    except sinit.DuplicateLinkError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    await session.commit()
+    initiative = await sinit.get_initiative(initiative_id, session)
+    assert initiative is not None
+    return initiative
+
+
+@router.delete(
+    "/initiatives/{initiative_id}/objectives/{objective_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_initiative_objective(
+    initiative_id: str, objective_id: str, session: AsyncSession = Depends(_get_session)
+):
+    try:
+        await sinit.unlink_initiative_objective(initiative_id, objective_id, session)
+    except sinit.LinkNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    await session.commit()
+
+
+@router.get("/objectives/{objective_id}/initiatives", response_model=StrategyInitiativeListResponse)
+async def list_objective_initiatives(
+    objective_id: str, session: AsyncSession = Depends(_get_session)
+):
+    """Reverse lookup (FR-005)."""
+    if await sstore.get_objective(objective_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Objective {objective_id!r} not found")
+    initiative_ids = await sinit.list_objective_initiative_ids(objective_id, session)
+    items = []
+    for initiative_id in initiative_ids:
+        initiative = await sinit.get_initiative(initiative_id, session)
+        assert initiative is not None
+        items.append(initiative)
+    return StrategyInitiativeListResponse(items=items, total=len(items))
+
+
+# ── Objective Dependencies (ADP-d8u.6) ─────────────────────────────────────────
+
+
+@router.post(
+    "/objectives/{objective_id}/depends-on",
+    response_model=ObjectiveDependenciesResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_objective_dependency(
+    objective_id: str,
+    body: ObjectiveDependencyCreate,
+    raw_request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    depends_on_objective_id = body.depends_on_objective_id
+    if await sstore.get_objective(objective_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Objective {objective_id!r} not found")
+    if await sstore.get_objective(depends_on_objective_id, session) is None:
+        raise HTTPException(
+            status_code=404, detail=f"Objective {depends_on_objective_id!r} not found"
+        )
+    try:
+        await sinit.add_objective_dependency(objective_id, depends_on_objective_id, session)
+    except sinit.CycleError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except sinit.DuplicateLinkError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    await session.commit()
+    actor = _get_actor(raw_request)
+    logger.info(
+        "strategy.objective.dependency.add objective_id=%s depends_on_objective_id=%s actor=%s",
+        objective_id, depends_on_objective_id, actor,
+    )
+    return await sinit.get_objective_dependencies(objective_id, session)
+
+
+@router.delete(
+    "/objectives/{objective_id}/depends-on/{depends_on_objective_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_objective_dependency(
+    objective_id: str,
+    depends_on_objective_id: str,
+    raw_request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    try:
+        await sinit.remove_objective_dependency(objective_id, depends_on_objective_id, session)
+    except sinit.LinkNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    await session.commit()
+    actor = _get_actor(raw_request)
+    logger.info(
+        "strategy.objective.dependency.remove objective_id=%s depends_on_objective_id=%s "
+        "actor=%s",
+        objective_id, depends_on_objective_id, actor,
+    )
+
+
+@router.get(
+    "/objectives/{objective_id}/dependencies", response_model=ObjectiveDependenciesResponse
+)
+async def get_objective_dependencies(
+    objective_id: str, session: AsyncSession = Depends(_get_session)
+):
+    if await sstore.get_objective(objective_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Objective {objective_id!r} not found")
+    return await sinit.get_objective_dependencies(objective_id, session)
 
 
 # ── Overview dashboard summary (051-strategy-landing-card) ────────────────────
