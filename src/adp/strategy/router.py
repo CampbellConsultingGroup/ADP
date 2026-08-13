@@ -50,7 +50,9 @@ from adp.strategy.initiatives import (
 )
 from adp.strategy.models import (
     AbandonRequest,
+    ObjectiveApplicationLinkCreate,
     ObjectiveCapabilityLinkCreate,
+    ObjectiveDesignLinkCreate,
     ObjectiveProgressCreate,
     ObjectiveProgressEntry,
     ObjectiveProgressListResponse,
@@ -372,6 +374,102 @@ async def unlink_objective_value_stream(
     except sstore.LinkNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     await session.commit()
+
+
+# ── Links: designs / applications (ADP-d8u.2) ──────────────────────────────────
+#
+# Unlike the capability/value-stream links above, design_id/application_id
+# existence is checked via sstore.design_exists/application_exists using the
+# SAME session -- no second, cross-package session is needed here (research.md
+# Decision 2: designs/applications are validated through adp.strategy.store's
+# own lightweight read-only mirror tables, which live in this module's own
+# _metadata against the same physical database, unlike capability_id/
+# value_stream_id which genuinely go through adp.business.store's own
+# higher-level functions via a separate session).
+
+
+@router.post("/objectives/{objective_id}/designs", status_code=status.HTTP_201_CREATED)
+async def link_objective_design(
+    objective_id: str,
+    body: ObjectiveDesignLinkCreate,
+    session: AsyncSession = Depends(_get_session),
+):
+    design_id = body.design_id
+    if await sstore.get_objective(objective_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Objective {objective_id!r} not found")
+    if not await sstore.design_exists(design_id, session):
+        raise HTTPException(status_code=404, detail=f"Design {design_id!r} not found")
+    try:
+        await sstore.link_objective_design(objective_id, design_id, session)
+    except sstore.DuplicateLinkError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    await session.commit()
+    logger.info(
+        "strategy.objective.design.link objective_id=%s design_id=%s", objective_id, design_id
+    )
+    objective = await sstore.get_objective(objective_id, session)
+    assert objective is not None
+    return objective.design_ids
+
+
+@router.delete(
+    "/objectives/{objective_id}/designs/{design_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_objective_design(
+    objective_id: str, design_id: str, session: AsyncSession = Depends(_get_session)
+):
+    try:
+        await sstore.unlink_objective_design(objective_id, design_id, session)
+    except sstore.LinkNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    await session.commit()
+    logger.info(
+        "strategy.objective.design.unlink objective_id=%s design_id=%s", objective_id, design_id
+    )
+
+
+@router.post("/objectives/{objective_id}/applications", status_code=status.HTTP_201_CREATED)
+async def link_objective_application(
+    objective_id: str,
+    body: ObjectiveApplicationLinkCreate,
+    session: AsyncSession = Depends(_get_session),
+):
+    application_id = body.application_id
+    if await sstore.get_objective(objective_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Objective {objective_id!r} not found")
+    if not await sstore.application_exists(application_id, session):
+        raise HTTPException(status_code=404, detail=f"Application {application_id!r} not found")
+    try:
+        await sstore.link_objective_application(objective_id, application_id, session)
+    except sstore.DuplicateLinkError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    await session.commit()
+    logger.info(
+        "strategy.objective.application.link objective_id=%s application_id=%s",
+        objective_id, application_id,
+    )
+    objective = await sstore.get_objective(objective_id, session)
+    assert objective is not None
+    return objective.application_ids
+
+
+@router.delete(
+    "/objectives/{objective_id}/applications/{application_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_objective_application(
+    objective_id: str, application_id: str, session: AsyncSession = Depends(_get_session)
+):
+    try:
+        await sstore.unlink_objective_application(objective_id, application_id, session)
+    except sstore.LinkNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    await session.commit()
+    logger.info(
+        "strategy.objective.application.unlink objective_id=%s application_id=%s",
+        objective_id, application_id,
+    )
 
 
 # ── Strategy Initiatives (ADP-d8u.6) ───────────────────────────────────────────

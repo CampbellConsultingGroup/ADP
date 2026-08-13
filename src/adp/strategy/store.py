@@ -112,6 +112,50 @@ _objective_value_streams = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
+# ADP-d8u.2: objective -> design / objective -> application traceability
+# links. Composite PK omitted here too (migration owns it).
+_objective_design_links = sa.Table(
+    "objective_design_links",
+    _metadata,
+    sa.Column("objective_id", sa.String(36), nullable=False),
+    sa.Column("design_id", sa.Text(), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+_objective_application_links = sa.Table(
+    "objective_application_links",
+    _metadata,
+    sa.Column("objective_id", sa.String(36), nullable=False),
+    sa.Column("application_id", sa.String(36), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# Lightweight read-only mirrors of designs/applications (research.md Decision
+# 2) -- mirrors adp.business.store's own established `_designs` precedent
+# ("designs table reference for JOIN queries (read-only; managed by
+# DesignStore migration 001)"). Used purely for existence checks and the
+# reverse-lookup JOIN; never written to from this module. Since designs and
+# applications live in the same physical Postgres database as everything
+# else, a single session (this module's own) can query them directly --
+# no second, cross-package session is needed here (unlike capability_id/
+# value_stream_id, which are validated via adp.business.store's own
+# higher-level get_capability/get_value_stream through a genuinely separate
+# adp.business-scoped session, research.md Decision 2 as originally written
+# for those two targets).
+_designs = sa.Table(
+    "designs",
+    _metadata,
+    sa.Column("id", sa.Text(), primary_key=True),
+    sa.Column("title", sa.Text(), nullable=False),
+)
+
+_applications = sa.Table(
+    "applications",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.String(255), nullable=False),
+)
+
 
 class DuplicateLinkError(Exception):
     """Raised when a link already exists (mirrors adp.business.models's)."""
@@ -418,6 +462,8 @@ async def get_objective(objective_id: str, session: AsyncSession) -> StrategicOb
         status_reason=status_reason,
         capability_ids=await _linked_capability_ids(objective_id, session),
         value_stream_ids=await _linked_value_stream_ids(objective_id, session),
+        design_ids=await _linked_design_ids(objective_id, session),
+        application_ids=await _linked_application_ids(objective_id, session),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -651,6 +697,139 @@ async def unlink_objective_value_stream(
     )
     if _rowcount(result) == 0:
         raise LinkNotFoundError(f"Link ({objective_id!r}, {value_stream_id!r}) not found")
+
+
+# ── Design/Application links (ADP-d8u.2) ─────────────────────────────────────
+
+
+async def design_exists(design_id: str, session: AsyncSession) -> bool:
+    result = await session.execute(sa.select(_designs.c.id).where(_designs.c.id == design_id))
+    return result.first() is not None
+
+
+async def application_exists(application_id: str, session: AsyncSession) -> bool:
+    result = await session.execute(
+        sa.select(_applications.c.id).where(_applications.c.id == application_id)
+    )
+    return result.first() is not None
+
+
+async def _linked_design_ids(objective_id: str, session: AsyncSession) -> list[str]:
+    result = await session.execute(
+        sa.select(_objective_design_links.c.design_id)
+        .where(_objective_design_links.c.objective_id == objective_id)
+        .order_by(_objective_design_links.c.design_id)
+    )
+    return [row.design_id for row in result]
+
+
+async def _linked_application_ids(objective_id: str, session: AsyncSession) -> list[str]:
+    result = await session.execute(
+        sa.select(_objective_application_links.c.application_id)
+        .where(_objective_application_links.c.objective_id == objective_id)
+        .order_by(_objective_application_links.c.application_id)
+    )
+    return [row.application_id for row in result]
+
+
+async def link_objective_design(objective_id: str, design_id: str, session: AsyncSession) -> None:
+    """Caller (router) has already validated both ids exist."""
+    try:
+        await session.execute(
+            _objective_design_links.insert().values(
+                objective_id=objective_id, design_id=design_id, created_at=_now()
+            )
+        )
+    except Exception as exc:
+        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+            raise DuplicateLinkError(
+                f"Link ({objective_id!r}, {design_id!r}) already exists"
+            ) from exc
+        raise
+
+
+async def unlink_objective_design(
+    objective_id: str, design_id: str, session: AsyncSession
+) -> None:
+    result = await session.execute(
+        _objective_design_links.delete().where(
+            _objective_design_links.c.objective_id == objective_id,
+            _objective_design_links.c.design_id == design_id,
+        )
+    )
+    if _rowcount(result) == 0:
+        raise LinkNotFoundError(f"Link ({objective_id!r}, {design_id!r}) not found")
+
+
+async def list_objectives_for_design(
+    design_id: str, session: AsyncSession
+) -> StrategicObjectiveListResponse:
+    """Reverse lookup, called from src/adp/api/routers/designs.py."""
+    result = await session.execute(
+        sa.select(_objective_design_links.c.objective_id)
+        .where(_objective_design_links.c.design_id == design_id)
+        .order_by(_objective_design_links.c.objective_id)
+    )
+    items = []
+    for row in result:
+        objective_row = await session.execute(
+            sa.select(_objectives).where(_objectives.c.id == row.objective_id)
+        )
+        obj = objective_row.mappings().first()
+        if obj is not None:
+            items.append(await _row_to_summary(obj, session))
+    return StrategicObjectiveListResponse(items=items, total=len(items))
+
+
+async def link_objective_application(
+    objective_id: str, application_id: str, session: AsyncSession
+) -> None:
+    """Caller (router) has already validated both ids exist."""
+    try:
+        await session.execute(
+            _objective_application_links.insert().values(
+                objective_id=objective_id, application_id=application_id, created_at=_now()
+            )
+        )
+    except Exception as exc:
+        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+            raise DuplicateLinkError(
+                f"Link ({objective_id!r}, {application_id!r}) already exists"
+            ) from exc
+        raise
+
+
+async def unlink_objective_application(
+    objective_id: str, application_id: str, session: AsyncSession
+) -> None:
+    result = await session.execute(
+        _objective_application_links.delete().where(
+            _objective_application_links.c.objective_id == objective_id,
+            _objective_application_links.c.application_id == application_id,
+        )
+    )
+    if _rowcount(result) == 0:
+        raise LinkNotFoundError(f"Link ({objective_id!r}, {application_id!r}) not found")
+
+
+async def list_objectives_for_application(
+    application_id: str, session: AsyncSession
+) -> StrategicObjectiveListResponse:
+    """Reverse lookup, called from src/adp/application/router.py."""
+    result = await session.execute(
+        sa.select(_objective_application_links.c.objective_id)
+        .where(_objective_application_links.c.application_id == application_id)
+        .order_by(_objective_application_links.c.objective_id)
+    )
+    items = []
+    for row in result:
+        objective_row = await session.execute(
+            sa.select(_objectives).where(_objectives.c.id == row.objective_id)
+        )
+        obj = objective_row.mappings().first()
+        if obj is not None:
+            items.append(await _row_to_summary(obj, session))
+    return StrategicObjectiveListResponse(items=items, total=len(items))
 
 
 # ── Overview dashboard summary (051-strategy-landing-card) ────────────────────

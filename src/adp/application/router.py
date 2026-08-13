@@ -83,6 +83,7 @@ from adp.application.models import (
 )
 from adp.authz.enforcement import require_action_dep
 from adp.authz.roles import ActionType
+from adp.strategy.models import StrategicObjectiveListResponse
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +109,16 @@ def _get_actor(request: Request) -> str:
 
 async def _get_session():
     factory = astore._get_session_factory()
+    async with factory() as session:
+        yield session
+
+
+async def _get_strategy_session():
+    """A strategy-scoped session (ADP-d8u.2), used only by the reverse-lookup
+    GET /applications/{id}/objectives endpoint below."""
+    from adp.strategy import store as sstore
+
+    factory = sstore._get_session_factory()
     async with factory() as session:
         yield session
 
@@ -174,6 +185,24 @@ async def get_application(app_id: str, session: AsyncSession = Depends(_get_sess
     if app is None:
         raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
     return app
+
+
+@applications_router.get(
+    "/{app_id}/objectives", response_model=StrategicObjectiveListResponse
+)
+async def get_application_objectives(
+    app_id: str,
+    session: AsyncSession = Depends(_get_session),
+    strategy_session: AsyncSession = Depends(_get_strategy_session),
+):
+    """ADP-d8u.2: reverse lookup -- every strategic objective this
+    application realizes."""
+    if await astore.get_application(app_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+
+    from adp.strategy import store as sstore
+
+    return await sstore.list_objectives_for_application(app_id, strategy_session)
 
 
 @applications_router.patch("/{app_id}", response_model=Application)

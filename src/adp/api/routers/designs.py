@@ -12,9 +12,11 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.audit.writer import next_audit_id
 from adp.models import SCHEMA_VERSION, ArchitectureDescription, AuditEntry
+from adp.strategy.models import StrategicObjectiveListResponse
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,16 @@ _MAX_DESIGNS_DEFAULT = 1000
 async def _get_design_store():  # type: ignore[return]
     from adp.api.deps import get_design_store
     return await get_design_store()
+
+
+async def _get_strategy_session():
+    """A strategy-scoped session (ADP-d8u.2), used only by the reverse-lookup
+    GET /designs/{id}/objectives endpoint below."""
+    from adp.strategy import store as sstore
+
+    factory = sstore._get_session_factory()
+    async with factory() as session:
+        yield session
 
 
 def _get_actor(request: Request) -> str:
@@ -171,3 +183,28 @@ async def create_design(
 
     logger.info("designs.create id=%s title=%r actor=%s", design_id, request_body.title, actor)
     return design
+
+
+@router.get("/{design_id}/objectives", response_model=StrategicObjectiveListResponse)
+async def get_design_objectives(
+    design_id: str,
+    store=Depends(_get_design_store),
+    strategy_session: AsyncSession = Depends(_get_strategy_session),
+):
+    """ADP-d8u.2: reverse lookup -- every strategic objective this design
+    realizes. Mirrors src/adp/api/routers/elements.py's own
+    `_get_design_or_404` pattern for the design-existence check (store.get()
+    + catch DesignNotFoundError), rather than adp.strategy.store's lighter-
+    weight mirror -- that pattern is specifically for adp.strategy's own
+    forward-link existence check (research.md Decision 2), not this
+    endpoint's, which already has a real DesignStore on hand."""
+    from adp.store.store import DesignNotFoundError
+
+    try:
+        await store.get(design_id)
+    except DesignNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Design {design_id!r} not found")
+
+    from adp.strategy import store as sstore
+
+    return await sstore.list_objectives_for_design(design_id, strategy_session)

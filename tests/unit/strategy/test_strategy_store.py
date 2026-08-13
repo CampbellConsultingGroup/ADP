@@ -39,6 +39,8 @@ _UNIQUE_DDL = [
     "CREATE UNIQUE INDEX uq_sovs "
     "ON strategic_objective_value_streams(objective_id, value_stream_id)",
     "CREATE UNIQUE INDEX uq_progress ON strategic_objective_progress(objective_id, as_of_date)",
+    "CREATE UNIQUE INDEX uq_odl ON objective_design_links(objective_id, design_id)",
+    "CREATE UNIQUE INDEX uq_oal ON objective_application_links(objective_id, application_id)",
 ]
 
 
@@ -475,6 +477,167 @@ async def test_unlink_capability_not_found_raises(session) -> None:
     await session.commit()
     with pytest.raises(sstore.LinkNotFoundError):
         await sstore.unlink_objective_capability(created.id, "nonexistent-cap", session)
+
+
+# ── Design/Application links (ADP-d8u.2) ────────────────────────────────────────
+
+
+async def _mk_design(session, design_id="DSN-001", title="Test Design") -> str:
+    """No create_design() exists in adp.strategy.store -- designs live in a
+    different package. Seed the lightweight _designs mirror table directly,
+    matching how designs actually land there (adp.store's own migration),
+    not through this package's own API."""
+    await session.execute(
+        sstore._designs.insert().values(id=design_id, title=title)
+    )
+    await session.commit()
+    return design_id
+
+
+async def _mk_application(session, application_id="app-1", name="Test App") -> str:
+    await session.execute(
+        sstore._applications.insert().values(id=application_id, name=name)
+    )
+    await session.commit()
+    return application_id
+
+
+async def _mk_plain_objective(session, statement="Statement") -> str:
+    theme_id = await _mk_theme(session, name=f"Theme-{statement}")
+    created = await sstore.create_objective(
+        StrategicObjectiveCreate(
+            theme_id=theme_id, owner="Owner", statement=statement,
+            fiscal_year=2026, period="Q1",
+        ),
+        session,
+    )
+    await session.commit()
+    return created.id
+
+
+async def test_design_exists_true_and_false(session) -> None:
+    design_id = await _mk_design(session)
+    assert await sstore.design_exists(design_id, session) is True
+    assert await sstore.design_exists("nonexistent", session) is False
+
+
+async def test_link_and_unlink_design_round_trip(session) -> None:
+    objective_id = await _mk_plain_objective(session)
+    design_id = await _mk_design(session)
+
+    await sstore.link_objective_design(objective_id, design_id, session)
+    await session.commit()
+    fetched = await sstore.get_objective(objective_id, session)
+    assert fetched is not None
+    assert fetched.design_ids == [design_id]
+
+    await sstore.unlink_objective_design(objective_id, design_id, session)
+    await session.commit()
+    fetched = await sstore.get_objective(objective_id, session)
+    assert fetched is not None
+    assert fetched.design_ids == []
+
+
+async def test_link_design_duplicate_raises(session) -> None:
+    objective_id = await _mk_plain_objective(session)
+    design_id = await _mk_design(session)
+    await sstore.link_objective_design(objective_id, design_id, session)
+    await session.commit()
+    with pytest.raises(sstore.DuplicateLinkError):
+        await sstore.link_objective_design(objective_id, design_id, session)
+
+
+async def test_unlink_design_not_found_raises(session) -> None:
+    objective_id = await _mk_plain_objective(session)
+    with pytest.raises(sstore.LinkNotFoundError):
+        await sstore.unlink_objective_design(objective_id, "nonexistent-design", session)
+
+
+async def test_unlink_one_design_link_leaves_others_untouched(session) -> None:
+    objective_id = await _mk_plain_objective(session)
+    d1 = await _mk_design(session, design_id="DSN-001")
+    d2 = await _mk_design(session, design_id="DSN-002")
+    await sstore.link_objective_design(objective_id, d1, session)
+    await sstore.link_objective_design(objective_id, d2, session)
+    await session.commit()
+
+    await sstore.unlink_objective_design(objective_id, d1, session)
+    await session.commit()
+
+    fetched = await sstore.get_objective(objective_id, session)
+    assert fetched is not None
+    assert fetched.design_ids == [d2]
+
+
+async def test_list_objectives_for_design_returns_every_linked_objective(session) -> None:
+    design_id = await _mk_design(session)
+    obj1 = await _mk_plain_objective(session, statement="Obj1")
+    obj2 = await _mk_plain_objective(session, statement="Obj2")
+    await sstore.link_objective_design(obj1, design_id, session)
+    await sstore.link_objective_design(obj2, design_id, session)
+    await session.commit()
+
+    result = await sstore.list_objectives_for_design(design_id, session)
+    assert result.total == 2
+    assert {o.id for o in result.items} == {obj1, obj2}
+
+
+async def test_list_objectives_for_design_empty_when_unlinked(session) -> None:
+    design_id = await _mk_design(session)
+    result = await sstore.list_objectives_for_design(design_id, session)
+    assert result.total == 0
+    assert result.items == []
+
+
+async def test_application_exists_true_and_false(session) -> None:
+    application_id = await _mk_application(session)
+    assert await sstore.application_exists(application_id, session) is True
+    assert await sstore.application_exists("nonexistent", session) is False
+
+
+async def test_link_and_unlink_application_round_trip(session) -> None:
+    objective_id = await _mk_plain_objective(session)
+    application_id = await _mk_application(session)
+
+    await sstore.link_objective_application(objective_id, application_id, session)
+    await session.commit()
+    fetched = await sstore.get_objective(objective_id, session)
+    assert fetched is not None
+    assert fetched.application_ids == [application_id]
+
+    await sstore.unlink_objective_application(objective_id, application_id, session)
+    await session.commit()
+    fetched = await sstore.get_objective(objective_id, session)
+    assert fetched is not None
+    assert fetched.application_ids == []
+
+
+async def test_link_application_duplicate_raises(session) -> None:
+    objective_id = await _mk_plain_objective(session)
+    application_id = await _mk_application(session)
+    await sstore.link_objective_application(objective_id, application_id, session)
+    await session.commit()
+    with pytest.raises(sstore.DuplicateLinkError):
+        await sstore.link_objective_application(objective_id, application_id, session)
+
+
+async def test_unlink_application_not_found_raises(session) -> None:
+    objective_id = await _mk_plain_objective(session)
+    with pytest.raises(sstore.LinkNotFoundError):
+        await sstore.unlink_objective_application(objective_id, "nonexistent-app", session)
+
+
+async def test_list_objectives_for_application_returns_every_linked_objective(session) -> None:
+    application_id = await _mk_application(session)
+    obj1 = await _mk_plain_objective(session, statement="AppObj1")
+    obj2 = await _mk_plain_objective(session, statement="AppObj2")
+    await sstore.link_objective_application(obj1, application_id, session)
+    await sstore.link_objective_application(obj2, application_id, session)
+    await session.commit()
+
+    result = await sstore.list_objectives_for_application(application_id, session)
+    assert result.total == 2
+    assert {o.id for o in result.items} == {obj1, obj2}
 
 
 # ── get_summary_stats (051-strategy-landing-card) ──────────────────────────────

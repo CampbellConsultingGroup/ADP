@@ -28,6 +28,8 @@ const OBJECTIVE: StrategicObjective = {
   period: "Q3",
   capability_ids: [],
   value_stream_ids: [],
+  design_ids: [],
+  application_ids: [],
   status: "proposed",
   status_reason: null,
   created_at: "2026-01-01T00:00:00Z",
@@ -125,6 +127,30 @@ beforeEach(() => {
     mutate: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof strategyApi.useRemoveObjectiveDependency>);
+  mockedStrategyApi.useDesignsForLinking.mockReturnValue({
+    data: { designs: [], total: 0 },
+    isLoading: false,
+  } as unknown as ReturnType<typeof strategyApi.useDesignsForLinking>);
+  mockedStrategyApi.useLinkObjectiveDesign.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveDesign>);
+  mockedStrategyApi.useUnlinkObjectiveDesign.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useUnlinkObjectiveDesign>);
+  mockedStrategyApi.useApplicationsForLinking.mockReturnValue({
+    data: { items: [], total: 0 },
+    isLoading: false,
+  } as unknown as ReturnType<typeof strategyApi.useApplicationsForLinking>);
+  mockedStrategyApi.useLinkObjectiveApplication.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveApplication>);
+  mockedStrategyApi.useUnlinkObjectiveApplication.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useUnlinkObjectiveApplication>);
 });
 
 describe("ObjectiveDetail: status badge and progress history (ADP-d8u.5, T018)", () => {

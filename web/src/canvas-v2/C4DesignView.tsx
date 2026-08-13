@@ -24,6 +24,7 @@ import type { C4Level } from "../types";
 import { Button, StatusBadge } from "../ui/primitives";
 import { elementsToC4Model } from "./c4Adapter";
 import { applyIdReplacements, reconcile } from "./reconcile";
+import { useDesignObjectives } from "../api/strategy";
 
 const LEVELS: { label: string; value: C4Level }[] = [
   { label: "Context", value: "context" },
@@ -48,6 +49,11 @@ export function C4DesignView({ designId }: C4DesignViewProps) {
   const { data: design, isLoading, error: designError } = useDesign(designId);
   const { data: layout } = useLayout(designId, level);
   const saveLayout = useSaveLayout();
+  // ADP-d8u.2: read-only reverse lookup -- this is the only design-scoped
+  // screen that exists today (spec.md's resolved Clarification), so the
+  // "Objectives realizing this design" panel lives here rather than a
+  // dedicated design detail screen, which doesn't exist.
+  const { data: linkedObjectives } = useDesignObjectives(designId);
 
   const createElement = useCreateElement(designId);
   const updateElement = useUpdateElement(designId);
@@ -221,6 +227,21 @@ export function C4DesignView({ designId }: C4DesignViewProps) {
               {design.elements.length === 0 && <div className="ui-empty"><p>No elements yet.</p></div>}
             </div>
           </div>
+          <details className="ui-panel">
+            <summary className="ui-panel-h" style={{ cursor: "pointer" }}>
+              Traceability
+            </summary>
+            <div className="ui-list" style={{ marginTop: 8 }}>
+              {(linkedObjectives?.items.length ?? 0) === 0 && (
+                <div className="ui-empty"><p>No objectives linked to this design yet.</p></div>
+              )}
+              {linkedObjectives?.items.map((obj) => (
+                <div key={obj.id} className="ui-list-row">
+                  <span>{obj.statement}</span>
+                </div>
+              ))}
+            </div>
+          </details>
           {selectedElementId && (
             <InspectionPanel
               elementId={selectedElementId}

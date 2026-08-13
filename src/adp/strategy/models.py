@@ -117,6 +117,8 @@ class StrategicObjective(BaseModel):
     period: ObjectivePeriod
     capability_ids: list[str] = []
     value_stream_ids: list[str] = []
+    design_ids: list[str] = []
+    application_ids: list[str] = []
     status: ObjectiveStatus
     status_reason: str | None = None
     created_at: datetime
@@ -272,6 +274,20 @@ class ObjectiveCapabilityLinkCreate(BaseModel):
 class ObjectiveValueStreamLinkCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     value_stream_id: str
+
+
+class ObjectiveDesignLinkCreate(BaseModel):
+    """ADP-d8u.2: objective -> design traceability link."""
+
+    model_config = ConfigDict(extra="forbid")
+    design_id: str
+
+
+class ObjectiveApplicationLinkCreate(BaseModel):
+    """ADP-d8u.2: objective -> application traceability link."""
+
+    model_config = ConfigDict(extra="forbid")
+    application_id: str
 
 
 # ── Overview dashboard summary (051-strategy-landing-card) ────────────────────

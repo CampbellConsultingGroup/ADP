@@ -28,6 +28,8 @@ const OBJECTIVE: StrategicObjective = {
   period: "Q1",
   capability_ids: [],
   value_stream_ids: ["vs-1"],
+  design_ids: [],
+  application_ids: [],
   status: "proposed",
   status_reason: null,
   created_at: "2026-01-01T00:00:00Z",

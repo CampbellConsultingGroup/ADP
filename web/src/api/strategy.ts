@@ -48,6 +48,8 @@ export interface StrategicObjective {
   period: ObjectivePeriod;
   capability_ids: string[];
   value_stream_ids: string[];
+  design_ids: string[];
+  application_ids: string[];
   status: ObjectiveStatus;
   status_reason: string | null;
   created_at: string;
@@ -339,6 +341,151 @@ export function useUnlinkObjectiveValueStream(objectiveId: string) {
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+    },
+  });
+}
+
+// ── Objective–Design link hooks (ADP-d8u.2) ────────────────────────────────────
+//
+// Minimal local types for the designs/applications list used by the two link
+// editors below -- deliberately NOT importing useApplications from
+// ../api/application, since that hook is useSuspenseQuery-based (requires a
+// <Suspense> boundary, as ApplicationPage.tsx provides locally); this plain
+// useQuery convention matches every other hook in this file.
+
+export interface DesignSummaryForLinking {
+  id: string;
+  title: string;
+}
+
+export interface ApplicationSummaryForLinking {
+  id: string;
+  name: string;
+}
+
+export function useDesignsForLinking() {
+  return useQuery<{ designs: DesignSummaryForLinking[]; total: number }>({
+    queryKey: ["designs-for-linking"],
+    queryFn: () => apiGet("/api/v1/designs?page=1&page_size=200"),
+  });
+}
+
+export function useApplicationsForLinking() {
+  return useQuery<{ items: ApplicationSummaryForLinking[]; total: number }>({
+    queryKey: ["applications-for-linking"],
+    queryFn: () => apiGet("/api/v1/applications"),
+  });
+}
+
+export function useLinkObjectiveDesign(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<string[], Error & { status?: number }, string>({
+    mutationFn: (designId) =>
+      apiMutation<string[], { design_id: string }>(
+        "POST",
+        `/api/v1/strategy/objectives/${objectiveId}/designs`,
+        { design_id: designId },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+    },
+  });
+}
+
+export function useUnlinkObjectiveDesign(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (designId) =>
+      apiMutation<void>(
+        "DELETE",
+        `/api/v1/strategy/objectives/${objectiveId}/designs/${designId}`,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+    },
+  });
+}
+
+export function useDesignObjectives(designId: string | null) {
+  return useQuery<{ items: StrategicObjectiveSummary[]; total: number }>({
+    queryKey: ["design-objectives", designId],
+    queryFn: () => apiGet(`/api/v1/designs/${designId}/objectives`),
+    enabled: !!designId,
+  });
+}
+
+// ── Objective–Application link hooks (ADP-d8u.2) ───────────────────────────────
+
+export function useLinkObjectiveApplication(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<string[], Error & { status?: number }, string>({
+    mutationFn: (applicationId) =>
+      apiMutation<string[], { application_id: string }>(
+        "POST",
+        `/api/v1/strategy/objectives/${objectiveId}/applications`,
+        { application_id: applicationId },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+    },
+  });
+}
+
+export function useUnlinkObjectiveApplication(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<void, Error, string>({
+    mutationFn: (applicationId) =>
+      apiMutation<void>(
+        "DELETE",
+        `/api/v1/strategy/objectives/${objectiveId}/applications/${applicationId}`,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+    },
+  });
+}
+
+export function useApplicationObjectives(applicationId: string | null) {
+  return useQuery<{ items: StrategicObjectiveSummary[]; total: number }>({
+    queryKey: ["application-objectives", applicationId],
+    queryFn: () => apiGet(`/api/v1/applications/${applicationId}/objectives`),
+    enabled: !!applicationId,
+  });
+}
+
+// Application-side variants (fixed applicationId, mutate variable =
+// objectiveId) for ObjectiveLinksPanel.tsx on ApplicationDetail.tsx -- same
+// endpoint as useLinkObjectiveApplication/useUnlinkObjectiveApplication
+// above, just bound the other way round, mirroring 916's own
+// useLinkObjectiveToInitiative/useUnlinkObjectiveFromInitiative precedent.
+
+export function useLinkApplicationToObjective(applicationId: string) {
+  const qc = useQueryClient();
+  return useMutation<string[], Error & { status?: number }, string>({
+    mutationFn: (objectiveId) =>
+      apiMutation<string[], { application_id: string }>(
+        "POST",
+        `/api/v1/strategy/objectives/${objectiveId}/applications`,
+        { application_id: applicationId },
+      ),
+    onSuccess: (_data, objectiveId) => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: ["application-objectives", applicationId] });
+    },
+  });
+}
+
+export function useUnlinkApplicationFromObjective(applicationId: string) {
+  const qc = useQueryClient();
+  return useMutation<void, Error & { status?: number }, string>({
+    mutationFn: (objectiveId) =>
+      apiMutation<void>(
+        "DELETE",
+        `/api/v1/strategy/objectives/${objectiveId}/applications/${applicationId}`,
+      ),
+    onSuccess: (_data, objectiveId) => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: ["application-objectives", applicationId] });
     },
   });
 }
