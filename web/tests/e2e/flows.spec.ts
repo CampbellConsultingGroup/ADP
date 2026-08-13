@@ -52,8 +52,9 @@ test.describe("Design creation via UI", () => {
     await page.getByRole("button", { name: "Designs", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Designs" })).toBeVisible({ timeout: 10_000 });
 
-    // Open the create form
-    await page.getByRole("button", { name: "+ New Design" }).click();
+    // Open the create form (stale as "+ New Design" -- the Button component's
+    // icon="plus" prop now renders the plus as a real icon, not a text prefix)
+    await page.getByRole("button", { name: "New Design" }).click();
     await expect(page.getByPlaceholder(/Design title/i)).toBeVisible();
 
     // Fill title and submit
@@ -110,8 +111,11 @@ test.describe("Knowledge item create → delete lifecycle", () => {
     await page.getByRole("button", { name: "Knowledge" }).click();
     await expect(page.getByRole("heading", { name: "Knowledge Base" })).toBeVisible({ timeout: 10_000 });
 
-    // Open the create form
-    await page.getByRole("button", { name: "+ Add Item" }).click();
+    // Open the create form (stale as "+ Add Item", same icon-prop rename as
+    // DesignsPage's "New Design" button above -- safe as a bare match since
+    // KnowledgePage's own toolbar button unmounts once the form replaces it,
+    // so it never coexists with the form's own "Add Item" submit button)
+    await page.getByRole("button", { name: "Add Item" }).click();
     await expect(page.getByRole("heading", { name: "Add Knowledge Item" })).toBeVisible();
 
     // Fill in all required fields
@@ -179,7 +183,11 @@ test.describe("Portfolio and Governance navigation", () => {
     await page.getByRole("button", { name: "Designs", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Designs" })).toBeVisible({ timeout: 10_000 });
 
-    await page.getByRole("button", { name: "Portfolio" }).click();
+    // exact: true -- bare "Portfolio" also substring-matches OverviewPage's
+    // redesigned dashboard tiles ("Application Portfolio 18 apps", "Portfolio
+    // Analysis TIME . 7R"), both visible on the landing view these tests start
+    // from without navigating through Designs first.
+    await page.getByRole("button", { name: "Portfolio", exact: true }).click();
 
     // Portfolio page shows "Technologies" heading and "Governance Report" button
     await expect(page.getByRole("heading", { name: "Technologies" })).toBeVisible({ timeout: 10_000 });
@@ -188,7 +196,11 @@ test.describe("Portfolio and Governance navigation", () => {
 
   test("Governance Report button opens the three-tab governance page", async ({ page }) => {
     await page.goto(WEB_URL);
-    await page.getByRole("button", { name: "Portfolio" }).click();
+    // exact: true -- bare "Portfolio" also substring-matches OverviewPage's
+    // redesigned dashboard tiles ("Application Portfolio 18 apps", "Portfolio
+    // Analysis TIME . 7R"), both visible on the landing view these tests start
+    // from without navigating through Designs first.
+    await page.getByRole("button", { name: "Portfolio", exact: true }).click();
     await expect(page.getByRole("button", { name: "Governance Report" })).toBeVisible({ timeout: 10_000 });
 
     await page.getByRole("button", { name: "Governance Report" }).click();
@@ -201,7 +213,11 @@ test.describe("Portfolio and Governance navigation", () => {
 
   test("← Portfolio back button returns to portfolio from governance", async ({ page }) => {
     await page.goto(WEB_URL);
-    await page.getByRole("button", { name: "Portfolio" }).click();
+    // exact: true -- bare "Portfolio" also substring-matches OverviewPage's
+    // redesigned dashboard tiles ("Application Portfolio 18 apps", "Portfolio
+    // Analysis TIME . 7R"), both visible on the landing view these tests start
+    // from without navigating through Designs first.
+    await page.getByRole("button", { name: "Portfolio", exact: true }).click();
     await page.getByRole("button", { name: "Governance Report" }).click();
     await expect(page.getByRole("button", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
 
@@ -210,18 +226,29 @@ test.describe("Portfolio and Governance navigation", () => {
     await expect(page.getByRole("heading", { name: "Technologies" })).toBeVisible({ timeout: 10_000 });
   });
 
-  test("Portfolio tab in NavBar stays highlighted when on governance page", async ({ page }) => {
+  // Renamed from "Portfolio tab in NavBar stays highlighted when on governance
+  // page" -- that assumed an older information architecture where Governance
+  // was reachable only as a Portfolio sub-view, so the NavBar special-cased
+  // Portfolio's active style to also apply on the governance page. Governance
+  // is now its own top-level ARCHITECTURE nav item (AppShell.tsx), reachable
+  // directly from the rail as well as via Portfolio's "Governance Report"
+  // button -- confirmed live that AppShell's NavItem active check is a plain
+  // `current === def.view` equality with no such special case anymore, so
+  // "Governance" (not "Portfolio") is the item that highlights either way.
+  test("Governance tab in NavBar is highlighted when reached via Portfolio's Governance Report button", async ({ page }) => {
     await page.goto(WEB_URL);
-    await page.getByRole("button", { name: "Portfolio" }).click();
+    // exact: true -- bare "Portfolio" also substring-matches OverviewPage's
+    // redesigned dashboard tiles ("Application Portfolio 18 apps", "Portfolio
+    // Analysis TIME . 7R"), both visible on the landing view these tests start
+    // from without navigating through Designs first.
+    await page.getByRole("button", { name: "Portfolio", exact: true }).click();
     await page.getByRole("button", { name: "Governance Report" }).click();
     await expect(page.getByRole("button", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
 
-    // NavBar Portfolio button should still appear active (has underline border style)
-    // We verify this by checking the Portfolio button has white border-bottom when on governance
-    const portfolioBtn = page.getByRole("button", { name: "Portfolio", exact: true });
-    await expect(portfolioBtn).toBeVisible();
-    // The NavBar applies fontWeight:600 when view is portfolio OR governance (vs 400 when inactive)
-    await expect(portfolioBtn).toHaveCSS("font-weight", "600");
+    const governanceBtn = page.getByRole("button", { name: "Governance", exact: true });
+    await expect(governanceBtn).toBeVisible();
+    // ui.css: .shell-navitem.active { font-weight: 600 } vs the base 500.
+    await expect(governanceBtn).toHaveCSS("font-weight", "600");
   });
 });
 
