@@ -16,7 +16,7 @@ afterEach(cleanup);
 
 const WORKSPACE = ["Overview", "Designs"];
 const ARCHITECTURE = ["Business", "Applications", "Portfolio", "Governance", "Knowledge"];
-const DESIGN_SCOPED = ["Intake", "Recommendations", "Canvas"];
+const DESIGN_SCOPED = ["Intake", "Recommendations", "C4 Design"];
 
 function rail(): HTMLElement {
   const el = document.querySelector("nav.shell-rail");
@@ -95,7 +95,7 @@ describe("AppShell", () => {
     fireEvent.click(navButton("Business"));
     expect(onNavigate).toHaveBeenCalledWith("business");
 
-    fireEvent.click(navButton("Canvas"));
-    expect(onNavigate).toHaveBeenCalledWith("canvas");
+    fireEvent.click(navButton("C4 Design"));
+    expect(onNavigate).toHaveBeenCalledWith("canvas-v2");
   });
 });

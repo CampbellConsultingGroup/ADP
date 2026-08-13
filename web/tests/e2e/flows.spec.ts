@@ -57,7 +57,7 @@ test.describe("Design creation via UI", () => {
 
     // After creation onSelectDesign fires → design tabs appear in NavBar
     await expect(page.getByRole("button", { name: "Knowledge" })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole("button", { name: "Canvas" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "C4 Design" })).toBeVisible();
   });
 });
 

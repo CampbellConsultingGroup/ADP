@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import OverviewPage from "./overview/OverviewPage";
 import DesignsPage from "./designs/DesignsPage";
-import Workspace from "./canvas/Workspace";
 import { C4DesignView } from "./canvas-v2/C4DesignView";
 import IntakePage from "./intake/IntakePage";
 import KnowledgePage from "./knowledge/KnowledgePage";
@@ -83,11 +82,11 @@ export default function App(): React.ReactElement {
     if (view === "intake") {
       return <IntakePage designId={currentDesignId} onNavigate={onNavigate} />;
     }
-    // ADP-SPEC-054 (research.md Decision 8): additive, alongside "canvas" -- not a replacement.
-    if (view === "canvas-v2") {
-      return <C4DesignView designId={currentDesignId} />;
-    }
-    return <Workspace designId={currentDesignId} onNavigate={onNavigate} />;
+    // ADP-914.13: C4DesignView is now the sole design-editing surface -- the legacy
+    // Workspace/C4Canvas ("canvas") fallback it replaced is deleted. Every remaining
+    // design-scoped view falls through to it (matches the pre-914.13 fallback shape,
+    // which defaulted unmatched design-scoped views to Workspace).
+    return <C4DesignView designId={currentDesignId} />;
   }
 
   return (

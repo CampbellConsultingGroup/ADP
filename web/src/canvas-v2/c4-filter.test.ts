@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { filterElementsForLevel, filterRelationshipsForLevel } from "../../src/canvas/c4-filter";
-import type { Element, Relationship } from "../../src/types";
+import { filterElementsForLevel, filterRelationshipsForLevel } from "./c4-filter";
+import type { Element, Relationship } from "../types";
 
 const elements: Element[] = [
   { id: "p1", name: "User", kind: "person" },

@@ -1,3 +1,6 @@
+// Moved here from web/src/canvas/c4-filter.ts by ADP-914.13 (retiring web/src/canvas/):
+// c4Adapter.ts is now this file's only consumer -- C4Canvas.tsx, its sole other caller,
+// was deleted in the same change. Logic unchanged.
 import type { C4Level, Element, ElementKind, Relationship } from "../types";
 
 export const C4_LEVEL_KINDS: Record<C4Level, ElementKind[]> = {
