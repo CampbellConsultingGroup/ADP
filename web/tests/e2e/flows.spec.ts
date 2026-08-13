@@ -44,7 +44,12 @@ test.describe("Design creation via UI", () => {
   test("creates a design through the new-design form and lands on intake", async ({ page }) => {
     const title = `E2E-Create-${RUN_ID}`;
 
+    // App.tsx's default landing view is Overview, not Designs (no client router,
+    // no persisted view state) -- navigate there explicitly. Pre-existing bug
+    // found while validating ADP-914.14's new canvas-v2.spec.ts against this
+    // file's own pattern: page.goto alone never actually landed on Designs.
     await page.goto(WEB_URL);
+    await page.getByRole("button", { name: "Designs", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Designs" })).toBeVisible({ timeout: 10_000 });
 
     // Open the create form
@@ -88,7 +93,12 @@ test.describe("Knowledge item create → delete lifecycle", () => {
   });
 
   test("creates a knowledge item via the Add Item form", async ({ page }) => {
+    // App.tsx's default landing view is Overview, not Designs (no client router,
+    // no persisted view state) -- navigate there explicitly. Pre-existing bug
+    // found while validating ADP-914.14's new canvas-v2.spec.ts against this
+    // file's own pattern: page.goto alone never actually landed on Designs.
     await page.goto(WEB_URL);
+    await page.getByRole("button", { name: "Designs", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Designs" })).toBeVisible({ timeout: 10_000 });
 
     // Open the test design
@@ -120,7 +130,12 @@ test.describe("Knowledge item create → delete lifecycle", () => {
   });
 
   test("deletes the knowledge item and confirms it is removed from the list", async ({ page }) => {
+    // App.tsx's default landing view is Overview, not Designs (no client router,
+    // no persisted view state) -- navigate there explicitly. Pre-existing bug
+    // found while validating ADP-914.14's new canvas-v2.spec.ts against this
+    // file's own pattern: page.goto alone never actually landed on Designs.
     await page.goto(WEB_URL);
+    await page.getByRole("button", { name: "Designs", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Designs" })).toBeVisible({ timeout: 10_000 });
 
     await page.getByText(designTitle, { exact: true }).locator("../../..").getByRole("button", { name: "Open" }).click();
@@ -156,7 +171,12 @@ test.describe("Portfolio and Governance navigation", () => {
   });
 
   test("clicking Portfolio in the NavBar shows the Technologies section", async ({ page }) => {
+    // App.tsx's default landing view is Overview, not Designs (no client router,
+    // no persisted view state) -- navigate there explicitly. Pre-existing bug
+    // found while validating ADP-914.14's new canvas-v2.spec.ts against this
+    // file's own pattern: page.goto alone never actually landed on Designs.
     await page.goto(WEB_URL);
+    await page.getByRole("button", { name: "Designs", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Designs" })).toBeVisible({ timeout: 10_000 });
 
     await page.getByRole("button", { name: "Portfolio" }).click();
@@ -274,7 +294,12 @@ test.describe("Business Capabilities Agent Review button", () => {
     });
     expect(created.ok).toBe(true);
 
+    // App.tsx's default landing view is Overview, not Designs (no client router,
+    // no persisted view state) -- navigate there explicitly. Pre-existing bug
+    // found while validating ADP-914.14's new canvas-v2.spec.ts against this
+    // file's own pattern: page.goto alone never actually landed on Designs.
     await page.goto(WEB_URL);
+    await page.getByRole("button", { name: "Designs", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Designs" })).toBeVisible({ timeout: 10_000 });
 
     await page.getByRole("button", { name: "Business", exact: true }).click();
