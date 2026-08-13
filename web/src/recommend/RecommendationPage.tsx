@@ -65,7 +65,7 @@ export default function RecommendationPage({ designId, onNavigate }: Recommendat
                 option={opt}
                 designId={designId}
                 operationId={operationId}
-                onAcceptSuccess={() => onNavigate("canvas")}
+                onAcceptSuccess={() => onNavigate("canvas-v2")}
               />
             ))}
           </div>

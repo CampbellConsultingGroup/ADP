@@ -1,7 +1,8 @@
 // ADP-SPEC-054: the C4Canvas.tsx replacement, built on the diagram tool's reused Canvas.tsx/
 // DslPanel.tsx (ADP-SPEC-052) instead of ReactFlow. Edits commit immediately per action via
-// reconcile.ts (research.md Decision 5) -- never a whole-design save. Reached via a new, separate
-// nav entry (research.md Decision 8); the existing "Canvas" item and C4Canvas.tsx are untouched.
+// reconcile.ts (research.md Decision 5) -- never a whole-design save. Originally reached via a
+// new, separate nav entry alongside the legacy "Canvas" item (research.md Decision 8); ADP-914.13
+// retired that item and C4Canvas.tsx once this view proved out, making this the sole surface.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "../diagrams/editor/Canvas";
@@ -166,7 +167,7 @@ export function C4DesignView({ designId }: C4DesignViewProps) {
       <div className="ui-toolbar">
         <div>
           <h1 className="ui-h1">{design.title}</h1>
-          <p className="ui-subtle">C4 Design (Preview) — built and edited directly, saved immediately.</p>
+          <p className="ui-subtle">C4 Design — built and edited directly, saved immediately.</p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {LEVELS.map(({ label, value }) => (

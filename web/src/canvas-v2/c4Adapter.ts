@@ -16,7 +16,7 @@
  */
 import type { C4Level, Element, ElementKind, Relationship } from "../types";
 import type { DiagramContainer, DiagramEdge, DiagramModel, DiagramNode, NodeShape } from "../diagrams/core/model/diagram-model";
-import { filterElementsForLevel, filterRelationshipsForLevel } from "../canvas/c4-filter";
+import { filterElementsForLevel, filterRelationshipsForLevel } from "./c4-filter";
 
 const KIND_TO_SHAPE: Record<ElementKind, NodeShape> = {
   person: "circle",

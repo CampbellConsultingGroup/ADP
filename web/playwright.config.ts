@@ -21,14 +21,6 @@ export default defineConfig({
       },
     },
     {
-      name: "browser",
-      testMatch: "**/workspace.spec.ts",
-      use: {
-        ...devices["Desktop Chrome"],
-        baseURL: WEB_URL,
-      },
-    },
-    {
       // Real-stack flows: browser + real API + real DB, no mocking.
       // Requires ADP_AUTH_ENABLED=false (backend) and VITE_AUTH_ENABLED=false (frontend).
       // Set ADP_WEB_URL=http://localhost:5173 before running.
