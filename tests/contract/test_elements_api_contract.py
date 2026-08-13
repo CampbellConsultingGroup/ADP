@@ -63,7 +63,10 @@ def client():
 
 def test_create_element_returns_201_with_new_id(client) -> None:
     c, mock_store, _ = client
-    resp = c.post("/api/v1/designs/DSN-001/elements", json={"kind": "container", "name": "API Gateway"})
+    resp = c.post(
+        "/api/v1/designs/DSN-001/elements",
+        json={"kind": "container", "name": "API Gateway"},
+    )
     assert resp.status_code == 201, resp.text
     body = resp.json()
     assert body["id"] == "ELM-003"
