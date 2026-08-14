@@ -87,6 +87,8 @@ Auto-generated from all feature plans. Last updated: 2026-08-14 (ADP-c44 objecti
 - N/A — no new persisted data; selection is component-local, transient `useState` in `CapabilityTree.tsx`, discarded on unmount (tab switch) by design. (920-capability-diagram-select)
 - Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) — both existing stacks. + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Pydantic v2, React 18, TanStack Query v5 — all existing project dependencies; zero new packages. (ADP-8xo)
 - PostgreSQL 16 — no migration. One new endpoint (`GET /portfolio/application-capability-groups`) reads the existing `application_capability_links`/`business_capabilities` tables; the other 4 dimensions read the existing `applications` table via the existing `GET /applications`. (ADP-8xo)
+- TypeScript 5.x + React 18 (frontend only — no backend touched at all). + None new. Reuses `groupApplications()` (ADP-8xo) per axis rather than reimplementing bucketing for two dimensions; styling mirrors `web/src/strategy/StrategyHeatMap.tsx`'s existing `<table>` matrix precedent. (ADP-3wa)
+- N/A — no new persisted data; second dropdown's dimension is component-local `useState` in `PortfolioPage.tsx`, same lifecycle as the first. (ADP-3wa)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -131,6 +133,31 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- ADP-3wa: Implemented (feature, no `specs/` directory — planned via plan mode, not speckit) — direct
+  follow-up request right after ADP-8xo shipped: "time to add a second drop down for the portfolio screen.
+  same values. allow the selection of 2 different cuts of the application portfolio at the same time. if
+  the same value is choosen in both drop downs the view will look like it does today with a single
+  selection." Deliberately reuses `groupApplications()` per axis rather than reimplementing bucketing for
+  two dimensions at once — a cross-tab cell is just the *intersection* of a row bucket's apps and a column
+  bucket's apps (by app id), so every dimension's existing behavior (fixed vs. dynamic bucket sets, and
+  capability's multi-membership) is inherited for free and stays covered by the already-existing
+  per-dimension tests; only the new intersection logic (`crossTabApplications`, `groupApplications.ts`)
+  needed its own tests. New `CrossTabGrid.tsx` mirrors `web/src/strategy/StrategyHeatMap.tsx`'s `<table>`
+  matrix precedent (the only other 2D-grid UI in the codebase) — `overflowX: auto` wrapper, `borderCollapse`,
+  same header/cell padding. Both dropdowns default to `"capability"`, so the page's default render stays
+  byte-for-byte identical to what ADP-8xo shipped; cross-tabbing only activates once the two dropdowns
+  genuinely differ, and setting them back to the same value (including a non-default one, e.g. both "TIME
+  Disposition") reverts to the exact original flat card grid, not a degenerate diagonal-only table — the
+  explicit requirement from the request. An empty Unclassified row/column is omitted from the grid entirely
+  (unlike the 1D view's always-shown footer) since a whole empty grid line is clutter, not a useful
+  confirmation, in a table. One live mid-turn correction, applied directly without re-entering plan mode
+  since it was a single-file styling change with no architectural implication: the user asked for actual
+  application names in each cell instead of the originally-planned count-with-hover-tooltip — cells now
+  stack app names directly (comma-free, one per line, ellipsis-truncated) with background tint only on
+  non-empty cells. 381 frontend tests (+9: 5 for `crossTabApplications`, 4 for the page's dropdown/table
+  behavior), `tsc` clean, no backend file touched. Full live Playwright walkthrough of all three states
+  (default flat view, an active cross-tab with real app names in cells, and both dropdowns reset to the
+  same non-default value correctly reverting to the flat view) against a running local stack.
 - ADP-8xo: Implemented (bug/feature capture, no `specs/` directory — planned via plan mode, not speckit) —
   "plan out how to accomplish this on the Portfolio screen" for the 8 recurring APM grouping dimensions the
   user described (business capability, domain/value-stream, TIME, technology layer, 7R, ownership,

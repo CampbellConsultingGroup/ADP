@@ -185,3 +185,75 @@ export function groupApplications(
       return groupByCriticality(apps);
   }
 }
+
+// ── Cross-tab (two dimensions at once) ──────────────────────────────────────
+//
+// Deliberately does NOT reimplement bucketing for two dimensions at once: each
+// axis is built by calling groupApplications() for that one dimension, then a
+// cell is just the intersection of a row bucket's apps and a column bucket's
+// apps. Every dimension's existing behavior -- fixed vs. dynamic bucket sets,
+// and capability's multi-membership -- is inherited for free and already
+// covered by groupApplications' own tests; this file only tests the
+// intersection logic itself.
+
+export interface CrossTabAxis {
+  key: string;
+  label: string;
+}
+
+export interface CrossTabResult {
+  rows: CrossTabAxis[];
+  columns: CrossTabAxis[];
+  cellApps: (rowKey: string, colKey: string) => Application[];
+}
+
+const UNCLASSIFIED_KEY = "__unclassified__";
+
+interface AxisBucket {
+  axis: CrossTabAxis;
+  apps: Application[];
+}
+
+function axisBuckets(
+  dimension: Dimension,
+  apps: Application[],
+  links: ApplicationCapabilityGroupLink[],
+): AxisBucket[] {
+  const result = groupApplications(dimension, apps, links);
+  const entries: AxisBucket[] = result.buckets.map((b) => ({
+    axis: { key: b.key, label: b.label },
+    apps: b.apps,
+  }));
+  // An empty Unclassified row/column would be pure clutter in a table (unlike
+  // the 1D view's footer, which is a one-time "every application is
+  // classified" confirmation, not a whole empty grid line) -- only append it
+  // when there's actually something in it.
+  if (result.unclassified.length > 0) {
+    entries.push({ axis: { key: UNCLASSIFIED_KEY, label: "Unclassified" }, apps: result.unclassified });
+  }
+  return entries;
+}
+
+export function crossTabApplications(
+  rowDimension: Dimension,
+  colDimension: Dimension,
+  apps: Application[],
+  links: ApplicationCapabilityGroupLink[],
+): CrossTabResult {
+  const rowBuckets = axisBuckets(rowDimension, apps, links);
+  const colBuckets = axisBuckets(colDimension, apps, links);
+
+  const cellMap = new Map<string, Application[]>();
+  for (const row of rowBuckets) {
+    const rowIds = new Set(row.apps.map((a) => a.id));
+    for (const col of colBuckets) {
+      cellMap.set(`${row.axis.key}::${col.axis.key}`, col.apps.filter((a) => rowIds.has(a.id)));
+    }
+  }
+
+  return {
+    rows: rowBuckets.map((r) => r.axis),
+    columns: colBuckets.map((c) => c.axis),
+    cellApps: (rowKey, colKey) => cellMap.get(`${rowKey}::${colKey}`) ?? [],
+  };
+}
