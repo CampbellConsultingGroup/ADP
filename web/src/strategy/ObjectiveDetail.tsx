@@ -16,6 +16,7 @@ import ObjectiveInitiativeLinkEditor from "./ObjectiveInitiativeLinkEditor";
 import ObjectiveDependencyPanel from "./ObjectiveDependencyPanel";
 import ObjectiveDesignLinkEditor from "./ObjectiveDesignLinkEditor";
 import ObjectiveApplicationLinkEditor from "./ObjectiveApplicationLinkEditor";
+import { checkMetricFields } from "./objectiveMetric";
 import { Button, StatusBadge, type BadgeTone } from "../ui";
 
 interface ObjectiveDetailProps {
@@ -63,6 +64,7 @@ export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetail
   const [direction, setDirection] = useState<ObjectiveDirection | "">("");
   const [fiscalYear, setFiscalYear] = useState("");
   const [period, setPeriod] = useState<ObjectivePeriod>("Q1");
+  const [metricError, setMetricError] = useState<string | null>(null);
 
   function startEdit() {
     if (!objective) return;
@@ -74,12 +76,19 @@ export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetail
     setDirection(objective.direction ?? "");
     setFiscalYear(String(objective.fiscal_year));
     setPeriod(objective.period);
+    setMetricError(null);
     setEditing(true);
   }
 
   function handleSave(e: React.FormEvent) {
     e.preventDefault();
-    const hasMetric = !!(metricName.trim() || targetValue.trim() || targetUnit.trim() || direction);
+    const metricCheck = checkMetricFields(metricName, targetValue, targetUnit, direction);
+    if (metricCheck.error) {
+      setMetricError(metricCheck.error);
+      return;
+    }
+    setMetricError(null);
+    const hasMetric = metricCheck.hasMetric;
     updateMutation.mutate(
       {
         owner: owner.trim(),
@@ -165,6 +174,9 @@ export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetail
               ))}
             </select>
           </label>
+          {metricError && (
+            <div className="ui-alert crit" style={{ fontSize: 12 }}>{metricError}</div>
+          )}
           <div style={{ display: "flex", gap: 8 }}>
             <button type="submit" disabled={updateMutation.isPending}>
               {updateMutation.isPending ? "Saving…" : "Save"}

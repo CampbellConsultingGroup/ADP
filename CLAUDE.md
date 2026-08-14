@@ -1,6 +1,6 @@
 # ADP Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-08-14 (043-capability-heat-map implemented)
+Auto-generated from all feature plans. Last updated: 2026-08-14 (ADP-5wf objective-save bug fixed)
 
 ## Active Technologies
 - Python 3.11+ + SQLAlchemy 2.x (async ORM), asyncpg (PostgreSQL async driver), Alembic (migrations), testcontainers-python (PostgreSQL container for integration tests), pydantic-settings (database URL config) (002-design-store)
@@ -127,6 +127,27 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- ADP-5wf: Fixed (bug, not a speckit feature — no `specs/` directory) — a user-reported "no way to save"
+  on the Strategy Objectives screen, root-caused live via direct reproduction rather than assumed. Both
+  `ObjectiveForm.tsx` (create) and `ObjectiveDetail.tsx` (edit) shared an identical, flawed `hasMetric`
+  check requiring only *one* of `metric_name`/`target_value`/`target_unit`/`direction` to be set before
+  submitting all four — but `src/adp/strategy/models.py`'s `_validate_metric_fields` requires all four or
+  none. Selecting just one field (e.g. only "Direction" from the dropdown, a very plausible real user
+  action) silently sent a partial payload the backend rejected with a raw `POST ... failed: 422`, with no
+  guidance — which read as "Save does nothing" exactly as reported. Confirmed via a live curl repro against
+  the running backend before touching any code, not guessed at. Fixed with one new shared, pure validator
+  (`web/src/strategy/objectiveMetric.ts`'s `checkMetricFields`) used by both forms, blocking submission
+  client-side with a clear message ("...must all be filled in together, or all left blank") before any
+  network call — avoiding the two forms' pre-existing duplicated-validation-logic drift risk by extracting
+  the shared piece rather than patching both copies independently. 320 frontend tests (was 312, +8: 6 pure
+  unit tests plus 2 component-level regression tests reproducing the exact original bug), backend
+  untouched, `tsc` clean — plus a full live Playwright verification: reproduced the original 422 first
+  (confirmed broken), then confirmed the fix blocks it client-side with zero network errors, then confirmed
+  the happy path (all four metric fields filled in) still saves correctly. Also notable: this investigation
+  collided harmlessly with the user's own live testing session on the same dev server — a test objective I
+  created and deleted via a direct API call for cleanup was deleted *while* the user had it open/cached,
+  which looked like a second "data loss" bug but was actually just my own cleanup timing; clarified rather
+  than left ambiguous.
 - 043-capability-heat-map: Implemented (ADP-3up.1, all three user stories) — a "Heat Map" tab on the
   Business Architecture screen: every business capability as one cell in the same flat L1/L2/L3 hierarchy
   as the existing capability tree (FR-002, resolved via `/speckit-clarify` — no domain grouping), shaded by
@@ -253,7 +274,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (15101 symbols, 24370 relationships, 225 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (15326 symbols, 24692 relationships, 229 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
