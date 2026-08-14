@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import type { Application } from "../api/application";
 import type { ApplicationCapabilityGroupLink } from "../api/portfolio";
 import {
+  crossTabApplications,
   groupByBusinessUnit,
   groupByCapability,
   groupByCriticality,
@@ -179,5 +180,80 @@ describe("groupApplications dispatcher", () => {
     const apps = [app({ id: "1", name: "A", time_classification: "Invest" })];
     const result = groupApplications("time", apps, []);
     expect(result.buckets.find((b) => b.key === "Invest")!.apps.map((a) => a.id)).toEqual(["1"]);
+  });
+});
+
+describe("crossTabApplications (ADP-3wa)", () => {
+  it("crosses two fixed dimensions with correct cell intersections", () => {
+    const apps = [
+      app({ id: "1", name: "A", time_classification: "Invest", r_strategy: "Refactor" }),
+      app({ id: "2", name: "B", time_classification: "Invest", r_strategy: "Retire" }),
+      app({ id: "3", name: "C", time_classification: "Migrate", r_strategy: "Refactor" }),
+    ];
+
+    const result = crossTabApplications("time", "r_strategy", apps, []);
+
+    expect(result.rows.map((r) => r.key)).toEqual(["Tolerate", "Invest", "Migrate", "Eliminate"]);
+    expect(result.columns.map((c) => c.key)).toEqual([
+      "Rehost", "Replatform", "Repurchase", "Refactor", "Retire", "Retain", "Relocate",
+    ]);
+    expect(result.cellApps("Invest", "Refactor").map((a) => a.id)).toEqual(["1"]);
+    expect(result.cellApps("Invest", "Retire").map((a) => a.id)).toEqual(["2"]);
+    expect(result.cellApps("Migrate", "Refactor").map((a) => a.id)).toEqual(["3"]);
+    expect(result.cellApps("Tolerate", "Rehost")).toEqual([]);
+  });
+
+  it("an app linked to 2 capabilities appears in both row cells' intersections", () => {
+    const apps = [app({ id: "1", name: "Claims Core", time_classification: "Invest" })];
+    const links: ApplicationCapabilityGroupLink[] = [
+      { app_id: "1", capability_id: "cap-1", capability_name: "Claims Processing", fit_score: 4 },
+      { app_id: "1", capability_id: "cap-2", capability_name: "Fraud Detection", fit_score: 2 },
+    ];
+
+    const result = crossTabApplications("capability", "time", apps, links);
+
+    expect(result.rows.map((r) => r.key)).toEqual(["cap-1", "cap-2"]);
+    expect(result.cellApps("cap-1", "Invest").map((a) => a.id)).toEqual(["1"]);
+    expect(result.cellApps("cap-2", "Invest").map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("a dynamic dimension (business unit) as an axis produces only the columns present in data", () => {
+    const apps = [
+      app({ id: "1", name: "A", owning_business_unit: "Claims", time_classification: "Invest" }),
+      app({ id: "2", name: "B", owning_business_unit: "Underwriting", time_classification: "Invest" }),
+    ];
+
+    const result = crossTabApplications("time", "business_unit", apps, []);
+
+    expect(result.columns.map((c) => c.key)).toEqual(["Claims", "Underwriting"]);
+    expect(result.cellApps("Invest", "Claims").map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("includes an Unclassified row/column only when non-empty", () => {
+    const classified = [app({ id: "1", name: "A", time_classification: "Invest", r_strategy: "Retire" })];
+    const withUnclassified = [
+      ...classified,
+      app({ id: "2", name: "B", time_classification: null, r_strategy: "Retire" }),
+    ];
+
+    const allClassified = crossTabApplications("time", "r_strategy", classified, []);
+    expect(allClassified.rows.some((r) => r.key === "__unclassified__")).toBe(false);
+
+    const someUnclassified = crossTabApplications("time", "r_strategy", withUnclassified, []);
+    expect(someUnclassified.rows.some((r) => r.key === "__unclassified__")).toBe(true);
+    expect(someUnclassified.cellApps("__unclassified__", "Retire").map((a) => a.id)).toEqual(["2"]);
+  });
+
+  it("the same dimension on both axes still computes correctly (non-zero only on the diagonal)", () => {
+    const apps = [
+      app({ id: "1", name: "A", time_classification: "Invest" }),
+      app({ id: "2", name: "B", time_classification: "Migrate" }),
+    ];
+
+    const result = crossTabApplications("time", "time", apps, []);
+
+    expect(result.cellApps("Invest", "Invest").map((a) => a.id)).toEqual(["1"]);
+    expect(result.cellApps("Invest", "Migrate")).toEqual([]);
+    expect(result.cellApps("Migrate", "Migrate").map((a) => a.id)).toEqual(["2"]);
   });
 });

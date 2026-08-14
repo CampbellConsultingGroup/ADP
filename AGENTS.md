@@ -2,7 +2,23 @@
 
 ## Project Status
 
-Latest work: **ADP-8xo** (planned via plan mode, not speckit — no `specs/` directory) — "plan out how to
+Latest work: **ADP-3wa** (planned via plan mode, not speckit — no `specs/` directory) — direct follow-up
+right after ADP-8xo shipped: a second "Group by" dropdown, same 5 values, for viewing 2 dimensions "at the
+same time" as a cross-tab. Deliberately reuses `groupApplications()` per axis (a cell is just the
+intersection of a row bucket's apps and a column bucket's apps by id) rather than reimplementing bucketing
+for two dimensions -- every dimension's existing behavior (fixed/dynamic buckets, capability's
+multi-membership) is inherited for free. New `CrossTabGrid.tsx` mirrors `StrategyHeatMap.tsx`'s `<table>`
+matrix precedent. Both dropdowns default to `"capability"` so the default render is unchanged from ADP-8xo;
+setting them back to the *same* value (even non-default) reverts to the original flat grid, not a
+degenerate diagonal table -- the explicit ask. Empty Unclassified rows/columns are omitted from the grid
+entirely (a whole empty line is clutter in a table, unlike the 1D view's one-time footer confirmation). One
+live mid-turn correction applied directly (no architectural implication, skipped re-entering plan mode):
+cells show actual application names stacked, not a count with hover tooltip as first planned. 381 frontend
+tests (+9), `tsc` clean, no backend touched, full live Playwright walkthrough of all three states (default
+flat view, active cross-tab with real names in cells, reset-to-same-value reverting correctly). See
+`CLAUDE.md` for the fuller narrative.
+
+Prior work: **ADP-8xo** (planned via plan mode, not speckit — no `specs/` directory) — "plan out how to
 accomplish this on the Portfolio screen" for 8 recurring APM grouping dimensions, following up on the ADP-v2n
 TIME-2x2 mockup investigation. Three parallel Explore agents + a Plan agent researched first; found a
 ground-truth correction surfaced to the user before designing: "Portfolio" was entirely about Designs, zero

@@ -100,7 +100,11 @@ describe("PortfolioPage (ADP-8xo — Group by dropdown)", () => {
     const user = userEvent.setup();
     render(<PortfolioPage />);
 
+    // Set both dropdowns to "time" to stay in the flat single-dimension view --
+    // ADP-3wa's second dropdown means changing only the first now activates the
+    // cross-tab instead (covered separately below).
     await user.selectOptions(screen.getByRole("combobox", { name: "Group by" }), "time");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Then by" }), "time");
 
     expect(screen.getByText("Invest")).toBeTruthy();
     expect(screen.getByText(/Unclassified \(1\)/)).toBeTruthy();
@@ -118,5 +122,58 @@ describe("PortfolioPage (ADP-8xo — Group by dropdown)", () => {
     expect(select.textContent).toMatch(/7R Strategy/);
     expect(select.textContent).toMatch(/Ownership \/ Business Unit/);
     expect(select.textContent).toMatch(/Criticality \/ Risk Tier/);
+  });
+});
+
+describe("PortfolioPage (ADP-3wa — second dropdown / cross-tab)", () => {
+  it("both dropdowns default to Business Capability, rendering the flat card view (no table)", () => {
+    render(<PortfolioPage />);
+
+    expect((screen.getByRole("combobox", { name: "Group by" }) as HTMLSelectElement).value).toBe("capability");
+    expect((screen.getByRole("combobox", { name: "Then by" }) as HTMLSelectElement).value).toBe("capability");
+    expect(screen.queryByRole("table")).toBeNull();
+  });
+
+  it("selecting a different second dimension renders a cross-tab table with correct cells", async () => {
+    const user = userEvent.setup();
+    render(<PortfolioPage />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Then by" }), "time");
+
+    const table = screen.getByRole("table");
+    expect(table).toBeTruthy();
+    // Row headers: the 2 capabilities + Unclassified (app-2 has no capability link).
+    expect(screen.getByText("Claims Processing")).toBeTruthy();
+    expect(screen.getByText("Fraud Detection")).toBeTruthy();
+    // Column headers: TIME's fixed set.
+    expect(screen.getByText("Invest")).toBeTruthy();
+    // app-1 (Invest, linked to both capabilities) shows a count of 1 in both
+    // capability rows' Invest column -- the multi-membership cross-tab case.
+    const investCells = screen.getAllByTitle("Claims Core");
+    expect(investCells).toHaveLength(2);
+  });
+
+  it("setting both dropdowns to the same (non-default) dimension reverts to the flat card view", async () => {
+    const user = userEvent.setup();
+    render(<PortfolioPage />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Then by" }), "time");
+    expect(screen.getByRole("table")).toBeTruthy();
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Group by" }), "time");
+
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.getByText("Invest")).toBeTruthy();
+  });
+
+  it("shows the active pivot in the summary line only when dimensions differ", async () => {
+    const user = userEvent.setup();
+    render(<PortfolioPage />);
+
+    expect(screen.queryByText(/Business Capability × TIME Disposition/)).toBeNull();
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Then by" }), "time");
+
+    expect(screen.getByText(/Business Capability × TIME Disposition/)).toBeTruthy();
   });
 });
