@@ -143,3 +143,58 @@ describe("CapabilityTree: orphan badge and filter (918-strategy-rollups)", () =>
     expect(screen.getByText("Orphan Cap")).toBeTruthy();
   });
 });
+
+describe("CapabilityTree: focusCapabilityId scroll/highlight (043-capability-heat-map US3)", () => {
+  const CAPS: BusinessCapability[] = [
+    cap({ id: "a", name: "Cap A", level: 1 }),
+    cap({ id: "b", name: "Cap B", level: 1, position: 1 }),
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedBusinessApi.useCapabilities.mockReturnValue({
+      data: { items: CAPS, total: 2 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof businessApi.useCapabilities>);
+    mockedBusinessApi.useOrphanReport.mockReturnValue({
+      data: { orphan_capabilities: [], orphan_value_streams: [] },
+    } as unknown as ReturnType<typeof businessApi.useOrphanReport>);
+    mockedBusinessApi.useUpdateCapability.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof businessApi.useUpdateCapability>);
+    mockedBusinessApi.useDeleteCapability.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof businessApi.useDeleteCapability>);
+    // jsdom does not implement scrollIntoView.
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("scrolls the matching node into view when focusCapabilityId is set", () => {
+    renderWithQueryClient(<CapabilityTree focusCapabilityId="b" />);
+
+    const node = document.getElementById("cap-b");
+    expect(node).toBeTruthy();
+    expect(node!.scrollIntoView).toHaveBeenCalled();
+  });
+
+  it("does not scroll anything when focusCapabilityId is null", () => {
+    renderWithQueryClient(<CapabilityTree focusCapabilityId={null} />);
+
+    const nodeA = document.getElementById("cap-a");
+    const nodeB = document.getElementById("cap-b");
+    expect(nodeA!.scrollIntoView).not.toHaveBeenCalled();
+    expect(nodeB!.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("applies a highlight treatment only to the focused node", () => {
+    renderWithQueryClient(<CapabilityTree focusCapabilityId="b" />);
+
+    const nodeA = document.getElementById("cap-a")!;
+    const nodeB = document.getElementById("cap-b")!;
+    expect(nodeB.getAttribute("data-focused")).toBe("true");
+    expect(nodeA.getAttribute("data-focused")).not.toBe("true");
+  });
+});

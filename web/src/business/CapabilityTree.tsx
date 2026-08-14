@@ -47,6 +47,7 @@ function renderTree(
   nodes: CapabilityTreeNode[],
   orphanIds: Set<string>,
   onGenerateDiagram?: (seed: DiagramSeed) => void,
+  focusCapabilityId?: string | null,
 ): React.ReactElement[] {
   return nodes.map((node) => (
     <CapabilityNode
@@ -54,8 +55,9 @@ function renderTree(
       capability={node}
       onGenerateDiagram={onGenerateDiagram}
       isOrphan={orphanIds.has(node.id)}
+      focused={focusCapabilityId === node.id}
     >
-      {renderTree(node.children, orphanIds, onGenerateDiagram)}
+      {renderTree(node.children, orphanIds, onGenerateDiagram, focusCapabilityId)}
     </CapabilityNode>
   ));
 }
@@ -67,9 +69,15 @@ export interface CapabilityTreeProps {
    *  DiagramSeed up through this callback unchanged -- CapabilityTree only
    *  threads it through, it never touches a raw CapabilityTreeNode itself. */
   onGenerateDiagram?: (seed: DiagramSeed) => void;
+  /** 043-capability-heat-map US3: when set, the matching node scrolls into
+   *  view and briefly highlights -- the drill-through target from
+   *  CapabilityHeatMap, since no separate capability detail screen exists
+   *  (research.md Decision 3). Every row is expanded by default already, so
+   *  no ancestor-expansion step is needed here. */
+  focusCapabilityId?: string | null;
 }
 
-export default function CapabilityTree({ onGenerateDiagram }: CapabilityTreeProps): React.ReactElement {
+export default function CapabilityTree({ onGenerateDiagram, focusCapabilityId }: CapabilityTreeProps): React.ReactElement {
   const { data, isLoading, error } = useCapabilities();
   const { data: orphanData } = useOrphanReport();
   const [showRootForm, setShowRootForm] = useState(false);
@@ -184,7 +192,7 @@ export default function CapabilityTree({ onGenerateDiagram }: CapabilityTreeProp
         </div>
       )}
 
-      {renderTree(tree, orphanIds, onGenerateDiagram)}
+      {renderTree(tree, orphanIds, onGenerateDiagram, focusCapabilityId)}
     </div>
   );
 }

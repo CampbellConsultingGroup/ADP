@@ -2,12 +2,13 @@ import React, { useState } from "react";
 import type { AppView } from "../shell";
 import type { DiagramSeed } from "../diagrams/generators";
 import CapabilityTree from "./CapabilityTree";
+import CapabilityHeatMap from "./CapabilityHeatMap";
 import ValueStreamList from "./ValueStreamList";
 import ValueStreamDetail from "./ValueStreamDetail";
 import DomainList from "./DomainList";
 import DomainDetail from "./DomainDetail";
 
-type BusinessTab = "capabilities" | "value-streams" | "domains";
+type BusinessTab = "capabilities" | "heatmap" | "value-streams" | "domains";
 
 interface BusinessPageProps {
   onNavigate: (view: AppView) => void;
@@ -22,6 +23,10 @@ export default function BusinessPage({ onGenerateDiagram }: BusinessPageProps): 
   const [tab, setTab] = useState<BusinessTab>("capabilities");
   const [selectedVsId, setSelectedVsId] = useState<string | null>(null);
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
+  // 043-capability-heat-map US3: set when a heat-map cell is clicked; cleared
+  // on any manual tab click so a later, unrelated visit to the Capabilities
+  // tab doesn't carry a stale highlight forward.
+  const [focusCapabilityId, setFocusCapabilityId] = useState<string | null>(null);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
@@ -36,10 +41,10 @@ export default function BusinessPage({ onGenerateDiagram }: BusinessPageProps): 
 
         {/* Tab bar */}
         <div style={{ display: "flex", gap: 0, borderBottom: "2px solid var(--border)", marginBottom: 20 }}>
-          {([["capabilities", "Capabilities"], ["value-streams", "Value Streams"], ["domains", "Domains"]] as [BusinessTab, string][]).map(([t, label]) => (
+          {([["capabilities", "Capabilities"], ["heatmap", "Heat Map"], ["value-streams", "Value Streams"], ["domains", "Domains"]] as [BusinessTab, string][]).map(([t, label]) => (
             <button
               key={t}
-              onClick={() => { setTab(t); setSelectedVsId(null); setSelectedDomainId(null); }}
+              onClick={() => { setTab(t); setSelectedVsId(null); setSelectedDomainId(null); setFocusCapabilityId(null); }}
               style={{
                 padding: "8px 20px",
                 fontSize: 14,
@@ -58,7 +63,18 @@ export default function BusinessPage({ onGenerateDiagram }: BusinessPageProps): 
         </div>
 
         {/* Tab content */}
-        {tab === "capabilities" && <CapabilityTree onGenerateDiagram={onGenerateDiagram} />}
+        {tab === "capabilities" && (
+          <CapabilityTree onGenerateDiagram={onGenerateDiagram} focusCapabilityId={focusCapabilityId} />
+        )}
+
+        {tab === "heatmap" && (
+          <CapabilityHeatMap
+            onDrillThrough={(id) => {
+              setFocusCapabilityId(id);
+              setTab("capabilities");
+            }}
+          />
+        )}
 
         {tab === "value-streams" && (
           selectedVsId
