@@ -226,6 +226,28 @@ describe("ObjectiveDetail: edit (T031)", () => {
       expect.anything(),
     );
   });
+
+  it("rejects saving when only some metric fields are filled in (bug found live, 2026-08-14)", async () => {
+    // OBJECTIVE's fixture has all four metric fields set -- clearing just one
+    // (metric name) reproduces the same partial-metric-group bug ObjectiveForm
+    // had, since ObjectiveDetail's edit form duplicated the same flawed check.
+    const mutate = vi.fn();
+    mockedStrategyApi.useUpdateObjective.mockReturnValue({
+      mutate,
+      isPending: false,
+      isError: false,
+    } as unknown as ReturnType<typeof strategyApi.useUpdateObjective>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    await user.click(screen.getByText("Edit"));
+    await user.clear(screen.getByLabelText("Metric name"));
+    await user.click(screen.getByText("Save"));
+
+    expect(mutate).not.toHaveBeenCalled();
+    expect(screen.getByText(/must all be filled in together, or all left blank/i)).toBeTruthy();
+  });
 });
 
 describe("ObjectiveDetail: delete (T031)", () => {

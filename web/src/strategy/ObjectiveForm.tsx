@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useThemes, type ObjectiveDirection, type ObjectivePeriod, type StrategicObjectiveCreate } from "../api/strategy";
+import { checkMetricFields } from "./objectiveMetric";
 
 interface ObjectiveFormProps {
   onSubmit: (data: StrategicObjectiveCreate) => void;
@@ -41,9 +42,13 @@ export default function ObjectiveForm({ onSubmit, onCancel, isLoading }: Objecti
       setError("Statement is required");
       return;
     }
+    const metricCheck = checkMetricFields(metricName, targetValue, targetUnit, direction);
+    if (metricCheck.error) {
+      setError(metricCheck.error);
+      return;
+    }
     setError(null);
-
-    const hasMetric = !!(metricName.trim() || targetValue.trim() || targetUnit.trim() || direction);
+    const hasMetric = metricCheck.hasMetric;
 
     onSubmit({
       theme_id: effectiveThemeId,

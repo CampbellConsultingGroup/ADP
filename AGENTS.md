@@ -2,7 +2,19 @@
 
 ## Project Status
 
-Latest work: **043-capability-heat-map** (ADP-3up.1, implemented — all three user stories) — a "Heat Map"
+Latest work: **ADP-5wf** (bug fix, no `specs/` directory) — a user-reported "no way to save" on the
+Strategy Objectives screen, root-caused live via direct reproduction. `ObjectiveForm.tsx`/`ObjectiveDetail.tsx`
+shared a flawed `hasMetric` check requiring only *one* of `metric_name`/`target_value`/`target_unit`/
+`direction` before submitting all four, but the backend requires all four or none — selecting just one
+field (e.g. only "Direction") silently 422'd with no guidance, reading as "Save does nothing." Fixed with a
+shared `checkMetricFields` validator (`web/src/strategy/objectiveMetric.ts`) blocking submission
+client-side with a clear message before any network call. 320 frontend tests (+8), `tsc` clean, plus a full
+live Playwright verification (reproduced the original 422, confirmed the fix blocks it client-side, then
+confirmed the happy path still saves). See `CLAUDE.md`'s own entry for the fuller narrative, including a
+harmless investigation-collision note (my own test-cleanup deletion looked like a second bug to the user
+mid-session — clarified, not a real issue).
+
+Prior work: **043-capability-heat-map** (ADP-3up.1, implemented — all three user stories) — a "Heat Map"
 tab on Business Architecture: every capability as one cell in the same flat L1/L2/L3 hierarchy as the
 existing capability tree (FR-002, resolved via `/speckit-clarify` — no domain grouping), shaded by
 maturity level (default) or strategic relevance. Zero backend changes needed — the existing
@@ -209,7 +221,7 @@ bd prime                # Refresh Beads context
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (15101 symbols, 24370 relationships, 225 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (15326 symbols, 24692 relationships, 229 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
