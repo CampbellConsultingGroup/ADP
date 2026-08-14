@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MATURITY_LEVEL_LABEL, STRATEGIC_RELEVANCE_LABEL, useDeleteCapability, useUpdateCapability } from "../api/business";
 import type { MaturityLevel, StrategicRelevance } from "../api/business";
@@ -24,11 +24,16 @@ interface CapabilityNodeProps {
   /** 918-strategy-rollups: true when this capability has zero strategic-
    *  objective linkage (spec.md FR-006). */
   isOrphan?: boolean;
+  /** 043-capability-heat-map US3: true when this is the drill-through target
+   *  from CapabilityHeatMap -- scrolls into view and briefly highlights
+   *  (research.md Decision 3: no separate capability detail screen exists,
+   *  this row already carries every detail affordance). */
+  focused?: boolean;
 }
 
 const LEVEL_LABELS: Record<number, string> = { 1: "L1", 2: "L2", 3: "L3" };
 
-export default function CapabilityNode({ capability, children, onGenerateDiagram, isOrphan }: CapabilityNodeProps): React.ReactElement {
+export default function CapabilityNode({ capability, children, onGenerateDiagram, isOrphan, focused }: CapabilityNodeProps): React.ReactElement {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(capability.name);
@@ -36,10 +41,15 @@ export default function CapabilityNode({ capability, children, onGenerateDiagram
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showLinks, setShowLinks] = useState(false);
   const [showAgentReview, setShowAgentReview] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
 
   const update = useUpdateCapability(capability.id);
   const deleteCap = useDeleteCapability();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    if (focused) rowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focused]);
 
   const hasChildren = React.Children.count(children) > 0;
   const canAddChild = capability.level < 3;
@@ -71,14 +81,17 @@ export default function CapabilityNode({ capability, children, onGenerateDiagram
   return (
     <div style={{ marginLeft: indent }}>
       <div
+        id={`cap-${capability.id}`}
+        ref={rowRef}
+        data-focused={focused ? "true" : undefined}
         style={{
           display: "flex",
           alignItems: "center",
           gap: 6,
           padding: "6px 8px",
           borderRadius: 4,
-          background: "var(--surface)",
-          border: "1px solid var(--border)",
+          background: focused ? "var(--accent-wash)" : "var(--surface)",
+          border: focused ? "1px solid var(--accent)" : "1px solid var(--border)",
           marginBottom: 3,
         }}
       >

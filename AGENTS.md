@@ -2,7 +2,22 @@
 
 ## Project Status
 
-Latest work: **919-insights-dashboard** (ADP-t3h, implemented — all three user stories) — the first
+Latest work: **043-capability-heat-map** (ADP-3up.1, implemented — all three user stories) — a "Heat Map"
+tab on Business Architecture: every capability as one cell in the same flat L1/L2/L3 hierarchy as the
+existing capability tree (FR-002, resolved via `/speckit-clarify` — no domain grouping), shaded by
+maturity level (default) or strategic relevance. Zero backend changes needed — the existing
+`GET /capabilities` endpoint already returned every field required; reuses the already-exported
+`buildTree()` and 919's own swatch/dimension-selector pattern directly. A real correction found during
+planning: capabilities have no separate detail screen (unlike Value Streams/Domains), so "drill into
+existing detail" (US3) resolved as scroll-and-highlight to the row in the tree, not a new page. Also
+notable: the feature's own branch had gone stale (created 2026-08-04, 28 commits behind) — checking it
+out made specs 044+ appear to vanish (a working-tree artifact, nothing lost); fixed with a user-authorized
+`git reset --hard main` since the branch had zero unique commits. 312 frontend tests (+11), backend
+suite unaffected at 1378, `ruff`/`mypy`/`tsc`/`adp-generate --check` clean, plus a full live Playwright
+walkthrough (maturity coloring, metric switch, and a real drill-through click landing on and highlighting
+the correct capability row). See `specs/043-capability-heat-map/`.
+
+Prior work: **919-insights-dashboard** (ADP-t3h, implemented — all three user stories) — the first
 non-architect-facing screen in ADP: a new "Insights" nav entry (sibling to Overview, not under
 Architecture) holding an applications heat map, color-coded by a user-selectable dimension (health
 score / business criticality / TIME classification / cost). Not bead-driven from a source doc like
