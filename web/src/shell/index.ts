@@ -5,6 +5,7 @@
  */
 export type AppView =
   | "overview"
+  | "insights"
   | "designs"
   | "intake"
   | "recommend"

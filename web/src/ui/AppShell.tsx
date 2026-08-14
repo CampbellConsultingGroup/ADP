@@ -18,6 +18,10 @@ interface NavDef {
 
 const PRIMARY: NavDef[] = [
   { view: "overview", label: "Overview", icon: "grid" },
+  // 919-insights-dashboard: general-audience, cross-domain visualizations --
+  // sibling to Overview, deliberately not folded into ARCHITECTURE below
+  // (that group is entirely architect-facing domain editors).
+  { view: "insights", label: "Insights", icon: "target" },
   { view: "designs", label: "Designs", icon: "sol" },
 ];
 const ARCHITECTURE: NavDef[] = [
@@ -53,6 +57,7 @@ const ADMIN: NavDef[] = [
 
 const TITLES: Record<AppView, string> = {
   overview: "Overview",
+  insights: "Insights",
   designs: "Designs",
   business: "Business Architecture",
   applications: "Application Registry",

@@ -1,6 +1,7 @@
 """Contract tests for the Portfolio Analysis API (ADP-SPEC-031).
 
 T001–T007: GET /portfolio/technologies, /portfolio/designs, /portfolio/search, /portfolio/summary
+T002/T010 (919-insights-dashboard): GET /portfolio/applications-heatmap
 """
 
 from __future__ import annotations
@@ -9,6 +10,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
+
+from adp.auth.deps import get_current_user
+from adp.auth.models import AuthenticatedUser
+from adp.authz.roles import PersonaRole
 
 
 def _make_session_mock(rows=None):
@@ -21,10 +26,28 @@ def _make_session_mock(rows=None):
     return session
 
 
+def _user(role: PersonaRole) -> AuthenticatedUser:
+    return AuthenticatedUser(sub="t", username="t", email="t@localhost", role=role, groups=[])
+
+
+# TCO_BUCKET_NAMES mirrors adp.application.models's own constant -- duplicated here (not
+# imported) since this is a contract test asserting the *wire* shape, not the internal model.
+_TCO_BUCKETS = (
+    "acquisition", "implementation", "training", "operational",
+    "maintenance", "upgrades", "risk_downtime", "end_of_life",
+)
+
+
 @pytest.fixture()
 def client_factory():
-    """Return a factory that creates a test client with an injectable session mock."""
-    def _make(session_mock):
+    """Return a factory that creates a test client with an injectable session mock.
+
+    919-insights-dashboard: an optional ``role`` overrides ``get_current_user`` (default
+    behaviour under ``ADP_AUTH_ENABLED=false`` is already ENTERPRISE_ARCHITECT via
+    ``UNAUTHENTICATED_USER`` — this override exists only for tests that need a *different*
+    role, e.g. one lacking READ_APPLICATION_COST).
+    """
+    def _make(session_mock, role: PersonaRole | None = None):
         import adp.api.deps as deps_module
         from adp.api.app import create_app
 
@@ -34,6 +57,8 @@ def client_factory():
             yield session_mock
 
         app.dependency_overrides[deps_module.get_kb_session] = _fake_session
+        if role is not None:
+            app.dependency_overrides[get_current_user] = lambda: _user(role)
         return TestClient(app, raise_server_exceptions=False)
 
     return _make
@@ -185,3 +210,101 @@ def test_portfolio_summary_returns_correct_counts(client_factory):
     assert body["by_status"]["draft"] == 3
     assert body["by_status"]["current"] == 2
     assert "overdue_review_count" in body
+
+
+# ── T002 (919-insights-dashboard): GET /portfolio/applications-heatmap ────────
+
+def test_applications_heatmap_returns_every_application_once(client_factory):
+    """Every application appears once; unscored fields are null, not defaulted."""
+    app_rows = [
+        {
+            "id": "app-01", "name": "Policy Admin System", "health_score": 4,
+            "business_criticality": 5, "time_classification": "Invest",
+        },
+        {
+            "id": "app-02", "name": "Legacy Claims Batch", "health_score": None,
+            "business_criticality": 2, "time_classification": "Eliminate",
+        },
+    ]
+    session = AsyncMock()
+    apps_result = MagicMock()
+    apps_result.mappings.return_value.all = MagicMock(return_value=app_rows)
+    costs_result = MagicMock()
+    costs_result.mappings.return_value.all = MagicMock(return_value=[])
+    session.execute = AsyncMock(side_effect=[apps_result, costs_result])
+
+    # Default dev/test caller (ADP_AUTH_ENABLED=false) is ENTERPRISE_ARCHITECT, who holds
+    # READ_APPLICATION_COST -- no role override needed here.
+    c = client_factory(session)
+
+    resp = c.get("/api/v1/portfolio/applications-heatmap")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["items"]) == 2
+    by_id = {i["id"]: i for i in body["items"]}
+    assert by_id["app-01"]["health_score"] == 4
+    assert by_id["app-01"]["business_criticality"] == 5
+    assert by_id["app-01"]["time_classification"] == "Invest"
+    # Unscored field is null, never a false default (FR-005)
+    assert by_id["app-02"]["health_score"] is None
+
+
+# ── T010 (919-insights-dashboard): cost dimension is permission-gated ─────────
+
+def test_applications_heatmap_cost_visible_when_permitted(client_factory):
+    """A caller holding READ_APPLICATION_COST sees cost data and cost_permitted=true."""
+    app_rows = [
+        {
+            "id": "app-01", "name": "Policy Admin System", "health_score": 4,
+            "business_criticality": 5, "time_classification": "Invest",
+        },
+    ]
+    cost_rows = [
+        {
+            "app_id": "app-01", "currency": "USD", "horizon_years": 5,
+            "updated_at": None,
+            **{f"{b}_one_time": 0 for b in _TCO_BUCKETS},
+            **{f"{b}_annual": 0 for b in _TCO_BUCKETS},
+            "acquisition_one_time": 100000, "operational_annual": 50000,
+        }
+    ]
+    session = AsyncMock()
+    apps_result = MagicMock()
+    apps_result.mappings.return_value.all = MagicMock(return_value=app_rows)
+    costs_result = MagicMock()
+    costs_result.mappings.return_value.all = MagicMock(return_value=cost_rows)
+    session.execute = AsyncMock(side_effect=[apps_result, costs_result])
+
+    c = client_factory(session, role=PersonaRole.ENTERPRISE_ARCHITECT)
+
+    resp = c.get("/api/v1/portfolio/applications-heatmap")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["cost_permitted"] is True
+    # tco = 100000 (acquisition one_time) + 50000 * 5 (operational annual * horizon) = 350000
+    assert float(body["items"][0]["cost"]) == 350000.0
+
+
+def test_applications_heatmap_cost_hidden_when_not_permitted(client_factory):
+    """A REVIEWER (no READ_APPLICATION_COST) gets cost=null and cost_permitted=false,
+    and the cost table is never even queried (only one session.execute call)."""
+    app_rows = [
+        {
+            "id": "app-01", "name": "Policy Admin System", "health_score": 4,
+            "business_criticality": 5, "time_classification": "Invest",
+        },
+    ]
+    session = AsyncMock()
+    apps_result = MagicMock()
+    apps_result.mappings.return_value.all = MagicMock(return_value=app_rows)
+    # Only one result configured -- a second session.execute() call (i.e. the cost query
+    # firing despite lacking permission) would raise StopIteration and fail the test.
+    session.execute = AsyncMock(side_effect=[apps_result])
+
+    c = client_factory(session, role=PersonaRole.REVIEWER)
+
+    resp = c.get("/api/v1/portfolio/applications-heatmap")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["cost_permitted"] is False
+    assert body["items"][0]["cost"] is None
