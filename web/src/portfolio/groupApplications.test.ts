@@ -8,9 +8,13 @@ import type { Application } from "../api/application";
 import type { ApplicationCapabilityGroupLink } from "../api/portfolio";
 import {
   crossTabApplications,
+  filterApplications,
   groupByBusinessUnit,
   groupByCapability,
   groupByCriticality,
+  groupByHostingModel,
+  groupByLifecycleStatus,
+  groupByPaceLayer,
   groupByRStrategy,
   groupByTime,
   groupApplications,
@@ -255,5 +259,95 @@ describe("crossTabApplications (ADP-3wa)", () => {
     expect(result.cellApps("Invest", "Invest").map((a) => a.id)).toEqual(["1"]);
     expect(result.cellApps("Invest", "Migrate")).toEqual([]);
     expect(result.cellApps("Migrate", "Migrate").map((a) => a.id)).toEqual(["2"]);
+  });
+});
+
+describe("groupByLifecycleStatus (ADP-9ye)", () => {
+  it("places apps into all 4 fixed buckets in the documented order", () => {
+    const result = groupByLifecycleStatus([]);
+    expect(result.buckets.map((b) => b.key)).toEqual(["planned", "active", "sunset", "retired"]);
+  });
+
+  it("groups by the app's lifecycle_status value", () => {
+    const apps = [app({ id: "1", name: "A", lifecycle_status: "retired" })];
+    const result = groupByLifecycleStatus(apps);
+    expect(result.buckets.find((b) => b.key === "retired")!.apps.map((a) => a.id)).toEqual(["1"]);
+  });
+});
+
+describe("groupByHostingModel (ADP-9ye)", () => {
+  it("places apps into all 4 fixed buckets in the documented order", () => {
+    const result = groupByHostingModel([]);
+    expect(result.buckets.map((b) => b.key)).toEqual(["on_prem", "cloud", "saas", "hybrid"]);
+  });
+
+  it("groups by the app's hosting_model value", () => {
+    const apps = [app({ id: "1", name: "A", hosting_model: "saas" })];
+    const result = groupByHostingModel(apps);
+    expect(result.buckets.find((b) => b.key === "saas")!.apps.map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("puts a null hosting_model into unclassified", () => {
+    const apps = [app({ id: "1", name: "A", hosting_model: null })];
+    const result = groupByHostingModel(apps);
+    expect(result.unclassified.map((a) => a.id)).toEqual(["1"]);
+  });
+});
+
+describe("groupByPaceLayer (ADP-9ye)", () => {
+  it("places apps into all 3 fixed buckets in the documented order", () => {
+    const result = groupByPaceLayer([]);
+    expect(result.buckets.map((b) => b.key)).toEqual(["Record", "Differentiation", "Innovation"]);
+  });
+
+  it("groups by the app's pace_layer value", () => {
+    const apps = [app({ id: "1", name: "A", pace_layer: "Innovation" })];
+    const result = groupByPaceLayer(apps);
+    expect(result.buckets.find((b) => b.key === "Innovation")!.apps.map((a) => a.id)).toEqual(["1"]);
+  });
+});
+
+describe("filterApplications (ADP-9ye)", () => {
+  it("filters by one of the original 5 Group By fields", () => {
+    const apps = [
+      app({ id: "1", name: "A", time_classification: "Invest" }),
+      app({ id: "2", name: "B", time_classification: "Migrate" }),
+    ];
+
+    expect(filterApplications("time", "Invest", apps, []).map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("filters by one of the 3 new fields not used for grouping", () => {
+    const apps = [
+      app({ id: "1", name: "A", hosting_model: "cloud" }),
+      app({ id: "2", name: "B", hosting_model: "on_prem" }),
+    ];
+
+    expect(filterApplications("hosting_model", "cloud", apps, []).map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("filtering to Unclassified returns exactly the apps missing that field", () => {
+    const apps = [
+      app({ id: "1", name: "A", pace_layer: "Record" }),
+      app({ id: "2", name: "B", pace_layer: null }),
+    ];
+
+    expect(filterApplications("pace_layer", "__unclassified__", apps, []).map((a) => a.id)).toEqual(["2"]);
+  });
+
+  it("a capability filter independently matches every app linked to that capability, including multi-membership apps", () => {
+    const apps = [
+      app({ id: "1", name: "Claims Core" }),
+      app({ id: "2", name: "Other App" }),
+    ];
+    const links: ApplicationCapabilityGroupLink[] = [
+      { app_id: "1", capability_id: "cap-1", capability_name: "Claims Processing", fit_score: 4 },
+      { app_id: "1", capability_id: "cap-2", capability_name: "Fraud Detection", fit_score: 2 },
+      { app_id: "2", capability_id: "cap-2", capability_name: "Fraud Detection", fit_score: 3 },
+    ];
+
+    // app-1 is linked to both capabilities -- filtering by either independently includes it.
+    expect(filterApplications("capability", "cap-1", apps, links).map((a) => a.id)).toEqual(["1"]);
+    expect(filterApplications("capability", "cap-2", apps, links).map((a) => a.id).sort()).toEqual(["1", "2"]);
   });
 });

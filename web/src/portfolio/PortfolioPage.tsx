@@ -15,16 +15,30 @@
  * that shipped first; picking two DIFFERENT dimensions is what turns the
  * cross-tab on. Picking the same dimension in both -- including the default
  * -- always renders the original flat card grid, never a degenerate
- * diagonal-only table. */
-import React, { useMemo, useState } from "react";
+ * diagonal-only table.
+ *
+ * ADP-9ye: a third pair ("Filter by" field + value) narrows WHICH
+ * applications are shown before either Group By/Then By bucket them --
+ * filtering applies uniformly to both the flat grid and the cross-tab.
+ * Field list (8) is deliberately wider than Group By's (5): the same 5
+ * dimensions plus 3 more bounded-enum fields (lifecycle_status,
+ * hosting_model, pace_layer) not otherwise surfaced on this screen. v1 is
+ * equality-only, per the user's own explicit phasing request -- comparison/
+ * string operators are follow-on work (ADP-6w4). */
+import React, { useEffect, useMemo, useState } from "react";
 import { useApplications } from "../api/application";
 import { useApplicationCapabilityGroups } from "../api/portfolio";
 import {
   ALL_DIMENSIONS,
+  ALL_FILTER_FIELDS,
   DIMENSION_LABELS,
+  FILTER_FIELD_LABELS,
   crossTabApplications,
+  filterApplications,
+  filterFieldBuckets,
   groupApplications,
   type Dimension,
+  type FilterField,
 } from "./groupApplications";
 import BucketCard, { AppChip } from "./BucketCard";
 import CrossTabGrid from "./CrossTabGrid";
@@ -37,29 +51,96 @@ export default function PortfolioPage(): React.ReactElement {
   const capabilityGroups = useApplicationCapabilityGroups();
   const [dimensionA, setDimensionA] = useState<Dimension>("capability");
   const [dimensionB, setDimensionB] = useState<Dimension>("capability");
+  const [filterField, setFilterField] = useState<FilterField | "">("");
+  const [filterValue, setFilterValue] = useState<string>("");
 
   const appItems = apps.data?.items ?? [];
   const links = capabilityGroups.data?.items ?? [];
   const sameDimension = dimensionA === dimensionB;
 
+  const filterValueOptions = useMemo(
+    () => (filterField ? filterFieldBuckets(filterField, appItems, links) : []),
+    [filterField, appItems, links],
+  );
+
+  // Whenever the filter field changes (including being cleared), land on a
+  // sensible default value rather than a dead intermediate state -- mirrors
+  // ApplicationsHeatMap.tsx's own "reset selection when it becomes invalid"
+  // precedent.
+  useEffect(() => {
+    setFilterValue(filterValueOptions[0]?.axis.key ?? "");
+  }, [filterField, filterValueOptions]);
+
+  const filteredApps = useMemo(
+    () => (filterField && filterValue ? filterApplications(filterField, filterValue, appItems, links) : appItems),
+    [filterField, filterValue, appItems, links],
+  );
+
   const grouped = useMemo(
-    () => groupApplications(dimensionA, appItems, links),
-    [dimensionA, appItems, links],
+    () => groupApplications(dimensionA, filteredApps, links),
+    [dimensionA, filteredApps, links],
   );
   const crossTab = useMemo(
-    () => (sameDimension ? null : crossTabApplications(dimensionA, dimensionB, appItems, links)),
-    [sameDimension, dimensionA, dimensionB, appItems, links],
+    () => (sameDimension ? null : crossTabApplications(dimensionA, dimensionB, filteredApps, links)),
+    [sameDimension, dimensionA, dimensionB, filteredApps, links],
   );
+
+  const isFiltered = filteredApps.length !== appItems.length;
+  const filterValueLabel = filterValueOptions.find((b) => b.axis.key === filterValue)?.axis.label;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", maxWidth: 1200, margin: "0 auto", width: "100%" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
           <span style={{ fontSize: 13, color: "var(--ink-3)" }}>
-            {appItems.length} application{appItems.length === 1 ? "" : "s"}
+            {filteredApps.length}
+            {isFiltered && ` of ${appItems.length}`} application{filteredApps.length === 1 ? "" : "s"}
             {!sameDimension && ` — ${DIMENSION_LABELS[dimensionA]} × ${DIMENSION_LABELS[dimensionB]}`}
+            {isFiltered && filterField && ` · filtered to ${FILTER_FIELD_LABELS[filterField]}: ${filterValueLabel}`}
           </span>
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <select
+              aria-label="Filter by"
+              value={filterField}
+              onChange={(e) => setFilterField(e.target.value as FilterField | "")}
+              style={{ fontSize: 13, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 4 }}
+            >
+              <option value="">Filter by: (none)</option>
+              {ALL_FILTER_FIELDS.map((f) => (
+                <option key={f} value={f}>
+                  Filter by: {FILTER_FIELD_LABELS[f]}
+                </option>
+              ))}
+            </select>
+            {filterField && (
+              <select
+                aria-label="Filter value"
+                value={filterValue}
+                onChange={(e) => setFilterValue(e.target.value)}
+                style={{ fontSize: 13, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 4 }}
+              >
+                {filterValueOptions.map((b) => (
+                  <option key={b.axis.key} value={b.axis.key}>
+                    {b.axis.label}
+                  </option>
+                ))}
+              </select>
+            )}
+            {filterField && (
+              <button
+                onClick={() => setFilterField("")}
+                style={{
+                  fontSize: 12,
+                  color: "var(--ink-3)",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                }}
+              >
+                Clear filter
+              </button>
+            )}
             <select
               aria-label="Group by"
               value={dimensionA}
@@ -87,9 +168,9 @@ export default function PortfolioPage(): React.ReactElement {
           </div>
         </div>
 
-        {appItems.length === 0 ? (
+        {filteredApps.length === 0 ? (
           <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 14, border: "2px dashed var(--border)", borderRadius: 8 }}>
-            No applications in the portfolio yet.
+            {appItems.length === 0 ? "No applications in the portfolio yet." : "No applications match the current filter."}
           </div>
         ) : sameDimension ? (
           <>

@@ -42,8 +42,8 @@ function app(overrides: Partial<Application> & { id: string; name: string }): Ap
 }
 
 const APPS: Application[] = [
-  app({ id: "app-1", name: "Claims Core", time_classification: "Invest" }),
-  app({ id: "app-2", name: "Fax Intake Tool", time_classification: null }),
+  app({ id: "app-1", name: "Claims Core", time_classification: "Invest", hosting_model: "cloud" }),
+  app({ id: "app-2", name: "Fax Intake Tool", time_classification: null, hosting_model: "on_prem" }),
 ];
 
 const CAPABILITY_GROUPS: ApplicationCapabilityGroupsResponse = {
@@ -175,5 +175,72 @@ describe("PortfolioPage (ADP-3wa — second dropdown / cross-tab)", () => {
     await user.selectOptions(screen.getByRole("combobox", { name: "Then by" }), "time");
 
     expect(screen.getByText(/Business Capability × TIME Disposition/)).toBeTruthy();
+  });
+});
+
+describe("PortfolioPage (ADP-9ye — Filter by)", () => {
+  it("no filter selected by default -- full app count, no value dropdown", () => {
+    render(<PortfolioPage />);
+
+    expect(screen.getByText(/^2 applications/)).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Filter value" })).toBeNull();
+  });
+
+  it("offers all 8 filter fields, including the 3 not used for grouping", () => {
+    render(<PortfolioPage />);
+
+    const select = screen.getByRole("combobox", { name: "Filter by" });
+    expect(select.textContent).toMatch(/Business Capability/);
+    expect(select.textContent).toMatch(/TIME Disposition/);
+    expect(select.textContent).toMatch(/7R Strategy/);
+    expect(select.textContent).toMatch(/Ownership \/ Business Unit/);
+    expect(select.textContent).toMatch(/Criticality \/ Risk Tier/);
+    expect(select.textContent).toMatch(/Lifecycle Status/);
+    expect(select.textContent).toMatch(/Hosting Model/);
+    expect(select.textContent).toMatch(/Pace Layer/);
+  });
+
+  it("selecting a filter field auto-selects a value and narrows the app list", async () => {
+    const user = userEvent.setup();
+    render(<PortfolioPage />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by" }), "hosting_model");
+
+    // hosting_model's fixed bucket order is on_prem/cloud/saas/hybrid -- the
+    // auto-selected first value is "On-Prem" (app-2's value), narrowing 2 -> 1.
+    expect(screen.getByText(/1 of 2 application/)).toBeTruthy();
+    expect(screen.getByText(/filtered to Hosting Model: On-Prem/)).toBeTruthy();
+    expect(screen.getByText("Fax Intake Tool")).toBeTruthy();
+    expect(screen.queryByText("Claims Core")).toBeNull();
+  });
+
+  it("clearing the filter restores the full application set", async () => {
+    const user = userEvent.setup();
+    render(<PortfolioPage />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by" }), "hosting_model");
+    expect(screen.getByText(/1 of 2 application/)).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Clear filter" }));
+
+    expect(screen.getByText(/^2 applications/)).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Filter value" })).toBeNull();
+  });
+
+  it("a filter applied while the cross-tab is active narrows the table too", async () => {
+    const user = userEvent.setup();
+    render(<PortfolioPage />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Then by" }), "time");
+    expect(screen.getByRole("table")).toBeTruthy();
+    // Before filtering, app-1's name appears in the table (twice -- linked to
+    // 2 capabilities, the multi-membership cross-tab case).
+    expect(screen.getAllByText("Claims Core").length).toBeGreaterThan(0);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by" }), "hosting_model");
+
+    // Filtered to On-Prem (app-2 only) -- app-1 no longer appears anywhere.
+    expect(screen.queryByText("Claims Core")).toBeNull();
+    expect(screen.getByText("Fax Intake Tool")).toBeTruthy();
   });
 });
