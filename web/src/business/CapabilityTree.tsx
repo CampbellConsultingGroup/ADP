@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCapabilities, useOrphanReport } from "../api/business";
 import type { BusinessCapability } from "../api/business";
+import { generateFromCapabilities } from "../diagrams/generators";
 import type { DiagramSeed } from "../diagrams/generators";
 import CapabilityNode from "./CapabilityNode";
 import CapabilityForm from "./CapabilityForm";
@@ -46,28 +47,29 @@ export function buildTree(items: BusinessCapability[]): CapabilityTreeNode[] {
 function renderTree(
   nodes: CapabilityTreeNode[],
   orphanIds: Set<string>,
-  onGenerateDiagram?: (seed: DiagramSeed) => void,
-  focusCapabilityId?: string | null,
+  focusCapabilityId: string | null | undefined,
+  selectedIds: Set<string>,
+  onToggleSelect: (id: string) => void,
 ): React.ReactElement[] {
   return nodes.map((node) => (
     <CapabilityNode
       key={node.id}
       capability={node}
-      onGenerateDiagram={onGenerateDiagram}
       isOrphan={orphanIds.has(node.id)}
       focused={focusCapabilityId === node.id}
+      selected={selectedIds.has(node.id)}
+      onToggleSelect={onToggleSelect}
     >
-      {renderTree(node.children, orphanIds, onGenerateDiagram, focusCapabilityId)}
+      {renderTree(node.children, orphanIds, focusCapabilityId, selectedIds, onToggleSelect)}
     </CapabilityNode>
   ));
 }
 
 export interface CapabilityTreeProps {
-  /** ADP-914.7: opens the Diagrams screen pre-filled with a flowchart
-   *  generated from a capability's own subtree. `CapabilityNode` itself
-   *  calls generateFromCapabilitySubtree() on click and passes the finished
-   *  DiagramSeed up through this callback unchanged -- CapabilityTree only
-   *  threads it through, it never touches a raw CapabilityTreeNode itself. */
+  /** 920-capability-diagram-select US1: opens the Diagrams screen pre-filled
+   *  with a flowchart generated from the currently checked capabilities (the
+   *  "Generate Diagram from Selected" toolbar action, replacing the old
+   *  per-row single-capability button -- FR-006). */
   onGenerateDiagram?: (seed: DiagramSeed) => void;
   /** 043-capability-heat-map US3: when set, the matching node scrolls into
    *  view and briefly highlights -- the drill-through target from
@@ -84,7 +86,20 @@ export default function CapabilityTree({ onGenerateDiagram, focusCapabilityId }:
   const [showPortfolioReview, setShowPortfolioReview] = useState(false);
   const [showChat, setShowChat] = useState(false);
   const [orphansOnly, setOrphansOnly] = useState(false);
+  // 920-capability-diagram-select US1: component-local, transient selection
+  // state (research.md Decision 1) -- naturally resets when this component
+  // unmounts on tab switch (BusinessPage.tsx conditionally renders it).
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   if (isLoading) return <div style={{ padding: 20, color: "var(--ink-3)", fontSize: 14 }}>Loading capabilities…</div>;
   if (error) return <div style={{ padding: 14, background: "var(--crit-wash)", borderRadius: 6, fontSize: 13, color: "var(--crit)" }}>Failed to load capabilities: {error.message}</div>;
@@ -98,13 +113,49 @@ export default function CapabilityTree({ onGenerateDiagram, focusCapabilityId }:
   const visibleItems = orphansOnly ? items.filter((c) => orphanIds.has(c.id)) : items;
   const tree = buildTree(visibleItems);
 
+  function handleGenerateFromSelected() {
+    const selected = items.filter((c) => selectedIds.has(c.id));
+    onGenerateDiagram?.(generateFromCapabilities(selected));
+  }
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <span style={{ fontSize: 13, color: "var(--ink-3)" }}>
           {items.length} capability{items.length !== 1 ? "ies" : "y"} across all levels
+          {/* 920-capability-diagram-select US2: visible selection count. */}
+          {selectedIds.size > 0 && <> · {selectedIds.size} selected</>}
         </span>
         <div style={{ display: "flex", gap: 8 }}>
+          {selectedIds.size > 0 && (
+            <button
+              onClick={() => setSelectedIds(new Set())}
+              title="Clear the current selection"
+              style={{
+                padding: "6px 14px",
+                background: "var(--surface)",
+                color: "var(--ink-2)",
+                border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600,
+              }}
+            >
+              Clear selection
+            </button>
+          )}
+          <button
+            onClick={handleGenerateFromSelected}
+            disabled={selectedIds.size === 0}
+            title="Generate a diagram from the checked capabilities and their hierarchy relationships"
+            style={{
+              padding: "6px 14px",
+              background: selectedIds.size === 0 ? "var(--surface)" : "var(--accent)",
+              color: selectedIds.size === 0 ? "var(--ink-3)" : "#fff",
+              border: "1px solid var(--border)", borderRadius: 4,
+              cursor: selectedIds.size === 0 ? "not-allowed" : "pointer",
+              fontSize: 13, fontWeight: 600,
+            }}
+          >
+            Generate Diagram from Selected
+          </button>
           <button
             onClick={() => setOrphansOnly(!orphansOnly)}
             title="Show only capabilities with no strategic-objective linkage"
@@ -192,7 +243,7 @@ export default function CapabilityTree({ onGenerateDiagram, focusCapabilityId }:
         </div>
       )}
 
-      {renderTree(tree, orphanIds, onGenerateDiagram, focusCapabilityId)}
+      {renderTree(tree, orphanIds, focusCapabilityId, selectedIds, toggleSelect)}
     </div>
   );
 }

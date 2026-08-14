@@ -3,8 +3,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { MATURITY_LEVEL_LABEL, STRATEGIC_RELEVANCE_LABEL, useDeleteCapability, useUpdateCapability } from "../api/business";
 import type { MaturityLevel, StrategicRelevance } from "../api/business";
 import type { CapabilityTreeNode } from "./CapabilityTree";
-import { generateFromCapabilitySubtree } from "../diagrams/generators";
-import type { DiagramSeed } from "../diagrams/generators";
 import CapabilityForm from "./CapabilityForm";
 import DesignLinkEditor from "./DesignLinkEditor";
 import { LEVEL_STYLE } from "./classification";
@@ -13,14 +11,9 @@ import { renderCapabilitySuggestionDetail } from "./agentReviewDetail";
 
 interface CapabilityNodeProps {
   // ADP-914.7: widened from BusinessCapability to CapabilityTreeNode (a
-  // strict superset -- all existing field access below still compiles) so
-  // this node has its own full subtree on hand for "Generate Diagram"
-  // (research.md Decision 1), without needing a second data-fetch/lookup.
+  // strict superset -- all existing field access below still compiles).
   capability: CapabilityTreeNode;
   children: React.ReactNode;
-  /** ADP-914.7: opens the Diagrams screen pre-filled with a flowchart
-   *  generated from this capability's own subtree. */
-  onGenerateDiagram?: (seed: DiagramSeed) => void;
   /** 918-strategy-rollups: true when this capability has zero strategic-
    *  objective linkage (spec.md FR-006). */
   isOrphan?: boolean;
@@ -29,11 +22,17 @@ interface CapabilityNodeProps {
    *  (research.md Decision 3: no separate capability detail screen exists,
    *  this row already carries every detail affordance). */
   focused?: boolean;
+  /** 920-capability-diagram-select US1: whether this capability is currently
+   *  part of the multi-select set for "Generate Diagram from Selected"
+   *  (CapabilityTree's own toolbar action) -- replaces the old per-row
+   *  single-capability "Generate Diagram" button (FR-006). */
+  selected: boolean;
+  onToggleSelect: (id: string) => void;
 }
 
 const LEVEL_LABELS: Record<number, string> = { 1: "L1", 2: "L2", 3: "L3" };
 
-export default function CapabilityNode({ capability, children, onGenerateDiagram, isOrphan, focused }: CapabilityNodeProps): React.ReactElement {
+export default function CapabilityNode({ capability, children, isOrphan, focused, selected, onToggleSelect }: CapabilityNodeProps): React.ReactElement {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(capability.name);
@@ -95,6 +94,16 @@ export default function CapabilityNode({ capability, children, onGenerateDiagram
           marginBottom: 3,
         }}
       >
+        {/* 920-capability-diagram-select US1: multi-select checkbox, replacing
+            the old per-row single-capability Generate Diagram button. */}
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(capability.id)}
+          title="Select for Generate Diagram from Selected"
+          style={{ cursor: "pointer" }}
+        />
+
         {/* Expand/collapse toggle */}
         <button
           onClick={() => setExpanded(!expanded)}
@@ -161,7 +170,6 @@ export default function CapabilityNode({ capability, children, onGenerateDiagram
                 <option key={v} value={v}>{MATURITY_LEVEL_LABEL[v]}</option>
               ))}
             </select>
-            <button onClick={() => onGenerateDiagram?.(generateFromCapabilitySubtree(capability))} title="Generate Diagram" style={actionBtn}>⛶</button>
             <button onClick={() => setEditing(true)} title="Edit" style={actionBtn}>✎</button>
             {canAddChild && (
               <button onClick={() => setAddingChild(!addingChild)} title="Add child capability" style={{ ...actionBtn, color: "var(--good)" }}>+</button>

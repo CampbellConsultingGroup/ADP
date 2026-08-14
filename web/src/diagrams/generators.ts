@@ -7,7 +7,7 @@ import { createEmptyDiagramModel } from "./core/index";
 import { addNode, addEdge } from "./core/model/diagram-ops";
 import type { DiagramModel } from "./core/index";
 import type { DiagramType } from "./api";
-import type { ValueStreamDetail } from "../api/business";
+import type { ValueStreamDetail, BusinessCapability } from "../api/business";
 import type { CapabilityTreeNode } from "../business/CapabilityTree";
 
 export interface DiagramSeed {
@@ -66,4 +66,40 @@ export function generateFromCapabilitySubtree(root: CapabilityTreeNode): Diagram
   addSubtree(root, null);
 
   return { title: root.name, diagramType: "flowchart", model };
+}
+
+/**
+ * 920-capability-diagram-select US1: one node per selected capability (any
+ * branch/level, arbitrary combination), plus one edge for each pair of
+ * *selected* capabilities that have a direct parent-child relationship --
+ * research.md Decision 3's flat id-membership check (`parent_id` also in the
+ * selected set), not a tree walk. A selected capability whose real parent
+ * isn't also selected renders with no incoming edge (no automatic ancestor
+ * inclusion, spec.md's resolved Assumption). Title: the single capability's
+ * own name for a 1-item selection (SC-004 parity with
+ * generateFromCapabilitySubtree's own leaf-node output), otherwise a generic
+ * title (research.md Decision 4).
+ */
+export function generateFromCapabilities(selected: BusinessCapability[]): DiagramSeed {
+  let model = createEmptyDiagramModel("flowchart");
+  const nodeIdByCapabilityId = new Map<string, string>();
+
+  for (const cap of selected) {
+    model = addNode(model, { shape: "rectangle", label: cap.name });
+    const created = model.nodes[model.nodes.length - 1];
+    nodeIdByCapabilityId.set(cap.id, created.id);
+  }
+
+  const selectedIds = new Set(selected.map((c) => c.id));
+  for (const cap of selected) {
+    if (cap.parent_id && selectedIds.has(cap.parent_id)) {
+      model = addEdge(model, {
+        sourceId: nodeIdByCapabilityId.get(cap.parent_id)!,
+        targetId: nodeIdByCapabilityId.get(cap.id)!,
+      });
+    }
+  }
+
+  const title = selected.length === 1 ? selected[0].name : "Capabilities Diagram";
+  return { title, diagramType: "flowchart", model };
 }

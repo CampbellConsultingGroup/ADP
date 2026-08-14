@@ -2,7 +2,27 @@
 
 ## Project Status
 
-Latest work: **ADP-c44** (bug fix, no `specs/` directory) — direct follow-up to ADP-5wf, reported live on
+Latest work: **920-capability-diagram-select** (ADP-3up.2, implemented — both user stories) — a direct user
+request interjected mid-turn while investigating the ADP-c44 bug reports below ("business capability diagram
+should be multi-select — capabilities should come over to the diagram tool with the relationships"). Replaces
+`CapabilityNode.tsx`'s old single-purpose "⛶ Generate Diagram" per-row button with a checkbox on every row
+plus a toolbar-level "Generate Diagram from Selected" action in `CapabilityTree.tsx` — an arbitrary,
+cross-branch selection instead of one capability's own subtree. New `generateFromCapabilities()`
+(`web/src/diagrams/generators.ts`, sibling to the existing `generateFromCapabilitySubtree`): one node per
+selected capability plus one edge for each pair where `cap.parent_id` is *also* selected (flat id-membership
+check, not a tree walk) — deliberately no auto-included unselected ancestors. Title: the single capability's
+own name for a 1-item selection (parity with the old button), else the generic "Capabilities Diagram". US2
+adds a "· N selected" count and a "Clear selection" action. Selection state stays component-local
+`useState` in `CapabilityTree.tsx` (resets for free on tab switch, since `BusinessPage.tsx` unmounts the
+tree) — deliberately not lifted, unlike `043`'s `focusCapabilityId` which must survive a tab switch. Both the
+cross-branch (zero-edge) and parent-child (hierarchy-edge) scenarios confirmed live via Playwright, not just
+unit tests — including confirming selection genuinely resets on tab switch. First-ever render test for
+`CapabilityNode.tsx` (needs a real `QueryClientProvider`, mirroring `CapabilityTree.test.tsx`'s own
+`renderWithQueryClient()`). 351 frontend tests (+6), `tsc`/`adp-generate --check` clean, backend suite (1378
+tests) run unchanged as a no-op sanity check since this feature touches no backend file. See `CLAUDE.md` for
+the fuller narrative.
+
+Prior work: **ADP-c44** (bug fix, no `specs/` directory) — direct follow-up to ADP-5wf, reported live on
 the same screen: "nowhere to see [saved data] again" and "no save button" for linked items. Investigated
 live before touching code: both mechanisms already worked (core fields render; Link/Remove persist
 immediately, confirmed via a direct API check + full page reload) — the real problem was legibility. Fixed
