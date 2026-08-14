@@ -49,7 +49,7 @@ export default function App(): React.ReactElement {
       case "insights":
         return <InsightsPage />;
       case "portfolio":
-        return <PortfolioPage onNavigate={onNavigate} onSelectDesign={onSelectDesign} />;
+        return <PortfolioPage />;
       case "governance":
         return <GovernancePage onNavigate={onNavigate} onSelectDesign={onSelectDesign} />;
       case "business":

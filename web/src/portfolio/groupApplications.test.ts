@@ -1,0 +1,183 @@
+// ADP-8xo: pure unit tests for the Application Portfolio pivot's bucketing
+// logic -- one describe block per groupBy* function, covering fixed-order
+// bucketing, the dynamic business-unit bucket set, the multi-membership
+// capability case, and the null -> unclassified case for every dimension.
+
+import { describe, expect, it } from "vitest";
+import type { Application } from "../api/application";
+import type { ApplicationCapabilityGroupLink } from "../api/portfolio";
+import {
+  groupByBusinessUnit,
+  groupByCapability,
+  groupByCriticality,
+  groupByRStrategy,
+  groupByTime,
+  groupApplications,
+} from "./groupApplications";
+
+function app(overrides: Partial<Application> & { id: string; name: string }): Application {
+  return {
+    description: null,
+    vendor: null,
+    primary_owner: null,
+    time_classification: null,
+    r_strategy: null,
+    pace_layer: null,
+    health_score: null,
+    business_value: null,
+    business_criticality: null,
+    owning_business_unit: null,
+    business_owner: null,
+    technical_owner: null,
+    lifecycle_status: "active",
+    hosting_model: null,
+    architecture_pattern: null,
+    tech_debt_flags: [],
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+describe("groupByTime", () => {
+  it("places apps into the 4 fixed buckets, in Tolerate/Invest/Migrate/Eliminate order", () => {
+    const apps = [
+      app({ id: "1", name: "A", time_classification: "Migrate" }),
+      app({ id: "2", name: "B", time_classification: "Invest" }),
+    ];
+
+    const result = groupByTime(apps);
+
+    expect(result.buckets.map((b) => b.key)).toEqual(["Tolerate", "Invest", "Migrate", "Eliminate"]);
+    expect(result.buckets.find((b) => b.key === "Invest")!.apps.map((a) => a.id)).toEqual(["2"]);
+    expect(result.buckets.find((b) => b.key === "Migrate")!.apps.map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("renders all 4 buckets even when empty", () => {
+    const result = groupByTime([]);
+    expect(result.buckets).toHaveLength(4);
+    expect(result.buckets.every((b) => b.apps.length === 0)).toBe(true);
+  });
+
+  it("puts a null time_classification into unclassified, not a bucket", () => {
+    const apps = [app({ id: "1", name: "A", time_classification: null })];
+
+    const result = groupByTime(apps);
+
+    expect(result.unclassified.map((a) => a.id)).toEqual(["1"]);
+    expect(result.buckets.every((b) => b.apps.length === 0)).toBe(true);
+    expect(result.unclassifiedReason).toMatch(/TIME disposition/);
+  });
+});
+
+describe("groupByRStrategy", () => {
+  it("places apps into all 7 fixed buckets in the documented order", () => {
+    const result = groupByRStrategy([]);
+    expect(result.buckets.map((b) => b.key)).toEqual([
+      "Rehost", "Replatform", "Repurchase", "Refactor", "Retire", "Retain", "Relocate",
+    ]);
+  });
+
+  it("groups by the app's r_strategy value", () => {
+    const apps = [app({ id: "1", name: "A", r_strategy: "Refactor" })];
+    const result = groupByRStrategy(apps);
+    expect(result.buckets.find((b) => b.key === "Refactor")!.apps.map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("puts a null r_strategy into unclassified", () => {
+    const apps = [app({ id: "1", name: "A", r_strategy: null })];
+    const result = groupByRStrategy(apps);
+    expect(result.unclassified.map((a) => a.id)).toEqual(["1"]);
+  });
+});
+
+describe("groupByCriticality", () => {
+  it("orders buckets highest tier first (5 down to 1)", () => {
+    const result = groupByCriticality([]);
+    expect(result.buckets.map((b) => b.key)).toEqual(["5", "4", "3", "2", "1"]);
+  });
+
+  it("groups by the app's business_criticality value", () => {
+    const apps = [app({ id: "1", name: "A", business_criticality: 5 })];
+    const result = groupByCriticality(apps);
+    expect(result.buckets.find((b) => b.key === "5")!.apps.map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("puts a null business_criticality into unclassified", () => {
+    const apps = [app({ id: "1", name: "A", business_criticality: null })];
+    const result = groupByCriticality(apps);
+    expect(result.unclassified.map((a) => a.id)).toEqual(["1"]);
+  });
+});
+
+describe("groupByBusinessUnit (dynamic bucket set)", () => {
+  it("derives the bucket set from the distinct values actually present, sorted alphabetically", () => {
+    const apps = [
+      app({ id: "1", name: "A", owning_business_unit: "Claims" }),
+      app({ id: "2", name: "B", owning_business_unit: "Underwriting" }),
+      app({ id: "3", name: "C", owning_business_unit: "Claims" }),
+    ];
+
+    const result = groupByBusinessUnit(apps);
+
+    expect(result.buckets.map((b) => b.key)).toEqual(["Claims", "Underwriting"]);
+    expect(result.buckets.find((b) => b.key === "Claims")!.apps.map((a) => a.id)).toEqual(["1", "3"]);
+  });
+
+  it("does not invent a bucket for a business unit with no apps (no fixed enum)", () => {
+    const apps = [app({ id: "1", name: "A", owning_business_unit: "Claims" })];
+    const result = groupByBusinessUnit(apps);
+    expect(result.buckets).toHaveLength(1);
+  });
+
+  it("puts a null owning_business_unit into unclassified", () => {
+    const apps = [app({ id: "1", name: "A", owning_business_unit: null })];
+    const result = groupByBusinessUnit(apps);
+    expect(result.unclassified.map((a) => a.id)).toEqual(["1"]);
+  });
+});
+
+describe("groupByCapability (multi-membership)", () => {
+  it("an app linked to 2 capabilities appears in both resulting buckets", () => {
+    const apps = [app({ id: "1", name: "Claims Core" })];
+    const links: ApplicationCapabilityGroupLink[] = [
+      { app_id: "1", capability_id: "cap-1", capability_name: "Claims Processing", fit_score: 4 },
+      { app_id: "1", capability_id: "cap-2", capability_name: "Fraud Detection", fit_score: 2 },
+    ];
+
+    const result = groupByCapability(apps, links);
+
+    expect(result.buckets).toHaveLength(2);
+    expect(result.buckets.every((b) => b.apps.map((a) => a.id).includes("1"))).toBe(true);
+  });
+
+  it("an app with zero capability links lands in unclassified, not a bucket", () => {
+    const apps = [app({ id: "1", name: "Unlinked App" })];
+
+    const result = groupByCapability(apps, []);
+
+    expect(result.buckets).toHaveLength(0);
+    expect(result.unclassified.map((a) => a.id)).toEqual(["1"]);
+    expect(result.unclassifiedReason).toMatch(/not linked to any business capability/);
+  });
+
+  it("orders buckets alphabetically by capability name", () => {
+    const apps = [app({ id: "1", name: "A" })];
+    const links: ApplicationCapabilityGroupLink[] = [
+      { app_id: "1", capability_id: "cap-2", capability_name: "Zeta", fit_score: 3 },
+      { app_id: "1", capability_id: "cap-1", capability_name: "Alpha", fit_score: 3 },
+    ];
+
+    const result = groupByCapability(apps, links);
+
+    expect(result.buckets.map((b) => b.label)).toEqual(["Alpha", "Zeta"]);
+  });
+});
+
+describe("groupApplications dispatcher", () => {
+  it("dispatches to the correct groupBy* function per dimension", () => {
+    const apps = [app({ id: "1", name: "A", time_classification: "Invest" })];
+    const result = groupApplications("time", apps, []);
+    expect(result.buckets.find((b) => b.key === "Invest")!.apps.map((a) => a.id)).toEqual(["1"]);
+  });
+});

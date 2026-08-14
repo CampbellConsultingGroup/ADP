@@ -2,6 +2,7 @@
 
 T001–T007: GET /portfolio/technologies, /portfolio/designs, /portfolio/search, /portfolio/summary
 T002/T010 (919-insights-dashboard): GET /portfolio/applications-heatmap
+ADP-8xo (Application Portfolio pivot): GET /portfolio/application-capability-groups
 """
 
 from __future__ import annotations
@@ -308,3 +309,67 @@ def test_applications_heatmap_cost_hidden_when_not_permitted(client_factory):
     body = resp.json()
     assert body["cost_permitted"] is False
     assert body["items"][0]["cost"] is None
+
+
+# ── ADP-8xo: GET /portfolio/application-capability-groups (Application Portfolio) ──
+
+def test_application_capability_groups_returns_every_link(client_factory):
+    """Every app-capability link across the whole registry comes back in one call --
+    the bulk read the Application Portfolio pivot's capability dimension relies on.
+    Row access is attribute-style (row.app_id, mirroring list_app_capability_links's
+    own established pattern), so mock rows use SimpleNamespace, not plain dicts."""
+    from types import SimpleNamespace
+
+    link_rows = [
+        SimpleNamespace(
+            app_id="app-01", capability_id="cap-01",
+            capability_name="Claims Processing", fit_score=4,
+        ),
+        SimpleNamespace(
+            app_id="app-01", capability_id="cap-02",
+            capability_name="Fraud Detection", fit_score=2,
+        ),
+        SimpleNamespace(
+            app_id="app-02", capability_id="cap-01",
+            capability_name="Claims Processing", fit_score=3,
+        ),
+    ]
+    session = AsyncMock()
+    links_result = MagicMock()
+    links_result.mappings.return_value.all = MagicMock(return_value=link_rows)
+    session.execute = AsyncMock(return_value=links_result)
+
+    c = client_factory(session)
+
+    resp = c.get("/api/v1/portfolio/application-capability-groups")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["items"]) == 3
+    # The multi-membership contract: app-01 appears in 2 links (2 capabilities).
+    app01_links = [i for i in body["items"] if i["app_id"] == "app-01"]
+    assert len(app01_links) == 2
+    assert {i["capability_id"] for i in app01_links} == {"cap-01", "cap-02"}
+
+
+def test_application_capability_groups_open_read_no_auth_required(client_factory):
+    """No READ_APPLICATION_* gate covers fit_score -- open read, no role override
+    needed (unlike applications-heatmap's cost dimension)."""
+    from types import SimpleNamespace
+
+    session = AsyncMock()
+    links_result = MagicMock()
+    links_result.mappings.return_value.all = MagicMock(
+        return_value=[
+            SimpleNamespace(
+                app_id="app-01", capability_id="cap-01",
+                capability_name="Claims Processing", fit_score=5,
+            ),
+        ]
+    )
+    session.execute = AsyncMock(return_value=links_result)
+
+    c = client_factory(session)  # no role override
+
+    resp = c.get("/api/v1/portfolio/application-capability-groups")
+    assert resp.status_code == 200
+    assert resp.json()["items"][0]["fit_score"] == 5

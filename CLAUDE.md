@@ -85,6 +85,8 @@ Auto-generated from all feature plans. Last updated: 2026-08-14 (ADP-c44 objecti
 - N/A — no new persisted data, no migration. Reads the existing `business_capabilities` table (043-capability-heat-map)
 - TypeScript 5.x + React 18 (frontend only — no backend touched at all). + None new. Reuses `generateFromCapabilitySubtree`'s own sibling `generateFromCapabilities()` (new, `web/src/diagrams/generators.ts`), the existing `useCapabilities()` hook, and `CapabilityTree.tsx`/`CapabilityNode.tsx` (043/048/052, extended not replaced). (920-capability-diagram-select)
 - N/A — no new persisted data; selection is component-local, transient `useState` in `CapabilityTree.tsx`, discarded on unmount (tab switch) by design. (920-capability-diagram-select)
+- Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) — both existing stacks. + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Pydantic v2, React 18, TanStack Query v5 — all existing project dependencies; zero new packages. (ADP-8xo)
+- PostgreSQL 16 — no migration. One new endpoint (`GET /portfolio/application-capability-groups`) reads the existing `application_capability_links`/`business_capabilities` tables; the other 4 dimensions read the existing `applications` table via the existing `GET /applications`. (ADP-8xo)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -129,6 +131,39 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- ADP-8xo: Implemented (bug/feature capture, no `specs/` directory — planned via plan mode, not speckit) —
+  "plan out how to accomplish this on the Portfolio screen" for the 8 recurring APM grouping dimensions the
+  user described (business capability, domain/value-stream, TIME, technology layer, 7R, ownership,
+  criticality, application type), following up on the ADP-v2n TIME-2x2 mockup investigation earlier in the
+  session. Three parallel Explore agents plus a Plan agent researched the actual codebase before any design
+  decision; the first found a **ground-truth correction surfaced to the user before proceeding**: ADP's
+  "Portfolio" nav screen was entirely about Designs (technology tags, lifecycle status) with zero
+  application data — the real Application registry lived on a separate "Applications" screen. Resolved via
+  two rounds of `AskUserQuestion`: Portfolio's identity flips entirely to the Application Portfolio,
+  replacing its Design-scoped content outright (not merged alongside); ship the 5 dimensions with clean
+  existing data now (capability, TIME, 7R, ownership/business-unit, criticality), defer domain/value-stream
+  and application-type (both had real data-model gaps, confirmed via direct field-by-field code reads) as
+  follow-on beads (`ADP-r41`, `ADP-3jj`) rather than guessing at new fields. New `groupApplications.ts`
+  (`web/src/portfolio/`) centralizes the bucketing logic — pulled out of the component (unlike
+  `RationalizationView.tsx`'s inline single-dimension bucketing) specifically so 5 dimensions' worth of
+  logic is independently unit-testable; `groupByCapability` is deliberately multi-membership (an app linked
+  to 2 capabilities appears in both buckets — the underlying `application_capability_links` table is
+  genuinely many-to-many, no "primary capability" concept exists to force a single bucket), while
+  `groupByBusinessUnit` is the one dimension with a dynamic, data-driven bucket set rather than a fixed enum
+  like the other three. One new backend endpoint (`GET /portfolio/application-capability-groups` +
+  `store.list_all_capability_links`, mirroring `list_all_costs`'s 919-insights-dashboard bulk-read
+  precedent) — the other 4 dimensions needed zero backend work, already returned by the existing
+  `GET /applications`. The design agent caught two real cross-dependencies during planning that a shallower
+  pass would have broken: `lifecycle.ts` is also imported by `governance/DesignStatusTab.tsx`, and
+  `usePortfolioSummary` is also consumed directly by `OverviewPage.tsx` — both confirmed via direct grep and
+  kept untouched; only the 4 truly single-importer old components
+  (`PortfolioSummaryHeader`/`TechnologyLandscape`/`DependencySearch`/`PortfolioDesignList`) were deleted.
+  Retiring the now-orphaned old backend endpoints themselves was deliberately deferred to a third follow-on
+  bead (`ADP-704`), Phase-C-style, mirroring the `ADP-914.9` C4Canvas-retirement precedent — prove the
+  replacement first, retire old surface only after. 1384 backend tests (+6), 372 frontend tests (+21),
+  `ruff`/`mypy`/`tsc`/`adp-generate --check` all clean, plus a full live Playwright walkthrough of all 5
+  dimensions against real seeded data (including the dynamic-bucket-set and fixed-empty-bucket edge cases)
+  and both shared-dependency regression checks (Overview's summary tile, Governance's lifecycle badges).
 - 920-capability-diagram-select: Implemented (ADP-3up.2, both user stories) — a direct user request
   interjected mid-turn while investigating the ADP-c44 bug reports above ("business capability diagram
   should be multi-select — capabilities should come over to the diagram tool with the relationships").
@@ -334,7 +369,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (15326 symbols, 24692 relationships, 229 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (15442 symbols, 24870 relationships, 229 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

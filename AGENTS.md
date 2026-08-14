@@ -2,7 +2,28 @@
 
 ## Project Status
 
-Latest work: **920-capability-diagram-select** (ADP-3up.2, implemented — both user stories) — a direct user
+Latest work: **ADP-8xo** (planned via plan mode, not speckit — no `specs/` directory) — "plan out how to
+accomplish this on the Portfolio screen" for 8 recurring APM grouping dimensions, following up on the ADP-v2n
+TIME-2x2 mockup investigation. Three parallel Explore agents + a Plan agent researched first; found a
+ground-truth correction surfaced to the user before designing: "Portfolio" was entirely about Designs, zero
+application data — the real Application registry lived on a separate "Applications" screen. Two
+`AskUserQuestion` rounds resolved it: Portfolio's identity flips entirely to Application Portfolio (replacing
+Design content outright); ship the 5 clean-data dimensions now (capability, TIME, 7R, ownership, criticality),
+defer domain/value-stream + application-type (real data-model gaps) as follow-on beads (`ADP-r41`/`ADP-3jj`)
+rather than guessing new fields. New `groupApplications.ts` centralizes bucketing across 5 dimensions
+(unlike `RationalizationView.tsx`'s inline single-dimension logic) — `groupByCapability` is deliberately
+multi-membership (many-to-many link table, an app can appear in multiple buckets), `groupByBusinessUnit` is
+the one dynamic/data-driven bucket set. One new backend endpoint
+(`GET /portfolio/application-capability-groups`); the other 4 dimensions needed zero backend work. The
+design agent caught two real cross-dependencies a shallower pass would've broken: `lifecycle.ts` (also used
+by `governance/DesignStatusTab.tsx`) and `usePortfolioSummary` (also used by `OverviewPage.tsx`) — both
+confirmed via direct grep and kept untouched; only the 4 truly single-importer old components were deleted.
+Retiring the now-orphaned old backend endpoints deferred to a third follow-on bead (`ADP-704`), Phase-C-style,
+mirroring the `ADP-914.9` C4Canvas precedent. 1384 backend tests (+6), 372 frontend tests (+21), full
+Playwright walkthrough of all 5 dimensions plus both shared-dependency regression checks. See `CLAUDE.md`
+for the fuller narrative.
+
+Prior work: **920-capability-diagram-select** (ADP-3up.2, implemented — both user stories) — a direct user
 request interjected mid-turn while investigating the ADP-c44 bug reports below ("business capability diagram
 should be multi-select — capabilities should come over to the diagram tool with the relationships"). Replaces
 `CapabilityNode.tsx`'s old single-purpose "⛶ Generate Diagram" per-row button with a checkbox on every row
@@ -258,7 +279,7 @@ bd prime                # Refresh Beads context
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (15326 symbols, 24692 relationships, 229 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (15442 symbols, 24870 relationships, 229 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 
