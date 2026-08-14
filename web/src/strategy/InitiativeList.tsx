@@ -10,6 +10,8 @@ import {
 } from "../api/strategy";
 import { Button } from "../ui";
 import InitiativeObjectiveLinkEditor from "./InitiativeObjectiveLinkEditor";
+import NavLinkButton from "./NavLinkButton";
+import { useScrollHighlight } from "./useScrollHighlight";
 
 const STATUSES: InitiativeStatus[] = ["planned", "in_progress", "blocked", "complete", "cancelled"];
 const STATUS_LABEL: Record<InitiativeStatus, string> = {
@@ -23,9 +25,11 @@ const STATUS_LABEL: Record<InitiativeStatus, string> = {
 function InitiativeEditForm({
   initiative,
   onDone,
+  onNavigateToObjective,
 }: {
   initiative: StrategyInitiative;
   onDone: () => void;
+  onNavigateToObjective?: (objectiveId: string) => void;
 }) {
   const updateMutation = useUpdateInitiative(initiative.id);
   const [name, setName] = useState(initiative.name);
@@ -84,12 +88,26 @@ function InitiativeEditForm({
       </form>
 
       <h4 style={{ fontSize: 13, marginTop: 16, marginBottom: 0, color: "var(--ink)" }}>Linked Objectives</h4>
-      <InitiativeObjectiveLinkEditor initiative={initiative} />
+      <InitiativeObjectiveLinkEditor initiative={initiative} onNavigateToObjective={onNavigateToObjective} />
     </div>
   );
 }
 
-export default function InitiativeList() {
+interface InitiativeListProps {
+  /** Drill-through target: when set, the matching initiative row scrolls
+   *  into view and briefly highlights. Initiatives have no dedicated detail
+   *  view, so cross-navigation lands here rather than a new page (mirrors
+   *  CapabilityTree's focusCapabilityId / ThemeList's focusThemeId). */
+  focusInitiativeId?: string | null;
+  /** Cross-navigation: jump to a linked Objective's own detail view
+   *  (Objectives tab, drilled in -- Objective has a real detail page, so
+   *  this uses the existing selectedObjectiveId mechanism rather than
+   *  scroll-and-highlight). Threaded to both the read-mode "Linked
+   *  objectives" list and the edit-mode InitiativeObjectiveLinkEditor. */
+  onNavigateToObjective?: (objectiveId: string) => void;
+}
+
+export default function InitiativeList({ focusInitiativeId, onNavigateToObjective }: InitiativeListProps = {}) {
   const { data, isLoading, error } = useInitiatives();
   const { data: objectivesData } = useObjectives();
   const createMutation = useCreateInitiative();
@@ -98,6 +116,7 @@ export default function InitiativeList() {
   const [name, setName] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const { registerRef } = useScrollHighlight(focusInitiativeId);
 
   if (isLoading) return <div style={{ padding: 16, color: "var(--ink-3)" }}>Loading initiatives…</div>;
   if (error) return <div className="ui-alert crit">Failed to load initiatives</div>;
@@ -132,6 +151,13 @@ export default function InitiativeList() {
 
   return (
     <div>
+      <p style={{ fontSize: 13, color: "var(--ink-3)", margin: "0 0 16px", lineHeight: 1.5 }}>
+        <strong style={{ color: "var(--ink-2)" }}>Initiative:</strong> A funded program of work that
+        delivers progress toward one or more objectives — the &ldquo;how&rdquo; and &ldquo;who&rsquo;s
+        building it.&rdquo; Where an objective states what will change and by when, an initiative is the
+        actual project, system change, or transformation effort doing the work to get there.
+      </p>
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <h3 style={{ margin: 0, fontSize: 15, color: "var(--ink)" }}>Strategy Initiatives</h3>
         <Button size="sm" variant={showForm ? "default" : "primary"} icon={showForm ? undefined : "plus"} onClick={() => setShowForm(!showForm)}>
@@ -176,14 +202,23 @@ export default function InitiativeList() {
 
       {items.map((i) =>
         editingId === i.id ? (
-          <InitiativeEditForm key={i.id} initiative={i} onDone={() => setEditingId(null)} />
+          <InitiativeEditForm
+            key={i.id}
+            initiative={i}
+            onDone={() => setEditingId(null)}
+            onNavigateToObjective={onNavigateToObjective}
+          />
         ) : (
           <div
             key={i.id}
+            id={`initiative-${i.id}`}
+            ref={registerRef(i.id)}
+            data-focused={focusInitiativeId === i.id ? "true" : undefined}
             style={{
               display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-              border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", marginBottom: 8,
-              background: "var(--surface)",
+              border: focusInitiativeId === i.id ? "1px solid var(--accent)" : "1px solid var(--border)",
+              borderRadius: 8, padding: "10px 12px", marginBottom: 8,
+              background: focusInitiativeId === i.id ? "var(--accent-wash)" : "var(--surface)",
             }}
           >
             <div>
@@ -206,7 +241,13 @@ export default function InitiativeList() {
                   Linked objectives:
                   {i.objective_ids.map((oid) => (
                     <div key={oid} style={{ marginTop: 1 }}>
-                      {objectiveStatements.get(oid) ?? oid}
+                      {onNavigateToObjective ? (
+                        <NavLinkButton onClick={() => onNavigateToObjective(oid)} title="Jump to this objective">
+                          {objectiveStatements.get(oid) ?? oid}
+                        </NavLinkButton>
+                      ) : (
+                        objectiveStatements.get(oid) ?? oid
+                      )}
                     </div>
                   ))}
                 </div>

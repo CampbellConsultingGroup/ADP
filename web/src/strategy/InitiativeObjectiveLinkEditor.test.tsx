@@ -128,6 +128,25 @@ describe("InitiativeObjectiveLinkEditor", () => {
     expect(screen.getByText(/Removed "Reduce cycle time"/)).toBeTruthy();
   });
 
+  it("renders linked objective statements as plain text when no navigation handler is supplied", () => {
+    render(<InitiativeObjectiveLinkEditor initiative={INITIATIVE} />);
+
+    const statement = screen.getByText("Reduce cycle time");
+    expect(statement.tagName).not.toBe("BUTTON");
+  });
+
+  it("lets you jump to a linked objective's own detail view when onNavigateToObjective is supplied (strategy screen navigation, 2026-08-14)", async () => {
+    const onNavigateToObjective = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <InitiativeObjectiveLinkEditor initiative={INITIATIVE} onNavigateToObjective={onNavigateToObjective} />,
+    );
+
+    await user.click(screen.getByText("Reduce cycle time"));
+
+    expect(onNavigateToObjective).toHaveBeenCalledWith("obj-1");
+  });
+
   it("surfaces a 409 as 'Already linked'", async () => {
     const mutate = vi.fn((_id, opts) => opts?.onError?.({ message: "conflict", status: 409 }));
     mockedStrategyApi.useLinkInitiativeObjective.mockReturnValue({

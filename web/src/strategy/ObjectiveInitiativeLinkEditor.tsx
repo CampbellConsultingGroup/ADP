@@ -13,12 +13,16 @@ import {
   useUnlinkObjectiveFromInitiative,
 } from "../api/strategy";
 import { useLinkFeedback } from "./useLinkFeedback";
+import NavLinkButton from "./NavLinkButton";
 
 interface Props {
   objectiveId: string;
+  /** Cross-navigation: jump to a linked initiative (Initiatives tab,
+   *  scroll-and-highlighted). When omitted, names render as plain text. */
+  onNavigateToInitiative?: (initiativeId: string) => void;
 }
 
-export default function ObjectiveInitiativeLinkEditor({ objectiveId }: Props): React.ReactElement {
+export default function ObjectiveInitiativeLinkEditor({ objectiveId, onNavigateToInitiative }: Props): React.ReactElement {
   const [selectedId, setSelectedId] = useState<string>("");
   const [linkError, setLinkError] = useState<string | null>(null);
   const feedback = useLinkFeedback();
@@ -74,7 +78,15 @@ export default function ObjectiveInitiativeLinkEditor({ objectiveId }: Props): R
               borderBottom: "1px solid var(--border)",
             }}
           >
-            <span style={{ flex: 1, fontSize: "0.85rem" }}>{i.name}</span>
+            <span style={{ flex: 1, fontSize: "0.85rem" }}>
+              {onNavigateToInitiative ? (
+                <NavLinkButton onClick={() => onNavigateToInitiative(i.id)} title="Jump to this initiative">
+                  {i.name}
+                </NavLinkButton>
+              ) : (
+                i.name
+              )}
+            </span>
             <button
               onClick={() => unlink.mutate(i.id, { onSuccess: () => feedback.showRemoved(i.name) })}
               disabled={unlink.isPending}

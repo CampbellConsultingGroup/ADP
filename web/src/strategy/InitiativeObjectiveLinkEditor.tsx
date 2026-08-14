@@ -14,12 +14,16 @@ import {
   type StrategyInitiative,
 } from "../api/strategy";
 import { useLinkFeedback } from "./useLinkFeedback";
+import NavLinkButton from "./NavLinkButton";
 
 interface Props {
   initiative: StrategyInitiative;
+  /** Cross-navigation: jump to a linked objective's own detail view. When
+   *  omitted, names render as plain text. */
+  onNavigateToObjective?: (objectiveId: string) => void;
 }
 
-export default function InitiativeObjectiveLinkEditor({ initiative }: Props): React.ReactElement {
+export default function InitiativeObjectiveLinkEditor({ initiative, onNavigateToObjective }: Props): React.ReactElement {
   const [selectedId, setSelectedId] = useState<string>("");
   const [linkError, setLinkError] = useState<string | null>(null);
   const feedback = useLinkFeedback();
@@ -75,7 +79,15 @@ export default function InitiativeObjectiveLinkEditor({ initiative }: Props): Re
               borderBottom: "1px solid var(--border)",
             }}
           >
-            <span style={{ flex: 1, fontSize: "0.85rem" }}>{o.statement}</span>
+            <span style={{ flex: 1, fontSize: "0.85rem" }}>
+              {onNavigateToObjective ? (
+                <NavLinkButton onClick={() => onNavigateToObjective(o.id)} title="Jump to this objective">
+                  {o.statement}
+                </NavLinkButton>
+              ) : (
+                o.statement
+              )}
+            </span>
             <button
               onClick={() => unlink.mutate(o.id, { onSuccess: () => feedback.showRemoved(o.statement) })}
               disabled={unlink.isPending}
