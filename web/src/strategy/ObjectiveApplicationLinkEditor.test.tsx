@@ -101,6 +101,37 @@ describe("ObjectiveApplicationLinkEditor", () => {
 
     await user.click(screen.getByText("Remove"));
 
-    expect(mutate).toHaveBeenCalledWith("app-1");
+    expect(mutate).toHaveBeenCalledWith("app-1", expect.anything());
+  });
+
+  it("shows a confirmation once linking succeeds (bug found live, 2026-08-14)", async () => {
+    const mutate = vi.fn((_id, opts) => opts?.onSuccess?.());
+    mockedStrategyApi.useLinkObjectiveApplication.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveApplication>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveApplicationLinkEditor objective={OBJECTIVE} />);
+
+    await user.selectOptions(screen.getByRole("combobox"), "app-2");
+    await user.click(screen.getByText("Link"));
+
+    expect(screen.getByText(/Linked "Fraud Detection"/)).toBeTruthy();
+  });
+
+  it("shows a confirmation once unlinking succeeds", async () => {
+    const mutate = vi.fn((_id, opts) => opts?.onSuccess?.());
+    mockedStrategyApi.useUnlinkObjectiveApplication.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useUnlinkObjectiveApplication>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveApplicationLinkEditor objective={OBJECTIVE} />);
+
+    await user.click(screen.getByText("Remove"));
+
+    expect(screen.getByText(/Removed "Claims CRM"/)).toBeTruthy();
   });
 });

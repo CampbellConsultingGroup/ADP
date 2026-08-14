@@ -108,6 +108,37 @@ describe("ObjectiveCapabilityLinkEditor", () => {
 
     await user.click(screen.getByText("Remove"));
 
-    expect(mutate).toHaveBeenCalledWith("cap-1");
+    expect(mutate).toHaveBeenCalledWith("cap-1", expect.anything());
+  });
+
+  it("shows a confirmation once linking succeeds (bug found live, 2026-08-14)", async () => {
+    const mutate = vi.fn((_id, opts) => opts?.onSuccess?.());
+    mockedStrategyApi.useLinkObjectiveCapability.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveCapability>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveCapabilityLinkEditor objective={OBJECTIVE} />);
+
+    await user.selectOptions(screen.getByRole("combobox"), "cap-2");
+    await user.click(screen.getByText("Link"));
+
+    expect(screen.getByText(/Linked "Underwriting"/)).toBeTruthy();
+  });
+
+  it("shows a confirmation once unlinking succeeds", async () => {
+    const mutate = vi.fn((_id, opts) => opts?.onSuccess?.());
+    mockedStrategyApi.useUnlinkObjectiveCapability.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useUnlinkObjectiveCapability>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveCapabilityLinkEditor objective={OBJECTIVE} />);
+
+    await user.click(screen.getByText("Remove"));
+
+    expect(screen.getByText(/Removed "Claims Processing"/)).toBeTruthy();
   });
 });

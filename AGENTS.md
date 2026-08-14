@@ -2,7 +2,24 @@
 
 ## Project Status
 
-Latest work: **ADP-5wf** (bug fix, no `specs/` directory) — a user-reported "no way to save" on the
+Latest work: **ADP-c44** (bug fix, no `specs/` directory) — direct follow-up to ADP-5wf, reported live on
+the same screen: "nowhere to see [saved data] again" and "no save button" for linked items. Investigated
+live before touching code: both mechanisms already worked (core fields render; Link/Remove persist
+immediately, confirmed via a direct API check + full page reload) — the real problem was legibility. Fixed
+via a real `AskUserQuestion` (both directions confirmed): (1) `ObjectiveDetail.tsx`'s read view now shows
+owner/fiscal period/target in a clearly labeled, bordered data card, distinct from the "Linked ___" sections
+below; (2) a new shared `useLinkFeedback` hook gives all five link editors (Capability/ValueStream/Design/
+Application/Initiative) a transient "✓ Linked X"/"Removed X" confirmation, extracted once rather than
+duplicated five times (mirrors `checkMetricFields`'s own ADP-5wf precedent). A real git-history wrinkle
+caught and fixed before opening a PR: this branch forked from `920-capability-diagram-select`, itself
+forked from `main` *before* ADP-5wf merged — realigned via `git reset --soft main` (safe since the working
+tree already had ADP-5wf's content, so the reset nets to "no diff" for it, leaving only this fix's genuine
+changes). 16 new/updated tests, `tsc` clean — data card confirmed visually live; link confirmation verified
+via deterministic fake-timer unit tests, since its 3s auto-clear window is faster than this session's live
+Playwright round-trip can reliably screenshot (a tooling-latency limit, not a functional gap). See
+`CLAUDE.md` for the fuller narrative.
+
+Prior work: **ADP-5wf** (bug fix, no `specs/` directory) — a user-reported "no way to save" on the
 Strategy Objectives screen, root-caused live via direct reproduction. `ObjectiveForm.tsx`/`ObjectiveDetail.tsx`
 shared a flawed `hasMetric` check requiring only *one* of `metric_name`/`target_value`/`target_unit`/
 `direction` before submitting all four, but the backend requires all four or none — selecting just one

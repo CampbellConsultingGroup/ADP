@@ -13,6 +13,7 @@ import {
   useUnlinkObjectiveApplication,
   type StrategicObjective,
 } from "../api/strategy";
+import { useLinkFeedback } from "./useLinkFeedback";
 
 interface Props {
   objective: StrategicObjective;
@@ -21,6 +22,7 @@ interface Props {
 export default function ObjectiveApplicationLinkEditor({ objective }: Props): React.ReactElement {
   const [selectedId, setSelectedId] = useState<string>("");
   const [linkError, setLinkError] = useState<string | null>(null);
+  const feedback = useLinkFeedback();
 
   const allApplications = useApplicationsForLinking();
   const link = useLinkObjectiveApplication(objective.id);
@@ -33,8 +35,12 @@ export default function ObjectiveApplicationLinkEditor({ objective }: Props): Re
   function handleAdd() {
     if (!selectedId) return;
     setLinkError(null);
+    const name = available.find((a) => a.id === selectedId)?.name ?? selectedId;
     link.mutate(selectedId, {
-      onSuccess: () => setSelectedId(""),
+      onSuccess: () => {
+        setSelectedId("");
+        feedback.showLinked(name);
+      },
       onError: (err: Error & { status?: number }) => {
         if (err.status === 409) {
           setLinkError("Already linked");
@@ -72,7 +78,7 @@ export default function ObjectiveApplicationLinkEditor({ objective }: Props): Re
           >
             <span style={{ flex: 1, fontSize: "0.85rem" }}>{a.name}</span>
             <button
-              onClick={() => unlink.mutate(a.id)}
+              onClick={() => unlink.mutate(a.id, { onSuccess: () => feedback.showRemoved(a.name) })}
               disabled={unlink.isPending}
               style={{
                 background: "none",
@@ -135,6 +141,11 @@ export default function ObjectiveApplicationLinkEditor({ objective }: Props): Re
       {linkError && (
         <p style={{ color: "var(--error, var(--crit))", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>
           {linkError}
+        </p>
+      )}
+      {feedback.message && (
+        <p style={{ color: "var(--good)", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>
+          {feedback.message}
         </p>
       )}
     </div>
