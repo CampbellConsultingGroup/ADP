@@ -109,6 +109,13 @@ export default function ThemeList() {
 
   return (
     <div>
+      <p style={{ fontSize: 13, color: "var(--ink-3)", margin: "0 0 16px", lineHeight: 1.5 }}>
+        <strong style={{ color: "var(--ink-2)" }}>Theme:</strong> A broad, ongoing area of strategic focus
+        (e.g. &ldquo;Operational Resilience&rdquo;) that groups related objectives under a shared intent.
+        Themes are qualitative and long-lived — they don&rsquo;t carry metrics or fiscal horizons themselves.
+        Objectives are created under a theme to make it measurable and actionable.
+      </p>
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <h3 style={{ margin: 0, fontSize: 15, color: "var(--ink)" }}>Strategic Themes</h3>
         <Button size="sm" variant={showForm ? "default" : "primary"} icon={showForm ? undefined : "plus"} onClick={() => setShowForm(!showForm)}>
