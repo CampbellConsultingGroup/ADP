@@ -2,7 +2,20 @@
 
 ## Project Status
 
-Latest work: **ADP-3wa** (planned via plan mode, not speckit — no `specs/` directory) — direct follow-up
+Latest work: **ADP-9ye** (planned via plan mode, not speckit — no `specs/` directory) — direct follow-up
+right after ADP-3wa shipped: a third "Filter by" control narrowing which applications show before Group
+By/Then By bucket them. Resolved via `AskUserQuestion`: field scope is the 5 Group By dimensions PLUS 3
+more bounded-enum fields never surfaced on this screen before (`lifecycle_status`/`hosting_model`/
+`pace_layer`) -- 8 fields total. v1 is equality-only per the user's own explicit phasing request;
+comparison/string operators filed as a pre-authorized follow-on bead (`ADP-6w4`), not attempted here.
+Deliberately reuses `groupApplications()`/`bucketsFromResult()` (ADP-8xo/ADP-3wa) as the entire filter
+mechanism -- a filter value's app list is just one bucket's `.apps`, zero new matching logic.
+`filteredApps` sits upstream of both the flat-grid and cross-tab computations, so filtering composes with
+both Group By modes automatically -- confirmed live. 397 frontend tests (+16), `tsc` clean, no backend
+touched, full live Playwright walkthrough (empty-field case, a real narrowing case, Clear filter, and
+filter+cross-tab composing together). See `CLAUDE.md` for the fuller narrative.
+
+Prior work: **ADP-3wa** (planned via plan mode, not speckit — no `specs/` directory) — direct follow-up
 right after ADP-8xo shipped: a second "Group by" dropdown, same 5 values, for viewing 2 dimensions "at the
 same time" as a cross-tab. Deliberately reuses `groupApplications()` per axis (a cell is just the
 intersection of a row bucket's apps and a column bucket's apps by id) rather than reimplementing bucketing

@@ -89,6 +89,8 @@ Auto-generated from all feature plans. Last updated: 2026-08-14 (ADP-c44 objecti
 - PostgreSQL 16 — no migration. One new endpoint (`GET /portfolio/application-capability-groups`) reads the existing `application_capability_links`/`business_capabilities` tables; the other 4 dimensions read the existing `applications` table via the existing `GET /applications`. (ADP-8xo)
 - TypeScript 5.x + React 18 (frontend only — no backend touched at all). + None new. Reuses `groupApplications()` (ADP-8xo) per axis rather than reimplementing bucketing for two dimensions; styling mirrors `web/src/strategy/StrategyHeatMap.tsx`'s existing `<table>` matrix precedent. (ADP-3wa)
 - N/A — no new persisted data; second dropdown's dimension is component-local `useState` in `PortfolioPage.tsx`, same lifecycle as the first. (ADP-3wa)
+- TypeScript 5.x + React 18 (frontend only — no backend touched at all). + None new. Reuses `groupApplications()`/`bucketsFromResult()` (ADP-8xo/ADP-3wa) as the value source for "Filter by" -- a filter value's app list is just one bucket's `.apps`. (ADP-9ye)
+- N/A — no new persisted data; filter field/value are component-local `useState` in `PortfolioPage.tsx`. (ADP-9ye)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -133,6 +135,30 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- ADP-9ye: Implemented (feature, no `specs/` directory — planned via plan mode, not speckit) — direct
+  follow-up right after ADP-3wa shipped: "time to add filter by option. it should be limited to value that
+  limit the selection of applications." A real ambiguity resolved via `AskUserQuestion` before designing:
+  the field dropdown's scope. Confirmed to be the same 5 Group By dimensions PLUS 3 more bounded-enum
+  fields on `Application` never surfaced anywhere on this screen before (`lifecycle_status`,
+  `hosting_model`, `pace_layer`) — 8 fields total, not just the existing 5. v1 is deliberately
+  equality-only ("pick field, pick exact value"), per the user's own explicit phasing request; comparison
+  operators (`>`/`<` on scores) and string operators (`contains`) are filed as a pre-authorized follow-on
+  bead (`ADP-6w4`) rather than attempted here — the user's own words: "if it is more straightforward to do
+  this in pieces that is OK, just open a bead for work that will follow." Deliberately reuses
+  `groupApplications()`/`bucketsFromResult()` (already built for ADP-8xo/ADP-3wa) as the entire mechanism:
+  a filter's available *values* for a chosen field are exactly that field's bucket list, and filtering to
+  one value is exactly "return that one bucket's apps" — zero new value-enumeration or matching logic
+  needed. `filteredApps` sits upstream of both the existing flat-grid and cross-tab computations, so
+  filtering composes correctly with both Group By modes automatically, confirmed live (filtering while the
+  cross-tab is active correctly narrows table cells too, not just the flat view). One correction caught
+  live during the walkthrough, not a bug in the code: seed data has zero applications with `hosting_model`
+  or `owning_business_unit` set at all, so filtering by those fields' non-"Unclassified" values correctly
+  shows "No applications match the current filter" — confirmed this is accurate given the fixtures, not a
+  regression, by cross-checking against `owning_business_unit`'s same known-empty state from ADP-8xo's own
+  verification. 397 frontend tests (+16: 11 for the 3 new `groupBy*` functions plus `filterApplications`,
+  5 for the page's filter UI behavior), `tsc` clean, no backend file touched. Full live Playwright
+  walkthrough of the empty-field case, a real narrowing case (TIME=Migrate → exactly 1 app), Clear filter
+  restoring the full set, and filter+cross-tab composing correctly together.
 - ADP-3wa: Implemented (feature, no `specs/` directory — planned via plan mode, not speckit) — direct
   follow-up request right after ADP-8xo shipped: "time to add a second drop down for the portfolio screen.
   same values. allow the selection of 2 different cuts of the application portfolio at the same time. if

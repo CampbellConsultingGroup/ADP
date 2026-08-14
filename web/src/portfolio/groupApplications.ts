@@ -209,9 +209,26 @@ export interface CrossTabResult {
 
 const UNCLASSIFIED_KEY = "__unclassified__";
 
-interface AxisBucket {
+export interface AxisBucket {
   axis: CrossTabAxis;
   apps: Application[];
+}
+
+// Shared by cross-tab axes (Dimension only) and filter value buckets
+// (FilterField, 3 more fields) -- both just need "a GroupedResult turned into
+// a flat list of {key,label,apps}, with Unclassified appended only when
+// non-empty" (an empty Unclassified row/column/option is clutter, unlike the
+// 1D view's footer, which is a one-time "every application is classified"
+// confirmation, not a whole empty line).
+function bucketsFromResult(result: GroupedResult): AxisBucket[] {
+  const entries: AxisBucket[] = result.buckets.map((b) => ({
+    axis: { key: b.key, label: b.label },
+    apps: b.apps,
+  }));
+  if (result.unclassified.length > 0) {
+    entries.push({ axis: { key: UNCLASSIFIED_KEY, label: "Unclassified" }, apps: result.unclassified });
+  }
+  return entries;
 }
 
 function axisBuckets(
@@ -219,19 +236,7 @@ function axisBuckets(
   apps: Application[],
   links: ApplicationCapabilityGroupLink[],
 ): AxisBucket[] {
-  const result = groupApplications(dimension, apps, links);
-  const entries: AxisBucket[] = result.buckets.map((b) => ({
-    axis: { key: b.key, label: b.label },
-    apps: b.apps,
-  }));
-  // An empty Unclassified row/column would be pure clutter in a table (unlike
-  // the 1D view's footer, which is a one-time "every application is
-  // classified" confirmation, not a whole empty grid line) -- only append it
-  // when there's actually something in it.
-  if (result.unclassified.length > 0) {
-    entries.push({ axis: { key: UNCLASSIFIED_KEY, label: "Unclassified" }, apps: result.unclassified });
-  }
-  return entries;
+  return bucketsFromResult(groupApplications(dimension, apps, links));
 }
 
 export function crossTabApplications(
@@ -256,4 +261,109 @@ export function crossTabApplications(
     columns: colBuckets.map((c) => c.axis),
     cellApps: (rowKey, colKey) => cellMap.get(`${rowKey}::${colKey}`) ?? [],
   };
+}
+
+// ── Filter by (ADP-9ye) ──────────────────────────────────────────────────────
+//
+// "Limited to values that limit the selection" (the requester's own framing):
+// FilterField is deliberately WIDER than Dimension (8 fields vs. 5) -- Group
+// By/Then By stay exactly as they were, untouched. The 3 extra fields
+// (lifecycle_status, hosting_model, pace_layer) are bounded enums on
+// Application not currently used for grouping, but well suited to narrowing.
+// v1 is equality-only (pick field, pick exact value) -- comparison/string
+// operators are explicit, pre-authorized follow-on work (ADP-6w4), not
+// attempted here.
+
+export type FilterField = Dimension | "lifecycle_status" | "hosting_model" | "pace_layer";
+
+export const FILTER_FIELD_LABELS: Record<FilterField, string> = {
+  ...DIMENSION_LABELS,
+  lifecycle_status: "Lifecycle Status",
+  hosting_model: "Hosting Model",
+  pace_layer: "Pace Layer",
+};
+
+export const ALL_FILTER_FIELDS: FilterField[] = [...ALL_DIMENSIONS, "lifecycle_status", "hosting_model", "pace_layer"];
+
+const LIFECYCLE_STATUS_ORDER = ["planned", "active", "sunset", "retired"] as const;
+const LIFECYCLE_STATUS_LABELS: Record<(typeof LIFECYCLE_STATUS_ORDER)[number], string> = {
+  planned: "Planned",
+  active: "Active",
+  sunset: "Sunset",
+  retired: "Retired",
+};
+
+export function groupByLifecycleStatus(apps: Application[]): GroupedResult {
+  return bucketize(
+    apps,
+    LIFECYCLE_STATUS_ORDER,
+    (k) => LIFECYCLE_STATUS_LABELS[k],
+    (app) => app.lifecycle_status,
+    "missing a lifecycle status",
+  );
+}
+
+const HOSTING_MODEL_ORDER = ["on_prem", "cloud", "saas", "hybrid"] as const;
+const HOSTING_MODEL_LABELS: Record<(typeof HOSTING_MODEL_ORDER)[number], string> = {
+  on_prem: "On-Prem",
+  cloud: "Cloud",
+  saas: "SaaS",
+  hybrid: "Hybrid",
+};
+
+export function groupByHostingModel(apps: Application[]): GroupedResult {
+  return bucketize(
+    apps,
+    HOSTING_MODEL_ORDER,
+    (k) => HOSTING_MODEL_LABELS[k],
+    (app) => app.hosting_model,
+    "missing a hosting model",
+  );
+}
+
+const PACE_LAYER_ORDER = ["Record", "Differentiation", "Innovation"] as const;
+
+export function groupByPaceLayer(apps: Application[]): GroupedResult {
+  return bucketize(
+    apps,
+    PACE_LAYER_ORDER,
+    (k) => k,
+    (app) => app.pace_layer,
+    "missing a pace layer",
+  );
+}
+
+export function groupByField(
+  field: FilterField,
+  apps: Application[],
+  capabilityLinks: ApplicationCapabilityGroupLink[],
+): GroupedResult {
+  switch (field) {
+    case "lifecycle_status":
+      return groupByLifecycleStatus(apps);
+    case "hosting_model":
+      return groupByHostingModel(apps);
+    case "pace_layer":
+      return groupByPaceLayer(apps);
+    default:
+      return groupApplications(field, apps, capabilityLinks);
+  }
+}
+
+export function filterFieldBuckets(
+  field: FilterField,
+  apps: Application[],
+  links: ApplicationCapabilityGroupLink[],
+): AxisBucket[] {
+  return bucketsFromResult(groupByField(field, apps, links));
+}
+
+export function filterApplications(
+  field: FilterField,
+  valueKey: string,
+  apps: Application[],
+  links: ApplicationCapabilityGroupLink[],
+): Application[] {
+  const bucket = filterFieldBuckets(field, apps, links).find((b) => b.axis.key === valueKey);
+  return bucket?.apps ?? [];
 }
