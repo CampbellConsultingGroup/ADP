@@ -1,0 +1,122 @@
+// ADP-8xo: mirrors ApplicationsHeatMap.test.tsx's established
+// vi.mock(hooks-module) convention. PortfolioPage calls hooks from two
+// modules (api/application, api/portfolio), both mocked.
+
+import { describe, expect, it, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import PortfolioPage from "./PortfolioPage";
+import * as applicationApi from "../api/application";
+import * as portfolioApi from "../api/portfolio";
+import type { Application } from "../api/application";
+import type { ApplicationCapabilityGroupsResponse } from "../api/portfolio";
+
+vi.mock("../api/application");
+vi.mock("../api/portfolio");
+
+const mockedApplicationApi = vi.mocked(applicationApi);
+const mockedPortfolioApi = vi.mocked(portfolioApi);
+
+function app(overrides: Partial<Application> & { id: string; name: string }): Application {
+  return {
+    description: null,
+    vendor: null,
+    primary_owner: null,
+    time_classification: null,
+    r_strategy: null,
+    pace_layer: null,
+    health_score: null,
+    business_value: null,
+    business_criticality: null,
+    owning_business_unit: null,
+    business_owner: null,
+    technical_owner: null,
+    lifecycle_status: "active",
+    hosting_model: null,
+    architecture_pattern: null,
+    tech_debt_flags: [],
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+const APPS: Application[] = [
+  app({ id: "app-1", name: "Claims Core", time_classification: "Invest" }),
+  app({ id: "app-2", name: "Fax Intake Tool", time_classification: null }),
+];
+
+const CAPABILITY_GROUPS: ApplicationCapabilityGroupsResponse = {
+  items: [
+    { app_id: "app-1", capability_id: "cap-1", capability_name: "Claims Processing", fit_score: 4 },
+    { app_id: "app-1", capability_id: "cap-2", capability_name: "Fraud Detection", fit_score: 2 },
+  ],
+};
+
+function mockData(apps: Application[], groups: ApplicationCapabilityGroupsResponse) {
+  mockedApplicationApi.useApplications.mockReturnValue({
+    data: { items: apps, total: apps.length },
+  } as unknown as ReturnType<typeof applicationApi.useApplications>);
+  mockedPortfolioApi.useApplicationCapabilityGroups.mockReturnValue({
+    data: groups,
+    isLoading: false,
+    error: null,
+  } as unknown as ReturnType<typeof portfolioApi.useApplicationCapabilityGroups>);
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mockData(APPS, CAPABILITY_GROUPS);
+});
+
+describe("PortfolioPage (ADP-8xo — default capability grouping)", () => {
+  it("renders capability buckets by default, with an app appearing in both its buckets", () => {
+    render(<PortfolioPage />);
+
+    expect(screen.getByText("Claims Processing")).toBeTruthy();
+    expect(screen.getByText("Fraud Detection")).toBeTruthy();
+    // app-1 is linked to both -- its name renders in both bucket cards.
+    expect(screen.getAllByText("Claims Core")).toHaveLength(2);
+  });
+
+  it("shows an app with zero capability links under Unclassified", () => {
+    render(<PortfolioPage />);
+
+    expect(screen.getByText(/Unclassified \(1\)/)).toBeTruthy();
+    expect(screen.getByText("Fax Intake Tool")).toBeTruthy();
+  });
+
+  it("shows an empty-state message when there are zero applications", () => {
+    mockData([], { items: [] });
+
+    render(<PortfolioPage />);
+
+    expect(screen.getByText(/No applications in the portfolio yet/)).toBeTruthy();
+  });
+});
+
+describe("PortfolioPage (ADP-8xo — Group by dropdown)", () => {
+  it("switches to TIME buckets on selection, and shows the null case as Unclassified", async () => {
+    const user = userEvent.setup();
+    render(<PortfolioPage />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Group by" }), "time");
+
+    expect(screen.getByText("Invest")).toBeTruthy();
+    expect(screen.getByText(/Unclassified \(1\)/)).toBeTruthy();
+    // Regrouping is a pure client-side computation over already-fetched data --
+    // neither hook is parameterized by `dimension`, so there is structurally no
+    // query-key change (and thus no re-fetch) when the dropdown changes.
+  });
+
+  it("offers all 5 dimensions", () => {
+    render(<PortfolioPage />);
+
+    const select = screen.getByRole("combobox", { name: "Group by" });
+    expect(select.textContent).toMatch(/Business Capability/);
+    expect(select.textContent).toMatch(/TIME Disposition/);
+    expect(select.textContent).toMatch(/7R Strategy/);
+    expect(select.textContent).toMatch(/Ownership \/ Business Unit/);
+    expect(select.textContent).toMatch(/Criticality \/ Risk Tier/);
+  });
+});

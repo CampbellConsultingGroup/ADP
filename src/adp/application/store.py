@@ -1240,6 +1240,38 @@ async def list_app_capability_links(
     return ApplicationCapabilityLinksResponse(items=items)
 
 
+async def list_all_capability_links(session: AsyncSession) -> list[ApplicationCapabilityLink]:
+    """Every application-capability link across the whole registry, in one query.
+
+    Application Portfolio pivot (ADP-8xo): a bulk read for the portfolio-wide
+    "group by business capability" dimension -- reuses list_app_capability_links's
+    own join shape, just without the app_id filter, mirroring 919-insights-dashboard's
+    list_all_costs precedent for the same "one bulk query, not N+1" reasoning.
+    Ordered by capability name then app name for a stable default grouping order.
+    """
+    result = await session.execute(
+        sa.select(
+            _app_cap_links.c.app_id,
+            _app_cap_links.c.capability_id,
+            _biz_caps.c.name.label("capability_name"),
+            _app_cap_links.c.fit_score,
+            _applications.c.name.label("app_name"),
+        )
+        .join(_biz_caps, _biz_caps.c.id == _app_cap_links.c.capability_id)
+        .join(_applications, _applications.c.id == _app_cap_links.c.app_id)
+        .order_by(_biz_caps.c.name, _applications.c.name)
+    )
+    return [
+        ApplicationCapabilityLink(
+            app_id=row.app_id,
+            capability_id=row.capability_id,
+            capability_name=row.capability_name,
+            fit_score=row.fit_score,
+        )
+        for row in result.mappings().all()
+    ]
+
+
 @dataclass(frozen=True)
 class CapabilityApplicationRef:
     """An application linked to a business capability, with non-sensitive APM

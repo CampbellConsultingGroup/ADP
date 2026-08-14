@@ -5,10 +5,12 @@ columns (element_technology_tags B-tree indexes, designs.lifecycle_status index)
 No new DB tables or migrations required.
 
 Endpoints:
-  GET /api/v1/portfolio/technologies  — technology landscape aggregation
-  GET /api/v1/portfolio/designs       — combined technology + lifecycle filter
-  GET /api/v1/portfolio/search        — cross-design element/technology search
-  GET /api/v1/portfolio/summary       — portfolio health summary header
+  GET /api/v1/portfolio/technologies              — technology landscape aggregation
+  GET /api/v1/portfolio/designs                   — combined technology + lifecycle filter
+  GET /api/v1/portfolio/search                    — cross-design element/technology search
+  GET /api/v1/portfolio/summary                   — portfolio health summary header
+  GET /api/v1/portfolio/applications-heatmap      — applications heat map (919-insights-dashboard)
+  GET /api/v1/portfolio/application-capability-groups — app-capability links, bulk (ADP-8xo)
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.api.deps import get_kb_session
+from adp.application.models import ApplicationCapabilityLink
 from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
 from adp.authz.permissions import is_permitted
@@ -98,6 +101,11 @@ class ApplicationHeatmapEntry(BaseModel):
 class ApplicationHeatmapResponse(BaseModel):
     items: list[ApplicationHeatmapEntry]
     cost_permitted: bool
+
+
+# ADP-8xo: Application Portfolio pivot, business-capability grouping dimension.
+class ApplicationCapabilityGroupsResponse(BaseModel):
+    items: list[ApplicationCapabilityLink]
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -330,3 +338,20 @@ async def get_applications_heatmap(
         for r in rows
     ]
     return ApplicationHeatmapResponse(items=items, cost_permitted=cost_permitted)
+
+
+@router.get("/application-capability-groups", response_model=ApplicationCapabilityGroupsResponse)
+async def get_application_capability_groups(
+    session: AsyncSession = Depends(get_kb_session),
+) -> ApplicationCapabilityGroupsResponse:
+    """Every app-capability link across the portfolio, for client-side grouping by
+    business capability (ADP-8xo, Application Portfolio pivot, dimension 1 of 5).
+
+    Open read -- fit_score carries no READ_APPLICATION_* gate (confirmed against
+    adp.authz.permissions; only Risk/Cost/Governance are gated), so no route-level
+    permission dependency is needed, unlike applications-heatmap's cost dimension.
+    """
+    from adp.application import store as astore
+
+    links = await astore.list_all_capability_links(session)
+    return ApplicationCapabilityGroupsResponse(items=links)
