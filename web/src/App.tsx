@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import OverviewPage from "./overview/OverviewPage";
+import InsightsPage from "./insights/InsightsPage";
 import DesignsPage from "./designs/DesignsPage";
 import { C4DesignView } from "./canvas-v2/C4DesignView";
 import IntakePage from "./intake/IntakePage";
@@ -45,6 +46,8 @@ export default function App(): React.ReactElement {
     switch (view) {
       case "overview":
         return <OverviewPage onNavigate={onNavigate} />;
+      case "insights":
+        return <InsightsPage />;
       case "portfolio":
         return <PortfolioPage onNavigate={onNavigate} onSelectDesign={onSelectDesign} />;
       case "governance":

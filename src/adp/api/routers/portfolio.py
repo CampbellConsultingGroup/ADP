@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, Query
@@ -22,6 +23,10 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.api.deps import get_kb_session
+from adp.auth.deps import get_current_user
+from adp.auth.models import AuthenticatedUser
+from adp.authz.permissions import is_permitted
+from adp.authz.roles import ActionType
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +81,23 @@ class PortfolioSummaryResponse(BaseModel):
     total_designs: int
     by_status: dict[str, int]
     overdue_review_count: int
+
+
+# 919-insights-dashboard: applications heat map.
+class ApplicationHeatmapEntry(BaseModel):
+    id: str
+    name: str
+    health_score: int | None
+    business_criticality: int | None
+    time_classification: str | None
+    # Always None when the caller lacks READ_APPLICATION_COST, regardless of whether the
+    # application actually has a cost record -- see ApplicationHeatmapResponse.cost_permitted.
+    cost: Decimal | None
+
+
+class ApplicationHeatmapResponse(BaseModel):
+    items: list[ApplicationHeatmapEntry]
+    cost_permitted: bool
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -262,3 +284,49 @@ async def get_portfolio_summary(
         by_status=by_status,
         overdue_review_count=overdue_count,
     )
+
+
+@router.get("/applications-heatmap", response_model=ApplicationHeatmapResponse)
+async def get_applications_heatmap(
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: AsyncSession = Depends(get_kb_session),
+) -> ApplicationHeatmapResponse:
+    """Every application as one heat-map cell (919-insights-dashboard, FR-001).
+
+    No route-level permission gate -- health_score/business_criticality/
+    time_classification are already open reads today (Ground-Truth Correction 3). The cost
+    dimension is checked inline instead (research.md Decision 2): the cost query only runs,
+    and cost values only populate, when the caller holds READ_APPLICATION_COST -- mirroring
+    adp.chat.tools.get_application_cost's own inline-check pattern rather than gating the
+    whole endpoint and blocking the three open dimensions for a cost-denied caller.
+    """
+    result = await session.execute(
+        sa.text(
+            """
+            SELECT id, name, health_score, business_criticality, time_classification
+            FROM applications
+            ORDER BY name
+            """
+        )
+    )
+    rows = result.mappings().all()
+
+    cost_permitted = is_permitted(user.role, ActionType.READ_APPLICATION_COST)
+    cost_by_app: dict[str, Decimal] = {}
+    if cost_permitted:
+        from adp.application import store as astore
+
+        cost_by_app = await astore.list_all_costs(session)
+
+    items = [
+        ApplicationHeatmapEntry(
+            id=r["id"],
+            name=r["name"],
+            health_score=r["health_score"],
+            business_criticality=r["business_criticality"],
+            time_classification=r["time_classification"],
+            cost=cost_by_app.get(r["id"]) if cost_permitted else None,
+        )
+        for r in rows
+    ]
+    return ApplicationHeatmapResponse(items=items, cost_permitted=cost_permitted)

@@ -648,6 +648,19 @@ async def upsert_application_cost(
     return cost
 
 
+async def list_all_costs(session: AsyncSession) -> dict[str, Decimal]:
+    """TCO per application, for every application with a cost record.
+
+    919-insights-dashboard: a bulk read for the applications heat map's cost dimension --
+    reuses ``_row_to_cost`` (TCO is derived, not stored) rather than duplicating the
+    bucket-sum formula in raw SQL. Applications with no cost record are simply absent from
+    the returned mapping (caller renders them "unclassified", mirroring health_score/
+    business_criticality/time_classification's own null handling).
+    """
+    result = await session.execute(sa.select(_application_cost))
+    return {row["app_id"]: _row_to_cost(row).tco for row in result.mappings().all()}
+
+
 async def rollup_cost_by_business_unit(session: AsyncSession) -> CostRollupResponse:
     """TCO per business unit, computed in Python (TCO is derived, not stored)."""
     stmt = sa.select(_applications.c.owning_business_unit, _application_cost).select_from(
