@@ -5,10 +5,10 @@ import ObjectiveDetail from "./ObjectiveDetail";
 import InitiativeList from "./InitiativeList";
 import StrategyHeatMap from "./StrategyHeatMap";
 
-type StrategyTab = "objectives" | "themes" | "initiatives" | "heatmap";
+type StrategyTab = "themes" | "objectives" | "initiatives" | "heatmap";
 
 export default function StrategyPage(): React.ReactElement {
-  const [tab, setTab] = useState<StrategyTab>("objectives");
+  const [tab, setTab] = useState<StrategyTab>("themes");
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<string | null>(null);
 
   return (
@@ -25,8 +25,8 @@ export default function StrategyPage(): React.ReactElement {
         <div style={{ display: "flex", gap: 0, borderBottom: "2px solid var(--border)", marginBottom: 20 }}>
           {(
             [
-              ["objectives", "Objectives"],
               ["themes", "Themes"],
+              ["objectives", "Objectives"],
               ["initiatives", "Initiatives"],
               ["heatmap", "Heat Map"],
             ] as [StrategyTab, string][]
