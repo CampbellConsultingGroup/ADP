@@ -204,16 +204,40 @@ export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetail
               <Button size="sm" variant="danger" onClick={handleDelete}>Delete</Button>
             </div>
           </div>
-          <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 4 }}>Owner: {objective.owner}</div>
-          <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 4 }}>
-            {objective.period} {objective.fiscal_year}
-          </div>
-          {objective.metric_name && (
-            <div style={{ fontSize: 13, color: "var(--ink-3)", marginBottom: 4 }}>
-              {objective.metric_name}: {objective.direction} to {objective.target_value}
-              {objective.target_unit}
+          {/* Labeled data card: the objective's own fields, made clearly legible
+              and visually distinct from the "Linked ___" sections below --
+              previously plain unlabeled text easy to read past (reported live,
+              2026-08-14). */}
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+              gap: 12,
+              padding: 14,
+              marginBottom: 16,
+              background: "var(--surface-2)",
+              border: "1px solid var(--border)",
+              borderRadius: 8,
+            }}
+          >
+            <div>
+              <div style={fieldLabelStyle}>Owner</div>
+              <div style={fieldValueStyle}>{objective.owner}</div>
             </div>
-          )}
+            <div>
+              <div style={fieldLabelStyle}>Fiscal Period</div>
+              <div style={fieldValueStyle}>{objective.period} {objective.fiscal_year}</div>
+            </div>
+            {objective.metric_name && (
+              <div>
+                <div style={fieldLabelStyle}>Target</div>
+                <div style={fieldValueStyle}>
+                  {objective.metric_name}: {objective.direction} to {objective.target_value}
+                  {objective.target_unit}
+                </div>
+              </div>
+            )}
+          </div>
           {objective.status === "abandoned" && objective.status_reason && (
             <div className="ui-alert crit" style={{ fontSize: 12, marginBottom: 4 }}>
               Abandoned: {objective.status_reason}
@@ -256,3 +280,17 @@ export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetail
     </div>
   );
 }
+
+const fieldLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 600,
+  color: "var(--ink-3)",
+  textTransform: "uppercase",
+  letterSpacing: 0.4,
+  marginBottom: 2,
+};
+
+const fieldValueStyle: React.CSSProperties = {
+  fontSize: 13,
+  color: "var(--ink)",
+};

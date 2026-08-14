@@ -103,6 +103,37 @@ describe("ObjectiveValueStreamLinkEditor", () => {
 
     await user.click(screen.getByText("Remove"));
 
-    expect(mutate).toHaveBeenCalledWith("vs-1");
+    expect(mutate).toHaveBeenCalledWith("vs-1", expect.anything());
+  });
+
+  it("shows a confirmation once linking succeeds (bug found live, 2026-08-14)", async () => {
+    const mutate = vi.fn((_id, opts) => opts?.onSuccess?.());
+    mockedStrategyApi.useLinkObjectiveValueStream.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveValueStream>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveValueStreamLinkEditor objective={OBJECTIVE} />);
+
+    await user.selectOptions(screen.getByRole("combobox"), "vs-2");
+    await user.click(screen.getByText("Link"));
+
+    expect(screen.getByText(/Linked "Quote to Bind"/)).toBeTruthy();
+  });
+
+  it("shows a confirmation once unlinking succeeds", async () => {
+    const mutate = vi.fn((_id, opts) => opts?.onSuccess?.());
+    mockedStrategyApi.useUnlinkObjectiveValueStream.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useUnlinkObjectiveValueStream>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveValueStreamLinkEditor objective={OBJECTIVE} />);
+
+    await user.click(screen.getByText("Remove"));
+
+    expect(screen.getByText(/Removed "Claim to Payout"/)).toBeTruthy();
   });
 });

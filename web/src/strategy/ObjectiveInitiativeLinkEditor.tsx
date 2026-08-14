@@ -12,6 +12,7 @@ import {
   useLinkObjectiveToInitiative,
   useUnlinkObjectiveFromInitiative,
 } from "../api/strategy";
+import { useLinkFeedback } from "./useLinkFeedback";
 
 interface Props {
   objectiveId: string;
@@ -20,6 +21,7 @@ interface Props {
 export default function ObjectiveInitiativeLinkEditor({ objectiveId }: Props): React.ReactElement {
   const [selectedId, setSelectedId] = useState<string>("");
   const [linkError, setLinkError] = useState<string | null>(null);
+  const feedback = useLinkFeedback();
 
   const allInitiatives = useInitiatives();
   const linkedInitiatives = useObjectiveInitiatives(objectiveId);
@@ -33,8 +35,12 @@ export default function ObjectiveInitiativeLinkEditor({ objectiveId }: Props): R
   function handleAdd() {
     if (!selectedId) return;
     setLinkError(null);
+    const name = available.find((i) => i.id === selectedId)?.name ?? selectedId;
     link.mutate(selectedId, {
-      onSuccess: () => setSelectedId(""),
+      onSuccess: () => {
+        setSelectedId("");
+        feedback.showLinked(name);
+      },
       onError: (err: Error & { status?: number }) => {
         if (err.status === 409) {
           setLinkError("Already linked");
@@ -70,7 +76,7 @@ export default function ObjectiveInitiativeLinkEditor({ objectiveId }: Props): R
           >
             <span style={{ flex: 1, fontSize: "0.85rem" }}>{i.name}</span>
             <button
-              onClick={() => unlink.mutate(i.id)}
+              onClick={() => unlink.mutate(i.id, { onSuccess: () => feedback.showRemoved(i.name) })}
               disabled={unlink.isPending}
               style={{
                 background: "none",
@@ -133,6 +139,11 @@ export default function ObjectiveInitiativeLinkEditor({ objectiveId }: Props): R
       {linkError && (
         <p style={{ color: "var(--error, var(--crit))", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>
           {linkError}
+        </p>
+      )}
+      {feedback.message && (
+        <p style={{ color: "var(--good)", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>
+          {feedback.message}
         </p>
       )}
     </div>

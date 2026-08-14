@@ -13,6 +13,7 @@ import {
   useUnlinkObjectiveCapability,
   type StrategicObjective,
 } from "../api/strategy";
+import { useLinkFeedback } from "./useLinkFeedback";
 
 interface Props {
   objective: StrategicObjective;
@@ -21,6 +22,7 @@ interface Props {
 export default function ObjectiveCapabilityLinkEditor({ objective }: Props): React.ReactElement {
   const [selectedId, setSelectedId] = useState<string>("");
   const [linkError, setLinkError] = useState<string | null>(null);
+  const feedback = useLinkFeedback();
 
   const allCapabilities = useCapabilities();
   const link = useLinkObjectiveCapability(objective.id);
@@ -33,8 +35,12 @@ export default function ObjectiveCapabilityLinkEditor({ objective }: Props): Rea
   function handleAdd() {
     if (!selectedId) return;
     setLinkError(null);
+    const name = available.find((c) => c.id === selectedId)?.name ?? selectedId;
     link.mutate(selectedId, {
-      onSuccess: () => setSelectedId(""),
+      onSuccess: () => {
+        setSelectedId("");
+        feedback.showLinked(name);
+      },
       onError: (err: Error & { status?: number }) => {
         if (err.status === 409) {
           setLinkError("Already linked");
@@ -70,7 +76,7 @@ export default function ObjectiveCapabilityLinkEditor({ objective }: Props): Rea
           >
             <span style={{ flex: 1, fontSize: "0.85rem" }}>{c.name}</span>
             <button
-              onClick={() => unlink.mutate(c.id)}
+              onClick={() => unlink.mutate(c.id, { onSuccess: () => feedback.showRemoved(c.name) })}
               disabled={unlink.isPending}
               style={{
                 background: "none",
@@ -133,6 +139,11 @@ export default function ObjectiveCapabilityLinkEditor({ objective }: Props): Rea
       {linkError && (
         <p style={{ color: "var(--error, var(--crit))", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>
           {linkError}
+        </p>
+      )}
+      {feedback.message && (
+        <p style={{ color: "var(--good)", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>
+          {feedback.message}
         </p>
       )}
     </div>

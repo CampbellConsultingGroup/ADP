@@ -101,6 +101,37 @@ describe("ObjectiveDesignLinkEditor", () => {
 
     await user.click(screen.getByText("Remove"));
 
-    expect(mutate).toHaveBeenCalledWith("DSN-001");
+    expect(mutate).toHaveBeenCalledWith("DSN-001", expect.anything());
+  });
+
+  it("shows a confirmation once linking succeeds (bug found live, 2026-08-14)", async () => {
+    const mutate = vi.fn((_id, opts) => opts?.onSuccess?.());
+    mockedStrategyApi.useLinkObjectiveDesign.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveDesign>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveDesignLinkEditor objective={OBJECTIVE} />);
+
+    await user.selectOptions(screen.getByRole("combobox"), "DSN-002");
+    await user.click(screen.getByText("Link"));
+
+    expect(screen.getByText(/Linked "Claims Portal"/)).toBeTruthy();
+  });
+
+  it("shows a confirmation once unlinking succeeds", async () => {
+    const mutate = vi.fn((_id, opts) => opts?.onSuccess?.());
+    mockedStrategyApi.useUnlinkObjectiveDesign.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useUnlinkObjectiveDesign>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveDesignLinkEditor objective={OBJECTIVE} />);
+
+    await user.click(screen.getByText("Remove"));
+
+    expect(screen.getByText(/Removed "Payments Platform"/)).toBeTruthy();
   });
 });

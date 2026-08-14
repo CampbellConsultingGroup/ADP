@@ -201,6 +201,15 @@ describe("ObjectiveDetail: read-only display", () => {
     expect(screen.getByText("No capabilities linked yet.")).toBeTruthy();
     expect(screen.getByText("No value streams linked yet.")).toBeTruthy();
   });
+
+  it("labels the core fields clearly, distinct from the linked-entity sections (bug found live, 2026-08-14)", () => {
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    expect(screen.getByText("Owner")).toBeTruthy();
+    expect(screen.getByText("Fiscal Period")).toBeTruthy();
+    expect(screen.getByText("Target")).toBeTruthy();
+    expect(screen.getByText(/Q3 2026/)).toBeTruthy();
+  });
 });
 
 describe("ObjectiveDetail: edit (T031)", () => {
@@ -397,7 +406,41 @@ describe("ObjectiveDetail: linked initiatives panel (ADP-d8u.6, T018)", () => {
 
     await user.click(screen.getByText("Remove"));
 
-    expect(unlinkMutate).toHaveBeenCalledWith("init-1");
+    expect(unlinkMutate).toHaveBeenCalledWith("init-1", expect.anything());
+  });
+
+  it("shows a confirmation once linking an initiative succeeds (bug found live, 2026-08-14)", async () => {
+    mockedStrategyApi.useObjectiveInitiatives.mockReturnValue({
+      data: { items: [], total: 0 },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useObjectiveInitiatives>);
+    mockedStrategyApi.useInitiatives.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: "init-2", name: "Fraud Detection", description: null, owner: null,
+            status: "planned", objective_ids: [],
+            created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+        total: 1,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useInitiatives>);
+    const linkMutate = vi.fn((_id, opts) => opts?.onSuccess?.());
+    mockedStrategyApi.useLinkObjectiveToInitiative.mockReturnValue({
+      mutate: linkMutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveToInitiative>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    const select = screen.getByDisplayValue("— select initiative —");
+    await user.selectOptions(select, "init-2");
+    await user.click(within(select.parentElement as HTMLElement).getByText("Link"));
+
+    expect(screen.getByText(/Linked "Fraud Detection"/)).toBeTruthy();
   });
 });
 

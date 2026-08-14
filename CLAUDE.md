@@ -1,6 +1,6 @@
 # ADP Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-08-14 (ADP-5wf objective-save bug fixed)
+Auto-generated from all feature plans. Last updated: 2026-08-14 (ADP-c44 objective detail legibility fixed)
 
 ## Active Technologies
 - Python 3.11+ + SQLAlchemy 2.x (async ORM), asyncpg (PostgreSQL async driver), Alembic (migrations), testcontainers-python (PostgreSQL container for integration tests), pydantic-settings (database URL config) (002-design-store)
@@ -127,6 +127,38 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- ADP-c44: Fixed (bug, not a speckit feature — no `specs/` directory) — a direct follow-up to ADP-5wf,
+  reported live on the same screen: "once data is saved there is nowhere to see it again" and "no save
+  button to save the linked items." Investigated live before touching any code (per this session's own
+  established discipline): both mechanisms actually already worked correctly — the objective's own fields
+  (owner/period/metric) rendered in the read view, and each link editor's "Link"/"Remove" persisted
+  immediately on click, confirmed via a direct API check plus a full page reload. The real problem was
+  legibility, not function: the core fields were small, unlabeled text sitting directly above six large,
+  clearly-headed "Linked ___" sections, easy to read straight past; and clicking "Link" gave zero visual
+  confirmation it had just saved, unlike every other form in the app (which all use an explicit Save
+  button). Resolved via a real `AskUserQuestion` on which direction to take (both fixes, confirmed) rather
+  than guessing. Fixed: (1) `ObjectiveDetail.tsx`'s read view now shows owner/fiscal period/target in a
+  clearly labeled, bordered data card, visually distinct from the linked-entity sections below it; (2) a
+  new shared `useLinkFeedback` hook (`web/src/strategy/useLinkFeedback.ts`) gives all five near-identical
+  link editors (Capability/ValueStream/Design/Application/Initiative) a transient "✓ Linked X" / "Removed
+  X" confirmation on success — extracted once rather than duplicated five times, mirroring
+  `checkMetricFields`'s own precedent from ADP-5wf for de-duplicating logic identical across multiple
+  near-verbatim editor components. **A real git-history wrinkle handled carefully, not silently**: this
+  fix's branch was created from `920-capability-diagram-select`'s tip, which had itself forked from `main`
+  *before* ADP-5wf's PR merged — meaning the branch's merge-base with `main` was one commit stale. Caught
+  before opening a PR (a `git log`/`git merge-base` check surfaced the divergence) and fixed with
+  `git reset --soft main`, which moves the branch pointer forward while leaving the working tree
+  untouched — safe here specifically because the working tree already contained the ADP-5wf fix's content
+  (never having been discarded across the branch-creation step), so the reset correctly nets out to "no
+  diff" for that already-merged content and leaves only this fix's genuinely new changes for the PR. 16
+  new/updated tests (`useLinkFeedback.test.ts` plus confirmation-message and unlink-call-signature updates
+  across all five editors' test files and `ObjectiveDetail.test.tsx`), `tsc` clean — the labeled data card
+  confirmed visually live; the link confirmation's correctness confirmed via deterministic unit tests using
+  fake timers, since the message's 3-second auto-clear window is faster than this session's own live-browser
+  tooling round-trip can reliably screenshot (attempted twice live, both times the message had already
+  auto-cleared by the time the screenshot returned — a tooling-latency limitation, not a functional gap,
+  and not worth stretching the timeout to chase given the unit coverage already exercises the exact code
+  path deterministically).
 - ADP-5wf: Fixed (bug, not a speckit feature — no `specs/` directory) — a user-reported "no way to save"
   on the Strategy Objectives screen, root-caused live via direct reproduction rather than assumed. Both
   `ObjectiveForm.tsx` (create) and `ObjectiveDetail.tsx` (edit) shared an identical, flawed `hasMetric`
