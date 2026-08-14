@@ -1,6 +1,23 @@
-import { describe, it, expect } from "vitest";
-import { buildTree } from "./CapabilityTree";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
+import CapabilityTree, { buildTree } from "./CapabilityTree";
+import * as businessApi from "../api/business";
 import type { BusinessCapability } from "../api/business";
+
+vi.mock("../api/business");
+
+const mockedBusinessApi = vi.mocked(businessApi);
+
+// CapabilityTree.tsx calls useQueryClient() directly (for the portfolio-
+// review invalidate callback) -- a real QueryClientProvider is needed,
+// unlike this session's usual vi.mock(hooks-module)-only convention.
+function renderWithQueryClient(ui: ReactElement) {
+  const qc = new QueryClient();
+  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
+}
 
 function cap(partial: Partial<BusinessCapability> & { id: string; name: string; level: 1 | 2 | 3 }): BusinessCapability {
   return {
@@ -78,5 +95,51 @@ describe("buildTree", () => {
     const tree = buildTree(items);
     expect(tree).toHaveLength(2);
     expect(tree.map((n) => n.id)).toEqual(["a", "b"]);
+  });
+});
+
+describe("CapabilityTree: orphan badge and filter (918-strategy-rollups)", () => {
+  const CAPS: BusinessCapability[] = [
+    cap({ id: "linked", name: "Linked Cap", level: 1 }),
+    cap({ id: "orphan", name: "Orphan Cap", level: 1, position: 1 }),
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedBusinessApi.useCapabilities.mockReturnValue({
+      data: { items: CAPS, total: 2 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof businessApi.useCapabilities>);
+    mockedBusinessApi.useOrphanReport.mockReturnValue({
+      data: { orphan_capabilities: [CAPS[1]], orphan_value_streams: [] },
+    } as unknown as ReturnType<typeof businessApi.useOrphanReport>);
+    mockedBusinessApi.useUpdateCapability.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof businessApi.useUpdateCapability>);
+    mockedBusinessApi.useDeleteCapability.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof businessApi.useDeleteCapability>);
+  });
+
+  it("shows a 'no strategic linkage' badge only on the orphaned capability", () => {
+    renderWithQueryClient(<CapabilityTree />);
+
+    expect(screen.getAllByText("no strategic linkage")).toHaveLength(1);
+  });
+
+  it("toggling 'Show orphans only' narrows the tree to just orphaned capabilities", async () => {
+    const user = userEvent.setup();
+    renderWithQueryClient(<CapabilityTree />);
+
+    expect(screen.getByText("Linked Cap")).toBeTruthy();
+    expect(screen.getByText("Orphan Cap")).toBeTruthy();
+
+    await user.click(screen.getByText("Show orphans only"));
+
+    expect(screen.queryByText("Linked Cap")).toBeNull();
+    expect(screen.getByText("Orphan Cap")).toBeTruthy();
   });
 });

@@ -124,6 +124,14 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
   const stratUpcoming = strategySummary.data?.upcoming_count ?? 0;
   const stratPastDue = strategySummary.data?.past_due_count ?? 0;
   const stratFiscalTotal = Math.max(1, stratCurrent + stratUpcoming + stratPastDue);
+  // 918-strategy-rollups: status breakdown + initiative count, enriching
+  // this already-shipped card -- no new card, no layout change beyond the
+  // card's own content (spec.md Ground-Truth Correction 1).
+  const stratInitiatives = strategySummary.data?.initiative_count;
+  const stratAtRisk = strategySummary.data?.at_risk_count ?? 0;
+  const stratHealthy = (strategySummary.data?.active_count ?? 0) + (strategySummary.data?.achieved_count ?? 0);
+  const stratOther = (strategySummary.data?.proposed_count ?? 0) + (strategySummary.data?.abandoned_count ?? 0);
+  const stratStatusTotal = Math.max(1, stratAtRisk + stratHealthy + stratOther);
 
   const DOMAINS: Domain[] = [
     {
@@ -133,6 +141,7 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
       metrics: [
         { n: num(stratTotalObjectives), l: "Objectives" },
         { n: num(stratTotalThemes), l: "Themes" },
+        { n: num(stratInitiatives), l: "Initiatives" },
       ],
       tiles: [
         { name: "Objectives", icon: "spark", metric: `${num(stratTotalObjectives)} objectives`, view: "strategy" },
@@ -159,6 +168,17 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
               <div className="ovw-strat-seg-warn" style={{ width: `${(stratPastDue / stratFiscalTotal) * 100}%` }} />
               <div className="ovw-strat-seg-good" style={{ width: `${(stratCurrent / stratFiscalTotal) * 100}%` }} />
               <div className="ovw-strat-seg-upcoming" style={{ width: `${(stratUpcoming / stratFiscalTotal) * 100}%` }} />
+            </div>
+          </div>
+          <div className="ovw-strat-row">
+            <div className={`ovw-strat-label${stratAtRisk > 0 ? " alert" : ""}`}>
+              <span>{stratAtRisk} at risk</span>
+              <span>{stratHealthy} on track</span>
+            </div>
+            <div className="ovw-strat-bar">
+              <div className="ovw-strat-seg-warn" style={{ width: `${(stratAtRisk / stratStatusTotal) * 100}%` }} />
+              <div className="ovw-strat-seg-good" style={{ width: `${(stratHealthy / stratStatusTotal) * 100}%` }} />
+              <div className="ovw-strat-seg-upcoming" style={{ width: `${(stratOther / stratStatusTotal) * 100}%` }} />
             </div>
           </div>
         </>

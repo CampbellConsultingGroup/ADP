@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCapabilities } from "../api/business";
+import { useCapabilities, useOrphanReport } from "../api/business";
 import type { BusinessCapability } from "../api/business";
 import type { DiagramSeed } from "../diagrams/generators";
 import CapabilityNode from "./CapabilityNode";
@@ -43,10 +43,19 @@ export function buildTree(items: BusinessCapability[]): CapabilityTreeNode[] {
   return roots;
 }
 
-function renderTree(nodes: CapabilityTreeNode[], onGenerateDiagram?: (seed: DiagramSeed) => void): React.ReactElement[] {
+function renderTree(
+  nodes: CapabilityTreeNode[],
+  orphanIds: Set<string>,
+  onGenerateDiagram?: (seed: DiagramSeed) => void,
+): React.ReactElement[] {
   return nodes.map((node) => (
-    <CapabilityNode key={node.id} capability={node} onGenerateDiagram={onGenerateDiagram}>
-      {renderTree(node.children, onGenerateDiagram)}
+    <CapabilityNode
+      key={node.id}
+      capability={node}
+      onGenerateDiagram={onGenerateDiagram}
+      isOrphan={orphanIds.has(node.id)}
+    >
+      {renderTree(node.children, orphanIds, onGenerateDiagram)}
     </CapabilityNode>
   ));
 }
@@ -62,16 +71,24 @@ export interface CapabilityTreeProps {
 
 export default function CapabilityTree({ onGenerateDiagram }: CapabilityTreeProps): React.ReactElement {
   const { data, isLoading, error } = useCapabilities();
+  const { data: orphanData } = useOrphanReport();
   const [showRootForm, setShowRootForm] = useState(false);
   const [showPortfolioReview, setShowPortfolioReview] = useState(false);
   const [showChat, setShowChat] = useState(false);
+  const [orphansOnly, setOrphansOnly] = useState(false);
   const queryClient = useQueryClient();
 
   if (isLoading) return <div style={{ padding: 20, color: "var(--ink-3)", fontSize: 14 }}>Loading capabilities…</div>;
   if (error) return <div style={{ padding: 14, background: "var(--crit-wash)", borderRadius: 6, fontSize: 13, color: "var(--crit)" }}>Failed to load capabilities: {error.message}</div>;
 
   const items = data?.items ?? [];
-  const tree = buildTree(items);
+  const orphanIds = new Set((orphanData?.orphan_capabilities ?? []).map((c) => c.id));
+  // FR-006: filtering to orphans only prunes the tree to just orphaned
+  // nodes -- a capability whose only orphaned descendant is nested several
+  // levels down surfaces as its own root, rather than dragging its whole
+  // (non-orphaned) ancestor chain along just for context.
+  const visibleItems = orphansOnly ? items.filter((c) => orphanIds.has(c.id)) : items;
+  const tree = buildTree(visibleItems);
 
   return (
     <div>
@@ -80,6 +97,18 @@ export default function CapabilityTree({ onGenerateDiagram }: CapabilityTreeProp
           {items.length} capability{items.length !== 1 ? "ies" : "y"} across all levels
         </span>
         <div style={{ display: "flex", gap: 8 }}>
+          <button
+            onClick={() => setOrphansOnly(!orphansOnly)}
+            title="Show only capabilities with no strategic-objective linkage"
+            style={{
+              padding: "6px 14px",
+              background: orphansOnly ? "var(--warn-wash)" : "var(--surface)",
+              color: orphansOnly ? "var(--warn)" : "var(--ink-2)",
+              border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600,
+            }}
+          >
+            {orphansOnly ? "Showing orphans only" : "Show orphans only"}
+          </button>
           <ChatButton active={showChat} onToggle={() => setShowChat(!showChat)} label="Chat" />
           <button
             onClick={() => setShowPortfolioReview(!showPortfolioReview)}
@@ -143,13 +172,19 @@ export default function CapabilityTree({ onGenerateDiagram }: CapabilityTreeProp
         />
       )}
 
-      {tree.length === 0 && !showRootForm && (
+      {tree.length === 0 && !showRootForm && orphansOnly && (
+        <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 14, border: "2px dashed var(--border)", borderRadius: 8 }}>
+          No capabilities with missing strategic linkage.
+        </div>
+      )}
+
+      {tree.length === 0 && !showRootForm && !orphansOnly && (
         <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 14, border: "2px dashed var(--border)", borderRadius: 8 }}>
           The capability model is empty. Click "Add Strategic Capability" to create the first Level 1 capability.
         </div>
       )}
 
-      {renderTree(tree, onGenerateDiagram)}
+      {renderTree(tree, orphanIds, onGenerateDiagram)}
     </div>
   );
 }

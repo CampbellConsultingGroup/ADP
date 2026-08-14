@@ -515,6 +515,10 @@ def _mock_row(**fields):
 
 @pytest.fixture()
 def mocked_summary_session():
+    # 918-strategy-rollups: get_summary_stats now issues a second
+    # session.execute() call (the Python-side status tally) -- .mappings().
+    # all() is configured to return an empty list for it, same as
+    # test_strategy_store.py's own _mock_session_returning helper.
     session = AsyncMock()
     result = MagicMock()
     result.mappings.return_value.first = MagicMock(
@@ -526,8 +530,10 @@ def mocked_summary_session():
             current_period_count=5,
             upcoming_count=4,
             past_due_count=3,
+            initiative_count=2,
         )
     )
+    result.mappings.return_value.all = MagicMock(return_value=[])
     session.execute = AsyncMock(return_value=result)
     return session
 
@@ -544,6 +550,12 @@ async def test_get_summary_200_with_all_fields(summary_client) -> None:
         "current_period_count": 5,
         "upcoming_count": 4,
         "past_due_count": 3,
+        "initiative_count": 2,
+        "proposed_count": 0,
+        "active_count": 0,
+        "at_risk_count": 0,
+        "achieved_count": 0,
+        "abandoned_count": 0,
     }
 
 
@@ -554,7 +566,8 @@ async def test_get_summary_rejects_unexpected_fields(summary_client) -> None:
     assert resp.status_code == 200
     assert set(resp.json().keys()) == {
         "total_themes", "total_objectives", "linked_count", "unlinked_count",
-        "current_period_count", "upcoming_count", "past_due_count",
+        "current_period_count", "upcoming_count", "past_due_count", "initiative_count",
+        "proposed_count", "active_count", "at_risk_count", "achieved_count", "abandoned_count",
     }
 
 
@@ -564,9 +577,10 @@ async def test_get_summary_all_zero_on_empty_database() -> None:
     result.mappings.return_value.first = MagicMock(
         return_value=_mock_row(
             total_themes=0, total_objectives=0, linked_count=0, unlinked_count=0,
-            current_period_count=0, upcoming_count=0, past_due_count=0,
+            current_period_count=0, upcoming_count=0, past_due_count=0, initiative_count=0,
         )
     )
+    result.mappings.return_value.all = MagicMock(return_value=[])
     session.execute = AsyncMock(return_value=result)
 
     from adp.api.app import create_app
@@ -583,6 +597,60 @@ async def test_get_summary_all_zero_on_empty_database() -> None:
 
     assert resp.status_code == 200, resp.text
     assert all(v == 0 for v in resp.json().values())
+
+
+# ── GET /strategy/heatmap (918-strategy-rollups) ────────────────────────────────
+#
+# Unlike /summary above, get_strategy_heatmap() has no Postgres-only NOW()/
+# EXTRACT() SQL, so it runs against this module's real-SQLite `client`
+# fixture directly -- no mocked-session fixture needed.
+
+
+async def test_get_heatmap_200_reflects_real_objectives(client) -> None:
+    theme_id = await _mk_theme(client, "Growth")
+    created = await _mk_objective_with_target(client, theme_id)
+    await client.post(
+        f"{BASE}/objectives/{created['id']}/progress",
+        json={"as_of_date": "2026-08-01", "actual_value": 40},
+    )
+
+    resp = await client.get(f"{BASE}/heatmap")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["total_objectives"] == 1
+    row = next(r for r in body["themes"] if r["theme_id"] == theme_id)
+    assert row["active_count"] == 1
+    assert row["proposed_count"] == 0
+
+
+async def test_get_heatmap_theme_with_zero_objectives_shows_all_zero_row(client) -> None:
+    theme_id = await _mk_theme(client, "Untouched")
+    resp = await client.get(f"{BASE}/heatmap")
+    assert resp.status_code == 200
+    row = next(r for r in resp.json()["themes"] if r["theme_id"] == theme_id)
+    assert row["proposed_count"] == 0
+    assert row["active_count"] == 0
+    assert row["at_risk_count"] == 0
+    assert row["achieved_count"] == 0
+    assert row["abandoned_count"] == 0
+
+
+async def test_get_heatmap_theme_id_filter_narrows_to_one_theme(client) -> None:
+    growth_id = await _mk_theme(client, "Growth")
+    efficiency_id = await _mk_theme(client, "Efficiency")
+    await _mk_objective_with_target(client, growth_id)
+    await _mk_objective_with_target(client, efficiency_id)
+
+    resp = await client.get(f"{BASE}/heatmap", params={"theme_id": growth_id})
+    assert resp.status_code == 200
+    theme_ids = [r["theme_id"] for r in resp.json()["themes"]]
+    assert theme_ids == [growth_id]
+
+
+async def test_get_heatmap_empty_database_returns_empty_themes(client) -> None:
+    resp = await client.get(f"{BASE}/heatmap")
+    assert resp.status_code == 200
+    assert resp.json() == {"themes": [], "total_objectives": 0}
 
 
 # ── User Story 1 (ADP-d8u.5): objective progress + computed status ────────────

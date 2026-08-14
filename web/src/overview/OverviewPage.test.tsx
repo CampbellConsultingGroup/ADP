@@ -5,7 +5,7 @@
 // calls eight hooks across five modules unconditionally on every render.
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import OverviewPage from "./OverviewPage";
 import * as applicationApi from "../api/application";
@@ -42,6 +42,13 @@ const DEFAULT_SUMMARY = {
   current_period_count: 5,
   upcoming_count: 4,
   past_due_count: 3,
+  // 918-strategy-rollups
+  proposed_count: 3,
+  active_count: 5,
+  at_risk_count: 2,
+  achieved_count: 1,
+  abandoned_count: 1,
+  initiative_count: 6,
 };
 
 beforeEach(() => {
@@ -160,5 +167,49 @@ describe("OverviewPage: Strategy card fiscal-period breakdown (US3)", () => {
 
     const pastDueLabel = screen.getByText(/0 past due/i);
     expect(pastDueLabel.closest(".alert")).toBeNull();
+  });
+});
+
+describe("OverviewPage: Strategy card status breakdown + initiative count (918-strategy-rollups)", () => {
+  // The Governance & Standards tile elsewhere on this page also renders
+  // "N at risk" text (application-level risk, an unrelated concept that
+  // happens to share the same phrasing) -- scope queries to the Strategy
+  // card's own container to avoid colliding with it.
+  function strategyCard() {
+    return screen.getByText("Strategy").closest(".ovw-dcard") as HTMLElement;
+  }
+
+  it("renders the initiative count as a metric tile", () => {
+    render(<OverviewPage onNavigate={vi.fn()} />);
+
+    expect(within(strategyCard()).getByText("6")).toBeTruthy(); // initiative_count
+    expect(within(strategyCard()).getByText("Initiatives")).toBeTruthy();
+  });
+
+  it("renders the at-risk/on-track split from the summary data", () => {
+    render(<OverviewPage onNavigate={vi.fn()} />);
+
+    expect(within(strategyCard()).getByText(/2 at risk/i)).toBeTruthy();
+    expect(within(strategyCard()).getByText(/6 on track/i)).toBeTruthy(); // active_count + achieved_count
+  });
+
+  it("flags the at-risk segment as a warning when at_risk_count > 0", () => {
+    render(<OverviewPage onNavigate={vi.fn()} />);
+
+    const atRiskLabel = within(strategyCard()).getByText(/2 at risk/i);
+    expect(atRiskLabel.closest(".alert")).not.toBeNull();
+  });
+
+  it("shows no warning treatment when at_risk_count is 0", () => {
+    mockedStrategyApi.useStrategySummary.mockReturnValue({
+      data: { ...DEFAULT_SUMMARY, at_risk_count: 0, active_count: 7 },
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof strategyApi.useStrategySummary>);
+
+    render(<OverviewPage onNavigate={vi.fn()} />);
+
+    const atRiskLabel = within(strategyCard()).getByText(/0 at risk/i);
+    expect(atRiskLabel.closest(".alert")).toBeNull();
   });
 });

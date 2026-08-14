@@ -714,6 +714,13 @@ export interface StrategicSummary {
   current_period_count: number;
   upcoming_count: number;
   past_due_count: number;
+  // 918-strategy-rollups
+  proposed_count: number;
+  active_count: number;
+  at_risk_count: number;
+  achieved_count: number;
+  abandoned_count: number;
+  initiative_count: number;
 }
 
 export function useStrategySummary() {
@@ -721,5 +728,34 @@ export function useStrategySummary() {
     queryKey: ["strategy-summary"],
     queryFn: () => apiGet("/api/v1/strategy/summary"),
     staleTime: 60_000,
+  });
+}
+
+// ── Strategy Heat Map (918-strategy-rollups) ────────────────────────────────────
+
+export interface ThemeStatusCounts {
+  theme_id: string;
+  theme_name: string;
+  proposed_count: number;
+  active_count: number;
+  at_risk_count: number;
+  achieved_count: number;
+  abandoned_count: number;
+}
+
+export interface StrategyHeatMapResponse {
+  themes: ThemeStatusCounts[];
+  total_objectives: number;
+}
+
+export function useStrategyHeatMap(themeId?: string) {
+  return useQuery<StrategyHeatMapResponse>({
+    queryKey: ["strategy-heatmap", themeId ?? null],
+    queryFn: () =>
+      apiGet(
+        themeId
+          ? `/api/v1/strategy/heatmap?theme_id=${encodeURIComponent(themeId)}`
+          : "/api/v1/strategy/heatmap",
+      ),
   });
 }
