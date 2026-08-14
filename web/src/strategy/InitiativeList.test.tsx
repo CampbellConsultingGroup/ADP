@@ -39,10 +39,28 @@ beforeEach(() => {
     mutate: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof strategyApi.useDeleteInitiative>);
+  mockedApi.useObjectives.mockReturnValue({
+    data: {
+      items: [
+        { id: "obj-1", theme_id: "t1", owner: "Owner", statement: "Reduce cycle time", fiscal_year: 2026, period: "Q1", status: "proposed", updated_at: "2026-01-01T00:00:00Z" },
+        { id: "obj-2", theme_id: "t1", owner: "Owner", statement: "Improve retention", fiscal_year: 2026, period: "Q1", status: "proposed", updated_at: "2026-01-01T00:00:00Z" },
+      ],
+      total: 2,
+    },
+    isLoading: false,
+  } as unknown as ReturnType<typeof strategyApi.useObjectives>);
+  mockedApi.useLinkInitiativeObjective.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useLinkInitiativeObjective>);
+  mockedApi.useUnlinkInitiativeObjective.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useUnlinkInitiativeObjective>);
 });
 
 describe("InitiativeList (mirrors ThemeList.tsx's convention)", () => {
-  it("renders existing initiatives with status, description, owner, and linked-objective count", () => {
+  it("renders existing initiatives with status, description, owner, and linked-objective statements", () => {
     mockedApi.useInitiatives.mockReturnValue({
       data: { items: [INITIATIVE], total: 1 },
       isLoading: false,
@@ -55,7 +73,8 @@ describe("InitiativeList (mirrors ThemeList.tsx's convention)", () => {
     expect(screen.getByText("In progress")).toBeTruthy();
     expect(screen.getByText("Automate first-notice-of-loss intake")).toBeTruthy();
     expect(screen.getByText(/jane/)).toBeTruthy();
-    expect(screen.getByText("2 linked objectives")).toBeTruthy();
+    expect(screen.getByText("Reduce cycle time")).toBeTruthy();
+    expect(screen.getByText("Improve retention")).toBeTruthy();
   });
 
   it("supports creating a new initiative", async () => {
@@ -108,6 +127,44 @@ describe("InitiativeList (mirrors ThemeList.tsx's convention)", () => {
       expect.objectContaining({ status: "blocked" }),
       expect.anything(),
     );
+  });
+
+  it("shows the objective link editor in edit mode without submitting the name/status form (ADP-pgx)", async () => {
+    const initiative = { ...INITIATIVE, objective_ids: ["obj-1"] };
+    mockedApi.useInitiatives.mockReturnValue({
+      data: { items: [initiative], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useInitiatives>);
+    const updateMutate = vi.fn();
+    mockedApi.useUpdateInitiative.mockReturnValue({
+      mutate: updateMutate,
+      isPending: false,
+      isError: false,
+    } as unknown as ReturnType<typeof strategyApi.useUpdateInitiative>);
+    const linkMutate = vi.fn();
+    mockedApi.useLinkInitiativeObjective.mockReturnValue({
+      mutate: linkMutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useLinkInitiativeObjective>);
+
+    const user = userEvent.setup();
+    render(<InitiativeList />);
+
+    await user.click(screen.getByText("Edit"));
+
+    expect(screen.getByText("Linked Objectives")).toBeTruthy();
+    expect(screen.getByText("Reduce cycle time")).toBeTruthy();
+
+    // Two <select>s are on screen in edit mode (Status, then the objective
+    // link editor's own) -- the objective one is the last combobox.
+    const comboboxes = screen.getAllByRole("combobox");
+    await user.selectOptions(comboboxes[comboboxes.length - 1], "obj-2");
+    await user.click(screen.getByText("Link"));
+
+    expect(linkMutate).toHaveBeenCalledWith("obj-2", expect.anything());
+    // Clicking Link must not have also submitted the name/status form.
+    expect(updateMutate).not.toHaveBeenCalled();
   });
 
   it("deletes an initiative unconditionally, even with linked objectives", async () => {

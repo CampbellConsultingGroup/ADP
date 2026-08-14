@@ -4,10 +4,12 @@ import {
   useCreateInitiative,
   useUpdateInitiative,
   useDeleteInitiative,
+  useObjectives,
   type StrategyInitiative,
   type InitiativeStatus,
 } from "../api/strategy";
 import { Button } from "../ui";
+import InitiativeObjectiveLinkEditor from "./InitiativeObjectiveLinkEditor";
 
 const STATUSES: InitiativeStatus[] = ["planned", "in_progress", "blocked", "complete", "cancelled"];
 const STATUS_LABEL: Record<InitiativeStatus, string> = {
@@ -46,47 +48,50 @@ function InitiativeEditForm({
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 12, marginBottom: 8, background: "var(--surface)" }}
-    >
-      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-        Name
-        <input value={name} onChange={(e) => setName(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
-      </label>
-      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-        Description
-        <input value={description} onChange={(e) => setDescription(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
-      </label>
-      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-        Owner
-        <input value={owner} onChange={(e) => setOwner(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
-      </label>
-      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-        Status
-        <select value={status} onChange={(e) => setStatus(e.target.value as InitiativeStatus)} style={{ display: "block", width: "100%", marginTop: 2 }}>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-          ))}
-        </select>
-      </label>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button type="submit" disabled={updateMutation.isPending}>
-          {updateMutation.isPending ? "Saving…" : "Save"}
-        </button>
-        <button type="button" onClick={onDone}>Cancel</button>
-      </div>
-      {updateMutation.isError && (
-        <div className="ui-alert crit" style={{ marginTop: 6, fontSize: 12 }}>
-          {updateMutation.error.message}
+    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 12, marginBottom: 8, background: "var(--surface)" }}>
+      <form onSubmit={handleSubmit}>
+        <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+          Name
+          <input value={name} onChange={(e) => setName(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
+        </label>
+        <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+          Description
+          <input value={description} onChange={(e) => setDescription(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
+        </label>
+        <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+          Owner
+          <input value={owner} onChange={(e) => setOwner(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
+        </label>
+        <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+          Status
+          <select value={status} onChange={(e) => setStatus(e.target.value as InitiativeStatus)} style={{ display: "block", width: "100%", marginTop: 2 }}>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+            ))}
+          </select>
+        </label>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="submit" disabled={updateMutation.isPending}>
+            {updateMutation.isPending ? "Saving…" : "Save"}
+          </button>
+          <button type="button" onClick={onDone}>Cancel</button>
         </div>
-      )}
-    </form>
+        {updateMutation.isError && (
+          <div className="ui-alert crit" style={{ marginTop: 6, fontSize: 12 }}>
+            {updateMutation.error.message}
+          </div>
+        )}
+      </form>
+
+      <h4 style={{ fontSize: 13, marginTop: 16, marginBottom: 0, color: "var(--ink)" }}>Linked Objectives</h4>
+      <InitiativeObjectiveLinkEditor initiative={initiative} />
+    </div>
   );
 }
 
 export default function InitiativeList() {
   const { data, isLoading, error } = useInitiatives();
+  const { data: objectivesData } = useObjectives();
   const createMutation = useCreateInitiative();
   const deleteMutation = useDeleteInitiative();
   const [showForm, setShowForm] = useState(false);
@@ -98,6 +103,7 @@ export default function InitiativeList() {
   if (error) return <div className="ui-alert crit">Failed to load initiatives</div>;
 
   const items = data?.items ?? [];
+  const objectiveStatements = new Map((objectivesData?.items ?? []).map((o) => [o.id, o.statement]));
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -193,9 +199,18 @@ export default function InitiativeList() {
               {i.owner && (
                 <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>Owner: {i.owner}</div>
               )}
-              <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>
-                {i.objective_ids.length} linked objective{i.objective_ids.length === 1 ? "" : "s"}
-              </div>
+              {i.objective_ids.length === 0 ? (
+                <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>No linked objectives</div>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>
+                  Linked objectives:
+                  {i.objective_ids.map((oid) => (
+                    <div key={oid} style={{ marginTop: 1 }}>
+                      {objectiveStatements.get(oid) ?? oid}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <Button size="sm" onClick={() => setEditingId(i.id)}>Edit</Button>
