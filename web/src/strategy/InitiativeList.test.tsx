@@ -167,6 +167,38 @@ describe("InitiativeList (mirrors ThemeList.tsx's convention)", () => {
     expect(updateMutate).not.toHaveBeenCalled();
   });
 
+  it("lets you jump from a linked objective's name to its own detail view (strategy screen navigation, 2026-08-14)", async () => {
+    mockedApi.useInitiatives.mockReturnValue({
+      data: { items: [INITIATIVE], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useInitiatives>);
+
+    const onNavigateToObjective = vi.fn();
+    const user = userEvent.setup();
+    render(<InitiativeList onNavigateToObjective={onNavigateToObjective} />);
+
+    await user.click(screen.getByText("Reduce cycle time"));
+
+    expect(onNavigateToObjective).toHaveBeenCalledWith("obj-1");
+  });
+
+  it("scrolls the matching row into view and marks it focused when focusInitiativeId is set (mirrors CapabilityTree's focusCapabilityId precedent)", () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    mockedApi.useInitiatives.mockReturnValue({
+      data: { items: [INITIATIVE], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useInitiatives>);
+
+    render(<InitiativeList focusInitiativeId="init-1" />);
+
+    const node = document.getElementById("initiative-init-1");
+    expect(node).toBeTruthy();
+    expect(node!.scrollIntoView).toHaveBeenCalled();
+    expect(node!.getAttribute("data-focused")).toBe("true");
+  });
+
   it("deletes an initiative unconditionally, even with linked objectives", async () => {
     mockedApi.useInitiatives.mockReturnValue({
       data: { items: [INITIATIVE], total: 1 },

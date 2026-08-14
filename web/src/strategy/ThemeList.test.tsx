@@ -28,6 +28,10 @@ beforeEach(() => {
     mutate: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof strategyApi.useDeleteTheme>);
+  mockedApi.useObjectives.mockReturnValue({
+    data: { items: [], total: 0 },
+    isLoading: false,
+  } as unknown as ReturnType<typeof strategyApi.useObjectives>);
 });
 
 describe("ThemeList (mirrors DomainList.tsx's convention)", () => {
@@ -149,6 +153,61 @@ describe("ThemeList: description/owner/priority (ADP-d8u.5, T034)", () => {
 
     expect(mutate).toHaveBeenCalledWith("t1", expect.anything());
     vi.unstubAllGlobals();
+  });
+
+  it("shows an objective count per theme, and lets you jump to that theme's objectives (strategy screen navigation, 2026-08-14)", async () => {
+    mockedApi.useThemes.mockReturnValue({
+      data: { items: [THEME_WITH_METADATA], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useThemes>);
+    mockedApi.useObjectives.mockReturnValue({
+      data: {
+        items: [
+          { id: "obj-1", theme_id: "t1", owner: "A", statement: "Reduce cycle time", fiscal_year: 2026, period: "Q1", status: "proposed", updated_at: "" },
+          { id: "obj-2", theme_id: "t1", owner: "A", statement: "Improve retention", fiscal_year: 2026, period: "Q1", status: "proposed", updated_at: "" },
+        ],
+        total: 2,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useObjectives>);
+
+    const onNavigateToObjectives = vi.fn();
+    const user = userEvent.setup();
+    render(<ThemeList onNavigateToObjectives={onNavigateToObjectives} />);
+
+    const link = screen.getByText("2 objectives");
+    await user.click(link);
+
+    expect(onNavigateToObjectives).toHaveBeenCalledWith("t1");
+  });
+
+  it("shows a zero objective count as plain text when no objectives are linked", () => {
+    mockedApi.useThemes.mockReturnValue({
+      data: { items: [THEME_WITH_METADATA], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useThemes>);
+
+    render(<ThemeList onNavigateToObjectives={vi.fn()} />);
+
+    expect(screen.getByText("0 objectives")).toBeTruthy();
+  });
+
+  it("scrolls the matching row into view and marks it focused when focusThemeId is set (mirrors CapabilityTree's focusCapabilityId precedent)", () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    mockedApi.useThemes.mockReturnValue({
+      data: { items: [THEME_WITH_METADATA], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useThemes>);
+
+    render(<ThemeList focusThemeId="t1" />);
+
+    const node = document.getElementById("theme-t1");
+    expect(node).toBeTruthy();
+    expect(node!.scrollIntoView).toHaveBeenCalled();
+    expect(node!.getAttribute("data-focused")).toBe("true");
   });
 
   it("surfaces a clear message when deleting a still-referenced theme is blocked (409)", async () => {

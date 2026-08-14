@@ -1,12 +1,15 @@
 import { useState } from "react";
 import {
   useThemes,
+  useObjectives,
   useCreateTheme,
   useUpdateTheme,
   useDeleteTheme,
   type StrategicTheme,
 } from "../api/strategy";
 import { Button } from "../ui";
+import NavLinkButton from "./NavLinkButton";
+import { useScrollHighlight } from "./useScrollHighlight";
 
 function ThemeEditForm({ theme, onDone }: { theme: StrategicTheme; onDone: () => void }) {
   const updateMutation = useUpdateTheme(theme.id);
@@ -58,8 +61,20 @@ function ThemeEditForm({ theme, onDone }: { theme: StrategicTheme; onDone: () =>
   );
 }
 
-export default function ThemeList() {
+interface ThemeListProps {
+  /** 043-capability-heat-map-style drill-through target: when set, the
+   *  matching theme row scrolls into view and briefly highlights. Themes
+   *  have no dedicated detail view, so cross-navigation lands here rather
+   *  than a new page (mirrors CapabilityTree's focusCapabilityId). */
+  focusThemeId?: string | null;
+  /** Cross-navigation: jump to the Objectives tab, filtered to this
+   *  theme's objectives. */
+  onNavigateToObjectives?: (themeId: string) => void;
+}
+
+export default function ThemeList({ focusThemeId, onNavigateToObjectives }: ThemeListProps = {}) {
   const { data, isLoading, error } = useThemes();
+  const { data: objectivesData } = useObjectives();
   const createMutation = useCreateTheme();
   const deleteMutation = useDeleteTheme();
   const [showForm, setShowForm] = useState(false);
@@ -67,11 +82,16 @@ export default function ThemeList() {
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { registerRef } = useScrollHighlight(focusThemeId);
 
   if (isLoading) return <div style={{ padding: 16, color: "var(--ink-3)" }}>Loading themes…</div>;
   if (error) return <div className="ui-alert crit">Failed to load themes</div>;
 
   const items = data?.items ?? [];
+  const objectiveCountByTheme = new Map<string, number>();
+  for (const o of objectivesData?.items ?? []) {
+    objectiveCountByTheme.set(o.theme_id, (objectiveCountByTheme.get(o.theme_id) ?? 0) + 1);
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -168,10 +188,14 @@ export default function ThemeList() {
         ) : (
           <div
             key={t.id}
+            id={`theme-${t.id}`}
+            ref={registerRef(t.id)}
+            data-focused={focusThemeId === t.id ? "true" : undefined}
             style={{
               display: "flex", justifyContent: "space-between", alignItems: "flex-start",
-              border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", marginBottom: 8,
-              background: "var(--surface)",
+              border: focusThemeId === t.id ? "1px solid var(--accent)" : "1px solid var(--border)",
+              borderRadius: 8, padding: "10px 12px", marginBottom: 8,
+              background: focusThemeId === t.id ? "var(--accent-wash)" : "var(--surface)",
             }}
           >
             <div>
@@ -189,6 +213,15 @@ export default function ThemeList() {
               {t.owner && (
                 <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>Owner: {t.owner}</div>
               )}
+              <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 4 }}>
+                {onNavigateToObjectives ? (
+                  <NavLinkButton onClick={() => onNavigateToObjectives(t.id)} title="View this theme's objectives">
+                    {objectiveCountByTheme.get(t.id) ?? 0} objective{(objectiveCountByTheme.get(t.id) ?? 0) !== 1 ? "s" : ""}
+                  </NavLinkButton>
+                ) : (
+                  <>{objectiveCountByTheme.get(t.id) ?? 0} objective{(objectiveCountByTheme.get(t.id) ?? 0) !== 1 ? "s" : ""}</>
+                )}
+              </div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
               <Button size="sm" onClick={() => setEditingId(t.id)}>Edit</Button>

@@ -5,6 +5,7 @@ import {
   useDeleteObjective,
   useObjectiveProgress,
   useAbandonObjective,
+  useThemes,
   type ObjectiveDirection,
   type ObjectivePeriod,
   type ObjectiveStatus,
@@ -18,10 +19,20 @@ import ObjectiveDesignLinkEditor from "./ObjectiveDesignLinkEditor";
 import ObjectiveApplicationLinkEditor from "./ObjectiveApplicationLinkEditor";
 import { checkMetricFields } from "./objectiveMetric";
 import { Button, StatusBadge, type BadgeTone } from "../ui";
+import NavLinkButton from "./NavLinkButton";
 
 interface ObjectiveDetailProps {
   objectiveId: string;
   onBack: () => void;
+  /** Cross-navigation: jump to this objective's own Theme (Themes tab,
+   *  scroll-and-highlighted). Undocumented from a required-hierarchy field
+   *  (theme_id) that, before this, was never displayed anywhere on this
+   *  screen. */
+  onNavigateToTheme?: (themeId: string) => void;
+  /** Cross-navigation: jump to a linked Initiative (Initiatives tab,
+   *  scroll-and-highlighted). Threaded down to ObjectiveInitiativeLinkEditor
+   *  so its "Linked Initiatives" names become clickable. */
+  onNavigateToInitiative?: (initiativeId: string) => void;
 }
 
 const PERIODS: ObjectivePeriod[] = ["Q1", "Q2", "Q3", "Q4", "FY"];
@@ -48,8 +59,9 @@ const STATUS_LABEL: Record<ObjectiveStatus, string> = {
   abandoned: "Abandoned",
 };
 
-export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetailProps) {
+export default function ObjectiveDetail({ objectiveId, onBack, onNavigateToTheme, onNavigateToInitiative }: ObjectiveDetailProps) {
   const { data: objective, isLoading, error } = useObjective(objectiveId);
+  const { data: themesData } = useThemes();
   const { data: progress } = useObjectiveProgress(objectiveId);
   const updateMutation = useUpdateObjective(objectiveId);
   const deleteMutation = useDeleteObjective();
@@ -121,6 +133,8 @@ export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetail
 
   if (isLoading) return <div style={{ padding: 16, color: "var(--ink-3)" }}>Loading objective…</div>;
   if (error || !objective) return <div className="ui-alert crit">Failed to load objective</div>;
+
+  const theme = themesData?.items.find((t) => t.id === objective.theme_id);
 
   return (
     <div>
@@ -221,6 +235,18 @@ export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetail
             }}
           >
             <div>
+              <div style={fieldLabelStyle}>Theme</div>
+              <div style={fieldValueStyle}>
+                {onNavigateToTheme ? (
+                  <NavLinkButton onClick={() => onNavigateToTheme(objective.theme_id)} title="Jump to this theme">
+                    {theme?.name ?? objective.theme_id}
+                  </NavLinkButton>
+                ) : (
+                  theme?.name ?? objective.theme_id
+                )}
+              </div>
+            </div>
+            <div>
               <div style={fieldLabelStyle}>Owner</div>
               <div style={fieldValueStyle}>{objective.owner}</div>
             </div>
@@ -271,7 +297,7 @@ export default function ObjectiveDetail({ objectiveId, onBack }: ObjectiveDetail
           <ObjectiveApplicationLinkEditor objective={objective} />
 
           <h4 style={{ fontSize: 14, marginTop: 20, marginBottom: 0, color: "var(--ink)" }}>Linked Initiatives</h4>
-          <ObjectiveInitiativeLinkEditor objectiveId={objective.id} />
+          <ObjectiveInitiativeLinkEditor objectiveId={objective.id} onNavigateToInitiative={onNavigateToInitiative} />
 
           <h4 style={{ fontSize: 14, marginTop: 20, marginBottom: 0, color: "var(--ink)" }}>Dependencies</h4>
           <ObjectiveDependencyPanel objectiveId={objective.id} />

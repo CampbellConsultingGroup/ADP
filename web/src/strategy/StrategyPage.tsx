@@ -10,6 +10,58 @@ type StrategyTab = "themes" | "objectives" | "initiatives" | "heatmap";
 export default function StrategyPage(): React.ReactElement {
   const [tab, setTab] = useState<StrategyTab>("themes");
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<string | null>(null);
+  // Cross-entity navigation (theme <-> objective <-> initiative), added in
+  // direct response to "we need a method of navigation on the strategy
+  // screens to allow navigation between themes - objectives and
+  // initiatives." Mirrors BusinessPage.tsx's own focusCapabilityId
+  // precedent: `focusThemeId`/`focusInitiativeId` drive a scroll-and-
+  // highlight on their flat list (neither Theme nor Initiative has a
+  // dedicated detail view -- research.md Decision 3 from
+  // 043-capability-heat-map). `filterThemeId` narrows the Objectives list
+  // to one theme's objectives -- there is no single row to highlight when
+  // "jumping to" a theme's objectives, since a theme commonly has several.
+  const [focusThemeId, setFocusThemeId] = useState<string | null>(null);
+  const [focusInitiativeId, setFocusInitiativeId] = useState<string | null>(null);
+  const [filterThemeId, setFilterThemeId] = useState<string | null>(null);
+
+  function goToTab(t: StrategyTab) {
+    setTab(t);
+    setSelectedObjectiveId(null);
+    setFocusThemeId(null);
+    setFocusInitiativeId(null);
+    setFilterThemeId(null);
+  }
+
+  function goToTheme(themeId: string) {
+    setFocusThemeId(themeId);
+    setFocusInitiativeId(null);
+    setFilterThemeId(null);
+    setSelectedObjectiveId(null);
+    setTab("themes");
+  }
+
+  function goToThemeObjectives(themeId: string) {
+    setFilterThemeId(themeId);
+    setFocusThemeId(null);
+    setFocusInitiativeId(null);
+    setSelectedObjectiveId(null);
+    setTab("objectives");
+  }
+
+  function goToObjective(objectiveId: string) {
+    setSelectedObjectiveId(objectiveId);
+    setFocusThemeId(null);
+    setFocusInitiativeId(null);
+    setTab("objectives");
+  }
+
+  function goToInitiative(initiativeId: string) {
+    setFocusInitiativeId(initiativeId);
+    setFocusThemeId(null);
+    setFilterThemeId(null);
+    setSelectedObjectiveId(null);
+    setTab("initiatives");
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
@@ -33,7 +85,7 @@ export default function StrategyPage(): React.ReactElement {
           ).map(([t, label]) => (
             <button
               key={t}
-              onClick={() => { setTab(t); setSelectedObjectiveId(null); }}
+              onClick={() => goToTab(t)}
               style={{
                 padding: "8px 20px",
                 fontSize: 14,
@@ -54,13 +106,26 @@ export default function StrategyPage(): React.ReactElement {
         {/* Tab content */}
         {tab === "objectives" && (
           selectedObjectiveId
-            ? <ObjectiveDetail objectiveId={selectedObjectiveId} onBack={() => setSelectedObjectiveId(null)} />
-            : <ObjectiveList onSelect={setSelectedObjectiveId} />
+            ? (
+              <ObjectiveDetail
+                objectiveId={selectedObjectiveId}
+                onBack={() => setSelectedObjectiveId(null)}
+                onNavigateToTheme={goToTheme}
+                onNavigateToInitiative={goToInitiative}
+              />
+            )
+            : (
+              <ObjectiveList
+                onSelect={setSelectedObjectiveId}
+                filterThemeId={filterThemeId}
+                onClearThemeFilter={() => setFilterThemeId(null)}
+              />
+            )
         )}
 
-        {tab === "themes" && <ThemeList />}
+        {tab === "themes" && <ThemeList focusThemeId={focusThemeId} onNavigateToObjectives={goToThemeObjectives} />}
 
-        {tab === "initiatives" && <InitiativeList />}
+        {tab === "initiatives" && <InitiativeList focusInitiativeId={focusInitiativeId} onNavigateToObjective={goToObjective} />}
 
         {tab === "heatmap" && <StrategyHeatMap />}
       </div>

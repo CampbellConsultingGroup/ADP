@@ -43,6 +43,11 @@ beforeEach(() => {
     isLoading: false,
     error: null,
   } as unknown as ReturnType<typeof strategyApi.useObjective>);
+  mockedStrategyApi.useThemes.mockReturnValue({
+    data: { items: [{ id: "t1", name: "Growth", description: null, owner: null, priority: null, created_at: "2026-01-01T00:00:00Z" }], total: 1 },
+    isLoading: false,
+    error: null,
+  } as unknown as ReturnType<typeof strategyApi.useThemes>);
   mockedStrategyApi.useUpdateObjective.mockReturnValue({
     mutate: vi.fn(),
     isPending: false,
@@ -209,6 +214,53 @@ describe("ObjectiveDetail: read-only display", () => {
     expect(screen.getByText("Fiscal Period")).toBeTruthy();
     expect(screen.getByText("Target")).toBeTruthy();
     expect(screen.getByText(/Q3 2026/)).toBeTruthy();
+  });
+});
+
+describe("ObjectiveDetail: cross-navigation (strategy screen navigation, 2026-08-14)", () => {
+  it("shows the objective's own theme name, and lets you jump to it", async () => {
+    const onNavigateToTheme = vi.fn();
+    const user = userEvent.setup();
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} onNavigateToTheme={onNavigateToTheme} />);
+
+    expect(screen.getByText("Theme")).toBeTruthy();
+    const themeLink = screen.getByText("Growth");
+    await user.click(themeLink);
+
+    expect(onNavigateToTheme).toHaveBeenCalledWith("t1");
+  });
+
+  it("renders the theme name as plain text when no navigation handler is supplied", () => {
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
+
+    const themeText = screen.getByText("Growth");
+    expect(themeText.tagName).not.toBe("BUTTON");
+  });
+
+  it("lets you jump to a linked initiative", async () => {
+    mockedStrategyApi.useObjectiveInitiatives.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: "init-1", name: "Claims Automation", description: null, owner: null,
+            status: "in_progress", objective_ids: ["obj-1"],
+            created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+        total: 1,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof strategyApi.useObjectiveInitiatives>);
+
+    const onNavigateToInitiative = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} onNavigateToInitiative={onNavigateToInitiative} />,
+    );
+
+    await user.click(screen.getByText("Claims Automation"));
+
+    expect(onNavigateToInitiative).toHaveBeenCalledWith("init-1");
   });
 });
 
