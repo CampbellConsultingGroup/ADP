@@ -2,8 +2,8 @@
 // own business data" functions. Pure functions -- no rendering, no mocking.
 
 import { describe, expect, it } from "vitest";
-import { generateFromValueStream, generateFromCapabilitySubtree } from "./generators";
-import type { ValueStreamDetail, ValueStreamStage } from "../api/business";
+import { generateFromValueStream, generateFromCapabilitySubtree, generateFromCapabilities } from "./generators";
+import type { ValueStreamDetail, ValueStreamStage, BusinessCapability } from "../api/business";
 import type { CapabilityTreeNode } from "../business/CapabilityTree";
 
 function stage(id: string, name: string, position: number): ValueStreamStage {
@@ -117,5 +117,86 @@ describe("generateFromCapabilitySubtree", () => {
     expect(seed.model.edges).toContainEqual(expect.objectContaining({ sourceId: rootNode.id, targetId: aNode.id }));
     expect(seed.model.edges).toContainEqual(expect.objectContaining({ sourceId: rootNode.id, targetId: bNode.id }));
     expect(seed.model.edges.some((e) => e.sourceId === aNode.id && e.targetId === bNode.id)).toBe(false);
+  });
+});
+
+function flatCap(id: string, name: string, parentId: string | null = null): BusinessCapability {
+  return {
+    id,
+    name,
+    description: null,
+    level: parentId ? 2 : 1,
+    parent_id: parentId,
+    position: 0,
+    created_at: "2026-08-14T00:00:00Z",
+    updated_at: "2026-08-14T00:00:00Z",
+    domain_id: null,
+    domain_name: null,
+    strategic_relevance: null,
+    maturity_level: null,
+  };
+}
+
+// 920-capability-diagram-select
+describe("generateFromCapabilities", () => {
+  it("produces one node per selected capability", () => {
+    const selected = [
+      flatCap("a", "Risk Assessment"),
+      flatCap("b", "Pricing"),
+      flatCap("c", "Underwriting"),
+    ];
+
+    const seed = generateFromCapabilities(selected);
+
+    expect(seed.diagramType).toBe("flowchart");
+    expect(seed.model.nodes).toHaveLength(3);
+    expect(seed.model.nodes.map((n) => n.label).sort()).toEqual(["Pricing", "Risk Assessment", "Underwriting"]);
+  });
+
+  it("adds an edge only between two selected capabilities with a direct parent-child relationship", () => {
+    // root -> child is a real relationship; "unrelated" shares no relationship with either.
+    const root = flatCap("root", "Underwriting");
+    const child = flatCap("child", "Risk Assessment", "root");
+    const unrelated = flatCap("unrelated", "Merchandising");
+
+    const seed = generateFromCapabilities([root, child, unrelated]);
+
+    expect(seed.model.nodes).toHaveLength(3);
+    expect(seed.model.edges).toHaveLength(1);
+    const rootNode = seed.model.nodes.find((n) => n.label === "Underwriting")!;
+    const childNode = seed.model.nodes.find((n) => n.label === "Risk Assessment")!;
+    expect(seed.model.edges[0]).toMatchObject({ sourceId: rootNode.id, targetId: childNode.id });
+  });
+
+  it("does not add an edge when a selected capability's parent is not also selected (spec Edge Case)", () => {
+    // child's real parent ("root") is NOT part of the selection.
+    const child = flatCap("child", "Risk Assessment", "root");
+    const other = flatCap("other", "Pricing");
+
+    const seed = generateFromCapabilities([child, other]);
+
+    expect(seed.model.nodes).toHaveLength(2);
+    expect(seed.model.edges).toHaveLength(0);
+  });
+
+  it("titles a single-capability selection with that capability's own name (SC-004 parity)", () => {
+    const seed = generateFromCapabilities([flatCap("a", "Risk Assessment")]);
+
+    expect(seed.title).toBe("Risk Assessment");
+    expect(seed.model.nodes).toHaveLength(1);
+    expect(seed.model.edges).toHaveLength(0);
+  });
+
+  it("titles a multi-capability selection generically", () => {
+    const seed = generateFromCapabilities([flatCap("a", "Risk Assessment"), flatCap("b", "Pricing")]);
+
+    expect(seed.title).toBe("Capabilities Diagram");
+  });
+
+  it("produces zero nodes and zero edges for an empty selection", () => {
+    const seed = generateFromCapabilities([]);
+
+    expect(seed.model.nodes).toHaveLength(0);
+    expect(seed.model.edges).toHaveLength(0);
   });
 });

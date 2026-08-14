@@ -198,3 +198,136 @@ describe("CapabilityTree: focusCapabilityId scroll/highlight (043-capability-hea
     expect(nodeA.getAttribute("data-focused")).not.toBe("true");
   });
 });
+
+describe("CapabilityTree: multi-select + Generate Diagram from Selected (920-capability-diagram-select US1)", () => {
+  const CAPS: BusinessCapability[] = [
+    cap({ id: "root-a", name: "Underwriting", level: 1 }),
+    cap({ id: "child-a", name: "Risk Assessment", level: 2, parent_id: "root-a", position: 1 }),
+    cap({ id: "root-b", name: "Claims", level: 1, position: 1 }),
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedBusinessApi.useCapabilities.mockReturnValue({
+      data: { items: CAPS, total: CAPS.length },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof businessApi.useCapabilities>);
+    mockedBusinessApi.useOrphanReport.mockReturnValue({
+      data: { orphan_capabilities: [], orphan_value_streams: [] },
+    } as unknown as ReturnType<typeof businessApi.useOrphanReport>);
+    mockedBusinessApi.useUpdateCapability.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof businessApi.useUpdateCapability>);
+    mockedBusinessApi.useDeleteCapability.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof businessApi.useDeleteCapability>);
+  });
+
+  it("disables 'Generate Diagram from Selected' when nothing is checked", () => {
+    renderWithQueryClient(<CapabilityTree onGenerateDiagram={vi.fn()} />);
+
+    const button = screen.getByText("Generate Diagram from Selected") as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+  });
+
+  it("generates a diagram from exactly the checked capabilities, spanning branches", async () => {
+    const onGenerateDiagram = vi.fn();
+    const user = userEvent.setup();
+    renderWithQueryClient(<CapabilityTree onGenerateDiagram={onGenerateDiagram} />);
+
+    // Render order (position-sorted tree walk): root-a, child-a, root-b.
+    const checkboxes = screen.getAllByRole("checkbox");
+    await user.click(checkboxes[0]); // root-a (Underwriting)
+    await user.click(checkboxes[2]); // root-b (Claims) -- a different branch
+
+    const button = screen.getByText("Generate Diagram from Selected") as HTMLButtonElement;
+    expect(button.disabled).toBe(false);
+    await user.click(button);
+
+    expect(onGenerateDiagram).toHaveBeenCalledTimes(1);
+    const seed = onGenerateDiagram.mock.calls[0][0];
+    expect(seed.model.nodes).toHaveLength(2);
+    expect(seed.model.nodes.map((n: { label: string }) => n.label).sort()).toEqual(["Claims", "Underwriting"]);
+    // root-a and root-b have no relationship to each other -- zero edges.
+    expect(seed.model.edges).toHaveLength(0);
+  });
+
+  it("includes the hierarchy edge when a checked parent and checked child are both selected", async () => {
+    const onGenerateDiagram = vi.fn();
+    const user = userEvent.setup();
+    renderWithQueryClient(<CapabilityTree onGenerateDiagram={onGenerateDiagram} />);
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    await user.click(checkboxes[0]); // root-a
+    await user.click(checkboxes[1]); // child-a (root-a's real child)
+    await user.click(screen.getByText("Generate Diagram from Selected"));
+
+    const seed = onGenerateDiagram.mock.calls[0][0];
+    expect(seed.model.nodes).toHaveLength(2);
+    expect(seed.model.edges).toHaveLength(1);
+  });
+});
+
+describe("CapabilityTree: selection count and clear (920-capability-diagram-select US2)", () => {
+  const CAPS: BusinessCapability[] = [
+    cap({ id: "root-a", name: "Underwriting", level: 1 }),
+    cap({ id: "root-b", name: "Claims", level: 1, position: 1 }),
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockedBusinessApi.useCapabilities.mockReturnValue({
+      data: { items: CAPS, total: CAPS.length },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof businessApi.useCapabilities>);
+    mockedBusinessApi.useOrphanReport.mockReturnValue({
+      data: { orphan_capabilities: [], orphan_value_streams: [] },
+    } as unknown as ReturnType<typeof businessApi.useOrphanReport>);
+    mockedBusinessApi.useUpdateCapability.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof businessApi.useUpdateCapability>);
+    mockedBusinessApi.useDeleteCapability.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: false,
+    } as unknown as ReturnType<typeof businessApi.useDeleteCapability>);
+  });
+
+  it("shows no selection count and no Clear action when nothing is checked", () => {
+    renderWithQueryClient(<CapabilityTree />);
+
+    expect(screen.queryByText(/selected/)).toBeNull();
+    expect(screen.queryByText("Clear selection")).toBeNull();
+  });
+
+  it("shows a count reflecting the number of checked capabilities", async () => {
+    const user = userEvent.setup();
+    renderWithQueryClient(<CapabilityTree />);
+
+    const checkboxes = screen.getAllByRole("checkbox");
+    await user.click(checkboxes[0]);
+    await user.click(checkboxes[1]);
+
+    expect(screen.getByText(/2 selected/)).toBeTruthy();
+  });
+
+  it("unchecks every row and resets the count when Clear selection is used", async () => {
+    const user = userEvent.setup();
+    renderWithQueryClient(<CapabilityTree />);
+
+    const checkboxes = screen.getAllByRole("checkbox") as HTMLInputElement[];
+    await user.click(checkboxes[0]);
+    await user.click(checkboxes[1]);
+    expect(screen.getByText(/2 selected/)).toBeTruthy();
+
+    await user.click(screen.getByText("Clear selection"));
+
+    expect(screen.queryByText(/selected/)).toBeNull();
+    expect(checkboxes[0].checked).toBe(false);
+    expect(checkboxes[1].checked).toBe(false);
+  });
+});

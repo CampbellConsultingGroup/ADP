@@ -83,6 +83,8 @@ Auto-generated from all feature plans. Last updated: 2026-08-14 (ADP-c44 objecti
 - PostgreSQL 16 — no migration. The new endpoint reads the existing `applications` table (919-insights-dashboard)
 - TypeScript 5.x + React 18 — frontend only, no backend touched at all (confirmed by the + None new. Reuses the existing `useCapabilities()` hook and `BusinessCapability`/ (043-capability-heat-map)
 - N/A — no new persisted data, no migration. Reads the existing `business_capabilities` table (043-capability-heat-map)
+- TypeScript 5.x + React 18 (frontend only — no backend touched at all). + None new. Reuses `generateFromCapabilitySubtree`'s own sibling `generateFromCapabilities()` (new, `web/src/diagrams/generators.ts`), the existing `useCapabilities()` hook, and `CapabilityTree.tsx`/`CapabilityNode.tsx` (043/048/052, extended not replaced). (920-capability-diagram-select)
+- N/A — no new persisted data; selection is component-local, transient `useState` in `CapabilityTree.tsx`, discarded on unmount (tab switch) by design. (920-capability-diagram-select)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -127,6 +129,32 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 920-capability-diagram-select: Implemented (ADP-3up.2, both user stories) — a direct user request
+  interjected mid-turn while investigating the ADP-c44 bug reports above ("business capability diagram
+  should be multi-select — capabilities should come over to the diagram tool with the relationships").
+  Replaces `CapabilityNode.tsx`'s old single-purpose "⛶ Generate Diagram" per-row button (which called
+  `generateFromCapabilitySubtree` on one capability's own subtree) with a checkbox on every row plus a
+  toolbar-level "Generate Diagram from Selected" action in `CapabilityTree.tsx` — an arbitrary,
+  cross-branch selection instead of one capability's own descendants. New `generateFromCapabilities()`
+  (`web/src/diagrams/generators.ts`, a sibling to the existing `generateFromCapabilitySubtree`): one node
+  per selected capability plus one edge for each pair where `cap.parent_id` is *also* selected (a flat
+  id-membership check, not a tree walk, per research.md Decision 3) — deliberately does not auto-include
+  unselected ancestors, so a selected capability whose real parent isn't checked renders with no incoming
+  edge. Title is the single capability's own name for a 1-item selection (parity with the old button's
+  leaf-node behavior) or the generic "Capabilities Diagram" for multiple. US2 adds a visible
+  "· N selected" count and a "Clear selection" toolbar action once anything is checked. Selection state
+  (`selectedIds: Set<string>`) is intentionally component-local `useState` in `CapabilityTree.tsx`, not
+  lifted to `BusinessPage.tsx` — it resets for free on tab switch since `BusinessPage.tsx` conditionally
+  unmounts the tree, a deliberate contrast with `043-capability-heat-map`'s `focusCapabilityId` (which
+  *does* need lifting, since it must survive a Heat Map → Capabilities tab switch). Both the cross-branch
+  (zero-edge) and parent-child (hierarchy-edge) scenarios were confirmed live via Playwright against a
+  running local stack, not just unit tests — including confirming selection genuinely resets on tab
+  switch. First-ever render-based test for `CapabilityNode.tsx` (`CapabilityNode.test.tsx`, new — the
+  component calls `useQueryClient()` directly, so needed a real `QueryClientProvider` wrapper, mirroring
+  `CapabilityTree.test.tsx`'s own established `renderWithQueryClient()` helper). 351 frontend tests (was
+  345 before this feature), `tsc`/`adp-generate --check` clean, backend suite (1378 tests) run unchanged
+  as a no-op sanity check since this feature touches no backend file at all. See
+  `specs/920-capability-diagram-select/`.
 - ADP-c44: Fixed (bug, not a speckit feature — no `specs/` directory) — a direct follow-up to ADP-5wf,
   reported live on the same screen: "once data is saved there is nowhere to see it again" and "no save
   button to save the linked items." Investigated live before touching any code (per this session's own
