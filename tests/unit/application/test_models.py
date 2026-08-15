@@ -13,6 +13,7 @@ from adp.application.models import (
     ApplicationIntegrationCreate,
     ApplicationTechCapLinkCreate,
     ApplicationUpdate,
+    BusinessValueAssessmentSubmit,
     HealthAssessmentSubmit,
     TechnicalCapabilityCreate,
     TechnicalCapabilityUpdate,
@@ -87,6 +88,18 @@ def test_application_update_rejects_health_score():
         ApplicationUpdate(health_score=6)  # type: ignore[call-arg]
 
 
+def test_application_create_rejects_business_value():
+    # docs/application-business-value-assessment-spec.md §7: business_value
+    # is only ever set via PUT /applications/{id}/business-value-assessment.
+    with pytest.raises(ValidationError):
+        ApplicationCreate(name="App", business_value=4)  # type: ignore[call-arg]
+
+
+def test_application_update_rejects_business_value():
+    with pytest.raises(ValidationError):
+        ApplicationUpdate(business_value=4)  # type: ignore[call-arg]
+
+
 # ── HealthAssessmentSubmit ────────────────────────────────────────────────────
 
 
@@ -130,6 +143,51 @@ def test_health_assessment_submit_score_six_rejected():
 def test_health_assessment_submit_extra_fields_rejected():
     with pytest.raises(ValidationError):
         HealthAssessmentSubmit(**_all_scores(), unknown_field=1)  # type: ignore[call-arg]
+
+
+# ── BusinessValueAssessmentSubmit ──────────────────────────────────────────────
+
+
+def _all_value_scores(**overrides: int) -> dict[str, int]:
+    base = dict(
+        strategic_alignment=3,
+        revenue_cost_impact=3,
+        customer_stakeholder_impact=3,
+        competitive_differentiation=3,
+        risk_compliance_contribution=3,
+        evidence_measurability=3,
+    )
+    base.update(overrides)
+    return base
+
+
+def test_business_value_assessment_submit_valid_all_six():
+    submit = BusinessValueAssessmentSubmit(**_all_value_scores(evidence_measurability=1))
+    assert submit.evidence_measurability == 1
+    assert submit.as_dimension_scores()["evidence_measurability"] == 1
+    assert len(submit.as_dimension_scores()) == 6
+
+
+def test_business_value_assessment_submit_missing_dimension_rejected():
+    scores = _all_value_scores()
+    del scores["risk_compliance_contribution"]
+    with pytest.raises(ValidationError):
+        BusinessValueAssessmentSubmit(**scores)  # type: ignore[arg-type]
+
+
+def test_business_value_assessment_submit_score_zero_rejected():
+    with pytest.raises(ValidationError):
+        BusinessValueAssessmentSubmit(**_all_value_scores(strategic_alignment=0))
+
+
+def test_business_value_assessment_submit_score_six_rejected():
+    with pytest.raises(ValidationError):
+        BusinessValueAssessmentSubmit(**_all_value_scores(strategic_alignment=6))
+
+
+def test_business_value_assessment_submit_extra_fields_rejected():
+    with pytest.raises(ValidationError):
+        BusinessValueAssessmentSubmit(**_all_value_scores(), unknown_field=1)  # type: ignore[call-arg]
 
 
 # ── TechnicalCapabilityCreate ─────────────────────────────────────────────────

@@ -58,21 +58,24 @@ describe("ApplicationForm", () => {
     );
   });
 
-  it("disables Assess Health with no application to assess against yet (New mode)", () => {
+  it("disables Assess Health and Assess Business Value with no application to assess against yet (New mode)", () => {
     renderWithQuery(<ApplicationForm onSave={vi.fn()} onCancel={vi.fn()} />);
 
-    expect(screen.getByText("— not assessed —")).toBeDefined();
-    const assessButton = screen.getByRole("button", { name: "Assess Health" });
-    expect(assessButton.hasAttribute("disabled")).toBe(true);
+    // Both Health's and Business Value's read-only displays show this text
+    // when unassessed -- two matches, not one.
+    expect(screen.getAllByText("— not assessed —")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Assess Health" }).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByRole("button", { name: "Assess Business Value" }).hasAttribute("disabled")).toBe(true);
   });
 
-  it("shows the current health score read-only (not editable) in Edit mode", () => {
+  it("shows the current health score and business value read-only (not editable) in Edit mode", () => {
     renderWithQuery(<ApplicationForm initial={APP} onSave={vi.fn()} onCancel={vi.fn()} />);
 
-    expect(screen.getByText(/★★★★☆ \(4\)/)).toBeDefined();
+    expect(screen.getByText(/★★★★☆ \(4\)/)).toBeDefined(); // health_score: 4
     expect(screen.queryByLabelText(/Health Score/)).toBeNull();
-    const assessButton = screen.getByRole("button", { name: "Assess Health" });
-    expect(assessButton.hasAttribute("disabled")).toBe(false);
+    expect(screen.queryByLabelText(/Business Value/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Assess Health" }).hasAttribute("disabled")).toBe(false);
+    expect(screen.getByRole("button", { name: "Assess Business Value" }).hasAttribute("disabled")).toBe(false);
   });
 });
 

@@ -43,8 +43,8 @@ async def _mk_app(client, name, **extra) -> dict:
 
 
 async def _assess(client, app_id: str, score: int) -> dict:
-    """PUTs a full six-dimension assessment with every dimension set to
-    `score`, so the resulting health_score is exactly `score`."""
+    """PUTs a full six-dimension health assessment with every dimension set
+    to `score`, so the resulting health_score is exactly `score`."""
     body = {
         "stability_incidents": score, "technical_currency_debt": score,
         "security_posture": score, "support_team_capacity": score,
@@ -55,11 +55,32 @@ async def _assess(client, app_id: str, score: int) -> dict:
     return resp.json()
 
 
+async def _assess_value(client, app_id: str, score: int) -> dict:
+    """PUTs a full six-dimension business-value assessment with every
+    dimension set to `score`. A uniform score never triggers the evidence
+    cap tighter than itself (docs/application-business-value-assessment-
+    spec.md §5), so the resulting business_value is exactly `score`."""
+    body = {
+        "strategic_alignment": score, "revenue_cost_impact": score,
+        "customer_stakeholder_impact": score, "competitive_differentiation": score,
+        "risk_compliance_contribution": score, "evidence_measurability": score,
+    }
+    resp = await client.put(
+        f"/api/v1/applications/{app_id}/business-value-assessment", json=body
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
 async def test_create_with_scores(client):
-    app = await _mk_app(client, "CRM", business_value=5, business_criticality=4)
+    app = await _mk_app(client, "CRM", business_criticality=4)
+    await _assess_value(client, app["id"], 5)
     await _assess(client, app["id"], 2)
-    assert app["business_value"] == 5
     assert app["business_criticality"] == 4
+
+    refreshed = (await client.get(f"/api/v1/applications/{app['id']}")).json()
+    assert refreshed["business_value"] == 5
+    assert refreshed["health_score"] == 2
 
 
 async def test_scores_default_null(client):
@@ -71,27 +92,41 @@ async def test_scores_default_null(client):
 async def test_patch_score(client):
     app = await _mk_app(client, "WMS")
     resp = await client.patch(
-        f"/api/v1/applications/{app['id']}", json={"business_value": 3}
+        f"/api/v1/applications/{app['id']}", json={"business_criticality": 3}
     )
     assert resp.status_code == 200, resp.text
-    assert resp.json()["business_value"] == 3
+    assert resp.json()["business_criticality"] == 3
 
 
-@pytest.mark.parametrize("payload", [{"business_value": 6}, {"business_criticality": 0}])
-async def test_score_out_of_range_rejected(client, payload):
+async def test_patch_rejects_business_value(client):
+    # docs/application-business-value-assessment-spec.md §7: business_value
+    # is only ever set via PUT .../business-value-assessment.
+    app = await _mk_app(client, "WMS")
+    resp = await client.patch(
+        f"/api/v1/applications/{app['id']}", json={"business_value": 3}
+    )
+    assert resp.status_code == 422
+
+
+async def test_score_out_of_range_rejected(client):
     app = await _mk_app(client, "HRIS")
-    resp = await client.patch(f"/api/v1/applications/{app['id']}", json=payload)
+    resp = await client.patch(
+        f"/api/v1/applications/{app['id']}", json={"business_criticality": 0}
+    )
     assert resp.status_code == 422
 
 
 async def test_rationalization_places_assessed_and_separates_unassessed(client):
-    alpha = await _mk_app(client, "Alpha", business_value=5)  # invest
+    alpha = await _mk_app(client, "Alpha")  # invest
+    await _assess_value(client, alpha["id"], 5)
     await _assess(client, alpha["id"], 4)
-    beta = await _mk_app(client, "Beta", business_value=4)  # migrate
+    beta = await _mk_app(client, "Beta")  # migrate
+    await _assess_value(client, beta["id"], 4)
     await _assess(client, beta["id"], 1)
     gamma = await _mk_app(client, "Gamma")  # unassessed: no value
     await _assess(client, gamma["id"], 5)
-    delta = await _mk_app(client, "Delta", business_value=2)  # unassessed: no health
+    delta = await _mk_app(client, "Delta")  # unassessed: no health
+    await _assess_value(client, delta["id"], 2)
 
     resp = await client.get("/api/v1/applications/rationalization")
     assert resp.status_code == 200, resp.text

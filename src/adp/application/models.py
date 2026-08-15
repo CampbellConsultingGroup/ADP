@@ -49,6 +49,45 @@ HEALTH_DIMENSIONS: tuple[HealthDimension, ...] = (
     "business_value_criticality",
 )
 
+# docs/application-business-value-assessment-spec.md: the six
+# business-value-rubric dimensions (docs/business_value.md's six rows).
+# Unrelated to (and no naming overlap with) HealthDimension's own
+# "business_value_criticality" -- that's Health's 6th row ("Business Value
+# & Criticality Alignment"), a different assessment entirely.
+BusinessValueDimension = Literal[
+    "strategic_alignment",
+    "revenue_cost_impact",
+    "customer_stakeholder_impact",
+    "competitive_differentiation",
+    "risk_compliance_contribution",
+    "evidence_measurability",
+]
+BUSINESS_VALUE_DIMENSIONS: tuple[BusinessValueDimension, ...] = (
+    "strategic_alignment",
+    "revenue_cost_impact",
+    "customer_stakeholder_impact",
+    "competitive_differentiation",
+    "risk_compliance_contribution",
+    "evidence_measurability",
+)
+
+# docs/application-business-value-assessment-spec.md §5.1 -- EA-prioritized
+# weighting, hardcoded for this build (an editable-weights UI is a
+# deliberately deferred follow-on, ADP-68z). Sums to 1.0.
+BUSINESS_VALUE_WEIGHTS: dict[BusinessValueDimension, float] = {
+    "strategic_alignment": 0.25,
+    "revenue_cost_impact": 0.25,
+    "customer_stakeholder_impact": 0.15,
+    "risk_compliance_contribution": 0.15,
+    "competitive_differentiation": 0.10,
+    "evidence_measurability": 0.10,
+}
+
+# docs/application-business-value-assessment-spec.md §5.2 -- verbatim from
+# docs/business_value.md's own cap table. A cap of None means "no cap
+# applied" (evidence_measurability scored 4 or 5).
+BUSINESS_VALUE_EVIDENCE_CAP: dict[int, int | None] = {1: 2, 2: 3, 3: 4, 4: None, 5: None}
+
 # ── Error classes ─────────────────────────────────────────────────────────────
 
 
@@ -112,11 +151,12 @@ class ApplicationCreate(BaseModel):
     time_classification: TimeClassification | None = None
     r_strategy: RStrategy | None = None
     pace_layer: PaceLayer | None = None
-    # health_score is intentionally absent: it is only ever set via
-    # PUT /applications/{id}/health-assessment (docs/application-health-
-    # assessment-spec.md §6 Q5) -- it doesn't exist yet at creation anyway
-    # (the assessment popup needs a real application_id, §4).
-    business_value: Score15 | None = None
+    # health_score and business_value are both intentionally absent: each
+    # is only ever set via its own PUT .../{id}/{health,business-value}-assessment
+    # endpoint (docs/application-health-assessment-spec.md §6 Q5;
+    # docs/application-business-value-assessment-spec.md §7) -- neither
+    # exists yet at creation anyway (the assessment popup needs a real
+    # application_id, §4 in both specs).
     business_criticality: Score15 | None = None
     owning_business_unit: str | None = None
     business_owner: str | None = None
@@ -143,11 +183,10 @@ class ApplicationUpdate(BaseModel):
     time_classification: TimeClassification | None = None
     r_strategy: RStrategy | None = None
     pace_layer: PaceLayer | None = None
-    # health_score is intentionally absent -- see ApplicationCreate's own
-    # comment above. extra="forbid" rejects (422) any request that still
-    # tries to PATCH it directly, which is the enforcement mechanism for
-    # spec §6 Q5 ("reject direct writes").
-    business_value: Score15 | None = None
+    # health_score and business_value are both intentionally absent -- see
+    # ApplicationCreate's own comment above. extra="forbid" rejects (422)
+    # any request that still tries to PATCH either directly, which is the
+    # enforcement mechanism for both specs' "reject direct writes" decision.
     business_criticality: Score15 | None = None
     owning_business_unit: str | None = None
     business_owner: str | None = None
@@ -211,6 +250,60 @@ class HealthAssessmentResponse(BaseModel):
     application_id: str
     entries: list[HealthAssessmentEntry] = Field(default_factory=list)
     health_score: Annotated[int, Field(ge=1, le=5)] | None = None
+
+
+# ── Business Value Assessment (docs/application-business-value-assessment-spec.md) ─
+
+
+class BusinessValueAssessmentEntry(BaseModel):
+    """One dimension's current answer. Read-only; written only via
+    BusinessValueAssessmentSubmit below."""
+
+    model_config = ConfigDict(extra="forbid")
+    dimension: BusinessValueDimension
+    score: Annotated[int, Field(ge=1, le=5)]
+    assessed_at: datetime
+    assessed_by: str | None = None
+
+
+class BusinessValueAssessmentSubmit(BaseModel):
+    """PUT body -- all six dimensions required, same "no partial assessment"
+    rule as HealthAssessmentSubmit (spec §2)."""
+
+    model_config = ConfigDict(extra="forbid")
+    strategic_alignment: Annotated[int, Field(ge=1, le=5)]
+    revenue_cost_impact: Annotated[int, Field(ge=1, le=5)]
+    customer_stakeholder_impact: Annotated[int, Field(ge=1, le=5)]
+    competitive_differentiation: Annotated[int, Field(ge=1, le=5)]
+    risk_compliance_contribution: Annotated[int, Field(ge=1, le=5)]
+    evidence_measurability: Annotated[int, Field(ge=1, le=5)]
+
+    def as_dimension_scores(self) -> dict[BusinessValueDimension, int]:
+        return {dim: getattr(self, dim) for dim in BUSINESS_VALUE_DIMENSIONS}
+
+
+class BusinessValueAssessmentResult(BaseModel):
+    """The computed result of compute_business_value_score() -- not just the
+    final integer, but the intermediate weighted average and whether/how the
+    evidence cap bound, so the UI can always show the cap math (spec §4,
+    resolved: shown on every assessment, not just when the cap binds)."""
+
+    model_config = ConfigDict(extra="forbid")
+    business_value: Annotated[int, Field(ge=1, le=5)]
+    weighted_average: float
+    evidence_score: Annotated[int, Field(ge=1, le=5)]
+    cap: Annotated[int, Field(ge=1, le=5)] | None
+    capped: bool
+
+
+class BusinessValueAssessmentResponse(BaseModel):
+    """GET/PUT response. `entries` is empty when the application has never
+    been assessed; `result` is None until the first assessment."""
+
+    model_config = ConfigDict(extra="forbid")
+    application_id: str
+    entries: list[BusinessValueAssessmentEntry] = Field(default_factory=list)
+    result: BusinessValueAssessmentResult | None = None
 
 
 # ── Rationalization (APM US1) ─────────────────────────────────────────────────

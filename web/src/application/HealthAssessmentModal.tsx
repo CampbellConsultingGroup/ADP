@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   useHealthAssessment,
   useSaveHealthAssessment,
   type HealthDimension,
   type HealthAssessmentSubmit,
 } from "../api/application";
-import { Button } from "../ui";
+import AssessmentModal, { type AssessmentRubricRow } from "./AssessmentModal";
 
 interface Props {
   appId: string;
@@ -17,9 +17,9 @@ interface Props {
  * (docs/application-health-assessment-spec.md §3/§7). */
 const SCORE_LABELS = ["1 — Critical", "2 — At Risk", "3 — Fair / Watch", "4 — Healthy", "5 — Thriving"];
 
-const RUBRIC: { dimension: HealthDimension; label: string; options: string[] }[] = [
+const RUBRIC: AssessmentRubricRow[] = [
   {
-    dimension: "stability_incidents",
+    dimension: "stability_incidents" satisfies HealthDimension,
     label: "Stability & Incidents",
     options: [
       "Severe or continuous outages; core function is unreliable or unusable.",
@@ -30,7 +30,7 @@ const RUBRIC: { dimension: HealthDimension; label: string; options: string[] }[]
     ],
   },
   {
-    dimension: "technical_currency_debt",
+    dimension: "technical_currency_debt" satisfies HealthDimension,
     label: "Technical Currency & Debt",
     options: [
       "Running on end-of-life or unsupported infrastructure with no upgrade path.",
@@ -41,7 +41,7 @@ const RUBRIC: { dimension: HealthDimension; label: string; options: string[] }[]
     ],
   },
   {
-    dimension: "security_posture",
+    dimension: "security_posture" satisfies HealthDimension,
     label: "Security Posture",
     options: [
       "Known exploitable or critical vulnerabilities; failing compliance requirements.",
@@ -52,7 +52,7 @@ const RUBRIC: { dimension: HealthDimension; label: string; options: string[] }[]
     ],
   },
   {
-    dimension: "support_team_capacity",
+    dimension: "support_team_capacity" satisfies HealthDimension,
     label: "Support & Team Capacity",
     options: [
       "No one able to support it; original team or vendor is gone.",
@@ -63,7 +63,7 @@ const RUBRIC: { dimension: HealthDimension; label: string; options: string[] }[]
     ],
   },
   {
-    dimension: "documentation_knowledge",
+    dimension: "documentation_knowledge" satisfies HealthDimension,
     label: "Documentation & Knowledge",
     options: [
       "No usable documentation; knowledge is effectively lost.",
@@ -74,7 +74,7 @@ const RUBRIC: { dimension: HealthDimension; label: string; options: string[] }[]
     ],
   },
   {
-    dimension: "business_value_criticality",
+    dimension: "business_value_criticality" satisfies HealthDimension,
     label: "Business Value & Criticality Alignment",
     options: [
       "Value no longer justifies its cost, risk, or existence; candidate for retirement.",
@@ -89,123 +89,25 @@ const RUBRIC: { dimension: HealthDimension; label: string; options: string[] }[]
 export default function HealthAssessmentModal({ appId, onClose }: Props): React.ReactElement {
   const { data, isLoading } = useHealthAssessment(appId);
   const save = useSaveHealthAssessment(appId);
-  const [selections, setSelections] = useState<Partial<Record<HealthDimension, number>>>({});
-  const [prefilled, setPrefilled] = useState(false);
-
-  // Pre-fill from the application's last-saved assessment, once, when it
-  // arrives (spec §4 "Popup, on open") -- not on every refetch, so a save
-  // in progress doesn't clobber the user's still-unsaved edits.
-  useEffect(() => {
-    if (data && !prefilled) {
-      const initial: Partial<Record<HealthDimension, number>> = {};
-      for (const entry of data.entries) initial[entry.dimension] = entry.score;
-      setSelections(initial);
-      setPrefilled(true);
-    }
-  }, [data, prefilled]);
-
-  const allAnswered = RUBRIC.every((row) => selections[row.dimension] !== undefined);
-  const computedMin = allAnswered
-    ? Math.min(...RUBRIC.map((row) => selections[row.dimension]!))
-    : null;
-
-  function handleSave() {
-    if (!allAnswered) return;
-    save.mutate(selections as HealthAssessmentSubmit, { onSuccess: onClose });
-  }
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
+    <AssessmentModal
+      title="Health Assessment"
+      description="Pick the description that best matches this application for each dimension. The overall health score is the lowest of the six selections."
+      scoreLabels={SCORE_LABELS}
+      rubric={RUBRIC}
+      entries={data?.entries}
+      isLoading={isLoading}
+      resultText={(selections) => {
+        const min = Math.min(...Object.values(selections));
+        return `Resulting health score: ${min} (lowest of the six selections)`;
       }}
-    >
-      <div
-        style={{
-          background: "var(--surface)", borderRadius: 8, padding: 24,
-          maxWidth: 1000, width: "94%", maxHeight: "90vh", overflowY: "auto",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-        }}
-      >
-        <h3 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700 }}>Health Assessment</h3>
-        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-2)" }}>
-          Pick the description that best matches this application for each dimension. The
-          overall health score is the lowest of the six selections.
-        </p>
-
-        {isLoading ? (
-          <div style={{ padding: 20, fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12 }}>
-              <thead>
-                <tr>
-                  <th style={{ ...cellStyle, textAlign: "left", minWidth: 160 }}>Dimension</th>
-                  {SCORE_LABELS.map((label) => (
-                    <th key={label} style={{ ...cellStyle, minWidth: 150 }}>{label}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {RUBRIC.map((row) => (
-                  <tr key={row.dimension}>
-                    <td style={{ ...cellStyle, fontWeight: 600, textAlign: "left" }}>{row.label}</td>
-                    {row.options.map((description, idx) => {
-                      const score = idx + 1;
-                      return (
-                        <td key={score} style={cellStyle}>
-                          <label style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, cursor: "pointer" }}>
-                            <input
-                              type="radio"
-                              name={`health-${row.dimension}`}
-                              checked={selections[row.dimension] === score}
-                              onChange={() =>
-                                setSelections((prev) => ({ ...prev, [row.dimension]: score }))
-                              }
-                            />
-                            <span style={{ color: "var(--ink-3)" }}>{description}</span>
-                          </label>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20 }}>
-          <div style={{ fontSize: 13, color: "var(--ink-2)" }}>
-            {allAnswered
-              ? `Resulting health score: ${computedMin} (lowest of the six selections)`
-              : "Select an option for every dimension to continue."}
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <Button onClick={onClose} disabled={save.isPending}>Cancel</Button>
-            <Button
-              variant="primary"
-              onClick={handleSave}
-              disabled={!allAnswered || save.isPending}
-            >
-              {save.isPending ? "Saving…" : "Save"}
-            </Button>
-          </div>
-        </div>
-        {save.isError && (
-          <div style={{ marginTop: 10, fontSize: 12, color: "var(--crit)" }}>
-            {save.error instanceof Error ? save.error.message : "Failed to save"}
-          </div>
-        )}
-      </div>
-    </div>
+      onSave={(selections) =>
+        save.mutate(selections as unknown as HealthAssessmentSubmit, { onSuccess: onClose })
+      }
+      saving={save.isPending}
+      saveError={save.isError ? (save.error instanceof Error ? save.error.message : "Failed to save") : null}
+      onClose={onClose}
+    />
   );
 }
-
-const cellStyle: React.CSSProperties = {
-  border: "1px solid var(--border)",
-  padding: "8px 10px",
-  textAlign: "center",
-  verticalAlign: "top",
-};

@@ -16,6 +16,9 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from adp.application.models import (
+    BUSINESS_VALUE_DIMENSIONS,
+    BUSINESS_VALUE_EVIDENCE_CAP,
+    BUSINESS_VALUE_WEIGHTS,
     HEALTH_DIMENSIONS,
     TCO_BUCKET_NAMES,
     Application,
@@ -55,6 +58,11 @@ from adp.application.models import (
     ApplicationTechCapLinksResponse,
     ApplicationUpdate,
     BusinessUnitCostRollup,
+    BusinessValueAssessmentEntry,
+    BusinessValueAssessmentResponse,
+    BusinessValueAssessmentResult,
+    BusinessValueAssessmentSubmit,
+    BusinessValueDimension,
     CostBucket,
     CostRollupResponse,
     DuplicateAppCapLinkError,
@@ -238,6 +246,18 @@ _application_risk = sa.Table(
 # (application, dimension); a re-assessment upserts in place (no history).
 _health_assessment = sa.Table(
     "application_health_assessment",
+    _metadata,
+    sa.Column("application_id", sa.String(36), primary_key=True),
+    sa.Column("dimension", sa.Text(), primary_key=True),
+    sa.Column("score", sa.SmallInteger(), nullable=False),
+    sa.Column("assessed_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("assessed_by", sa.Text()),
+)
+
+# docs/application-business-value-assessment-spec.md: same shape as
+# _health_assessment above, different dimension keys.
+_business_value_assessment = sa.Table(
+    "application_business_value_assessment",
     _metadata,
     sa.Column("application_id", sa.String(36), primary_key=True),
     sa.Column("dimension", sa.Text(), primary_key=True),
@@ -432,11 +452,12 @@ async def create_application(body: ApplicationCreate, session: AsyncSession) -> 
             time_classification=body.time_classification,
             r_strategy=body.r_strategy,
             pace_layer=body.pace_layer,
-            # health_score always starts unset -- only ever written by
-            # upsert_health_assessment, and there's no application_id yet
-            # to assess against until this insert commits.
+            # health_score/business_value always start unset -- only ever
+            # written by upsert_health_assessment/upsert_business_value_assessment,
+            # and there's no application_id yet to assess against until this
+            # insert commits.
             health_score=None,
-            business_value=body.business_value,
+            business_value=None,
             business_criticality=body.business_criticality,
             owning_business_unit=body.owning_business_unit,
             business_owner=body.business_owner,
@@ -459,7 +480,7 @@ async def create_application(body: ApplicationCreate, session: AsyncSession) -> 
         r_strategy=body.r_strategy,
         pace_layer=body.pace_layer,
         health_score=None,
-        business_value=body.business_value,
+        business_value=None,
         business_criticality=body.business_criticality,
         owning_business_unit=body.owning_business_unit,
         business_owner=body.business_owner,
@@ -488,12 +509,14 @@ async def update_application(
     # Nullable fields: an explicitly provided null clears the value;
     # an omitted field is left unchanged (model_fields_set distinguishes them).
     for field in (
-        # health_score is deliberately absent -- ApplicationUpdate no longer
-        # carries it (docs/application-health-assessment-spec.md §6 Q5); it
-        # is only ever written by upsert_health_assessment below.
+        # health_score/business_value are deliberately absent --
+        # ApplicationUpdate no longer carries either (docs/application-
+        # health-assessment-spec.md §6 Q5; docs/application-business-value-
+        # assessment-spec.md §7); each is only ever written by its own
+        # upsert_*_assessment function below.
         "description", "vendor", "primary_owner", "time_classification",
         "r_strategy", "pace_layer",
-        "business_value", "business_criticality",
+        "business_criticality",
         "owning_business_unit", "business_owner", "technical_owner", "lifecycle_status",
         "hosting_model", "architecture_pattern", "tech_debt_flags",
     ):
@@ -689,6 +712,121 @@ async def upsert_health_assessment(
         .values(health_score=health_score, updated_at=now)
     )
     return await get_health_assessment(app_id, session)
+
+
+# ── Application Business Value Assessment
+#    (docs/application-business-value-assessment-spec.md) ─────────────────────
+
+
+def compute_business_value_score(
+    scores: dict[BusinessValueDimension, int],
+) -> BusinessValueAssessmentResult:
+    """Pure, no-I/O aggregation (spec §5, mirrors adp.strategy.store.
+    compute_status()'s own precedent for derived-value functions): a
+    weighted average of all six dimensions, soft-capped by the
+    evidence_measurability score.
+
+    Unlike Health's MIN() (a hard risk gate), this is a weighted composite
+    with a soft ceiling -- one weak dimension pulls the average down but
+    doesn't zero it out, except evidence_measurability, which additionally
+    caps how high the *result* can land (spec §5.2's cap table), independent
+    of its own 10% weight in the average.
+    """
+    raw_score = sum(scores[dim] * BUSINESS_VALUE_WEIGHTS[dim] for dim in BUSINESS_VALUE_DIMENSIONS)
+    evidence_score = scores["evidence_measurability"]
+    cap = BUSINESS_VALUE_EVIDENCE_CAP[evidence_score]
+    capped_value = min(raw_score, cap) if cap is not None else raw_score
+    # Round-half-up, not Python's banker's-rounding round() (spec §5.4) --
+    # e.g. 4.5 must land on 5, not 4, matching what the UI visibly shows.
+    business_value = int(capped_value + 0.5)
+    business_value = max(1, min(5, business_value))  # clamp -- defensive, should never trigger
+    return BusinessValueAssessmentResult(
+        business_value=business_value,
+        weighted_average=round(raw_score, 2),
+        evidence_score=evidence_score,
+        cap=cap,
+        capped=cap is not None and raw_score > cap,
+    )
+
+
+async def get_business_value_assessment(
+    app_id: str, session: AsyncSession
+) -> BusinessValueAssessmentResponse:
+    """Caller (router) has already validated app_id exists."""
+    result = await session.execute(
+        sa.select(_business_value_assessment)
+        .where(_business_value_assessment.c.application_id == app_id)
+        .order_by(_business_value_assessment.c.dimension)
+    )
+    rows = result.mappings().all()
+    entries = [
+        BusinessValueAssessmentEntry(
+            dimension=row.dimension,
+            score=row.score,
+            assessed_at=row.assessed_at,
+            assessed_by=row.assessed_by,
+        )
+        for row in rows
+    ]
+    computed_result = (
+        compute_business_value_score({row.dimension: row.score for row in rows})
+        if len(rows) == len(BUSINESS_VALUE_DIMENSIONS)
+        else None
+    )
+    return BusinessValueAssessmentResponse(
+        application_id=app_id, entries=entries, result=computed_result
+    )
+
+
+async def upsert_business_value_assessment(
+    app_id: str, body: BusinessValueAssessmentSubmit, actor: str | None, session: AsyncSession
+) -> BusinessValueAssessmentResponse:
+    """Upserts all six dimension rows and recomputes applications.business_value
+    via compute_business_value_score(), in one call -- the two can never
+    drift apart (spec §6). Caller (router) has already validated app_id
+    exists."""
+    now = _now()
+    scores = body.as_dimension_scores()
+
+    existing_dims = {
+        row.dimension
+        for row in (
+            await session.execute(
+                sa.select(_business_value_assessment.c.dimension).where(
+                    _business_value_assessment.c.application_id == app_id
+                )
+            )
+        ).all()
+    }
+    for dimension in BUSINESS_VALUE_DIMENSIONS:
+        values = {
+            "score": scores[dimension],
+            "assessed_at": now,
+            "assessed_by": actor,
+        }
+        if dimension in existing_dims:
+            await session.execute(
+                _business_value_assessment.update()
+                .where(
+                    _business_value_assessment.c.application_id == app_id,
+                    _business_value_assessment.c.dimension == dimension,
+                )
+                .values(**values)
+            )
+        else:
+            await session.execute(
+                _business_value_assessment.insert().values(
+                    application_id=app_id, dimension=dimension, **values
+                )
+            )
+
+    computed_result = compute_business_value_score(scores)
+    await session.execute(
+        _applications.update()
+        .where(_applications.c.id == app_id)
+        .values(business_value=computed_result.business_value, updated_at=now)
+    )
+    return await get_business_value_assessment(app_id, session)
 
 
 # ── Application Cost / TCO CRUD (US4, ADP-9x6) ────────────────────────────────

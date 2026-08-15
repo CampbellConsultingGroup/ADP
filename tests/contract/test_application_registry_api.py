@@ -246,6 +246,110 @@ async def test_put_health_assessment_404(client):
     assert resp.status_code == 404
 
 
+# ── Application Business Value Assessment ─────────────────────────────────────
+
+
+async def _assess_value(client, app_id: str, **overrides: int) -> dict:
+    """PUTs a full six-dimension business-value assessment, all dimensions
+    defaulting to 3 unless overridden."""
+    scores = dict(
+        strategic_alignment=3, revenue_cost_impact=3, customer_stakeholder_impact=3,
+        competitive_differentiation=3, risk_compliance_contribution=3,
+        evidence_measurability=3,
+    )
+    scores.update(overrides)
+    resp = await client.put(
+        f"/api/v1/applications/{app_id}/business-value-assessment", json=scores
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
+async def test_get_business_value_assessment_never_assessed(client):
+    app = await _mk_app(client)
+    resp = await client.get(f"/api/v1/applications/{app['id']}/business-value-assessment")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["entries"] == []
+    assert body["result"] is None
+
+
+async def test_get_business_value_assessment_404(client):
+    resp = await client.get("/api/v1/applications/nope/business-value-assessment")
+    assert resp.status_code == 404
+
+
+async def test_put_business_value_assessment_worked_example_from_spec(client):
+    # docs/application-business-value-assessment-spec.md §5.3's own example.
+    app = await _mk_app(client)
+    body = await _assess_value(
+        client, app["id"],
+        strategic_alignment=5, revenue_cost_impact=5, customer_stakeholder_impact=4,
+        competitive_differentiation=4, risk_compliance_contribution=3,
+        evidence_measurability=1,
+    )
+    assert body["result"]["weighted_average"] == 4.05
+    assert body["result"]["cap"] == 2
+    assert body["result"]["capped"] is True
+    assert body["result"]["business_value"] == 2
+    assert len(body["entries"]) == 6
+
+    resp = await client.get(f"/api/v1/applications/{app['id']}")
+    assert resp.json()["business_value"] == 2
+
+
+async def test_put_business_value_assessment_no_cap_when_evidence_strong(client):
+    app = await _mk_app(client)
+    body = await _assess_value(client, app["id"], evidence_measurability=5)
+    assert body["result"]["cap"] is None
+    assert body["result"]["capped"] is False
+    assert body["result"]["business_value"] == 3
+
+
+async def test_put_business_value_assessment_reassessment_upserts_in_place(client):
+    app = await _mk_app(client)
+    await _assess_value(client, app["id"], strategic_alignment=2)
+    first = await client.get(f"/api/v1/applications/{app['id']}/business-value-assessment")
+    assert len(first.json()["entries"]) == 6
+
+    body = await _assess_value(client, app["id"], strategic_alignment=5)
+    assert len(body["entries"]) == 6  # still 6 rows, not 12 -- upserted, not appended
+
+
+async def test_put_business_value_assessment_partial_submission_422(client):
+    app = await _mk_app(client)
+    resp = await client.put(
+        f"/api/v1/applications/{app['id']}/business-value-assessment",
+        json={"strategic_alignment": 3, "revenue_cost_impact": 3},
+    )
+    assert resp.status_code == 422
+
+
+async def test_put_business_value_assessment_out_of_range_422(client):
+    app = await _mk_app(client)
+    resp = await client.put(
+        f"/api/v1/applications/{app['id']}/business-value-assessment",
+        json={
+            "strategic_alignment": 6, "revenue_cost_impact": 3,
+            "customer_stakeholder_impact": 3, "competitive_differentiation": 3,
+            "risk_compliance_contribution": 3, "evidence_measurability": 3,
+        },
+    )
+    assert resp.status_code == 422
+
+
+async def test_put_business_value_assessment_404(client):
+    resp = await client.put(
+        "/api/v1/applications/nope/business-value-assessment",
+        json={
+            "strategic_alignment": 3, "revenue_cost_impact": 3,
+            "customer_stakeholder_impact": 3, "competitive_differentiation": 3,
+            "risk_compliance_contribution": 3, "evidence_measurability": 3,
+        },
+    )
+    assert resp.status_code == 404
+
+
 async def test_delete_application(client):
     app = await _mk_app(client)
     resp = await client.delete(f"/api/v1/applications/{app['id']}")
