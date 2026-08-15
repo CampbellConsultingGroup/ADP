@@ -10,6 +10,7 @@ import PortfolioPage from "./portfolio/PortfolioPage";
 import GovernancePage from "./governance/GovernancePage";
 import BusinessPage from "./business/BusinessPage";
 import ApplicationPage from "./application/ApplicationPage";
+import TechCapPage from "./application/TechCapPage";
 import { DiagramsPage } from "./diagrams/DiagramsPage";
 import type { DiagramSeed } from "./diagrams/generators";
 import StrategyPage from "./strategy/StrategyPage";
@@ -56,6 +57,8 @@ export default function App(): React.ReactElement {
         return <BusinessPage onNavigate={onNavigate} designId={currentDesignId} onGenerateDiagram={onGenerateDiagram} />;
       case "applications":
         return <ApplicationPage />;
+      case "technical":
+        return <TechCapPage />;
       case "diagrams":
         return (
           <DiagramsPage

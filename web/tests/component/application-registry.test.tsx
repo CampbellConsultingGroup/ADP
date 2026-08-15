@@ -152,11 +152,12 @@ describe("ApplicationList", () => {
 describe("TechCapTree", () => {
   it("renders the hierarchy and creates a root capability", async () => {
     const calls = mockFetch({
+      "GET /api/v1/technical-capabilities": { items: [TC, TC_CHILD], total: 2 },
       "POST /api/v1/technical-capabilities": { ...TC, id: "tc-3", name: "Storage" },
     });
-    renderWithQuery(<TechCapTree caps={[TC, TC_CHILD]} />);
+    renderWithQuery(<TechCapTree />);
 
-    expect(screen.getByText("Messaging")).toBeDefined();
+    await waitFor(() => expect(screen.getByText("Messaging")).toBeDefined());
     expect(screen.getByText("Queues")).toBeDefined();
 
     fireEvent.click(screen.getByRole("button", { name: "+ Root" }));

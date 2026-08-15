@@ -32,6 +32,10 @@ const ARCHITECTURE: NavDef[] = [
   { view: "strategy", label: "Strategy", icon: "spark", hue: "biz" },
   { view: "business", label: "Business", icon: "biz", hue: "biz" },
   { view: "applications", label: "Applications", icon: "ent", hue: "ent" },
+  // ADP-61l: mirrors Business's own top-level structure (a new top-level
+  // nav item, not a tab bolted onto Applications) -- placed beside
+  // Applications, the other "ent"-adjacent registry-style screen.
+  { view: "technical", label: "Technical Architecture", icon: "tec", hue: "tec" },
   { view: "portfolio", label: "APM", icon: "chart", hue: "ent" },
   { view: "governance", label: "Governance", icon: "shield" },
   { view: "knowledge", label: "Knowledge", icon: "book", hue: "tec" },
@@ -61,6 +65,7 @@ const TITLES: Record<AppView, string> = {
   designs: "Designs",
   business: "Business Architecture",
   applications: "Application Registry",
+  technical: "Technical Architecture",
   portfolio: "APM",
   governance: "Governance",
   knowledge: "Knowledge",
