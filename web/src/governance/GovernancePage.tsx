@@ -30,7 +30,7 @@ export default function GovernancePage({
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", maxWidth: 1200, margin: "0 auto", width: "100%" }}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", marginBottom: 20 }}>
-          <Button size="sm" onClick={() => onNavigate("portfolio")} style={{ marginRight: 16 }}>← Portfolio</Button>
+          <Button size="sm" onClick={() => onNavigate("portfolio")} style={{ marginRight: 16 }}>← APM</Button>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--ink)" }}>
             Governance Report
           </h2>
