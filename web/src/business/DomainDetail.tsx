@@ -117,7 +117,12 @@ export default function DomainDetail({ domainId, onBack }: DomainDetailProps) {
               key={cap.id}
               capId={cap.id}
               name={cap.name}
-              domainId={null}
+              // The real bug (2026-08-15): this was hardcoded to `null`, so
+              // clicking "Assign" called mutate(null) -- assigning to no
+              // domain, a no-op -- instead of mutate(domainId), the domain
+              // actually being viewed. `assigned` is false here, so
+              // CapabilityRow's toggle() always sends this prop verbatim.
+              domainId={domainId}
               assigned={false}
               onError={setAssignError}
             />
