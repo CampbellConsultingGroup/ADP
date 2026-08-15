@@ -37,11 +37,17 @@ function ApplicationPageInner() {
       {/* Main panel */}
       <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>
         {showCreate && (
-          <ApplicationForm
-            onSave={handleCreate}
-            onCancel={() => setShowCreate(false)}
-            saving={createApp.isPending}
-          />
+          // Same overflow:hidden-parent-with-no-scroll-region issue as
+          // ApplicationDetail.tsx's edit form (bug report, 2026-08-15) --
+          // this panel also has overflow:hidden with nothing scrollable
+          // between it and ApplicationForm's own root.
+          <div style={{ height: "100%", overflowY: "auto" }}>
+            <ApplicationForm
+              onSave={handleCreate}
+              onCancel={() => setShowCreate(false)}
+              saving={createApp.isPending}
+            />
+          </div>
         )}
         {!showCreate && selectedId && (
           <ApplicationDetail

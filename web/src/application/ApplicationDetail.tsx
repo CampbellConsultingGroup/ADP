@@ -78,7 +78,18 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
   });
 
   if (editing) {
-    return <ApplicationForm initial={app} onSave={handleSave} onCancel={() => setEditing(false)} saving={updateApp.isPending} />;
+    // The parent panel (ApplicationPage.tsx) has overflow:hidden, and
+    // ApplicationForm's own root has no scroll region of its own -- with 17
+    // fields plus Save/Cancel, the form's real height exceeds the viewport,
+    // clipping the last few fields (Hosting Model, Architecture Pattern,
+    // Tech-Debt Flags) with no way to reach them (bug report, 2026-08-15).
+    // Wrapping in a scrollable container mirrors every other page's own
+    // content-area convention (e.g. BusinessPage.tsx/StrategyPage.tsx).
+    return (
+      <div style={{ height: "100%", overflowY: "auto" }}>
+        <ApplicationForm initial={app} onSave={handleSave} onCancel={() => setEditing(false)} saving={updateApp.isPending} />
+      </div>
+    );
   }
 
   return (
