@@ -258,8 +258,13 @@ class ChildCapabilitiesExist(Exception):
 
 
 async def list_capabilities(session: AsyncSession) -> list[BusinessCapability]:
+    # Ordered by (level, name) rather than (level, position): `position` has
+    # no editing UI and is ~always 0, so ties fell back to whatever row order
+    # Postgres happened to return -- not stable across an unrelated UPDATE,
+    # which read as the list silently reshuffling (bug report, 2026-08-15).
+    # Name is stable under edits to any other attribute.
     result = await session.execute(
-        _cap_with_domain_stmt().order_by(_capabilities.c.level, _capabilities.c.position)
+        _cap_with_domain_stmt().order_by(_capabilities.c.level, _capabilities.c.name)
     )
     return [_row_to_capability(row) for row in result.mappings().all()]
 
@@ -1134,7 +1139,7 @@ async def list_orphan_capabilities(session: AsyncSession) -> list[BusinessCapabi
             ~_capabilities.c.id.in_(
                 sa.select(_strategic_objective_capabilities.c.capability_id)
             )
-        ).order_by(_capabilities.c.level, _capabilities.c.position)
+        ).order_by(_capabilities.c.level, _capabilities.c.name)
     )
     return [_row_to_capability(row) for row in result.mappings().all()]
 

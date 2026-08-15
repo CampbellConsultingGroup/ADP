@@ -15,7 +15,13 @@ export interface CapabilityTreeNode extends BusinessCapability {
   children: CapabilityTreeNode[];
 }
 
-/** Assemble a flat list of capabilities into a nested tree, sorted by position. */
+/** Assemble a flat list of capabilities into a nested tree, with siblings at
+ *  every level (L1/L2/L3) sorted alphabetically by name -- not by `position`
+ *  (mostly all 0, an unused legacy field with no editing UI), which gave no
+ *  real ordering and let ties fall back to whatever row order Postgres
+ *  happened to return, silently reshuffling after an unrelated edit updated
+ *  a row (bug report, 2026-08-15). Name is stable under edits to any other
+ *  attribute, so the displayed order no longer moves around. */
 export function buildTree(items: BusinessCapability[]): CapabilityTreeNode[] {
   const byId = new Map<string, CapabilityTreeNode>();
   const roots: CapabilityTreeNode[] = [];
@@ -34,12 +40,12 @@ export function buildTree(items: BusinessCapability[]): CapabilityTreeNode[] {
     }
   }
 
-  // Sort all levels by position
-  const sortByPosition = (nodes: CapabilityTreeNode[]) => {
-    nodes.sort((a, b) => a.position - b.position);
-    for (const n of nodes) sortByPosition(n.children);
+  // Sort all levels alphabetically by name
+  const sortByName = (nodes: CapabilityTreeNode[]) => {
+    nodes.sort((a, b) => a.name.localeCompare(b.name));
+    for (const n of nodes) sortByName(n.children);
   };
-  sortByPosition(roots);
+  sortByName(roots);
 
   return roots;
 }
