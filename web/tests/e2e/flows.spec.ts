@@ -183,11 +183,10 @@ test.describe("Portfolio and Governance navigation", () => {
     await page.getByRole("button", { name: "Designs", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Designs" })).toBeVisible({ timeout: 10_000 });
 
-    // exact: true -- bare "Portfolio" also substring-matches OverviewPage's
-    // redesigned dashboard tiles ("Application Portfolio 18 apps", "Portfolio
-    // Analysis TIME . 7R"), both visible on the landing view these tests start
-    // from without navigating through Designs first.
-    await page.getByRole("button", { name: "Portfolio", exact: true }).click();
+    // exact: true -- bare "APM" also substring-matches OverviewPage's
+    // redesigned dashboard tile ("APM Analysis TIME . 7R"), visible on the
+    // landing view these tests start from without navigating through Designs first.
+    await page.getByRole("button", { name: "APM", exact: true }).click();
 
     // Portfolio page shows "Technologies" heading and "Governance Report" button
     await expect(page.getByRole("heading", { name: "Technologies" })).toBeVisible({ timeout: 10_000 });
@@ -196,11 +195,10 @@ test.describe("Portfolio and Governance navigation", () => {
 
   test("Governance Report button opens the three-tab governance page", async ({ page }) => {
     await page.goto(WEB_URL);
-    // exact: true -- bare "Portfolio" also substring-matches OverviewPage's
-    // redesigned dashboard tiles ("Application Portfolio 18 apps", "Portfolio
-    // Analysis TIME . 7R"), both visible on the landing view these tests start
-    // from without navigating through Designs first.
-    await page.getByRole("button", { name: "Portfolio", exact: true }).click();
+    // exact: true -- bare "APM" also substring-matches OverviewPage's
+    // redesigned dashboard tile ("APM Analysis TIME . 7R"), visible on the
+    // landing view these tests start from without navigating through Designs first.
+    await page.getByRole("button", { name: "APM", exact: true }).click();
     await expect(page.getByRole("button", { name: "Governance Report" })).toBeVisible({ timeout: 10_000 });
 
     await page.getByRole("button", { name: "Governance Report" }).click();
@@ -213,15 +211,14 @@ test.describe("Portfolio and Governance navigation", () => {
 
   test("← Portfolio back button returns to portfolio from governance", async ({ page }) => {
     await page.goto(WEB_URL);
-    // exact: true -- bare "Portfolio" also substring-matches OverviewPage's
-    // redesigned dashboard tiles ("Application Portfolio 18 apps", "Portfolio
-    // Analysis TIME . 7R"), both visible on the landing view these tests start
-    // from without navigating through Designs first.
-    await page.getByRole("button", { name: "Portfolio", exact: true }).click();
+    // exact: true -- bare "APM" also substring-matches OverviewPage's
+    // redesigned dashboard tile ("APM Analysis TIME . 7R"), visible on the
+    // landing view these tests start from without navigating through Designs first.
+    await page.getByRole("button", { name: "APM", exact: true }).click();
     await page.getByRole("button", { name: "Governance Report" }).click();
     await expect(page.getByRole("button", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
 
-    await page.getByRole("button", { name: "← Portfolio" }).click();
+    await page.getByRole("button", { name: "← APM" }).click();
 
     await expect(page.getByRole("heading", { name: "Technologies" })).toBeVisible({ timeout: 10_000 });
   });
@@ -237,11 +234,10 @@ test.describe("Portfolio and Governance navigation", () => {
   // "Governance" (not "Portfolio") is the item that highlights either way.
   test("Governance tab in NavBar is highlighted when reached via Portfolio's Governance Report button", async ({ page }) => {
     await page.goto(WEB_URL);
-    // exact: true -- bare "Portfolio" also substring-matches OverviewPage's
-    // redesigned dashboard tiles ("Application Portfolio 18 apps", "Portfolio
-    // Analysis TIME . 7R"), both visible on the landing view these tests start
-    // from without navigating through Designs first.
-    await page.getByRole("button", { name: "Portfolio", exact: true }).click();
+    // exact: true -- bare "APM" also substring-matches OverviewPage's
+    // redesigned dashboard tile ("APM Analysis TIME . 7R"), visible on the
+    // landing view these tests start from without navigating through Designs first.
+    await page.getByRole("button", { name: "APM", exact: true }).click();
     await page.getByRole("button", { name: "Governance Report" }).click();
     await expect(page.getByRole("button", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
 

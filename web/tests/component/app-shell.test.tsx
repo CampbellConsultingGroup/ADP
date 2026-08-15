@@ -15,7 +15,7 @@ import { AppShell } from "../../src/ui";
 afterEach(cleanup);
 
 const WORKSPACE = ["Overview", "Designs"];
-const ARCHITECTURE = ["Business", "Applications", "Portfolio", "Governance", "Knowledge"];
+const ARCHITECTURE = ["Business", "Applications", "APM", "Governance", "Knowledge"];
 const DESIGN_SCOPED = ["Intake", "Recommendations", "C4 Design"];
 
 function rail(): HTMLElement {
@@ -81,7 +81,7 @@ describe("AppShell", () => {
         <div />
       </AppShell>,
     );
-    expect(navButton("Portfolio").className).toContain("active");
+    expect(navButton("APM").className).toContain("active");
     expect(navButton("Governance").className).not.toContain("active");
   });
 

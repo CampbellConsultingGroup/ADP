@@ -32,7 +32,7 @@ const ARCHITECTURE: NavDef[] = [
   { view: "strategy", label: "Strategy", icon: "spark", hue: "biz" },
   { view: "business", label: "Business", icon: "biz", hue: "biz" },
   { view: "applications", label: "Applications", icon: "ent", hue: "ent" },
-  { view: "portfolio", label: "Portfolio", icon: "chart", hue: "ent" },
+  { view: "portfolio", label: "APM", icon: "chart", hue: "ent" },
   { view: "governance", label: "Governance", icon: "shield" },
   { view: "knowledge", label: "Knowledge", icon: "book", hue: "tec" },
   // ADP-SPEC-046 / ADP-914.5: standalone diagrams (flowchart/sequence/ERD/
@@ -61,7 +61,7 @@ const TITLES: Record<AppView, string> = {
   designs: "Designs",
   business: "Business Architecture",
   applications: "Application Registry",
-  portfolio: "Portfolio",
+  portfolio: "APM",
   governance: "Governance",
   knowledge: "Knowledge",
   intake: "Requirements Intake",

@@ -212,7 +212,7 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
       tiles: [
         { name: "Application Portfolio", icon: "layers", metric: `${num(appCount)} apps`, view: "applications" },
         { name: "Landscape & Integrations", icon: "plug", metric: `${num(integrationCount)} flows`, view: "applications" },
-        { name: "Portfolio Analysis", icon: "chart", metric: "TIME · 7R", view: "portfolio" },
+        { name: "APM Analysis", icon: "chart", metric: "TIME · 7R", view: "portfolio" },
         { name: "Governance & Standards", icon: "shield", metric: `${atRisk} at risk`, view: "governance" },
       ],
     },
