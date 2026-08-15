@@ -112,7 +112,6 @@ async def test_application_create_201(client):
             "time_classification": "Invest",
             "r_strategy": "Refactor",
             "pace_layer": "Differentiation",
-            "health_score": 4,
         },
     )
     assert r.status_code == 201
@@ -122,7 +121,7 @@ async def test_application_create_201(client):
     assert data["time_classification"] == "Invest"
     assert data["r_strategy"] == "Refactor"
     assert data["pace_layer"] == "Differentiation"
-    assert data["health_score"] == 4
+    assert data["health_score"] is None
     assert "id" in data
     assert "created_at" in data
     assert "updated_at" in data
@@ -154,12 +153,22 @@ async def test_application_update_200(client):
     app_id = await _create_app(client, name="Update Test")
     r = await client.patch(
         f"/api/v1/applications/{app_id}",
-        json={"vendor": "Updated Vendor", "health_score": 2},
+        json={"vendor": "Updated Vendor"},
     )
     assert r.status_code == 200
     data = r.json()
     assert data["vendor"] == "Updated Vendor"
-    assert data["health_score"] == 2
+
+
+async def test_application_update_rejects_health_score_422(client):
+    # docs/application-health-assessment-spec.md §6 Q5: health_score is only
+    # ever set via PUT /applications/{id}/health-assessment.
+    app_id = await _create_app(client, name="Update Test")
+    r = await client.patch(
+        f"/api/v1/applications/{app_id}",
+        json={"health_score": 2},
+    )
+    assert r.status_code == 422
 
 
 async def test_application_delete_204(client):
@@ -183,20 +192,44 @@ async def test_application_invalid_time_422(client):
     assert r.status_code == 422
 
 
-async def test_application_health_score_0_422(client):
-    r = await client.post("/api/v1/applications", json={"name": "App", "health_score": 0})
+def _health_body(**overrides: int) -> dict:
+    body = {
+        "stability_incidents": 3, "technical_currency_debt": 3, "security_posture": 3,
+        "support_team_capacity": 3, "documentation_knowledge": 3,
+        "business_value_criticality": 3,
+    }
+    body.update(overrides)
+    return body
+
+
+async def test_application_health_assessment_score_0_422(client):
+    app_id = await _create_app(client, name="App")
+    r = await client.put(
+        f"/api/v1/applications/{app_id}/health-assessment",
+        json=_health_body(stability_incidents=0),
+    )
     assert r.status_code == 422
 
 
-async def test_application_health_score_6_422(client):
-    r = await client.post("/api/v1/applications", json={"name": "App", "health_score": 6})
+async def test_application_health_assessment_score_6_422(client):
+    app_id = await _create_app(client, name="App")
+    r = await client.put(
+        f"/api/v1/applications/{app_id}/health-assessment",
+        json=_health_body(stability_incidents=6),
+    )
     assert r.status_code == 422
 
 
-async def test_application_health_score_5_201(client):
-    r = await client.post("/api/v1/applications", json={"name": "Healthy App", "health_score": 5})
-    assert r.status_code == 201
-    assert r.json()["health_score"] == 5
+async def test_application_health_assessment_5_200(client):
+    app_id = await _create_app(client, name="Healthy App")
+    r = await client.put(
+        f"/api/v1/applications/{app_id}/health-assessment", json=_health_body()
+    )
+    assert r.status_code == 200
+    assert r.json()["health_score"] == 3
+
+    r2 = await client.get(f"/api/v1/applications/{app_id}")
+    assert r2.json()["health_score"] == 3
 
 
 async def test_application_not_found_404(client):

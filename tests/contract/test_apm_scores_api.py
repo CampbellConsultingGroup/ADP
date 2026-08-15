@@ -42,8 +42,22 @@ async def _mk_app(client, name, **extra) -> dict:
     return resp.json()
 
 
+async def _assess(client, app_id: str, score: int) -> dict:
+    """PUTs a full six-dimension assessment with every dimension set to
+    `score`, so the resulting health_score is exactly `score`."""
+    body = {
+        "stability_incidents": score, "technical_currency_debt": score,
+        "security_posture": score, "support_team_capacity": score,
+        "documentation_knowledge": score, "business_value_criticality": score,
+    }
+    resp = await client.put(f"/api/v1/applications/{app_id}/health-assessment", json=body)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
 async def test_create_with_scores(client):
-    app = await _mk_app(client, "CRM", business_value=5, business_criticality=4, health_score=2)
+    app = await _mk_app(client, "CRM", business_value=5, business_criticality=4)
+    await _assess(client, app["id"], 2)
     assert app["business_value"] == 5
     assert app["business_criticality"] == 4
 
@@ -71,9 +85,12 @@ async def test_score_out_of_range_rejected(client, payload):
 
 
 async def test_rationalization_places_assessed_and_separates_unassessed(client):
-    alpha = await _mk_app(client, "Alpha", business_value=5, health_score=4)  # invest
-    beta = await _mk_app(client, "Beta", business_value=4, health_score=1)  # migrate
-    gamma = await _mk_app(client, "Gamma", health_score=5)  # unassessed: no value
+    alpha = await _mk_app(client, "Alpha", business_value=5)  # invest
+    await _assess(client, alpha["id"], 4)
+    beta = await _mk_app(client, "Beta", business_value=4)  # migrate
+    await _assess(client, beta["id"], 1)
+    gamma = await _mk_app(client, "Gamma")  # unassessed: no value
+    await _assess(client, gamma["id"], 5)
     delta = await _mk_app(client, "Delta", business_value=2)  # unassessed: no health
 
     resp = await client.get("/api/v1/applications/rationalization")

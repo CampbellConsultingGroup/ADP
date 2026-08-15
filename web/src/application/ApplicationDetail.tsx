@@ -17,6 +17,7 @@ import InitiativeLinkEditor from "./InitiativeLinkEditor";
 import GovernancePanel from "./GovernancePanel";
 import QualityPanel from "./QualityPanel";
 import ObjectiveLinksPanel from "./ObjectiveLinksPanel";
+import HealthAssessmentModal from "./HealthAssessmentModal";
 
 interface Props {
   appId: string;
@@ -32,6 +33,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
   const deleteApp = useDeleteApplication();
   const [editing, setEditing] = useState(false);
   const [section, setSection] = useState<Section>("overview");
+  const [showHealthModal, setShowHealthModal] = useState(false);
 
   if (isLoading) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
   if (!app) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Not found</div>;
@@ -105,12 +107,27 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
             </div>
             {app.vendor && <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 3 }}>{app.vendor}</div>}
             {app.primary_owner && <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Owner: {app.primary_owner}</div>}
-            {app.health_score !== null && (
-              <div style={{ fontSize: 12, marginTop: 3, color: "var(--ink-2)" }}>
-                Health: <span style={{ color: "var(--warn)" }}>{"★".repeat(app.health_score)}</span>
-                <span style={{ color: "var(--ink-3)" }}>{"☆".repeat(5 - app.health_score)}</span>
-              </div>
-            )}
+            <div style={{ fontSize: 12, marginTop: 3, color: "var(--ink-2)", display: "flex", alignItems: "center", gap: 8 }}>
+              {app.health_score !== null ? (
+                <span>
+                  Health: <span style={{ color: "var(--warn)" }}>{"★".repeat(app.health_score)}</span>
+                  <span style={{ color: "var(--ink-3)" }}>{"☆".repeat(5 - app.health_score)}</span>
+                </span>
+              ) : (
+                <span>Health: — not assessed —</span>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowHealthModal(true)}
+                style={{
+                  fontSize: 11, padding: "1px 8px", borderRadius: 4,
+                  border: "1px solid var(--accent)", background: "none", color: "var(--accent)",
+                  cursor: "pointer",
+                }}
+              >
+                Assess Health
+              </button>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             <Button size="sm" onClick={() => setEditing(true)}>Edit</Button>
@@ -154,6 +171,10 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
         {section === "quality" && <QualityPanel appId={appId} />}
         {section === "objectives" && <ObjectiveLinksPanel appId={appId} />}
       </div>
+
+      {showHealthModal && (
+        <HealthAssessmentModal appId={appId} onClose={() => setShowHealthModal(false)} />
+      )}
     </div>
   );
 }

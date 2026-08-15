@@ -13,6 +13,7 @@ from adp.application.models import (
     ApplicationIntegrationCreate,
     ApplicationTechCapLinkCreate,
     ApplicationUpdate,
+    HealthAssessmentSubmit,
     TechnicalCapabilityCreate,
     TechnicalCapabilityUpdate,
 )
@@ -22,7 +23,6 @@ from adp.application.models import (
 def test_application_create_valid_minimal():
     app = ApplicationCreate(name="My App")
     assert app.name == "My App"
-    assert app.health_score is None
     assert app.time_classification is None
 
 
@@ -34,10 +34,15 @@ def test_application_create_valid_full():
         time_classification="Invest",
         r_strategy="Refactor",
         pace_layer="Differentiation",
-        health_score=4,
     )
     assert app.time_classification == "Invest"
-    assert app.health_score == 4
+
+
+def test_application_create_rejects_health_score():
+    # docs/application-health-assessment-spec.md §6 Q5: health_score is only
+    # ever set via PUT /applications/{id}/health-assessment.
+    with pytest.raises(ValidationError):
+        ApplicationCreate(name="App", health_score=4)  # type: ignore[call-arg]
 
 
 def test_application_create_blank_name():
@@ -60,26 +65,6 @@ def test_application_create_invalid_pace_layer():
         ApplicationCreate(name="App", pace_layer="Fast")  # type: ignore[arg-type]
 
 
-def test_application_create_health_score_zero():
-    with pytest.raises(ValidationError):
-        ApplicationCreate(name="App", health_score=0)
-
-
-def test_application_create_health_score_six():
-    with pytest.raises(ValidationError):
-        ApplicationCreate(name="App", health_score=6)
-
-
-def test_application_create_health_score_one():
-    app = ApplicationCreate(name="App", health_score=1)
-    assert app.health_score == 1
-
-
-def test_application_create_health_score_five():
-    app = ApplicationCreate(name="App", health_score=5)
-    assert app.health_score == 5
-
-
 def test_application_create_extra_fields_rejected():
     with pytest.raises(ValidationError):
         ApplicationCreate(name="App", unknown_field="x")  # type: ignore[call-arg]
@@ -97,9 +82,54 @@ def test_application_update_none_name_ok():
     assert update.name is None
 
 
-def test_application_update_health_score_out_of_range():
+def test_application_update_rejects_health_score():
     with pytest.raises(ValidationError):
-        ApplicationUpdate(health_score=6)
+        ApplicationUpdate(health_score=6)  # type: ignore[call-arg]
+
+
+# ── HealthAssessmentSubmit ────────────────────────────────────────────────────
+
+
+def _all_scores(**overrides: int) -> dict[str, int]:
+    base = dict(
+        stability_incidents=3,
+        technical_currency_debt=3,
+        security_posture=3,
+        support_team_capacity=3,
+        documentation_knowledge=3,
+        business_value_criticality=3,
+    )
+    base.update(overrides)
+    return base
+
+
+def test_health_assessment_submit_valid_all_six():
+    submit = HealthAssessmentSubmit(**_all_scores(security_posture=1))
+    assert submit.security_posture == 1
+    assert submit.as_dimension_scores()["security_posture"] == 1
+    assert len(submit.as_dimension_scores()) == 6
+
+
+def test_health_assessment_submit_missing_dimension_rejected():
+    scores = _all_scores()
+    del scores["documentation_knowledge"]
+    with pytest.raises(ValidationError):
+        HealthAssessmentSubmit(**scores)  # type: ignore[arg-type]
+
+
+def test_health_assessment_submit_score_zero_rejected():
+    with pytest.raises(ValidationError):
+        HealthAssessmentSubmit(**_all_scores(stability_incidents=0))
+
+
+def test_health_assessment_submit_score_six_rejected():
+    with pytest.raises(ValidationError):
+        HealthAssessmentSubmit(**_all_scores(stability_incidents=6))
+
+
+def test_health_assessment_submit_extra_fields_rejected():
+    with pytest.raises(ValidationError):
+        HealthAssessmentSubmit(**_all_scores(), unknown_field=1)  # type: ignore[call-arg]
 
 
 # ── TechnicalCapabilityCreate ─────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from adp.application.models import (
+    HEALTH_DIMENSIONS,
     TCO_BUCKET_NAMES,
     Application,
     ApplicationCapabilityLink,
@@ -61,6 +62,9 @@ from adp.application.models import (
     DuplicateAppInitiativeLinkError,
     DuplicateAppStageLinkError,
     DuplicateAppTechCapLinkError,
+    HealthAssessmentEntry,
+    HealthAssessmentResponse,
+    HealthAssessmentSubmit,
     InitiativeMember,
     OutOfSupportEntry,
     OutOfSupportResponse,
@@ -228,6 +232,18 @@ _application_risk = sa.Table(
     sa.Column("end_of_life_date", sa.Date()),
     sa.Column("end_of_support_date", sa.Date()),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# docs/application-health-assessment-spec.md: one *current* row per
+# (application, dimension); a re-assessment upserts in place (no history).
+_health_assessment = sa.Table(
+    "application_health_assessment",
+    _metadata,
+    sa.Column("application_id", sa.String(36), primary_key=True),
+    sa.Column("dimension", sa.Text(), primary_key=True),
+    sa.Column("score", sa.SmallInteger(), nullable=False),
+    sa.Column("assessed_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("assessed_by", sa.Text()),
 )
 
 # APM US4: Total Cost of Ownership (1:1 with applications; cascade-deletes)
@@ -416,7 +432,10 @@ async def create_application(body: ApplicationCreate, session: AsyncSession) -> 
             time_classification=body.time_classification,
             r_strategy=body.r_strategy,
             pace_layer=body.pace_layer,
-            health_score=body.health_score,
+            # health_score always starts unset -- only ever written by
+            # upsert_health_assessment, and there's no application_id yet
+            # to assess against until this insert commits.
+            health_score=None,
             business_value=body.business_value,
             business_criticality=body.business_criticality,
             owning_business_unit=body.owning_business_unit,
@@ -439,7 +458,7 @@ async def create_application(body: ApplicationCreate, session: AsyncSession) -> 
         time_classification=body.time_classification,
         r_strategy=body.r_strategy,
         pace_layer=body.pace_layer,
-        health_score=body.health_score,
+        health_score=None,
         business_value=body.business_value,
         business_criticality=body.business_criticality,
         owning_business_unit=body.owning_business_unit,
@@ -469,8 +488,11 @@ async def update_application(
     # Nullable fields: an explicitly provided null clears the value;
     # an omitted field is left unchanged (model_fields_set distinguishes them).
     for field in (
+        # health_score is deliberately absent -- ApplicationUpdate no longer
+        # carries it (docs/application-health-assessment-spec.md §6 Q5); it
+        # is only ever written by upsert_health_assessment below.
         "description", "vendor", "primary_owner", "time_classification",
-        "r_strategy", "pace_layer", "health_score",
+        "r_strategy", "pace_layer",
         "business_value", "business_criticality",
         "owning_business_unit", "business_owner", "technical_owner", "lifecycle_status",
         "hosting_model", "architecture_pattern", "tech_debt_flags",
@@ -591,6 +613,82 @@ async def list_out_of_support(session: AsyncSession, today: date) -> OutOfSuppor
         for r in result.mappings().all()
     ]
     return OutOfSupportResponse(items=items, total=len(items))
+
+
+# ── Application Health Assessment (docs/application-health-assessment-spec.md) ─
+
+
+async def get_health_assessment(app_id: str, session: AsyncSession) -> HealthAssessmentResponse:
+    """Caller (router) has already validated app_id exists."""
+    result = await session.execute(
+        sa.select(_health_assessment)
+        .where(_health_assessment.c.application_id == app_id)
+        .order_by(_health_assessment.c.dimension)
+    )
+    entries = [
+        HealthAssessmentEntry(
+            dimension=row.dimension,
+            score=row.score,
+            assessed_at=row.assessed_at,
+            assessed_by=row.assessed_by,
+        )
+        for row in result.mappings().all()
+    ]
+    app = await get_application(app_id, session)
+    assert app is not None  # caller already checked
+    return HealthAssessmentResponse(
+        application_id=app_id, entries=entries, health_score=app.health_score
+    )
+
+
+async def upsert_health_assessment(
+    app_id: str, body: HealthAssessmentSubmit, actor: str | None, session: AsyncSession
+) -> HealthAssessmentResponse:
+    """Upserts all six dimension rows and recomputes applications.health_score
+    as their minimum, in one call -- the two can never drift apart (spec §5).
+    Caller (router) has already validated app_id exists."""
+    now = _now()
+    scores = body.as_dimension_scores()
+
+    existing_dims = {
+        row.dimension
+        for row in (
+            await session.execute(
+                sa.select(_health_assessment.c.dimension).where(
+                    _health_assessment.c.application_id == app_id
+                )
+            )
+        ).all()
+    }
+    for dimension in HEALTH_DIMENSIONS:
+        values = {
+            "score": scores[dimension],
+            "assessed_at": now,
+            "assessed_by": actor,
+        }
+        if dimension in existing_dims:
+            await session.execute(
+                _health_assessment.update()
+                .where(
+                    _health_assessment.c.application_id == app_id,
+                    _health_assessment.c.dimension == dimension,
+                )
+                .values(**values)
+            )
+        else:
+            await session.execute(
+                _health_assessment.insert().values(
+                    application_id=app_id, dimension=dimension, **values
+                )
+            )
+
+    health_score = min(scores.values())
+    await session.execute(
+        _applications.update()
+        .where(_applications.c.id == app_id)
+        .values(health_score=health_score, updated_at=now)
+    )
+    return await get_health_assessment(app_id, session)
 
 
 # ── Application Cost / TCO CRUD (US4, ADP-9x6) ────────────────────────────────

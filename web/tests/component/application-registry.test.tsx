@@ -58,19 +58,21 @@ describe("ApplicationForm", () => {
     );
   });
 
-  it("rejects an out-of-range health score", async () => {
-    const onSave = vi.fn();
-    renderWithQuery(<ApplicationForm onSave={onSave} onCancel={vi.fn()} />);
+  it("disables Assess Health with no application to assess against yet (New mode)", () => {
+    renderWithQuery(<ApplicationForm onSave={vi.fn()} onCancel={vi.fn()} />);
 
-    fireEvent.change(screen.getByPlaceholderText("My Application"), { target: { value: "X" } });
-    const health = screen.getByLabelText(/Health Score/);
-    fireEvent.change(health, { target: { value: "9" } });
-    // jsdom (like browsers) blocks click-submit on rangeOverflow, so dispatch
-    // submit directly to exercise the component's own validation branch.
-    fireEvent.submit(health.closest("form")!);
+    expect(screen.getByText("— not assessed —")).toBeDefined();
+    const assessButton = screen.getByRole("button", { name: "Assess Health" });
+    expect(assessButton.hasAttribute("disabled")).toBe(true);
+  });
 
-    expect(await screen.findByText("Health score must be 1–5")).toBeDefined();
-    expect(onSave).not.toHaveBeenCalled();
+  it("shows the current health score read-only (not editable) in Edit mode", () => {
+    renderWithQuery(<ApplicationForm initial={APP} onSave={vi.fn()} onCancel={vi.fn()} />);
+
+    expect(screen.getByText(/★★★★☆ \(4\)/)).toBeDefined();
+    expect(screen.queryByLabelText(/Health Score/)).toBeNull();
+    const assessButton = screen.getByRole("button", { name: "Assess Health" });
+    expect(assessButton.hasAttribute("disabled")).toBe(false);
   });
 });
 
