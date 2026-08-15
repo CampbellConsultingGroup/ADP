@@ -67,11 +67,14 @@ describe("buildTree", () => {
     expect(tree[0].children[0].children[0].id).toBe("l3");
   });
 
-  it("sorts siblings by position", () => {
+  it("sorts siblings alphabetically by name, ignoring position", () => {
+    // position deliberately set opposite to name order -- a stale, unused
+    // field with no editing UI (bug report, 2026-08-15) must not affect the
+    // result.
     const items: BusinessCapability[] = [
-      cap({ id: "b", name: "B", level: 1, position: 2 }),
-      cap({ id: "a", name: "A", level: 1, position: 1 }),
-      cap({ id: "c", name: "C", level: 1, position: 3 }),
+      cap({ id: "b", name: "Bravo", level: 1, position: 1 }),
+      cap({ id: "a", name: "Alpha", level: 1, position: 2 }),
+      cap({ id: "c", name: "Charlie", level: 1, position: 0 }),
     ];
     const tree = buildTree(items);
     expect(tree.map((n) => n.id)).toEqual(["a", "b", "c"]);
@@ -238,10 +241,11 @@ describe("CapabilityTree: multi-select + Generate Diagram from Selected (920-cap
     const user = userEvent.setup();
     renderWithQueryClient(<CapabilityTree onGenerateDiagram={onGenerateDiagram} />);
 
-    // Render order (position-sorted tree walk): root-a, child-a, root-b.
+    // Render order (name-sorted tree walk): root-b (Claims), root-a
+    // (Underwriting), child-a (Risk Assessment, nested under root-a).
     const checkboxes = screen.getAllByRole("checkbox");
-    await user.click(checkboxes[0]); // root-a (Underwriting)
-    await user.click(checkboxes[2]); // root-b (Claims) -- a different branch
+    await user.click(checkboxes[0]); // root-b (Claims)
+    await user.click(checkboxes[1]); // root-a (Underwriting) -- a different branch
 
     const button = screen.getByText("Generate Diagram from Selected") as HTMLButtonElement;
     expect(button.disabled).toBe(false);
@@ -260,9 +264,11 @@ describe("CapabilityTree: multi-select + Generate Diagram from Selected (920-cap
     const user = userEvent.setup();
     renderWithQueryClient(<CapabilityTree onGenerateDiagram={onGenerateDiagram} />);
 
+    // Render order (name-sorted tree walk): root-b (Claims), root-a
+    // (Underwriting), child-a (Risk Assessment, nested under root-a).
     const checkboxes = screen.getAllByRole("checkbox");
-    await user.click(checkboxes[0]); // root-a
-    await user.click(checkboxes[1]); // child-a (root-a's real child)
+    await user.click(checkboxes[1]); // root-a (Underwriting)
+    await user.click(checkboxes[2]); // child-a (root-a's real child)
     await user.click(screen.getByText("Generate Diagram from Selected"));
 
     const seed = onGenerateDiagram.mock.calls[0][0];
