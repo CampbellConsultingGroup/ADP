@@ -507,8 +507,20 @@ export function useAssignCapabilityDomain(capabilityId: string) {
         { domain_id: domainId },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["capabilities"] });
+      // "capabilities" was a stale key -- useCapabilities() actually queries
+      // under "business-capabilities", so this never invalidated anything
+      // (bug report, 2026-08-15). Also missing: ["domain", id] (the detail
+      // query DomainDetail.tsx reads via useDomain) was never invalidated at
+      // all, only the ["domains"] list -- so a currently-open domain's
+      // Assigned/Unassigned lists never refreshed after Assign/Remove. Both
+      // together made assignment look like it silently did nothing; the PATCH
+      // itself always worked. queryKey: ["domain"] prefix-matches every
+      // cached ["domain", id] query (default partial matching), covering
+      // both the newly- and previously-assigned domain without needing to
+      // track which ids are affected.
+      void qc.invalidateQueries({ queryKey: ["business-capabilities"] });
       void qc.invalidateQueries({ queryKey: ["domains"] });
+      void qc.invalidateQueries({ queryKey: ["domain"] });
     },
   });
 }
