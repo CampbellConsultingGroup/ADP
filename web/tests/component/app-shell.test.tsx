@@ -15,7 +15,7 @@ import { AppShell } from "../../src/ui";
 afterEach(cleanup);
 
 const WORKSPACE = ["Overview", "Designs"];
-const ARCHITECTURE = ["Business", "Applications", "APM", "Governance", "Knowledge"];
+const ARCHITECTURE = ["Business", "Applications", "Technical Architecture", "APM", "Governance", "Knowledge"];
 const DESIGN_SCOPED = ["Intake", "Recommendations", "C4 Design"];
 
 function rail(): HTMLElement {

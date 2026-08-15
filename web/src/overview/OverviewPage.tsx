@@ -242,7 +242,7 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
         { n: "C4", l: "Locked theme" },
       ],
       tiles: [
-        { name: "Technical Capability Map", icon: "tec", metric: `${num(techCount)} capabilities`, view: "applications" },
+        { name: "Technical Capability Map", icon: "tec", metric: `${num(techCount)} capabilities`, view: "technical" },
         { name: "Standards & Tags", icon: "tags", metric: "technology tags", view: "portfolio" },
         { name: "Knowledge Base", icon: "book", metric: `${num(knowledgeCount)} items`, view: "knowledge" },
         { name: "Rendering & Export", icon: "image", metric: "locked C4 theme", view: "designs" },
