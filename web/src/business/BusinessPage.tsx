@@ -20,7 +20,7 @@ interface BusinessPageProps {
 }
 
 export default function BusinessPage({ onGenerateDiagram }: BusinessPageProps): React.ReactElement {
-  const [tab, setTab] = useState<BusinessTab>("capabilities");
+  const [tab, setTab] = useState<BusinessTab>("domains");
   const [selectedVsId, setSelectedVsId] = useState<string | null>(null);
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   // 043-capability-heat-map US3: set when a heat-map cell is clicked; cleared
@@ -41,7 +41,7 @@ export default function BusinessPage({ onGenerateDiagram }: BusinessPageProps): 
 
         {/* Tab bar */}
         <div style={{ display: "flex", gap: 0, borderBottom: "2px solid var(--border)", marginBottom: 20 }}>
-          {([["capabilities", "Capabilities"], ["heatmap", "Heat Map"], ["value-streams", "Value Streams"], ["domains", "Domains"]] as [BusinessTab, string][]).map(([t, label]) => (
+          {([["domains", "Domains"], ["capabilities", "Capabilities"], ["value-streams", "Value Streams"], ["heatmap", "Heat Map"]] as [BusinessTab, string][]).map(([t, label]) => (
             <button
               key={t}
               onClick={() => { setTab(t); setSelectedVsId(null); setSelectedDomainId(null); setFocusCapabilityId(null); }}
