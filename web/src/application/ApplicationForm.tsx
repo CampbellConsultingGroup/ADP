@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import type { Application, ApplicationCreate } from "../api/application";
 import HealthAssessmentModal from "./HealthAssessmentModal";
+import BusinessValueAssessmentModal from "./BusinessValueAssessmentModal";
 
 interface Props {
   initial?: Application | null;
@@ -27,7 +28,9 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
   // §6 Q5) -- read straight off `initial` at render time, not local state, so
   // it live-updates after the assessment popup saves and the parent refetches.
   const [showHealthModal, setShowHealthModal] = useState(false);
-  const [bizValue, setBizValue] = useState<string>(initial?.business_value?.toString() ?? "");
+  // business_value is read-only here too (docs/application-business-value-
+  // assessment-spec.md §7), same treatment as health_score above.
+  const [showBusinessValueModal, setShowBusinessValueModal] = useState(false);
   const [bizCrit, setBizCrit] = useState<string>(initial?.business_criticality?.toString() ?? "");
   const [bizUnit, setBizUnit] = useState<string>(initial?.owning_business_unit ?? "");
   const [bizOwner, setBizOwner] = useState<string>(initial?.business_owner ?? "");
@@ -41,10 +44,8 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) { setError("Name is required"); return; }
-    const bvNum = bizValue ? parseInt(bizValue, 10) : null;
     const bcNum = bizCrit ? parseInt(bizCrit, 10) : null;
     const outOfRange = (v: number | null) => v !== null && (v < 1 || v > 5);
-    if (outOfRange(bvNum)) { setError("Business value must be 1–5"); return; }
     if (outOfRange(bcNum)) { setError("Business criticality must be 1–5"); return; }
     setError(null);
     try {
@@ -56,7 +57,6 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
         time_classification: (time || null) as ApplicationCreate["time_classification"],
         r_strategy: (rStrategy || null) as ApplicationCreate["r_strategy"],
         pace_layer: (pace || null) as ApplicationCreate["pace_layer"],
-        business_value: bvNum,
         business_criticality: bcNum,
         owning_business_unit: bizUnit || null,
         business_owner: bizOwner || null,
@@ -145,9 +145,38 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
         <HealthAssessmentModal appId={initial.id} onClose={() => setShowHealthModal(false)} />
       )}
 
-      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Business Value (1–5)
-        <input style={field} type="number" min={1} max={5} value={bizValue} onChange={e => setBizValue(e.target.value)} placeholder="1–5" />
-      </label>
+      <div>
+        <div style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 4 }}>Business Value</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span style={{ fontSize: 13 }}>
+            {initial?.business_value
+              ? `${"★".repeat(initial.business_value)}${"☆".repeat(5 - initial.business_value)} (${initial.business_value})`
+              : "— not assessed —"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowBusinessValueModal(true)}
+            disabled={!initial}
+            title={initial ? undefined : "Save the application first, then assess business value"}
+            style={{
+              fontSize: 12, padding: "3px 10px", borderRadius: 4,
+              border: "1px solid var(--accent)", background: "none", color: "var(--accent)",
+              cursor: initial ? "pointer" : "not-allowed", opacity: initial ? 1 : 0.5,
+            }}
+          >
+            Assess Business Value
+          </button>
+        </div>
+        {!initial && (
+          <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>
+            Save the application first, then assess business value.
+          </div>
+        )}
+      </div>
+
+      {initial && showBusinessValueModal && (
+        <BusinessValueAssessmentModal appId={initial.id} onClose={() => setShowBusinessValueModal(false)} />
+      )}
 
       <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Business Criticality (1–5)
         <input style={field} type="number" min={1} max={5} value={bizCrit} onChange={e => setBizCrit(e.target.value)} placeholder="1–5" />

@@ -18,6 +18,7 @@ import GovernancePanel from "./GovernancePanel";
 import QualityPanel from "./QualityPanel";
 import ObjectiveLinksPanel from "./ObjectiveLinksPanel";
 import HealthAssessmentModal from "./HealthAssessmentModal";
+import BusinessValueAssessmentModal from "./BusinessValueAssessmentModal";
 
 interface Props {
   appId: string;
@@ -34,6 +35,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
   const [editing, setEditing] = useState(false);
   const [section, setSection] = useState<Section>("overview");
   const [showHealthModal, setShowHealthModal] = useState(false);
+  const [showBusinessValueModal, setShowBusinessValueModal] = useState(false);
 
   if (isLoading) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
   if (!app) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Not found</div>;
@@ -128,6 +130,27 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
                 Assess Health
               </button>
             </div>
+            <div style={{ fontSize: 12, marginTop: 3, color: "var(--ink-2)", display: "flex", alignItems: "center", gap: 8 }}>
+              {app.business_value !== null ? (
+                <span>
+                  Business Value: <span style={{ color: "var(--warn)" }}>{"★".repeat(app.business_value)}</span>
+                  <span style={{ color: "var(--ink-3)" }}>{"☆".repeat(5 - app.business_value)}</span>
+                </span>
+              ) : (
+                <span>Business Value: — not assessed —</span>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowBusinessValueModal(true)}
+                style={{
+                  fontSize: 11, padding: "1px 8px", borderRadius: 4,
+                  border: "1px solid var(--accent)", background: "none", color: "var(--accent)",
+                  cursor: "pointer",
+                }}
+              >
+                Assess Business Value
+              </button>
+            </div>
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
             <Button size="sm" onClick={() => setEditing(true)}>Edit</Button>
@@ -174,6 +197,9 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
 
       {showHealthModal && (
         <HealthAssessmentModal appId={appId} onClose={() => setShowHealthModal(false)} />
+      )}
+      {showBusinessValueModal && (
+        <BusinessValueAssessmentModal appId={appId} onClose={() => setShowBusinessValueModal(false)} />
       )}
     </div>
   );

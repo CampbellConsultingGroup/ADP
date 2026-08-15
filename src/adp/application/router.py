@@ -7,6 +7,7 @@ GET/POST/DELETE       /api/v1/applications/{id}/stage-links
 GET/POST/DELETE       /api/v1/applications/{id}/domain-integrations
 GET/POST/DELETE       /api/v1/applications/{id}/design-links
 GET/PUT               /api/v1/applications/{id}/health-assessment
+GET/PUT               /api/v1/applications/{id}/business-value-assessment
 GET/POST/PATCH/DELETE /api/v1/technical-capabilities
 GET/POST/PATCH/DELETE /api/v1/integrations
 
@@ -60,6 +61,8 @@ from adp.application.models import (
     ApplicationTechCapLinkCreate,
     ApplicationTechCapLinksResponse,
     ApplicationUpdate,
+    BusinessValueAssessmentResponse,
+    BusinessValueAssessmentSubmit,
     CostRollupResponse,
     DuplicateAppCapLinkError,
     DuplicateAppDesignLinkError,
@@ -311,6 +314,44 @@ async def put_health_assessment(
     logger.info(
         "application.health_assessment.update id=%s health_score=%s actor=%s",
         app_id, result.health_score, actor,
+    )
+    return result
+
+
+# ── Application Business Value Assessment
+#    (docs/application-business-value-assessment-spec.md, not sensitive --
+#    ungated read, same treatment as Health Assessment above) ────────────────
+
+@applications_router.get(
+    "/{app_id}/business-value-assessment", response_model=BusinessValueAssessmentResponse
+)
+async def get_business_value_assessment(
+    app_id: str, session: AsyncSession = Depends(_get_session)
+):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    return await astore.get_business_value_assessment(app_id, session)
+
+
+@applications_router.put(
+    "/{app_id}/business-value-assessment", response_model=BusinessValueAssessmentResponse
+)
+async def put_business_value_assessment(
+    app_id: str,
+    body: BusinessValueAssessmentSubmit,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    actor = _get_actor(request)
+    result = await astore.upsert_business_value_assessment(app_id, body, actor, session)
+    await session.commit()
+    logger.info(
+        "application.business_value_assessment.update id=%s business_value=%s actor=%s",
+        app_id, result.result.business_value if result.result else None, actor,
     )
     return result
 

@@ -43,9 +43,10 @@ export interface ApplicationCreate {
   time_classification?: TimeClassification | null;
   r_strategy?: RStrategy | null;
   pace_layer?: PaceLayer | null;
-  // health_score is intentionally absent -- only ever set via
-  // useSaveHealthAssessment (docs/application-health-assessment-spec.md §6 Q5).
-  business_value?: number | null;
+  // health_score and business_value are both intentionally absent -- only
+  // ever set via useSaveHealthAssessment/useSaveBusinessValueAssessment
+  // (docs/application-health-assessment-spec.md §6 Q5;
+  // docs/application-business-value-assessment-spec.md §7).
   business_criticality?: number | null;
   owning_business_unit?: string | null;
   business_owner?: string | null;
@@ -87,6 +88,43 @@ export interface HealthAssessmentResponse {
   application_id: string;
   entries: HealthAssessmentEntry[];
   health_score: number | null;
+}
+
+// ── Business Value Assessment (docs/application-business-value-assessment-spec.md) ─
+
+export type BusinessValueDimension =
+  | "strategic_alignment"
+  | "revenue_cost_impact"
+  | "customer_stakeholder_impact"
+  | "competitive_differentiation"
+  | "risk_compliance_contribution"
+  | "evidence_measurability";
+
+export interface BusinessValueAssessmentEntry {
+  dimension: BusinessValueDimension;
+  score: number;
+  assessed_at: string;
+  assessed_by: string | null;
+}
+
+/** PUT body -- all six required, same rule as HealthAssessmentSubmit. */
+export type BusinessValueAssessmentSubmit = Record<BusinessValueDimension, number>;
+
+/** The server's own computed result -- not just the final integer, but the
+ *  weighted average and whether/how the evidence cap bound, so the UI can
+ *  always show the cap math (spec §4: shown on every assessment). */
+export interface BusinessValueAssessmentResult {
+  business_value: number;
+  weighted_average: number;
+  evidence_score: number;
+  cap: number | null;
+  capped: boolean;
+}
+
+export interface BusinessValueAssessmentResponse {
+  application_id: string;
+  entries: BusinessValueAssessmentEntry[];
+  result: BusinessValueAssessmentResult | null;
 }
 
 // ── Rationalization (APM US1) ─────────────────────────────────────────────────
@@ -429,6 +467,33 @@ export function useSaveHealthAssessment(appId: string) {
       void qc.invalidateQueries({ queryKey: ["applications", appId, "health-assessment"] });
       // Broad invalidate (not just [.., appId]) -- health_score also shows
       // on the applications list/rationalization/heat-map views.
+      void qc.invalidateQueries({ queryKey: ["applications"] });
+    },
+  });
+}
+
+export function useBusinessValueAssessment(appId: string | null) {
+  return useQuery<BusinessValueAssessmentResponse>({
+    queryKey: ["applications", appId, "business-value-assessment"],
+    queryFn: () => apiFetch(`${API}/applications/${appId}/business-value-assessment`),
+    enabled: !!appId,
+  });
+}
+
+export function useSaveBusinessValueAssessment(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: BusinessValueAssessmentSubmit) =>
+      apiFetch<BusinessValueAssessmentResponse>(
+        `${API}/applications/${appId}/business-value-assessment`,
+        { method: "PUT", body: JSON.stringify(body) },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({
+        queryKey: ["applications", appId, "business-value-assessment"],
+      });
+      // Broad invalidate -- business_value also shows on the applications
+      // list/rationalization/heat-map views.
       void qc.invalidateQueries({ queryKey: ["applications"] });
     },
   });
