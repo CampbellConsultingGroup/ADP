@@ -29,6 +29,26 @@ LifecycleStatus = Literal["planned", "active", "sunset", "retired"]
 # ADP-SPEC-038 (APM US5): technical fit depth.
 HostingModel = Literal["on_prem", "cloud", "saas", "hybrid"]
 
+# docs/application-health-assessment-spec.md: the six health-rubric
+# dimensions (docs/health-table.md's six rows), in the same order the rubric
+# table lists them.
+HealthDimension = Literal[
+    "stability_incidents",
+    "technical_currency_debt",
+    "security_posture",
+    "support_team_capacity",
+    "documentation_knowledge",
+    "business_value_criticality",
+]
+HEALTH_DIMENSIONS: tuple[HealthDimension, ...] = (
+    "stability_incidents",
+    "technical_currency_debt",
+    "security_posture",
+    "support_team_capacity",
+    "documentation_knowledge",
+    "business_value_criticality",
+)
+
 # ── Error classes ─────────────────────────────────────────────────────────────
 
 
@@ -92,7 +112,10 @@ class ApplicationCreate(BaseModel):
     time_classification: TimeClassification | None = None
     r_strategy: RStrategy | None = None
     pace_layer: PaceLayer | None = None
-    health_score: Annotated[int, Field(ge=1, le=5)] | None = None
+    # health_score is intentionally absent: it is only ever set via
+    # PUT /applications/{id}/health-assessment (docs/application-health-
+    # assessment-spec.md §6 Q5) -- it doesn't exist yet at creation anyway
+    # (the assessment popup needs a real application_id, §4).
     business_value: Score15 | None = None
     business_criticality: Score15 | None = None
     owning_business_unit: str | None = None
@@ -120,7 +143,10 @@ class ApplicationUpdate(BaseModel):
     time_classification: TimeClassification | None = None
     r_strategy: RStrategy | None = None
     pace_layer: PaceLayer | None = None
-    health_score: Annotated[int, Field(ge=1, le=5)] | None = None
+    # health_score is intentionally absent -- see ApplicationCreate's own
+    # comment above. extra="forbid" rejects (422) any request that still
+    # tries to PATCH it directly, which is the enforcement mechanism for
+    # spec §6 Q5 ("reject direct writes").
     business_value: Score15 | None = None
     business_criticality: Score15 | None = None
     owning_business_unit: str | None = None
@@ -143,6 +169,48 @@ class ApplicationListResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
     items: list[Application]
     total: int
+
+
+# ── Health Assessment (docs/application-health-assessment-spec.md) ───────────
+
+
+class HealthAssessmentEntry(BaseModel):
+    """One dimension's current answer. Read-only; written only via
+    HealthAssessmentSubmit below."""
+
+    model_config = ConfigDict(extra="forbid")
+    dimension: HealthDimension
+    score: Annotated[int, Field(ge=1, le=5)]
+    assessed_at: datetime
+    assessed_by: str | None = None
+
+
+class HealthAssessmentSubmit(BaseModel):
+    """PUT body -- all six dimensions required (spec §2/§6 Q2: no partial
+    assessment). One field per dimension rather than a dict, per ART-XIII
+    (explicit typed fields over a loosely-typed mapping)."""
+
+    model_config = ConfigDict(extra="forbid")
+    stability_incidents: Annotated[int, Field(ge=1, le=5)]
+    technical_currency_debt: Annotated[int, Field(ge=1, le=5)]
+    security_posture: Annotated[int, Field(ge=1, le=5)]
+    support_team_capacity: Annotated[int, Field(ge=1, le=5)]
+    documentation_knowledge: Annotated[int, Field(ge=1, le=5)]
+    business_value_criticality: Annotated[int, Field(ge=1, le=5)]
+
+    def as_dimension_scores(self) -> dict[HealthDimension, int]:
+        return {dim: getattr(self, dim) for dim in HEALTH_DIMENSIONS}
+
+
+class HealthAssessmentResponse(BaseModel):
+    """GET/PUT response. `entries` is empty when the application has never
+    been assessed; `health_score` mirrors Application.health_score (None
+    until the first assessment)."""
+
+    model_config = ConfigDict(extra="forbid")
+    application_id: str
+    entries: list[HealthAssessmentEntry] = Field(default_factory=list)
+    health_score: Annotated[int, Field(ge=1, le=5)] | None = None
 
 
 # ── Rationalization (APM US1) ─────────────────────────────────────────────────

@@ -6,6 +6,7 @@ GET/POST/DELETE       /api/v1/applications/{id}/technical-capability-links
 GET/POST/DELETE       /api/v1/applications/{id}/stage-links
 GET/POST/DELETE       /api/v1/applications/{id}/domain-integrations
 GET/POST/DELETE       /api/v1/applications/{id}/design-links
+GET/PUT               /api/v1/applications/{id}/health-assessment
 GET/POST/PATCH/DELETE /api/v1/technical-capabilities
 GET/POST/PATCH/DELETE /api/v1/integrations
 
@@ -65,6 +66,8 @@ from adp.application.models import (
     DuplicateAppInitiativeLinkError,
     DuplicateAppStageLinkError,
     DuplicateAppTechCapLinkError,
+    HealthAssessmentResponse,
+    HealthAssessmentSubmit,
     OutOfSupportResponse,
     RationalizationResponse,
     RenewalsSoonResponse,
@@ -274,6 +277,42 @@ async def put_application_risk(
     await session.commit()
     logger.info("application.risk.update id=%s actor=%s", app_id, _get_actor(request))
     return risk
+
+
+# ── Application Health Assessment (docs/application-health-assessment-spec.md,
+#    not sensitive -- ungated read, matching every other non-Risk/Cost/
+#    Governance Application sub-resource) ──────────────────────────────────────
+
+@applications_router.get(
+    "/{app_id}/health-assessment", response_model=HealthAssessmentResponse
+)
+async def get_health_assessment(app_id: str, session: AsyncSession = Depends(_get_session)):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    return await astore.get_health_assessment(app_id, session)
+
+
+@applications_router.put(
+    "/{app_id}/health-assessment", response_model=HealthAssessmentResponse
+)
+async def put_health_assessment(
+    app_id: str,
+    body: HealthAssessmentSubmit,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    app = await astore.get_application(app_id, session)
+    if app is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+    actor = _get_actor(request)
+    result = await astore.upsert_health_assessment(app_id, body, actor, session)
+    await session.commit()
+    logger.info(
+        "application.health_assessment.update id=%s health_score=%s actor=%s",
+        app_id, result.health_score, actor,
+    )
+    return result
 
 
 # ── Application Cost / TCO (APM US4, sensitive) ───────────────────────────────

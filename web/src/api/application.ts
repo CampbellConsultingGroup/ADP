@@ -43,7 +43,8 @@ export interface ApplicationCreate {
   time_classification?: TimeClassification | null;
   r_strategy?: RStrategy | null;
   pace_layer?: PaceLayer | null;
-  health_score?: number | null;
+  // health_score is intentionally absent -- only ever set via
+  // useSaveHealthAssessment (docs/application-health-assessment-spec.md §6 Q5).
   business_value?: number | null;
   business_criticality?: number | null;
   owning_business_unit?: string | null;
@@ -60,6 +61,32 @@ export interface ApplicationUpdate extends Partial<ApplicationCreate> {}
 export interface ApplicationListResponse {
   items: Application[];
   total: number;
+}
+
+// ── Health Assessment (docs/application-health-assessment-spec.md) ───────────
+
+export type HealthDimension =
+  | "stability_incidents"
+  | "technical_currency_debt"
+  | "security_posture"
+  | "support_team_capacity"
+  | "documentation_knowledge"
+  | "business_value_criticality";
+
+export interface HealthAssessmentEntry {
+  dimension: HealthDimension;
+  score: number;
+  assessed_at: string;
+  assessed_by: string | null;
+}
+
+/** PUT body -- all six required (spec §2/§6 Q2: no partial assessment). */
+export type HealthAssessmentSubmit = Record<HealthDimension, number>;
+
+export interface HealthAssessmentResponse {
+  application_id: string;
+  entries: HealthAssessmentEntry[];
+  health_score: number | null;
 }
 
 // ── Rationalization (APM US1) ─────────────────────────────────────────────────
@@ -379,6 +406,31 @@ export function useApplication(id: string) {
     queryKey: ["applications", id],
     queryFn: () => apiFetch(`${API}/applications/${id}`),
     enabled: !!id,
+  });
+}
+
+export function useHealthAssessment(appId: string | null) {
+  return useQuery<HealthAssessmentResponse>({
+    queryKey: ["applications", appId, "health-assessment"],
+    queryFn: () => apiFetch(`${API}/applications/${appId}/health-assessment`),
+    enabled: !!appId,
+  });
+}
+
+export function useSaveHealthAssessment(appId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: HealthAssessmentSubmit) =>
+      apiFetch<HealthAssessmentResponse>(`${API}/applications/${appId}/health-assessment`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["applications", appId, "health-assessment"] });
+      // Broad invalidate (not just [.., appId]) -- health_score also shows
+      // on the applications list/rationalization/heat-map views.
+      void qc.invalidateQueries({ queryKey: ["applications"] });
+    },
   });
 }
 

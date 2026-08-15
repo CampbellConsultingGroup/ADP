@@ -69,6 +69,23 @@ async def _mk_app(client, name="CRM", **extra) -> dict:
     return resp.json()
 
 
+async def _assess(client, app_id: str, **overrides: int) -> dict:
+    """PUTs a full six-dimension health assessment, all dimensions defaulting
+    to 3 unless overridden -- the resulting health_score is min(scores)."""
+    scores = dict(
+        stability_incidents=3,
+        technical_currency_debt=3,
+        security_posture=3,
+        support_team_capacity=3,
+        documentation_knowledge=3,
+        business_value_criticality=3,
+    )
+    scores.update(overrides)
+    resp = await client.put(f"/api/v1/applications/{app_id}/health-assessment", json=scores)
+    assert resp.status_code == 200, resp.text
+    return resp.json()
+
+
 # ── Application CRUD ──────────────────────────────────────────────────────────
 
 async def test_list_applications_empty(client):
@@ -87,7 +104,6 @@ async def test_create_and_get_application(client):
         time_classification="Invest",
         r_strategy="Refactor",
         pace_layer="Differentiation",
-        health_score=4,
     )
     assert app["name"] == "CRM"  # trimmed
     assert app["time_classification"] == "Invest"
@@ -116,17 +132,28 @@ async def test_patch_application(client):
     app = await _mk_app(client)
     resp = await client.patch(
         f"/api/v1/applications/{app['id']}",
-        json={"health_score": 2, "r_strategy": "Retire"},
+        json={"r_strategy": "Retire"},
     )
     assert resp.status_code == 200
     body = resp.json()
-    assert body["health_score"] == 2
     assert body["r_strategy"] == "Retire"
     assert body["name"] == app["name"]
 
 
+async def test_patch_application_rejects_health_score(client):
+    # docs/application-health-assessment-spec.md §6 Q5: health_score is only
+    # ever set via PUT /applications/{id}/health-assessment.
+    app = await _mk_app(client)
+    resp = await client.patch(
+        f"/api/v1/applications/{app['id']}",
+        json={"health_score": 2},
+    )
+    assert resp.status_code == 422
+
+
 async def test_patch_application_explicit_null_clears_field(client):
-    app = await _mk_app(client, vendor="Acme", health_score=4)
+    app = await _mk_app(client, vendor="Acme")
+    await _assess(client, app["id"], stability_incidents=4)
     resp = await client.patch(
         f"/api/v1/applications/{app['id']}",
         json={"vendor": None},
@@ -134,11 +161,88 @@ async def test_patch_application_explicit_null_clears_field(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["vendor"] is None          # explicit null cleared it
-    assert body["health_score"] == 4       # omitted field unchanged
+    assert body["health_score"] == 3       # omitted field unchanged (unaffected by PATCH)
 
 
 async def test_patch_application_404(client):
-    resp = await client.patch("/api/v1/applications/nope", json={"health_score": 1})
+    resp = await client.patch("/api/v1/applications/nope", json={"vendor": "X"})
+    assert resp.status_code == 404
+
+
+# ── Application Health Assessment ─────────────────────────────────────────────
+
+
+async def test_get_health_assessment_never_assessed(client):
+    app = await _mk_app(client)
+    resp = await client.get(f"/api/v1/applications/{app['id']}/health-assessment")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["entries"] == []
+    assert body["health_score"] is None
+
+
+async def test_get_health_assessment_404(client):
+    resp = await client.get("/api/v1/applications/nope/health-assessment")
+    assert resp.status_code == 404
+
+
+async def test_put_health_assessment_computes_min_as_health_score(client):
+    app = await _mk_app(client)
+    body = await _assess(
+        client, app["id"],
+        stability_incidents=2, technical_currency_debt=5, security_posture=4,
+        support_team_capacity=3, documentation_knowledge=5, business_value_criticality=3,
+    )
+    assert body["health_score"] == 2
+    assert len(body["entries"]) == 6
+
+    # The application's own health_score reflects the same value.
+    resp = await client.get(f"/api/v1/applications/{app['id']}")
+    assert resp.json()["health_score"] == 2
+
+
+async def test_put_health_assessment_reassessment_upserts_in_place(client):
+    app = await _mk_app(client)
+    await _assess(client, app["id"], stability_incidents=2)
+    first = await client.get(f"/api/v1/applications/{app['id']}/health-assessment")
+    assert len(first.json()["entries"]) == 6
+
+    body = await _assess(client, app["id"], stability_incidents=5)
+    assert body["health_score"] == 3  # all dimensions now 3 (or 5 for stability)
+    assert len(body["entries"]) == 6  # still 6 rows, not 12 -- upserted, not appended
+
+
+async def test_put_health_assessment_partial_submission_422(client):
+    app = await _mk_app(client)
+    resp = await client.put(
+        f"/api/v1/applications/{app['id']}/health-assessment",
+        json={"stability_incidents": 3, "technical_currency_debt": 3},
+    )
+    assert resp.status_code == 422
+
+
+async def test_put_health_assessment_out_of_range_422(client):
+    app = await _mk_app(client)
+    resp = await client.put(
+        f"/api/v1/applications/{app['id']}/health-assessment",
+        json={
+            "stability_incidents": 6, "technical_currency_debt": 3, "security_posture": 3,
+            "support_team_capacity": 3, "documentation_knowledge": 3,
+            "business_value_criticality": 3,
+        },
+    )
+    assert resp.status_code == 422
+
+
+async def test_put_health_assessment_404(client):
+    resp = await client.put(
+        "/api/v1/applications/nope/health-assessment",
+        json={
+            "stability_incidents": 3, "technical_currency_debt": 3, "security_posture": 3,
+            "support_team_capacity": 3, "documentation_knowledge": 3,
+            "business_value_criticality": 3,
+        },
+    )
     assert resp.status_code == 404
 
 
