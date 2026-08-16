@@ -1,10 +1,17 @@
 import React, { useState } from "react";
 import { useSubmitIntake } from "../api/intake";
 import { useLLMConfig } from "../api/config";
+import { useCreateDesign } from "../api/designs";
 import ModelSelector from "./ModelSelector";
 
 interface IntakeTextFormProps {
-  designId: string;
+  // null until a design exists -- Intake is reachable with no design selected
+  // (it's where one starts): the first submit creates the design, titled from
+  // the Business Problem text, then submits intake against it in the same action.
+  designId: string | null;
+  // Fired once a design gets created by a submit that had no designId yet, so
+  // the caller can adopt it (e.g. App.tsx's currentDesignId).
+  onDesignCreated?: (designId: string) => void;
   // extractionRequested is true when Known Requirements text was submitted (so
   // the caller can distinguish "nothing extracted" from "framing-only save").
   onOperationCreated: (operationId: string, extractionRequested: boolean) => void;
@@ -30,13 +37,15 @@ const hintStyle: React.CSSProperties = {
  * persisted to the canonical model; Known Requirements is optional free-text run
  * through the existing extraction pipeline.
  */
-export default function IntakeTextForm({ designId, onOperationCreated }: IntakeTextFormProps): React.ReactElement {
+export default function IntakeTextForm({ designId, onDesignCreated, onOperationCreated }: IntakeTextFormProps): React.ReactElement {
   const [businessProblem, setBusinessProblem] = useState("");
   const [desiredOutcome, setDesiredOutcome] = useState("");
   const [knownRequirements, setKnownRequirements] = useState("");
+  const [creatingDesign, setCreatingDesign] = useState(false);
   const { data: llmConfig } = useLLMConfig();
   const [selectedModel, setSelectedModel] = useState<string>(llmConfig?.extraction_model ?? "claude-sonnet-4-6");
-  const submit = useSubmitIntake(designId);
+  const submit = useSubmitIntake();
+  const createDesign = useCreateDesign();
 
   // Sync selected model with global config default when it loads
   React.useEffect(() => {
@@ -49,12 +58,31 @@ export default function IntakeTextForm({ designId, onOperationCreated }: IntakeT
   const hasKnownReq = knownRequirements.trim().length > 0;
   const hasApiKey = llmConfig?.api_key_configured ?? false;
   const requiredFilled = businessProblem.trim().length > 0 && desiredOutcome.trim().length > 0;
-  const canSubmit = requiredFilled && !knownReqTooShort && !submit.isPending;
+  const isBusy = submit.isPending || creatingDesign;
+  const canSubmit = requiredFilled && !knownReqTooShort && !isBusy;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const extractionRequested = hasKnownReq;
+
+    let targetDesignId = designId;
+    if (!targetDesignId) {
+      setCreatingDesign(true);
+      try {
+        // No design yet -- Intake is where one starts. Title it from the
+        // Business Problem so it isn't just "Untitled" in the Designs list.
+        const design = await createDesign.mutateAsync({
+          title: businessProblem.trim().slice(0, 80),
+        });
+        targetDesignId = design.id;
+        onDesignCreated?.(targetDesignId);
+      } finally {
+        setCreatingDesign(false);
+      }
+    }
+
     submit.mutate(
       {
+        designId: targetDesignId,
         mode: "bulk_text",
         text: knownRequirements,
         business_problem: businessProblem,
@@ -132,7 +160,7 @@ export default function IntakeTextForm({ designId, onOperationCreated }: IntakeT
             flexShrink: 0,
           }}
         >
-          {submit.isPending ? "Submitting..." : hasKnownReq ? "Submit & Extract" : "Submit Intake"}
+          {creatingDesign ? "Starting…" : submit.isPending ? "Submitting..." : hasKnownReq ? "Submit & Extract" : "Submit Intake"}
         </button>
         <ModelSelector purpose="extraction" value={selectedModel} onChange={setSelectedModel} />
       </div>
@@ -146,6 +174,7 @@ export default function IntakeTextForm({ designId, onOperationCreated }: IntakeT
         ℹ Source text is stored with this design for traceability
       </div>
 
+      {createDesign.isError && <div style={{ marginTop: 8, color: "var(--crit)", fontSize: 13 }}>Couldn't start a new design. Check the server logs.</div>}
       {submit.isError && <div style={{ marginTop: 8, color: "var(--crit)", fontSize: 13 }}>Submission failed. Check the server logs.</div>}
     </div>
   );

@@ -8,6 +8,10 @@ import ValidateDesignButton from "./ValidateDesignButton";
 interface DesignsPageProps {
   onSelectDesign: (id: string) => void;
   onNavigate: (view: AppView) => void;
+  // Set when the user was redirected here from a design-scoped nav item
+  // (e.g. Intake) with no design selected yet -- shown as a hint, and the
+  // caller (App.tsx) continues straight to that screen once one is picked.
+  continueTo?: string | null;
 }
 
 const LIFECYCLE: Record<string, { tone: BadgeTone; label: string }> = {
@@ -18,7 +22,7 @@ const LIFECYCLE: Record<string, { tone: BadgeTone; label: string }> = {
   decommissioned: { tone: "crit", label: "Decommissioned" },
 };
 
-export default function DesignsPage({ onSelectDesign }: DesignsPageProps): React.ReactElement {
+export default function DesignsPage({ onSelectDesign, continueTo }: DesignsPageProps): React.ReactElement {
   const [showForm, setShowForm] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [titleError, setTitleError] = useState("");
@@ -49,6 +53,11 @@ export default function DesignsPage({ onSelectDesign }: DesignsPageProps): React
 
   return (
     <div className="ui-page" style={{ maxWidth: 940 }}>
+      {continueTo && (
+        <div className="ui-alert info" style={{ marginBottom: 16 }}>
+          ℹ Select or create a design to continue to {continueTo}
+        </div>
+      )}
       <div className="ui-toolbar">
         <div>
           <h1 className="ui-h1">Designs</h1>

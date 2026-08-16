@@ -11,8 +11,14 @@ import CapabilityGapPanel from "./CapabilityGapPanel";
 import { Button } from "../ui";
 
 interface IntakePageProps {
-  designId: string;
+  // null until a design exists -- Intake is always reachable directly (it's
+  // where a design starts, per explicit product decision), not gated on one
+  // being selected first. IntakeTextForm creates the design on first submit.
+  designId: string | null;
   onNavigate: (view: AppView) => void;
+  // Bubbles a design created during this Intake session up to the caller
+  // (e.g. App.tsx's currentDesignId) so the rest of the app picks it up.
+  onDesignCreated?: (designId: string) => void;
 }
 
 type Tab = "bulk" | "form" | "settings";
@@ -64,11 +70,14 @@ function RejectedRequirementsSection({ proposals }: { proposals: ProposalRespons
   );
 }
 
-export default function IntakePage({ designId, onNavigate }: IntakePageProps): React.ReactElement {
+export default function IntakePage({ designId, onNavigate, onDesignCreated }: IntakePageProps): React.ReactElement {
   const [activeTab, setActiveTab] = useState<Tab>("bulk");
   const [operationId, setOperationId] = useState<string | null>(null);
   const [extractionRequested, setExtractionRequested] = useState(false);
-  const { data: statusData } = useIntakeStatus(designId, operationId);
+  // Safe even before a design exists: the query is `enabled` only once
+  // operationId is set, which itself can't happen until IntakeTextForm has
+  // created (or been given) a real design id.
+  const { data: statusData } = useIntakeStatus(designId ?? "", operationId);
 
   const status = statusData?.status;
   const allProposals = statusData?.proposals ?? [];
@@ -114,6 +123,7 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
               <div>
                 <IntakeTextForm
                   designId={designId}
+                  onDesignCreated={onDesignCreated}
                   onOperationCreated={(opId, extraction) => {
                     setOperationId(opId);
                     setExtractionRequested(extraction);
@@ -147,7 +157,7 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
                 )}
 
                 {/* Pending proposals to review — confirmed/rejected are removed (FR-002, FR-003) */}
-                {operationId && status === "completed" && pendingProposals.length > 0 && (
+                {designId && operationId && status === "completed" && pendingProposals.length > 0 && (
                   <div style={{ marginTop: 16 }}>
                     <ProposalsList proposals={pendingProposals} designId={designId} operationId={operationId} />
                   </div>
@@ -162,27 +172,41 @@ export default function IntakePage({ designId, onNavigate }: IntakePageProps): R
               </div>
             )}
 
-            {activeTab === "form" && <StructuredForm designId={designId} />}
+            {activeTab === "form" && (
+              designId
+                ? <StructuredForm designId={designId} />
+                : <p style={{ fontSize: 13, color: "var(--ink-3)" }}>
+                    Start with Guided Intake's Business Problem field first — it's what creates the design.
+                  </p>
+            )}
             {activeTab === "settings" && <LLMSettings />}
           </div>
         </div>
 
         {/* Right sidebar: Confirmed then Rejected (FR-003, FR-004) */}
         <div style={{ flex: 1, borderLeft: "1px solid var(--border)", overflowY: "auto", background: "var(--surface-2)" }}>
-          {/* Confirmed Requirements */}
-          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontWeight: 600, fontSize: 14, color: "var(--good)", display: "flex", alignItems: "center", gap: 6 }}>
-            <span>✓</span> Confirmed Requirements
-          </div>
-          <RequirementsList designId={designId} />
+          {designId ? (
+            <>
+              {/* Confirmed Requirements */}
+              <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontWeight: 600, fontSize: 14, color: "var(--good)", display: "flex", alignItems: "center", gap: 6 }}>
+                <span>✓</span> Confirmed Requirements
+              </div>
+              <RequirementsList designId={designId} />
 
-          {/* Rejected Requirements — below confirmed (FR-003) */}
-          <RejectedRequirementsSection proposals={allProposals} />
+              {/* Rejected Requirements — below confirmed (FR-003) */}
+              <RejectedRequirementsSection proposals={allProposals} />
 
-          {/* Business context — capabilities and value streams linked to this design (ADP-SPEC-034) */}
-          <div style={{ padding: "0 16px 16px" }}>
-            <BusinessContextPanel designId={designId} onNavigate={onNavigate} />
-            <CapabilityGapPanel designId={designId} />
-          </div>
+              {/* Business context — capabilities and value streams linked to this design (ADP-SPEC-034) */}
+              <div style={{ padding: "0 16px 16px" }}>
+                <BusinessContextPanel designId={designId} onNavigate={onNavigate} />
+                <CapabilityGapPanel designId={designId} />
+              </div>
+            </>
+          ) : (
+            <div style={{ padding: 16, fontSize: 13, color: "var(--ink-3)" }}>
+              Confirmed requirements and business context appear here once the design starts.
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -79,9 +79,13 @@ export interface RequirementListResponse {
 
 // ── TanStack Query hooks ──────────────────────────────────────────────────────
 
-export function useSubmitIntake(designId: string) {
-  return useMutation<IntakeSubmitResponse, Error, IntakeSubmitRequest>({
-    mutationFn: (body) =>
+// designId is a mutate-time argument (not fixed at hook-creation time) so
+// intake can be submitted before a design exists yet -- IntakeTextForm
+// creates the design lazily on first submit and passes its id straight
+// through, in the same call, rather than waiting on a prop to update.
+export function useSubmitIntake() {
+  return useMutation<IntakeSubmitResponse, Error, IntakeSubmitRequest & { designId: string }>({
+    mutationFn: ({ designId, ...body }) =>
       apiMutation<IntakeSubmitResponse, IntakeSubmitRequest>(
         "POST",
         `/api/v1/designs/${designId}/intake`,
