@@ -34,7 +34,8 @@ class ProposalStatus(StrEnum):
 
 @dataclass
 class IntakeSubmission:
-    """Input package provided by the architect. Text is NEVER persisted."""
+    """Input package provided by the architect. Text is persisted to
+    `intake_submissions` (ADP AI process capture, ADP-3ei), linked to the design."""
 
     submission_id: str
     mode: SubmissionMode

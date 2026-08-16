@@ -142,8 +142,8 @@ export default function IntakeTextForm({ designId, onOperationCreated }: IntakeT
           ⚠ Set ADP_LLM_API_KEY to extract requirements from the Known Requirements text.
         </div>
       )}
-      <div className="ui-alert warn" style={{ marginTop: 8, fontSize: 12 }}>
-        ⚠ Source text is not stored after extraction
+      <div className="ui-alert info" style={{ marginTop: 8, fontSize: 12 }}>
+        ℹ Source text is stored with this design for traceability
       </div>
 
       {submit.isError && <div style={{ marginTop: 8, color: "var(--crit)", fontSize: 13 }}>Submission failed. Check the server logs.</div>}

@@ -54,6 +54,17 @@ def _make_pending_option(option_id: str = "OPT-001", advisory: bool = False) -> 
     return opt
 
 
+def _make_mock_capture():
+    from adp.store.ai_capture import RecommendationCaptureStore
+
+    mock_capture = AsyncMock(spec=RecommendationCaptureStore)
+    mock_capture.record_run = AsyncMock(return_value=None)
+    mock_capture.complete_run = AsyncMock(return_value=None)
+    mock_capture.record_options = AsyncMock(return_value=None)
+    mock_capture.record_option_decision = AsyncMock(return_value=True)
+    return mock_capture
+
+
 @pytest.fixture()
 def client():
     from adp.api.app import create_app
@@ -71,6 +82,8 @@ def client():
     mock_op_store.update = AsyncMock(return_value=None)
     mock_op_store.update_option_status = AsyncMock(return_value=True)
 
+    mock_capture = _make_mock_capture()
+
     app = create_app()
 
     async def _fake_store():
@@ -79,10 +92,57 @@ def client():
     async def _fake_op_store():
         return mock_op_store
 
+    async def _fake_capture():
+        return mock_capture
+
     app.dependency_overrides[rec_module._get_design_store_dep] = _fake_store
     app.dependency_overrides[rec_module._get_op_store_dep] = _fake_op_store
+    app.dependency_overrides[rec_module._get_recommendation_capture] = _fake_capture
 
     return TestClient(app, raise_server_exceptions=False), mock_store, mock_op_store
+
+
+@pytest.fixture()
+def client_with_capture():
+    """Like `client`, but also exposes the mocked RecommendationCaptureStore."""
+    from adp.api.app import create_app
+    from adp.api.routers import recommend as rec_module
+    from adp.store.operations import OperationStore
+
+    design = _make_design()
+    mock_store = AsyncMock()
+    mock_store.get = AsyncMock(return_value=design)
+    mock_store.save = AsyncMock()
+
+    mock_op_store = AsyncMock(spec=OperationStore)
+    mock_op_store.get = AsyncMock(return_value=None)
+    mock_op_store.create = AsyncMock(return_value=None)
+    mock_op_store.update = AsyncMock(return_value=None)
+    mock_op_store.update_option_status = AsyncMock(return_value=True)
+
+    mock_capture = _make_mock_capture()
+
+    app = create_app()
+
+    async def _fake_store():
+        return mock_store
+
+    async def _fake_op_store():
+        return mock_op_store
+
+    async def _fake_capture():
+        return mock_capture
+
+    app.dependency_overrides[rec_module._get_design_store_dep] = _fake_store
+    app.dependency_overrides[rec_module._get_op_store_dep] = _fake_op_store
+    app.dependency_overrides[rec_module._get_recommendation_capture] = _fake_capture
+
+    return (
+        TestClient(app, raise_server_exceptions=False),
+        mock_store,
+        mock_op_store,
+        mock_capture,
+    )
 
 
 # ── US1 tests ─────────────────────────────────────────────────────────────────
@@ -273,3 +333,55 @@ def test_reject_already_rejected_returns_409(client):
         json={"rejection_reason": "Some reason"},
     )
     assert resp.status_code == 409
+
+
+# ── ADP-3ei: durable AI process capture (closes the reject-durability gap) ────
+
+def test_reject_option_writes_audit_entry_and_durable_decision(client_with_capture):
+    """Before ADP-3ei, reject wrote nothing durable at all — this is the fix."""
+    c, mock_store, op_store, mock_capture = client_with_capture
+    op_id = _seed_operation(op_store)
+
+    resp = c.post(
+        f"/api/v1/designs/D-001/recommend/{op_id}/options/OPT-001/reject",
+        json={"rejection_reason": "Too complex for our team's current capability"},
+    )
+    assert resp.status_code == 200
+
+    # A durable AuditEntry now exists (mirrors intake's reject_proposal).
+    mock_store.save.assert_called()
+    saved_design = mock_store.save.call_args.args[0]
+    assert saved_design.audit_log[-1].action == "reject-recommendation"
+    assert saved_design.audit_log[-1].affected_entity == "OPT-001"
+
+    # And the durable capture row records the decision + reason.
+    mock_capture.record_option_decision.assert_awaited_once()
+    kwargs = mock_capture.record_option_decision.await_args.kwargs
+    assert kwargs["status"] == "rejected"
+    assert kwargs["decision_reason"] == "Too complex for our team's current capability"
+
+
+def test_accept_option_writes_durable_decision(client_with_capture):
+    c, _, op_store, mock_capture = client_with_capture
+    op_id = _seed_operation(op_store)
+
+    resp = c.post(
+        f"/api/v1/designs/D-001/recommend/{op_id}/options/OPT-001/accept",
+        json={"confirmation_id": "CONF-TEST", "acceptance_reason": "looks solid"},
+    )
+    assert resp.status_code == 200
+    mock_capture.record_option_decision.assert_awaited_once()
+    kwargs = mock_capture.record_option_decision.await_args.kwargs
+    assert kwargs["status"] == "accepted"
+    assert kwargs["confirmation_id"] == "CONF-TEST"
+    assert kwargs["decision_reason"] == "looks solid"
+
+
+def test_start_recommendation_captures_run(client_with_capture):
+    c, _, _, mock_capture = client_with_capture
+    resp = c.post("/api/v1/designs/D-001/recommend", json={"requirement_ids": ["REQ-001"]})
+    assert resp.status_code == 202
+    mock_capture.record_run.assert_awaited_once()
+    rec = mock_capture.record_run.await_args.args[0]
+    assert rec.design_id == "D-001"
+    assert rec.requirement_ids == ["REQ-001"]

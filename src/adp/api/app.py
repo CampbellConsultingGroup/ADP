@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, Request, Response
 
 from adp.api.routers import (
     admin_prompts_router,
+    ai_process,
     auth_proxy,
     calm,
     config,
@@ -33,6 +34,7 @@ from adp.api.routers import (
     search,
     tags,
     theme,
+    validate,
 )
 from adp.application import store as astore
 from adp.application.router import (
@@ -233,6 +235,8 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(intake.router)
     app.include_router(recommend.router)
+    app.include_router(validate.router)
+    app.include_router(ai_process.router)
     app.include_router(knowledge.router)
     app.include_router(calm.router)
     app.include_router(governance.router)

@@ -62,9 +62,18 @@ _EXPLICIT_ROUTE_ACTIONS: dict[tuple[str, str], ActionType] = {
         "POST",
         "/api/v1/designs/{design_id}/intake/{operation_id}/proposals/{proposal_id}/reject",
     ): ActionType.WRITE_DESIGN,
-    # AI operations (submit an intake/recommendation run)
+    # AI operations (submit an intake/recommendation/validation run)
     ("POST", "/api/v1/designs/{design_id}/intake"): ActionType.SUBMIT_AI_OPERATION,
     ("POST", "/api/v1/designs/{design_id}/recommend"): ActionType.SUBMIT_AI_OPERATION,
+    # ADP-3ei: LLM-as-Judge (008) is wired to an API route for the first time here.
+    # Reuses SUBMIT_AI_OPERATION/CONFIRM_RECOMMENDATION rather than introducing a
+    # new ActionType — overriding a FAIL verdict is the same class of consequential
+    # AI decision as accepting/rejecting a recommendation.
+    ("POST", "/api/v1/designs/{design_id}/validate"): ActionType.SUBMIT_AI_OPERATION,
+    (
+        "POST",
+        "/api/v1/designs/{design_id}/validate/{operation_id}/override",
+    ): ActionType.CONFIRM_RECOMMENDATION,
     # Deciding on a recommended option is a consequential confirmation
     (
         "POST",

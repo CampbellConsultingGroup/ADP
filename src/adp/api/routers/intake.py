@@ -1,7 +1,8 @@
 """Requirements Intake HTTP API — ADP-SPEC-014.
 
 Thin HTTP adapter over adp.intake.ExtractionOrchestrator (ADP-SPEC-006).
-Source text is NEVER stored, logged, or persisted after extraction.
+Source text is persisted to `intake_submissions` (ADP AI process capture, ADP-3ei),
+linked to the design; it is still never logged or included in telemetry.
 ART-VIII: every proposal requires an explicit per-proposal human action — no auto-confirm.
 """
 
@@ -211,7 +212,26 @@ async def _get_application_session():
         yield session
 
 
-def _make_orchestrator(model: str | None = None):  # type: ignore[return]
+def _resolve_extraction_model(model: str | None = None) -> str:
+    """Return the model id that _make_orchestrator would actually use.
+
+    Same precedence as _make_orchestrator; returns "stub" when no API key is
+    configured (extraction runs against StubLLMClient). Used so the durably
+    captured model_id always matches what really ran the request.
+    """
+    from adp.api.routers.config import get_api_key, get_extraction_model
+
+    if not get_api_key():
+        return "stub"
+    return model or get_extraction_model()
+
+
+async def _get_intake_capture():  # type: ignore[return]
+    from adp.api.deps import get_intake_capture_store
+    return await get_intake_capture_store()
+
+
+async def _make_orchestrator(model: str | None = None, capture: object | None = None):  # type: ignore[return]
     """Create ExtractionOrchestrator; stub LLMClient if ADP_LLM_ENDPOINT is not set.
 
     Uses the model from:
@@ -219,6 +239,10 @@ def _make_orchestrator(model: str | None = None):  # type: ignore[return]
     2. The globally configured extraction model (from PUT /api/v1/config/llm)
     3. ADP_LLM_MODEL env var fallback
     4. claude-sonnet-4-6 default
+
+    `capture` is the IntakeCaptureStore to use (caller resolves it via the
+    _get_intake_capture FastAPI dependency, so tests can override it) — not
+    resolved internally, so this function stays test-friendly/DB-free by default.
     """
     from adp.agents.llm_stub import StubLLMClient
     from adp.api.routers.config import get_api_key, get_extraction_model
@@ -235,7 +259,7 @@ def _make_orchestrator(model: str | None = None):  # type: ignore[return]
         active_model = model or get_extraction_model()
         llm = LLMClient(base_url=endpoint, api_key=api_key, model=active_model)  # type: ignore[assignment]
 
-    return ExtractionOrchestrator(llm_client=llm)
+    return ExtractionOrchestrator(llm_client=llm, capture_store=capture)
 
 
 def _proposals_from_store(op: dict) -> list[ProposalResponse]:
@@ -286,10 +310,12 @@ async def submit_intake(
     background_tasks: BackgroundTasks,
     store=Depends(_get_design_store),
     op_store=Depends(_get_op_store),
+    capture=Depends(_get_intake_capture),
 ) -> IntakeSubmitResponse:
     """Start AI extraction from text or structured form (ADP-SPEC-014 US1 / FR-001).
 
-    ART-VIII: source text is passed to the background task only; deleted after extraction.
+    ART-VIII: source text is passed to the background task and, per ADP-3ei,
+    durably persisted (linked to the design) as it is submitted.
     Returns immediately with an operation_id for polling.
     """
     from adp.store.store import DesignNotFoundError  # type: ignore[attr-defined]
@@ -312,6 +338,9 @@ async def submit_intake(
 
     operation_id = str(uuid.uuid4())
     correlation_id = raw_request.headers.get("X-Trace-ID", get_trace_id() or str(uuid.uuid4()))
+    submission_id = str(uuid.uuid4())
+    submitted_at = datetime.now(timezone.utc)
+    resolved_model = _resolve_extraction_model(request.model)
 
     await op_store.create(operation_id, "intake", design_id, actor, {
         "proposals": {},
@@ -320,18 +349,34 @@ async def submit_intake(
         "error_description": None,
     })
 
+    # ADP-3ei: durably capture every submission (incl. framing-only ones), linked
+    # to the design and the resolved model — best-effort, never blocks the request.
+    from adp.store.ai_capture import SubmissionRecord
+    await capture.record_submission(SubmissionRecord(
+        submission_id=submission_id,
+        design_id=design_id,
+        operation_id=operation_id,
+        mode=request.mode,
+        source_text=request.text or "",
+        business_problem=request.business_problem,
+        desired_outcome=request.desired_outcome,
+        model_id=resolved_model,
+        submitted_by=actor,
+        submitted_at=submitted_at,
+    ))
+
     # Extraction only runs when there is known-requirements text to extract.
     has_text = bool(request.text and request.text.strip())
     if has_text:
         submission = IntakeSubmission(
-            submission_id=str(uuid.uuid4()),
+            submission_id=submission_id,
             mode=SubmissionMode(request.mode),
             text=request.text,
             submitted_by=actor,
-            submitted_at=datetime.now(timezone.utc),
+            submitted_at=submitted_at,
             operation_id=operation_id,
         )
-        orchestrator = _make_orchestrator(model=request.model)
+        orchestrator = await _make_orchestrator(model=request.model, capture=capture)
         background_tasks.add_task(orchestrator.run, submission, op_store)
         op_status = "pending"
     else:
@@ -401,6 +446,7 @@ async def confirm_proposal(
     raw_request: Request,
     store=Depends(_get_design_store),
     op_store=Depends(_get_op_store),
+    capture=Depends(_get_intake_capture),
 ) -> ConfirmProposalResponse:
     """Confirm a proposal → writes Requirement + AuditEntry (ART-VIII / ART-IX / FR-003)."""
     op = await op_store.get(operation_id)
@@ -424,7 +470,7 @@ async def confirm_proposal(
         )
 
     actor = _get_actor(raw_request)
-    orchestrator = _make_orchestrator()
+    orchestrator = await _make_orchestrator(capture=capture)
 
     try:
         requirement = await orchestrator.confirm_proposal(
@@ -460,6 +506,7 @@ async def reject_proposal(
     raw_request: Request,
     store=Depends(_get_design_store),
     op_store=Depends(_get_op_store),
+    capture=Depends(_get_intake_capture),
 ) -> dict:
     """Reject a proposal — no Requirement written (ART-VIII / FR-004)."""
     op = await op_store.get(operation_id)
@@ -482,7 +529,7 @@ async def reject_proposal(
         )
 
     actor = _get_actor(raw_request)
-    orchestrator = _make_orchestrator()
+    orchestrator = await _make_orchestrator(capture=capture)
 
     await orchestrator.reject_proposal(
         proposal_id=proposal_id,

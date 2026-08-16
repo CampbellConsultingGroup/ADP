@@ -61,6 +61,7 @@ _llm_config: dict[str, str] = {
     "endpoint": os.environ.get("ADP_LLM_ENDPOINT", "https://api.anthropic.com"),
     "extraction_model": os.environ.get("ADP_LLM_MODEL", "claude-sonnet-4-6"),
     "recommendation_model": os.environ.get("ADP_LLM_RECOMMENDATION_MODEL", "claude-sonnet-4-6"),
+    "validation_model": os.environ.get("ADP_LLM_VALIDATION_MODEL", "claude-sonnet-4-6"),
     "api_key": os.environ.get("ADP_LLM_API_KEY", ""),
 }
 
@@ -90,6 +91,7 @@ class LLMConfigResponse(BaseModel):
     endpoint: str
     extraction_model: str
     recommendation_model: str
+    validation_model: str
     api_key_configured: bool
     provider: Literal["anthropic", "openai_compatible", "not_configured"]
 
@@ -98,6 +100,7 @@ class LLMConfigUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     extraction_model: str | None = None
     recommendation_model: str | None = None
+    validation_model: str | None = None
     api_key: str | None = None  # NEVER logged; stored only in process memory
 
 
@@ -133,6 +136,7 @@ async def get_llm_config() -> LLMConfigResponse:
         endpoint=endpoint,
         extraction_model=_llm_config["extraction_model"],
         recommendation_model=_llm_config["recommendation_model"],
+        validation_model=_llm_config["validation_model"],
         api_key_configured=api_key_configured,
         provider=provider,
     )
@@ -161,6 +165,16 @@ async def update_llm_config(update: LLMConfigUpdate) -> LLMConfigResponse:
             )
         _llm_config["recommendation_model"] = update.recommendation_model
 
+    if update.validation_model is not None:
+        valid_ids = {m["id"] for m in ANTHROPIC_MODELS}
+        if update.validation_model not in valid_ids:
+            from fastapi import HTTPException, status
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Unknown model '{update.validation_model}'. Valid: {sorted(valid_ids)}",  # type: ignore[type-var]
+            )
+        _llm_config["validation_model"] = update.validation_model
+
     if update.api_key is not None:
         # Store only; never log this value
         _llm_config["api_key"] = update.api_key
@@ -176,6 +190,11 @@ def get_extraction_model() -> str:
 def get_recommendation_model() -> str:
     """Return the currently configured recommendation model ID."""
     return _llm_config["recommendation_model"]
+
+
+def get_validation_model() -> str:
+    """Return the currently configured LLM-as-Judge validation model ID."""
+    return _llm_config["validation_model"]
 
 
 def get_api_key() -> str:
