@@ -3,9 +3,9 @@
  *
  * Covers FR-001 (single persistent left-rail shell), FR-002 (navigation
  * destinations defined in one place), FR-003 (Workspace / Architecture /
- * per-design groups), and FR-004 (active-view indication). The shell owns the
- * entire navigation surface, so exercising it here is the single-source check
- * that complements the static SC-001 grep.
+ * Oversight / per-design groups), and FR-004 (active-view indication). The
+ * shell owns the entire navigation surface, so exercising it here is the
+ * single-source check that complements the static SC-001 grep.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
@@ -14,9 +14,10 @@ import { AppShell } from "../../src/ui";
 
 afterEach(cleanup);
 
-const WORKSPACE = ["Overview", "Designs"];
-const ARCHITECTURE = ["Business", "Applications", "Technical Architecture", "APM", "Governance", "Knowledge"];
-const DESIGN_SCOPED = ["Intake", "Recommendations", "C4 Design"];
+const WORKSPACE = ["Overview", "Insights"];
+const ARCHITECTURE = ["Business", "Applications", "Technical Architecture"];
+const OVERSIGHT = ["APM", "Governance", "Knowledge"];
+const DESIGN_SCOPED = ["Intake", "Recommendations", "Designs", "C4 Design"];
 
 function rail(): HTMLElement {
   const el = document.querySelector("nav.shell-rail");
@@ -43,7 +44,8 @@ describe("AppShell", () => {
 
     expect(within(rail()).getByText("Workspace")).toBeTruthy();
     expect(within(rail()).getByText("Architecture")).toBeTruthy();
-    for (const label of [...WORKSPACE, ...ARCHITECTURE]) {
+    expect(within(rail()).getByText("Oversight")).toBeTruthy();
+    for (const label of [...WORKSPACE, ...ARCHITECTURE, ...OVERSIGHT]) {
       expect(navButton(label)).toBeTruthy();
     }
 
