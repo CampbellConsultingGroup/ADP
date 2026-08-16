@@ -1,14 +1,10 @@
 import React, { useState } from "react";
-import { useIntakeStatus, type ProposalResponse } from "../api/intake";
 import type { AppView } from "../shell";
 import IntakeTextForm from "./IntakeTextForm";
-import StructuredForm from "./StructuredForm";
-import ProposalsList from "./ProposalsList";
 import RequirementsList from "./RequirementsList";
 import LLMSettings from "./LLMSettings";
 import BusinessContextPanel from "../business/BusinessContextPanel";
 import CapabilityGapPanel from "./CapabilityGapPanel";
-import { Button } from "../ui";
 
 interface IntakePageProps {
   // null until a design exists -- Intake is always reachable directly (it's
@@ -21,76 +17,16 @@ interface IntakePageProps {
   onDesignCreated?: (designId: string) => void;
 }
 
-type Tab = "bulk" | "form" | "settings";
-
-const KIND_COLORS: Record<string, string> = {
-  functional: "var(--accent)",
-  non_functional: "var(--biz)",
-  constraint: "var(--tec)",
-  driver: "var(--good)",
-};
-
-/** Rejected Requirements section — renders in the right sidebar below Confirmed Requirements (FR-003, FR-004). */
-function RejectedRequirementsSection({ proposals }: { proposals: ProposalResponse[] }) {
-  const rejected = proposals.filter((p) => p.status === "rejected");
-  if (rejected.length === 0) return null;
-
-  return (
-    <div>
-      <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontWeight: 600, fontSize: 14, color: "var(--ink-3)", display: "flex", alignItems: "center", gap: 6 }}>
-        <span>✕</span> Rejected Requirements ({rejected.length})
-      </div>
-      <div>
-        {rejected.map((p) => (
-          <div
-            key={p.proposal_id}
-            style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px", borderBottom: "1px solid var(--surface-2)", opacity: 0.6 }}
-          >
-            <span
-              style={{
-                flexShrink: 0,
-                background: KIND_COLORS[p.kind] ?? "var(--ink-3)",
-                color: "#fff",
-                fontSize: 10,
-                fontWeight: "bold",
-                padding: "2px 5px",
-                borderRadius: 3,
-                marginTop: 2,
-              }}
-            >
-              {p.kind.replace("_", " ")}
-            </span>
-            <span style={{ fontSize: 12, color: "var(--ink-3)", textDecoration: "line-through" }}>
-              {p.draft_statement}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+type Tab = "intake" | "settings";
 
 export default function IntakePage({ designId, onNavigate, onDesignCreated }: IntakePageProps): React.ReactElement {
-  const [activeTab, setActiveTab] = useState<Tab>("bulk");
-  const [operationId, setOperationId] = useState<string | null>(null);
-  const [extractionRequested, setExtractionRequested] = useState(false);
-  // Safe even before a design exists: the query is `enabled` only once
-  // operationId is set, which itself can't happen until IntakeTextForm has
-  // created (or been given) a real design id.
-  const { data: statusData } = useIntakeStatus(designId ?? "", operationId);
-
-  const status = statusData?.status;
-  const allProposals = statusData?.proposals ?? [];
-  // Only show pending proposals in the review panel (FR-002); confirmed/rejected are removed
-  const pendingProposals = allProposals.filter((p) => p.status === "pending");
-  // "nothing extracted" only applies when extraction was actually requested.
-  const noLlm = status === "completed" && allProposals.length === 0 && extractionRequested;
-  // framing-only submit (no Known Requirements) completes with no proposals.
-  const framingSaved = status === "completed" && allProposals.length === 0 && !extractionRequested;
+  const [activeTab, setActiveTab] = useState<Tab>("intake");
+  // Set after a successful submit, cleared on the next edit -- IntakeTextForm
+  // resets its own fields, so this is just a transient confirmation banner.
+  const [justSubmitted, setJustSubmitted] = useState<{ requirementCount: number; capabilityCount: number } | null>(null);
 
   const TABS: { id: Tab; label: string }[] = [
-    { id: "bulk", label: "Guided Intake" },
-    { id: "form", label: "Structured Form" },
+    { id: "intake", label: "Intake" },
     { id: "settings", label: "⚙ LLM Settings" },
   ];
 
@@ -98,7 +34,7 @@ export default function IntakePage({ designId, onNavigate, onDesignCreated }: In
     <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* Left: Tabs + extraction content */}
+        {/* Left: Tabs + form */}
         <div style={{ flex: 2, display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ display: "flex", gap: 0, borderBottom: "2px solid var(--border)", flexShrink: 0, background: "var(--surface)" }}>
             {TABS.map((tab) => (
@@ -119,82 +55,41 @@ export default function IntakePage({ designId, onNavigate, onDesignCreated }: In
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-            {activeTab === "bulk" && (
+            {activeTab === "intake" && (
               <div>
                 <IntakeTextForm
                   designId={designId}
                   onDesignCreated={onDesignCreated}
-                  onOperationCreated={(opId, extraction) => {
-                    setOperationId(opId);
-                    setExtractionRequested(extraction);
-                  }}
+                  onSubmitted={(requirementCount, capabilityCount) =>
+                    setJustSubmitted({ requirementCount, capabilityCount })
+                  }
                 />
 
-                {operationId && status === "running" && (
-                  <div style={{ marginTop: 16, color: "var(--accent)", fontSize: 13 }}>⏳ Extracting requirements...</div>
-                )}
-                {framingSaved && (
+                {justSubmitted !== null && (
                   <div className="ui-alert good" style={{ marginTop: 16 }}>
-                    ✓ Intake saved — business problem and desired outcome recorded. Add Known Requirements above to extract typed requirements.
-                  </div>
-                )}
-                {operationId && status === "failed" && (
-                  <div className="ui-alert crit" style={{ marginTop: 16 }}>
-                    Extraction failed: {statusData?.error_description ?? "Unknown error"}. Check ⚙ LLM Settings.
-                  </div>
-                )}
-                {noLlm && (
-                  <div className="ui-alert warn" style={{ marginTop: 16 }}>
-                    <p style={{ margin: "0 0 6px", fontWeight: 600, fontSize: 13 }}>No requirements extracted</p>
-                    <p style={{ margin: "0 0 10px", fontSize: 13 }}>
-                      Make sure <code style={{ background: "var(--warn-wash)", padding: "1px 4px", borderRadius: 3, fontFamily: "var(--mono)" }}>ADP_LLM_API_KEY</code> is set or use the Structured Form.
-                    </p>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <Button size="sm" onClick={() => setActiveTab("settings")}>⚙ LLM Settings</Button>
-                      <Button size="sm" variant="primary" onClick={() => setActiveTab("form")}>Use Structured Form →</Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Pending proposals to review — confirmed/rejected are removed (FR-002, FR-003) */}
-                {designId && operationId && status === "completed" && pendingProposals.length > 0 && (
-                  <div style={{ marginTop: 16 }}>
-                    <ProposalsList proposals={pendingProposals} designId={designId} operationId={operationId} />
-                  </div>
-                )}
-
-                {/* Show empty state when all proposals have been actioned */}
-                {operationId && status === "completed" && allProposals.length > 0 && pendingProposals.length === 0 && (
-                  <div className="ui-alert good" style={{ marginTop: 16 }}>
-                    ✓ All proposals have been reviewed. See the sidebar for results.
+                    ✓ Intake saved — business problem and desired outcome recorded
+                    {justSubmitted.requirementCount > 0 &&
+                      `, ${justSubmitted.requirementCount} requirement${justSubmitted.requirementCount !== 1 ? "s" : ""} added`}
+                    {justSubmitted.capabilityCount > 0 &&
+                      `, ${justSubmitted.capabilityCount} business capabilit${justSubmitted.capabilityCount !== 1 ? "ies" : "y"} linked`}
+                    .
                   </div>
                 )}
               </div>
             )}
 
-            {activeTab === "form" && (
-              designId
-                ? <StructuredForm designId={designId} />
-                : <p style={{ fontSize: 13, color: "var(--ink-3)" }}>
-                    Start with Guided Intake's Business Problem field first — it's what creates the design.
-                  </p>
-            )}
             {activeTab === "settings" && <LLMSettings />}
           </div>
         </div>
 
-        {/* Right sidebar: Confirmed then Rejected (FR-003, FR-004) */}
+        {/* Right sidebar: Confirmed Requirements + business context */}
         <div style={{ flex: 1, borderLeft: "1px solid var(--border)", overflowY: "auto", background: "var(--surface-2)" }}>
           {designId ? (
             <>
-              {/* Confirmed Requirements */}
               <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", fontWeight: 600, fontSize: 14, color: "var(--good)", display: "flex", alignItems: "center", gap: 6 }}>
                 <span>✓</span> Confirmed Requirements
               </div>
               <RequirementsList designId={designId} />
-
-              {/* Rejected Requirements — below confirmed (FR-003) */}
-              <RejectedRequirementsSection proposals={allProposals} />
 
               {/* Business context — capabilities and value streams linked to this design (ADP-SPEC-034) */}
               <div style={{ padding: "0 16px 16px" }}>

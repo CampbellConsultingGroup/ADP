@@ -346,6 +346,33 @@ export function useLinkDesignToCapability(capabilityId: string) {
   });
 }
 
+// Both capabilityId and designId are mutate-time arguments (unlike
+// useLinkDesignToCapability above, which fixes capabilityId at hook-creation
+// time for its one-capability-at-a-time editor) -- lets a caller link one
+// design to several capabilities in a loop, e.g. Intake's "Business
+// Capabilities Impacted" section, without creating a hook per capability.
+export function useLinkDesignToCapabilities() {
+  const qc = useQueryClient();
+  return useMutation<
+    LinkedDesignsResponse,
+    Error & { status?: number },
+    { capabilityId: string; designId: string }
+  >({
+    mutationFn: ({ capabilityId, designId }) =>
+      apiMutation<LinkedDesignsResponse, { design_id: string }>(
+        "POST",
+        `/api/v1/business/capabilities/${capabilityId}/designs`,
+        { design_id: designId },
+      ),
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({ queryKey: ["cap-designs", variables.capabilityId] });
+      // So BusinessContextPanel (rendered right next to Intake) reflects the
+      // new link without a manual refresh.
+      void qc.invalidateQueries({ queryKey: ["design-business-context", variables.designId] });
+    },
+  });
+}
+
 export function useUnlinkDesignFromCapability(capabilityId: string) {
   const qc = useQueryClient();
   return useMutation<void, Error, string>({
