@@ -3,9 +3,16 @@
  *
  * Covers FR-001 (single persistent left-rail shell), FR-002 (navigation
  * destinations defined in one place), FR-003 (Workspace / Architecture /
- * Oversight / per-design groups), and FR-004 (active-view indication). The
+ * Oversight / Design groups), and FR-004 (active-view indication). The
  * shell owns the entire navigation surface, so exercising it here is the
  * single-source check that complements the static SC-001 grep.
+ *
+ * The Design group (Intake / Recommendations / Designs / C4 Design) is
+ * always rendered, not gated on a design being selected -- it's the entry
+ * point into any design, and a user reported it disappearing entirely when
+ * no design was open (having to select one first to even see the menu).
+ * Only its label adapts: "Design" with none selected, "Design · {id}" once
+ * inside one.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
@@ -53,19 +60,20 @@ describe("AppShell", () => {
     expect(screen.getByText("page-content")).toBeTruthy();
   });
 
-  it("hides the per-design group until a design is selected (FR-003)", () => {
+  it("shows the Design group, labelled plainly, when no design is selected (FR-003)", () => {
     render(
       <AppShell currentView="overview" onNavigate={vi.fn()} designId={null}>
         <div />
       </AppShell>,
     );
-    for (const label of DESIGN_SCOPED) {
-      expect(within(rail()).queryByText(label)).toBeNull();
-    }
+    expect(within(rail()).getByText("Design")).toBeTruthy();
     expect(within(rail()).queryByText(/^Design ·/)).toBeNull();
+    for (const label of DESIGN_SCOPED) {
+      expect(navButton(label)).toBeTruthy();
+    }
   });
 
-  it("shows the per-design group, labelled with the design id, when one is selected (FR-003)", () => {
+  it("shows the Design group, labelled with the design id, when one is selected (FR-003)", () => {
     render(
       <AppShell currentView="intake" onNavigate={vi.fn()} designId="DESIGN-001">
         <div />

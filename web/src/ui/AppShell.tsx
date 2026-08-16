@@ -45,6 +45,10 @@ const OVERSIGHT: NavDef[] = [
   { view: "governance", label: "Governance", icon: "shield" },
   { view: "knowledge", label: "Knowledge", icon: "book", hue: "tec" },
 ];
+// Always rendered (not gated on a design being selected) -- it's the entry
+// point into any design in the first place, as well as the home for
+// per-design views once inside one. See the render logic below for how the
+// section label adapts to whether a design is currently selected.
 const DESIGN_SCOPED: NavDef[] = [
   { view: "intake", label: "Intake", icon: "inbox" },
   { view: "recommend", label: "Recommendations", icon: "spark" },
@@ -146,12 +150,8 @@ export function AppShell({ currentView, onNavigate, designId, children }: AppShe
           </>
         )}
 
-        {inDesign && (
-          <>
-            <div className="shell-navlabel">Design · {designId}</div>
-            {DESIGN_SCOPED.map((d) => <NavItem key={d.view} def={d} current={currentView} onNavigate={onNavigate} />)}
-          </>
-        )}
+        <div className="shell-navlabel">{inDesign ? `Design · ${designId}` : "Design"}</div>
+        {DESIGN_SCOPED.map((d) => <NavItem key={d.view} def={d} current={currentView} onNavigate={onNavigate} />)}
 
         <div className="shell-railspacer" />
         {user && (
