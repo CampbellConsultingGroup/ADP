@@ -7,9 +7,11 @@ Architecture:
   → gate()
   → Verdict stored in operation_store
 
-Long-term verdict persistence (NFR-002 v2 scope) will require a
-`validation_verdicts` database table. For v1 verdicts are accessible
-within the 24h operation TTL via the operation handle.
+`operation_store` is a real, DB-backed OperationStore instance (ADP-SPEC-024),
+matching the intake/recommendation orchestrators' contract — not a raw dict.
+Long-term verdict persistence (NFR-002) is provided by ADP-3ei's
+`validation_verdicts`/`validation_findings` tables via `capture_store`, which
+survive the 24h operation TTL (durable, design-linked, queryable).
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ from adp.validation.models import (
     Verdict,
     VerdictStatus,
 )
+from adp.validation.serde import dict_to_verdict, verdict_to_dict
 from adp.validation.telemetry import ValidationTelemetry
 
 if TYPE_CHECKING:
@@ -56,28 +59,34 @@ class ValidationOrchestrator:
         design_store: "DesignStore",
         thresholds: GatingThreshold | None = None,
         telemetry: ValidationTelemetry | None = None,
+        capture_store: Any | None = None,
     ) -> None:
         self._llm = llm
         self._knowledge = knowledge_retrieval
         self._store = design_store
         self._thresholds = thresholds or GatingThreshold()
         self._telemetry = telemetry or ValidationTelemetry()
+        self._capture = capture_store
 
     async def run(
         self,
         operation_id: str,
         design_id: str,
-        operation_store: dict[str, Any],
+        operation_store: Any,
         design_version: int | None = None,
         correlation_id: str | None = None,
+        actor: str = "system",
     ) -> None:
-        """Execute the full validation pipeline as a background task."""
-        op = operation_store.get(operation_id, {})
-        op["status"] = "running"
-        operation_store[operation_id] = op
+        """Execute the full validation pipeline as a background task (ADP-SPEC-024).
+
+        operation_store is an OperationStore instance.
+        """
+        await operation_store.update(operation_id, status="running")
 
         verdict: Verdict | None = None
         error_msg: str | None = None
+        payload_patch: dict[str, Any] = {}
+        final_status = "running"
 
         try:
             design = await self._store.get(design_id, version=design_version)
@@ -136,8 +145,8 @@ class ValidationOrchestrator:
                 latency_ms=0.0,
             )
             if gate_result == "indeterminate":
-                op["status"] = "failed"
-                op["error_description"] = (
+                final_status = "failed"
+                payload_patch["error_description"] = (
                     "All LLM critics failed to run; verdict is indeterminate"
                 )
             self._telemetry.emit_span(gate_output, correlation_id)
@@ -162,18 +171,30 @@ class ValidationOrchestrator:
             )
 
             # Bridge citations_present to ADP-SPEC-003 ART-VII gate
-            op.setdefault("span", {})["citations_present"] = citations_present
-            op["verdict"] = verdict
+            payload_patch["span"] = {"citations_present": citations_present}
+            payload_patch["verdict"] = verdict_to_dict(verdict)
             if gate_result != "indeterminate":
-                op["status"] = "completed"
+                final_status = "completed"
             suffix = "pass" if gate_result == "pass" else gate_result.upper()
             finding_count = len([f for f in all_findings if f.severity.value != "advisory"])
-            op["result_summary"] = f"{suffix} — {finding_count} blocking findings"
+            payload_patch["result_summary"] = f"{suffix} — {finding_count} blocking findings"
+
+            await operation_store.update(
+                operation_id, status=final_status, payload_patch=payload_patch,
+            )
+
+            # ADP-3ei: durable, design-linked capture of the verdict + findings
+            if self._capture is not None:
+                model_id = getattr(self._llm, "_model", None)
+                await self._capture.record_verdict(
+                    verdict, design_id=design_id, actor=actor, model_id=model_id,
+                )
 
         except Exception as exc:
             error_msg = str(exc)
-            op["status"] = "failed"
-            op["error_description"] = error_msg
+            await operation_store.update(operation_id, status="failed", payload_patch={
+                "error_description": error_msg,
+            })
             _logger.error(
                 json.dumps({
                     "operation": "validation.pipeline_failed",
@@ -182,14 +203,15 @@ class ValidationOrchestrator:
                 })
             )
         finally:
+            current_op = await operation_store.get(operation_id) or {}
             _logger.info(
                 json.dumps({
                     "operation": "validation.pipeline",
                     "operation_id": operation_id,
                     "design_id": design_id,
-                    "status": op.get("status"),
+                    "status": current_op.get("status"),
                     "finding_count": len(verdict.findings) if verdict else 0,
-                    "citations_present": op.get("span", {}).get("citations_present", False),
+                    "citations_present": current_op.get("span", {}).get("citations_present", False),
                 })
             )
 
@@ -199,14 +221,18 @@ class ValidationOrchestrator:
         operation_id: str,
         reviewing_actor: str,
         justification: str,
-        operation_store: dict[str, Any],
+        operation_store: Any,
         design_id: str,
     ) -> None:
         """Override a failing verdict with recorded justification (FR-006 / QG-13)."""
+        from adp.audit.writer import next_audit_id as _next_audit_id
         from adp.models import AuditEntry as _AE
 
-        op = operation_store.get(operation_id, {})
-        verdict: Verdict | None = op.get("verdict")
+        op = await operation_store.get(operation_id) or {}
+        verdict_data = op.get("verdict")
+        verdict: Verdict | None = (
+            dict_to_verdict(verdict_data) if isinstance(verdict_data, dict) else verdict_data
+        )
 
         if verdict is None:
             raise ValueError(f"No verdict found in operation {operation_id!r}")
@@ -225,7 +251,7 @@ class ValidationOrchestrator:
 
         # Write audit entry (QG-13 / FR-006)
         design = await self._store.get(design_id)
-        audit_entry_id = f"AUD-{len(design.audit_log) + 1:03d}"
+        audit_entry_id = _next_audit_id(design)
         audit_entry = _AE(
             id=audit_entry_id,
             actor=reviewing_actor,
@@ -239,6 +265,21 @@ class ValidationOrchestrator:
         await self._store.save(design, actor=reviewing_actor)
 
         verdict.audit_entry_id = audit_entry_id
+
+        await operation_store.update(
+            operation_id, payload_patch={"verdict": verdict_to_dict(verdict)},
+        )
+
+        # ADP-3ei: durable override capture — awaited inline, raises on failure
+        # (a decision-path write, not fire-and-forget).
+        if self._capture is not None:
+            await self._capture.record_override(
+                verdict.verdict_id,
+                overridden_by=reviewing_actor,
+                override_at=verdict.override_at,
+                justification=verdict.override_justification,
+                audit_entry_id=audit_entry_id,
+            )
 
         _logger.info(
             json.dumps({

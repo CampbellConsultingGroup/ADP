@@ -22,7 +22,6 @@ const PRIMARY: NavDef[] = [
   // sibling to Overview, deliberately not folded into ARCHITECTURE below
   // (that group is entirely architect-facing domain editors).
   { view: "insights", label: "Insights", icon: "target" },
-  { view: "designs", label: "Designs", icon: "sol" },
 ];
 const ARCHITECTURE: NavDef[] = [
   // ADP-d8u.1: strategic objectives are a distinct entity with their own
@@ -36,17 +35,20 @@ const ARCHITECTURE: NavDef[] = [
   // nav item, not a tab bolted onto Applications) -- placed beside
   // Applications, the other "ent"-adjacent registry-style screen.
   { view: "technical", label: "Technical Architecture", icon: "tec", hue: "tec" },
-  { view: "portfolio", label: "APM", icon: "chart", hue: "ent" },
-  { view: "governance", label: "Governance", icon: "shield" },
-  { view: "knowledge", label: "Knowledge", icon: "book", hue: "tec" },
   // ADP-SPEC-046 / ADP-914.5: standalone diagrams (flowchart/sequence/ERD/
   // UML/architecture) have no relationship to a Design (FR-011), so they sit
   // here alongside Business/Applications rather than under DESIGN_SCOPED.
   { view: "diagrams", label: "Diagrams", icon: "layers", hue: "tec" },
 ];
+const OVERSIGHT: NavDef[] = [
+  { view: "portfolio", label: "APM", icon: "chart", hue: "ent" },
+  { view: "governance", label: "Governance", icon: "shield" },
+  { view: "knowledge", label: "Knowledge", icon: "book", hue: "tec" },
+];
 const DESIGN_SCOPED: NavDef[] = [
   { view: "intake", label: "Intake", icon: "inbox" },
   { view: "recommend", label: "Recommendations", icon: "spark" },
+  { view: "designs", label: "Designs", icon: "sol" },
   // ADP-914.13: the legacy "Canvas" item (C4Canvas/Workspace, ADP-SPEC-054's research.md
   // Decision 8 called it "canvas") is retired -- this is now the sole design-editing entry
   // point, so it drops the "(Preview)" qualifier that distinguished it from the alternative.
@@ -133,6 +135,9 @@ export function AppShell({ currentView, onNavigate, designId, children }: AppShe
 
         <div className="shell-navlabel">Architecture</div>
         {ARCHITECTURE.map((d) => <NavItem key={d.view} def={d} current={currentView} onNavigate={onNavigate} />)}
+
+        <div className="shell-navlabel">Oversight</div>
+        {OVERSIGHT.map((d) => <NavItem key={d.view} def={d} current={currentView} onNavigate={onNavigate} />)}
 
         {user?.role === "platform_admin" && (
           <>

@@ -35,7 +35,8 @@ def store() -> ReasoningStore:
                     prompt_hash TEXT NOT NULL,
                     input_tokens INTEGER NOT NULL DEFAULT 0,
                     output_tokens INTEGER NOT NULL DEFAULT 0,
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    design_id TEXT
                 )
             """))
 
@@ -137,6 +138,12 @@ def test_write_with_no_option_id(store):
     rows = run(store.list_for_operation("OP-NOOPTION"))
     assert len(rows) == 1
     assert rows[0]["option_id"] is None
+
+
+def test_write_persists_design_id(store):
+    run(store.write(_record(operation_id="OP-DESIGN", design_id="DSN-042")))
+    rows = run(store.list_for_operation("OP-DESIGN"))
+    assert rows[0]["design_id"] == "DSN-042"
 
 
 def test_hash_prompt_helper():

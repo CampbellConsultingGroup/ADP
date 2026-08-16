@@ -41,6 +41,7 @@ llm_reasoning_log = sa.Table(
     sa.Column("input_tokens", sa.Integer(), nullable=False, default=0),
     sa.Column("output_tokens", sa.Integer(), nullable=False, default=0),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("design_id", sa.Text(), nullable=True),
 )
 
 
@@ -58,6 +59,7 @@ class ReasoningRecord:
     input_tokens: int = 0
     output_tokens: int = 0
     option_id: str | None = None
+    design_id: str | None = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -103,6 +105,7 @@ class ReasoningStore:
                         input_tokens=record.input_tokens,
                         output_tokens=record.output_tokens,
                         created_at=now,
+                        design_id=record.design_id,
                     )
                 )
                 await session.commit()

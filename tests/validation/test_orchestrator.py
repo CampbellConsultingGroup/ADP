@@ -16,6 +16,31 @@ from adp.validation.models import (
 from adp.validation.orchestrator import ValidationOrchestrator
 from adp.validation.telemetry import ValidationTelemetry
 
+
+class _FakeOpStore:
+    """Minimal async double matching OperationStore's get/update contract
+    (ADP-3ei — ValidationOrchestrator now takes a real OperationStore, not a
+    raw dict)."""
+
+    def __init__(self, initial: dict[str, dict] | None = None) -> None:
+        self._rows: dict[str, dict] = {k: dict(v) for k, v in (initial or {}).items()}
+
+    async def get(self, op_id: str) -> dict | None:
+        return self._rows.get(op_id)
+
+    async def update(
+        self, op_id: str, *, status: str | None = None,
+        payload_patch: dict | None = None, error: str | None = None,
+    ) -> None:
+        row = self._rows.setdefault(op_id, {})
+        if payload_patch:
+            row.update(payload_patch)
+        if status is not None:
+            row["status"] = status
+        if error is not None:
+            row["error"] = error
+
+
 _NOW = datetime(2026, 7, 1, tzinfo=timezone.utc)
 
 _GEN_RESPONSE_PASS = {
@@ -101,10 +126,10 @@ def _make_orch(
 async def test_full_pipeline_produces_verdict() -> None:
     """Full pipeline completes with a Verdict in operation_store."""
     orch, _ = _make_orch()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", operation_store, correlation_id="corr-001")
 
-    op = operation_store["op-001"]
+    op = await operation_store.get("op-001")
     assert op["status"] == "completed"
     assert op["verdict"] is not None
 
@@ -146,12 +171,12 @@ async def test_structural_failure_blocks_llm_critics() -> None:
         telemetry=mock_telemetry,
     )
 
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", operation_store)
 
     assert call_count[0] == 0, "LLM was called despite structural failure"
-    op = operation_store["op-001"]
-    assert op["verdict"].status == VerdictStatus.FAIL
+    op = await operation_store.get("op-001")
+    assert op["verdict"]["status"] == VerdictStatus.FAIL.value
 
 
 # ── US4: Override ─────────────────────────────────────────────────────────────
@@ -160,7 +185,7 @@ async def test_structural_failure_blocks_llm_critics() -> None:
 async def test_override_requires_non_empty_justification() -> None:
     """Empty justification raises ValueError."""
     orch, _ = _make_orch(failing=True)
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", operation_store)
 
     with pytest.raises(ValueError, match="non-empty"):
@@ -178,7 +203,7 @@ async def test_override_requires_non_empty_justification() -> None:
 async def test_override_marks_verdict_overridden() -> None:
     """Valid override changes verdict status to overridden."""
     orch, _ = _make_orch(failing=True)
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", operation_store)
 
     await orch.override_verdict(
@@ -190,17 +215,18 @@ async def test_override_marks_verdict_overridden() -> None:
         design_id="DESIGN-001",
     )
 
-    verdict = operation_store["op-001"]["verdict"]
-    assert verdict.status == VerdictStatus.OVERRIDDEN
-    assert verdict.overridden_by == "sub:reviewer-456"
-    assert "EXC-001" in verdict.override_justification
+    op = await operation_store.get("op-001")
+    verdict = op["verdict"]
+    assert verdict["status"] == VerdictStatus.OVERRIDDEN.value
+    assert verdict["overridden_by"] == "sub:reviewer-456"
+    assert "EXC-001" in verdict["override_justification"]
 
 
 @pytest.mark.asyncio
 async def test_override_writes_audit_entry() -> None:
     """Override writes AuditEntry with actor and action."""
     orch, _ = _make_orch(failing=True)
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", operation_store)
 
     await orch.override_verdict(
@@ -225,7 +251,7 @@ async def test_override_writes_audit_entry() -> None:
 async def test_cannot_override_pass_verdict() -> None:
     """Cannot override a passing verdict."""
     orch, _ = _make_orch()  # passes by default
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", operation_store)
 
     with pytest.raises(ValueError, match="Only 'fail'"):
@@ -245,7 +271,7 @@ async def test_cannot_override_pass_verdict() -> None:
 async def test_five_spans_emitted_per_job() -> None:
     """At least 5 spans emitted (structural + 4 LLM + aggregate + gate)."""
     orch, mock_telemetry = _make_orch()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", operation_store, correlation_id="corr-001")
 
     critic_names = {call.args[0].critic_name for call in mock_telemetry.emit_span.call_args_list}
@@ -260,7 +286,7 @@ async def test_five_spans_emitted_per_job() -> None:
 async def test_all_spans_share_correlation_id() -> None:
     """All spans receive the correlation_id from the job."""
     orch, mock_telemetry = _make_orch()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", operation_store, correlation_id="trace-xyz")
 
     for call in mock_telemetry.emit_span.call_args_list:
@@ -271,11 +297,12 @@ async def test_all_spans_share_correlation_id() -> None:
 async def test_citations_present_true_when_cited_findings_exist() -> None:
     """citations_present=True when at least one finding has a citation (ART-VII bridge)."""
     orch, _ = _make_orch(failing=True)  # generates findings with citations
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", operation_store)
     # If any critic returned cited findings, citations_present should be True
     # (depends on whether resolve_citation succeeded)
-    assert "span" in operation_store["op-001"]
+    op = await operation_store.get("op-001")
+    assert "span" in op
 
 
 # ── Performance: NFR-001 / SC-003 ────────────────────────────────────────────
@@ -284,7 +311,7 @@ async def test_citations_present_true_when_cited_findings_exist() -> None:
 async def test_fan_out_completes_structurally() -> None:
     """Full orchestrator.run() with mocked critics completes in < 1 second."""
     orch, _ = _make_orch()
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
     start = time.perf_counter()
     await orch.run("op-001", "DESIGN-001", operation_store)
     elapsed = time.perf_counter() - start
@@ -302,9 +329,71 @@ async def test_api_key_never_in_validation_logs(caplog) -> None:
     orch, _ = _make_orch()
     orch._llm._api_key = FAKE_KEY
 
-    operation_store: dict = {"op-001": {"status": "pending"}}
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
     with caplog.at_level(logging.DEBUG, logger="adp"):
         await orch.run("op-001", "DESIGN-001", operation_store)
 
     full_log = "\n".join(r.message for r in caplog.records)
     assert FAKE_KEY not in full_log
+
+
+# ── ADP-3ei: durable AI process capture ───────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_run_writes_durable_verdict_capture() -> None:
+    """A capture_store, when provided, receives the built Verdict + design_id."""
+    mock_llm = MagicMock()
+
+    async def mock_extract(*args, **kwargs):
+        return _GEN_RESPONSE_PASS
+
+    mock_llm.extract = mock_extract
+    mock_llm._model = "claude-sonnet-4-6"
+
+    mock_store = AsyncMock()
+    mock_store.get.return_value = _make_design()
+    mock_store.list_versions.return_value = [MagicMock(), MagicMock()]
+
+    mock_capture = AsyncMock()
+
+    orch = ValidationOrchestrator(
+        llm=mock_llm,
+        knowledge_retrieval=_make_kr(),
+        design_store=mock_store,
+        capture_store=mock_capture,
+    )
+
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
+    await orch.run("op-001", "DESIGN-001", operation_store, actor="alice")
+
+    mock_capture.record_verdict.assert_awaited_once()
+    kwargs = mock_capture.record_verdict.await_args.kwargs
+    assert kwargs["design_id"] == "DESIGN-001"
+    assert kwargs["actor"] == "alice"
+    assert kwargs["model_id"] == "claude-sonnet-4-6"
+    verdict_arg = mock_capture.record_verdict.await_args.args[0]
+    assert verdict_arg.design_id == "DESIGN-001"
+
+
+@pytest.mark.asyncio
+async def test_override_writes_durable_capture() -> None:
+    """A capture_store, when provided, receives the override on a FAIL verdict."""
+    orch, _ = _make_orch(failing=True)
+    orch._capture = AsyncMock()
+
+    operation_store = _FakeOpStore({"op-001": {"status": "pending"}})
+    await orch.run("op-001", "DESIGN-001", operation_store)
+
+    await orch.override_verdict(
+        verdict_id="vrd-001",
+        operation_id="op-001",
+        reviewing_actor="sub:reviewer-456",
+        justification="Exception applies",
+        operation_store=operation_store,
+        design_id="DESIGN-001",
+    )
+
+    orch._capture.record_override.assert_awaited_once()
+    kwargs = orch._capture.record_override.await_args.kwargs
+    assert kwargs["overridden_by"] == "sub:reviewer-456"
+    assert kwargs["justification"] == "Exception applies"

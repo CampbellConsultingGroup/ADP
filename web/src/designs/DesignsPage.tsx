@@ -3,6 +3,7 @@ import { useDesignList, useCreateDesign } from "../api/designs";
 import type { AppView } from "../shell";
 import { Button, Card, StatusBadge, Icon, type BadgeTone } from "../ui";
 import LifecycleTransitionButton from "./LifecycleTransitionButton";
+import ValidateDesignButton from "./ValidateDesignButton";
 
 interface DesignsPageProps {
   onSelectDesign: (id: string) => void;
@@ -128,6 +129,7 @@ export default function DesignsPage({ onSelectDesign }: DesignsPageProps): React
                 </div>
                 <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                   <LifecycleTransitionButton designId={d.id} currentStatus={d.lifecycle_status} />
+                  <ValidateDesignButton designId={d.id} />
                   <Button variant="primary" size="sm" onClick={() => onSelectDesign(d.id)}>Open</Button>
                 </div>
               </div>

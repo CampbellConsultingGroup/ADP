@@ -91,6 +91,42 @@ async def get_reasoning_store() -> Any:
     return _reasoning_store_singleton
 
 
+_intake_capture_singleton: Any = None
+_recommendation_capture_singleton: Any = None
+_validation_capture_singleton: Any = None
+
+
+async def get_intake_capture_store() -> Any:
+    """FastAPI dependency: returns the singleton IntakeCaptureStore.
+
+    Uses the shared KB session factory so no additional DB connections are created.
+    Override in tests via app.dependency_overrides.
+    """
+    global _intake_capture_singleton
+    if _intake_capture_singleton is None:
+        from adp.store.ai_capture import IntakeCaptureStore
+        _intake_capture_singleton = IntakeCaptureStore(_get_kb_session_factory())
+    return _intake_capture_singleton
+
+
+async def get_recommendation_capture_store() -> Any:
+    """FastAPI dependency: returns the singleton RecommendationCaptureStore."""
+    global _recommendation_capture_singleton
+    if _recommendation_capture_singleton is None:
+        from adp.store.ai_capture import RecommendationCaptureStore
+        _recommendation_capture_singleton = RecommendationCaptureStore(_get_kb_session_factory())
+    return _recommendation_capture_singleton
+
+
+async def get_validation_capture_store() -> Any:
+    """FastAPI dependency: returns the singleton ValidationCaptureStore."""
+    global _validation_capture_singleton
+    if _validation_capture_singleton is None:
+        from adp.store.ai_capture import ValidationCaptureStore
+        _validation_capture_singleton = ValidationCaptureStore(_get_kb_session_factory())
+    return _validation_capture_singleton
+
+
 async def get_kb_session() -> AsyncGenerator[Any, None]:
     """FastAPI dependency: yields a SQLAlchemy AsyncSession for knowledge-base access.
 

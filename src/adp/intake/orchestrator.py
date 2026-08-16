@@ -1,7 +1,8 @@
 """ExtractionOrchestrator — coordinates the full requirements intake pipeline (ADP-SPEC-006).
 
 Consumed by ADP-SPEC-003's operations router when kind=intake.
-Source text is NEVER stored, logged, or included in telemetry.
+Source text is persisted durably to `intake_submissions` (ADP AI process capture,
+ADP-3ei), linked to the design; it is still never logged or included in telemetry.
 """
 
 from __future__ import annotations
@@ -47,12 +48,14 @@ class ExtractionOrchestrator:
         llm_client: LLMClient,
         linker: KnowledgeLinker | None = None,
         telemetry: IntakeTelemetry | None = None,
+        capture_store: Any | None = None,
     ) -> None:
         self._llm = llm_client
         self._linker = linker or KnowledgeLinker()
         self._telemetry = telemetry or IntakeTelemetry()
         self._parser = LLMResponseParser()
         self._verifier = SourceExcerptVerifier()
+        self._capture = capture_store
 
     async def run(
         self,
@@ -75,9 +78,10 @@ class ExtractionOrchestrator:
         correlation_id: str | None = None
 
         try:
-            # Read correlation_id from persisted payload
+            # Read correlation_id / design_id from persisted payload
             current_op = await operation_store.get(op_id) or {}
             correlation_id = current_op.get("correlation_id")
+            design_id = current_op.get("design_id")
 
             if submission.mode == SubmissionMode.STRUCTURED_FORM:
                 # Skip LLM — single pre-written requirement
@@ -157,7 +161,27 @@ class ExtractionOrchestrator:
                 prompt_text=submission.text,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                design_id=design_id,
             )
+
+            # ADP-3ei: durable, design-linked capture of every proposal (best-effort)
+            if self._capture is not None and design_id and proposals:
+                from adp.store.ai_capture import ProposalRecord
+                await self._capture.record_proposals([
+                    ProposalRecord(
+                        proposal_id=p.proposal_id,
+                        submission_id=p.submission_id,
+                        design_id=design_id,
+                        operation_id=op_id,
+                        draft_statement=p.draft_statement,
+                        kind=p.kind.value,
+                        source_excerpt=p.source_excerpt,
+                        verification_status=p.verification_status.value,
+                        confidence=p.confidence,
+                        proposed_links=list(p.proposed_links or []),
+                    )
+                    for p in proposals
+                ])
 
         except Exception as exc:
             error_msg = str(exc)
@@ -199,8 +223,6 @@ class ExtractionOrchestrator:
                     "status": current_op_final.get("status"),
                 })
             )
-            # Discard source text — never retained after extraction
-            del submission
 
     async def confirm_proposal(
         self,
@@ -264,11 +286,12 @@ class ExtractionOrchestrator:
 
         # Update proposal dict and write back to persistent store
         new_status = "edited_confirmed" if edited_statement else "confirmed"
+        decided_at = datetime.now(timezone.utc)
         proposal_update: dict = {
             "status": new_status,
             "confirmed_statement": statement,
             "confirmed_by": confirming_actor,
-            "confirmed_at": datetime.now(timezone.utc).isoformat(),
+            "confirmed_at": decided_at.isoformat(),
             "requirement_id": req_id,
         }
         if isinstance(proposal, dict):
@@ -286,6 +309,17 @@ class ExtractionOrchestrator:
             proposals[proposal_id] = {**proposal_dict, **proposal_update}
 
         await operation_store.update(operation_id, payload_patch={"proposals": proposals})
+
+        if self._capture is not None:
+            await self._capture.record_decision(
+                proposal_id,
+                status=new_status,
+                decided_by=confirming_actor,
+                decided_at=decided_at,
+                confirmed_statement=statement,
+                requirement_id=req_id,
+                audit_entry_id=audit_entry_id,
+            )
 
         _logger.info(
             json.dumps({
@@ -333,22 +367,35 @@ class ExtractionOrchestrator:
 
         await operation_store.update(operation_id, payload_patch={"proposals": proposals})
 
+        decided_at = datetime.now(timezone.utc)
+        audit_entry_id: str | None = None
+
         # Write rejection audit entry to design if store is available
         if design_store is not None and design_id is not None:
             design = await design_store.get(design_id)
             from adp.models import AuditEntry as _AuditEntry
 
+            audit_entry_id = _next_audit_id(design)
             audit_entry = _AuditEntry(
-                id=_next_audit_id(design),
+                id=audit_entry_id,
                 actor=rejecting_actor,
                 action="reject-requirement-proposal",
                 affected_entity=proposal_id,
                 summary=f"Rejected requirement proposal {proposal_id}",
-                timestamp=datetime.now(timezone.utc),
+                timestamp=decided_at,
                 origin="human",
             )
             design.audit_log.append(audit_entry)
             await design_store.save(design, actor=rejecting_actor)
+
+        if self._capture is not None:
+            await self._capture.record_decision(
+                proposal_id,
+                status="rejected",
+                decided_by=rejecting_actor,
+                decided_at=decided_at,
+                audit_entry_id=audit_entry_id,
+            )
 
         _logger.info(
             json.dumps({
@@ -371,6 +418,7 @@ def _write_extraction_reasoning(
     prompt_text: str,
     input_tokens: int,
     output_tokens: int,
+    design_id: str | None = None,
 ) -> None:
     """Fire-and-forget write of intake extraction reasoning (ADP-SPEC-027)."""
     import asyncio as _asyncio
@@ -390,6 +438,7 @@ def _write_extraction_reasoning(
                 prompt_hash=_hash_prompt(prompt_text),
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
+                design_id=design_id,
             ))
         except Exception as exc:
             _logger.debug("intake reasoning write skipped: %s", exc)

@@ -13,6 +13,7 @@ from __future__ import annotations
 import logging
 import os
 import uuid
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
@@ -327,8 +328,31 @@ def _make_stub_knowledge_retrieval():
     return _StubKnowledgeRetrieval.__new__(_StubKnowledgeRetrieval)
 
 
-def _make_recommend_orchestrator(model: str | None = None):
-    """Create RecommendationOrchestrator with stub knowledge retrieval and configured LLM."""
+def _resolve_recommendation_model(model: str | None = None) -> str:
+    """Return the model id that _make_recommend_orchestrator would actually use.
+
+    Same precedence as _make_recommend_orchestrator; returns "stub" when no API
+    key is configured. Used so the durably captured model_id always matches
+    what really ran the request.
+    """
+    from adp.api.routers.config import get_api_key, get_recommendation_model
+
+    if not get_api_key():
+        return "stub"
+    return model or get_recommendation_model()
+
+
+async def _get_recommendation_capture():  # type: ignore[return]
+    from adp.api.deps import get_recommendation_capture_store
+    return await get_recommendation_capture_store()
+
+
+def _make_recommend_orchestrator(model: str | None = None, capture: object | None = None):
+    """Create RecommendationOrchestrator with stub knowledge retrieval and configured LLM.
+
+    `capture` is the RecommendationCaptureStore to use (caller resolves it via
+    the _get_recommendation_capture FastAPI dependency, so tests can override it).
+    """
     from adp.agents.llm_stub import StubLLMClient
     from adp.api.routers.config import get_api_key, get_recommendation_model
     from adp.llm.client import LLMClient
@@ -361,6 +385,7 @@ def _make_recommend_orchestrator(model: str | None = None):
         knowledge_retrieval=knowledge,
         design_store=store_dep,  # type: ignore[arg-type]
         reuse_provider=reuse_provider,
+        capture_store=capture,
     )
 
 
@@ -465,6 +490,7 @@ async def start_recommendation(
     background_tasks: BackgroundTasks,
     store=Depends(_get_design_store_dep),
     op_store=Depends(_get_op_store_dep),
+    capture=Depends(_get_recommendation_capture),
 ) -> RecommendStatusResponse:
     """Start the 5-step recommendation pipeline as a background task (FR-001).
 
@@ -506,7 +532,20 @@ async def start_recommendation(
         "correlation_id": correlation_id,
     })
 
-    orchestrator = _make_recommend_orchestrator(model=request.model)
+    # ADP-3ei: durably capture the run at submission time (so failed runs are
+    # captured too), linked to the design and the resolved model.
+    from adp.store.ai_capture import RunRecord
+    await capture.record_run(RunRecord(
+        run_id=operation_id,
+        design_id=design_id,
+        requirement_ids=request.requirement_ids,
+        model_id=_resolve_recommendation_model(request.model),
+        actor=actor,
+        correlation_id=correlation_id,
+        started_at=datetime.now(timezone.utc),
+    ))
+
+    orchestrator = _make_recommend_orchestrator(model=request.model, capture=capture)
     orchestrator._store = store  # inject the real store for the background run
 
     background_tasks.add_task(
@@ -583,6 +622,7 @@ async def accept_option(
     raw_request: Request,
     store=Depends(_get_design_store_dep),
     op_store=Depends(_get_op_store_dep),
+    capture=Depends(_get_recommendation_capture),
 ) -> AcceptOptionResponse:
     """Accept one option — materialises proposed elements into the canonical design.
 
@@ -619,7 +659,7 @@ async def accept_option(
         )
 
     actor = _get_actor(raw_request)
-    orchestrator = _make_recommend_orchestrator()
+    orchestrator = _make_recommend_orchestrator(capture=capture)
     orchestrator._store = store  # type: ignore[attr-defined]
 
     try:
@@ -630,6 +670,8 @@ async def accept_option(
             operation_store=op_store,
             design_id=design_id,
             advisory_acknowledged=request.advisory_acknowledged,
+            acceptance_reason=request.acceptance_reason,
+            confirmation_id=request.confirmation_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
@@ -699,8 +741,14 @@ async def reject_option(
     raw_request: Request,
     store=Depends(_get_design_store_dep),
     op_store=Depends(_get_op_store_dep),
+    capture=Depends(_get_recommendation_capture),
 ) -> dict:
-    """Reject one option; record it as an anti-pattern in the knowledge base (ADP-SPEC-019)."""
+    """Reject one option; record it as an anti-pattern in the knowledge base (ADP-SPEC-019).
+
+    ADP-3ei: unlike before, rejection is now durably recorded — an AuditEntry on
+    the design (mirroring intake's reject_proposal) plus a recommendation_options
+    capture row — not just a soon-to-expire operations.payload status flag.
+    """
     op = await op_store.get(operation_id)
     if op is None:
         raise HTTPException(status_code=404, detail=f"Operation {operation_id!r} not found")
@@ -726,6 +774,37 @@ async def reject_option(
         )
 
     actor = _get_actor(raw_request)
+    decided_at = datetime.now(timezone.utc)
+
+    # ADP-3ei: write a rejection AuditEntry (ART-IX), mirroring intake's
+    # reject_proposal — accept already wrote one via materialize_option; reject
+    # previously wrote nothing durable at all.
+    from adp.audit.writer import next_audit_id as _next_audit_id
+    from adp.models import AuditEntry as _AuditEntry
+    design = await store.get(design_id)
+    audit_entry_id = _next_audit_id(design)
+    audit_entry = _AuditEntry(
+        id=audit_entry_id,
+        actor=actor,
+        action="reject-recommendation",
+        affected_entity=option_id,
+        summary=f"Rejected recommendation option {option_id}: {request.rejection_reason[:80]}",
+        timestamp=decided_at,
+        origin="human",
+    )
+    design.audit_log.append(audit_entry)
+    await store.save(design, actor=actor)
+
+    # Awaited inline (not fire-and-forget) — a decision-path capture write must
+    # not be lost the way the pre-ADP-3ei reject path lost this data entirely.
+    await capture.record_option_decision(
+        option_id,
+        status="rejected",
+        decided_by=actor,
+        decided_at=decided_at,
+        decision_reason=request.rejection_reason,
+        audit_entry_id=audit_entry_id,
+    )
 
     logger.info(
         "recommend.rejected",

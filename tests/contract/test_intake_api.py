@@ -49,6 +49,16 @@ def _make_proposal(proposal_id: str = "PROP-001", status: ProposalStatus = Propo
     )
 
 
+def _make_mock_capture():
+    from adp.store.ai_capture import IntakeCaptureStore
+
+    mock_capture = AsyncMock(spec=IntakeCaptureStore)
+    mock_capture.record_submission = AsyncMock(return_value=None)
+    mock_capture.record_proposals = AsyncMock(return_value=None)
+    mock_capture.record_decision = AsyncMock(return_value=True)
+    return mock_capture
+
+
 @pytest.fixture()
 def client():
     from adp.api.app import create_app
@@ -67,6 +77,8 @@ def client():
     mock_op_store.update = AsyncMock(return_value=None)
     mock_op_store.update_option_status = AsyncMock(return_value=True)
 
+    mock_capture = _make_mock_capture()
+
     app = create_app()
 
     async def _fake_store():
@@ -75,10 +87,57 @@ def client():
     async def _fake_op_store():
         return mock_op_store
 
+    async def _fake_capture():
+        return mock_capture
+
     app.dependency_overrides[intake_module._get_design_store] = _fake_store
     app.dependency_overrides[intake_module._get_op_store] = _fake_op_store
+    app.dependency_overrides[intake_module._get_intake_capture] = _fake_capture
 
     return TestClient(app, raise_server_exceptions=False), mock_store, mock_op_store
+
+
+@pytest.fixture()
+def client_with_capture():
+    """Like `client`, but also exposes the mocked IntakeCaptureStore for assertions."""
+    from adp.api.app import create_app
+    from adp.api.routers import intake as intake_module
+    from adp.store.operations import OperationStore
+
+    design = _make_design()
+    mock_store = AsyncMock()
+    mock_store.get = AsyncMock(return_value=design)
+    mock_store.save = AsyncMock(return_value=None)
+
+    mock_op_store = AsyncMock(spec=OperationStore)
+    mock_op_store.get = AsyncMock(return_value=None)
+    mock_op_store.create = AsyncMock(return_value=None)
+    mock_op_store.update = AsyncMock(return_value=None)
+    mock_op_store.update_option_status = AsyncMock(return_value=True)
+
+    mock_capture = _make_mock_capture()
+
+    app = create_app()
+
+    async def _fake_store():
+        return mock_store
+
+    async def _fake_op_store():
+        return mock_op_store
+
+    async def _fake_capture():
+        return mock_capture
+
+    app.dependency_overrides[intake_module._get_design_store] = _fake_store
+    app.dependency_overrides[intake_module._get_op_store] = _fake_op_store
+    app.dependency_overrides[intake_module._get_intake_capture] = _fake_capture
+
+    return (
+        TestClient(app, raise_server_exceptions=False),
+        mock_store,
+        mock_op_store,
+        mock_capture,
+    )
 
 
 # ── US1: Submit + poll ────────────────────────────────────────────────────────
@@ -263,6 +322,76 @@ def test_confirm_with_edited_statement(client):
     assert resp.status_code == 200
     body = resp.json()
     assert body["description"] == edited
+
+
+# ── ADP-3ei: durable AI process capture ───────────────────────────────────────
+
+def test_submit_intake_captures_source_text_and_model(client_with_capture, monkeypatch):
+    from adp.api.routers import config as config_module
+
+    monkeypatch.setattr(config_module, "get_api_key", lambda: "fake-key")
+    c, _, _, mock_capture = client_with_capture
+    resp = c.post("/api/v1/designs/D-001/intake", json={
+        "mode": "bulk_text",
+        "text": "The system must handle 10,000 concurrent users without degradation.",
+        "model": "claude-opus-4-8",
+    })
+    assert resp.status_code == 202
+    mock_capture.record_submission.assert_awaited_once()
+    rec = mock_capture.record_submission.await_args.args[0]
+    assert rec.design_id == "D-001"
+    assert rec.source_text == "The system must handle 10,000 concurrent users without degradation."
+    assert rec.model_id == "claude-opus-4-8"
+
+
+def test_submit_intake_captures_stub_model_when_no_api_key(client_with_capture):
+    """No API key configured -> extraction runs against the stub, and that's what's captured."""
+    c, _, _, mock_capture = client_with_capture
+    resp = c.post("/api/v1/designs/D-001/intake", json={
+        "mode": "bulk_text",
+        "text": "The system must handle 10,000 concurrent users without degradation.",
+    })
+    assert resp.status_code == 202
+    rec = mock_capture.record_submission.await_args.args[0]
+    assert rec.model_id == "stub"
+
+
+def test_submit_intake_captures_framing_only_submission(client_with_capture):
+    """Even a no-text, framing-only submission is durably captured (ADP-3ei)."""
+    c, _, _, mock_capture = client_with_capture
+    resp = c.post("/api/v1/designs/D-001/intake", json={
+        "mode": "bulk_text",
+        "business_problem": "Manual reporting is slow.",
+        "desired_outcome": "Self-serve analytics.",
+    })
+    assert resp.status_code == 202
+    mock_capture.record_submission.assert_awaited_once()
+    rec = mock_capture.record_submission.await_args.args[0]
+    assert rec.source_text == ""
+    assert rec.business_problem == "Manual reporting is slow."
+
+
+def test_reject_proposal_writes_durable_decision(client_with_capture):
+    c, _, op_store, mock_capture = client_with_capture
+    op_id = _seed_operation(op_store)
+
+    resp = c.post(f"/api/v1/designs/D-001/intake/{op_id}/proposals/PROP-001/reject", json={})
+    assert resp.status_code == 200
+    mock_capture.record_decision.assert_awaited_once()
+    kwargs = mock_capture.record_decision.await_args.kwargs
+    assert kwargs["status"] == "rejected"
+
+
+def test_confirm_proposal_writes_durable_decision(client_with_capture):
+    c, _, op_store, mock_capture = client_with_capture
+    op_id = _seed_operation(op_store)
+
+    resp = c.post(f"/api/v1/designs/D-001/intake/{op_id}/proposals/PROP-001/confirm", json={})
+    assert resp.status_code == 200
+    mock_capture.record_decision.assert_awaited_once()
+    kwargs = mock_capture.record_decision.await_args.kwargs
+    assert kwargs["status"] == "confirmed"
+    assert kwargs["requirement_id"].startswith("REQ-")
 
 
 # ── US3: Direct requirement add ───────────────────────────────────────────────
