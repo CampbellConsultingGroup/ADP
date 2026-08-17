@@ -236,6 +236,7 @@ class ExtractionOrchestrator:
     ) -> Any:
         """Confirm one proposal → write Requirement + AuditEntry to the design store."""
         from adp.models import Requirement
+        from adp.models import RequirementKind as _CanonicalRequirementKind
 
         op = await operation_store.get(operation_id) or {}
         proposals: dict = op.get("proposals", {})
@@ -255,6 +256,11 @@ class ExtractionOrchestrator:
         statement = edited_statement or draft
         if not statement or not statement.strip():
             raise ValueError("Requirement statement must be non-empty (NFR-002)")
+        raw_kind = proposal.get("kind") if isinstance(proposal, dict) else proposal.kind.value
+        kind = (
+            _CanonicalRequirementKind(raw_kind)
+            if raw_kind else _CanonicalRequirementKind.FUNCTIONAL
+        )
 
         # Read design, generate Requirement id, write back
         design = await design_store.get(design_id)
@@ -264,6 +270,7 @@ class ExtractionOrchestrator:
             id=req_id,
             title=statement[:120],
             description=statement,
+            kind=kind,
             priority="must",
             tags=[],
         )

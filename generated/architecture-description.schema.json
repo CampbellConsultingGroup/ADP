@@ -286,6 +286,10 @@
           "title": "Id",
           "type": "string"
         },
+        "kind": {
+          "$ref": "#/$defs/RequirementKind",
+          "default": "functional"
+        },
         "priority": {
           "anyOf": [
             {
@@ -324,6 +328,17 @@
       ],
       "title": "Requirement",
       "type": "object"
+    },
+    "RequirementKind": {
+      "description": "Requirement type. Mirrors adp.intake.models.RequirementKind's value set\n(kept as a separate canonical definition here per ART-II -- the intake\npipeline's version is a request/response-layer concern, not the source of\ntruth for the persisted model). Only functional/non_functional are\npresented as choices in the UI today; constraint/driver are reserved for\na later addition.",
+      "enum": [
+        "functional",
+        "non_functional",
+        "constraint",
+        "driver"
+      ],
+      "title": "RequirementKind",
+      "type": "string"
     },
     "SolutionOption": {
       "additionalProperties": false,
@@ -698,7 +713,7 @@
     "created_at",
     "updated_at"
   ],
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "title": "Architecture Description",
   "type": "object"
 }

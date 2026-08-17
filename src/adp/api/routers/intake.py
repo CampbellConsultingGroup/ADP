@@ -543,7 +543,7 @@ async def reject_proposal(
     return {"proposal_id": proposal_id, "status": "rejected"}
 
 
-# ── US3: Direct requirement add (structured form fast path) ───────────────────
+# ── US3: Direct requirement add (typed, no AI extraction) ─────────────────────
 
 @router.post(
     "/{design_id}/requirements",
@@ -562,6 +562,7 @@ async def add_requirement(
     ART-IX: writes an audit entry.
     """
     from adp.models import AuditEntry, Requirement
+    from adp.models import RequirementKind as _CanonicalRequirementKind
     from adp.store.store import DesignNotFoundError  # type: ignore[attr-defined]
 
     actor = _get_actor(raw_request)
@@ -579,6 +580,9 @@ async def add_requirement(
         id=req_id,
         title=statement[:120],
         description=description,
+        # request.kind is adp.intake.models.RequirementKind (request-layer);
+        # round-trip its value into adp.models.RequirementKind (canonical).
+        kind=_CanonicalRequirementKind(request.kind.value),
     )
 
     from adp.audit.writer import next_audit_id as _next_audit_id
@@ -588,7 +592,7 @@ async def add_requirement(
         actor=actor,
         action="add-requirement",
         affected_entity=req_id,
-        summary=f"Requirement {req_id} added directly via structured form",
+        summary=f"Requirement {req_id} added directly ({request.kind.value})",
         timestamp=datetime.now(timezone.utc),
         origin="human",
     )
@@ -645,7 +649,7 @@ async def list_requirements(
             id=req.id,
             title=req.title,
             description=req.description,
-            kind=getattr(req, "kind", "functional"),
+            kind=req.kind.value,
             satisfies=satisfies_map.get(req.id, []),
         )
         for req in design.requirements

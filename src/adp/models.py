@@ -17,7 +17,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 # 1.1.0 — added ArchitectureDescription.business_problem + desired_outcome
 #         (additive, Optional; backward-compatible with 1.0.0 designs).
-SCHEMA_VERSION = "1.1.0"
+# 1.2.0 — added Requirement.kind (additive, defaults to "functional";
+#         backward-compatible with designs that predate the field).
+SCHEMA_VERSION = "1.2.0"
 
 # ── Identifier type aliases ──────────────────────────────────────────────────
 
@@ -49,6 +51,20 @@ class ElementKind(StrEnum):
     SYSTEM = "system"
     CONTAINER = "container"
     COMPONENT = "component"
+
+
+class RequirementKind(StrEnum):
+    """Requirement type. Mirrors adp.intake.models.RequirementKind's value set
+    (kept as a separate canonical definition here per ART-II -- the intake
+    pipeline's version is a request/response-layer concern, not the source of
+    truth for the persisted model). Only functional/non_functional are
+    presented as choices in the UI today; constraint/driver are reserved for
+    a later addition."""
+
+    FUNCTIONAL = "functional"
+    NON_FUNCTIONAL = "non_functional"
+    CONSTRAINT = "constraint"
+    DRIVER = "driver"
 
 
 class VerdictStatus(StrEnum):
@@ -91,6 +107,7 @@ class Requirement(_BaseModel):
     id: RequirementId
     title: str = Field(min_length=1, max_length=120)
     description: str = Field(min_length=1)
+    kind: RequirementKind = RequirementKind.FUNCTIONAL
     priority: Literal["must", "should", "may"] | None = None
     tags: list[str] = Field(default_factory=list)
 

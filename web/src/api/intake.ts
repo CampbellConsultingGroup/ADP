@@ -140,17 +140,21 @@ export function useRejectProposal(designId: string, operationId: string) {
   });
 }
 
-export function useAddRequirement(designId: string) {
+// designId is a mutate-time argument (not fixed at hook-creation time) so a
+// batch of requirements can be added right after a design is created in the
+// same submit action, without waiting on a prop to catch up. Mirrors
+// useSubmitIntake's same fix.
+export function useAddRequirement() {
   const qc = useQueryClient();
-  return useMutation<ConfirmProposalResponse, Error, DirectRequirementRequest>({
-    mutationFn: (body) =>
+  return useMutation<ConfirmProposalResponse, Error, DirectRequirementRequest & { designId: string }>({
+    mutationFn: ({ designId, ...body }) =>
       apiMutation<ConfirmProposalResponse, DirectRequirementRequest>(
         "POST",
         `/api/v1/designs/${designId}/requirements`,
         body,
       ),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["requirements", designId] });
+    onSuccess: (_data, variables) => {
+      void qc.invalidateQueries({ queryKey: ["requirements", variables.designId] });
     },
   });
 }
