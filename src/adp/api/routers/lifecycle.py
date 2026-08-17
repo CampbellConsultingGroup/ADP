@@ -27,7 +27,11 @@ router = APIRouter(prefix="/api/v1/designs", tags=["lifecycle"])
 VALID_TRANSITIONS: dict[str, set[str]] = {
     "draft":          {"proposed"},
     "proposed":       {"current", "draft"},
-    "current":        {"deprecated"},
+    "current":        {"deprecated", "complete"},
+    # "complete" mirrors "deprecated"'s own transition set: it can still be
+    # reinstated as current, or later move on to deprecated (e.g. a
+    # successfully-finished design that's eventually phased out anyway).
+    "complete":       {"deprecated", "current"},
     "deprecated":     {"decommissioned", "current"},
     "decommissioned": set(),
 }

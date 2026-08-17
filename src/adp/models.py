@@ -40,6 +40,7 @@ class LifecycleStatus(StrEnum):
     DRAFT = "draft"
     PROPOSED = "proposed"
     CURRENT = "current"
+    COMPLETE = "complete"
     DEPRECATED = "deprecated"
     DECOMMISSIONED = "decommissioned"
 

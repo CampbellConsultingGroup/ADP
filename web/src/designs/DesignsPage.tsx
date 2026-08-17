@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useDesignList, useCreateDesign } from "../api/designs";
 import type { AppView } from "../shell";
-import { Button, Card, StatusBadge, Icon, type BadgeTone } from "../ui";
+import { Button, Card, StatusBadge, Icon } from "../ui";
+import { LIFECYCLE_TONE, LIFECYCLE_LABEL } from "../portfolio/lifecycle";
 import LifecycleTransitionButton from "./LifecycleTransitionButton";
 import ValidateDesignButton from "./ValidateDesignButton";
 
@@ -13,14 +14,6 @@ interface DesignsPageProps {
   // caller (App.tsx) continues straight to that screen once one is picked.
   continueTo?: string | null;
 }
-
-const LIFECYCLE: Record<string, { tone: BadgeTone; label: string }> = {
-  draft: { tone: "neutral", label: "Draft" },
-  proposed: { tone: "info", label: "Proposed" },
-  current: { tone: "good", label: "Current" },
-  deprecated: { tone: "warn", label: "Deprecated" },
-  decommissioned: { tone: "crit", label: "Decommissioned" },
-};
 
 export default function DesignsPage({ onSelectDesign, continueTo }: DesignsPageProps): React.ReactElement {
   const [showForm, setShowForm] = useState(false);
@@ -71,6 +64,7 @@ export default function DesignsPage({ onSelectDesign, continueTo }: DesignsPageP
             <option value="draft">Draft</option>
             <option value="proposed">Proposed</option>
             <option value="current">Current</option>
+            <option value="complete">Complete</option>
             <option value="deprecated">Deprecated</option>
             <option value="decommissioned">Decommissioned</option>
           </select>
@@ -123,7 +117,10 @@ export default function DesignsPage({ onSelectDesign, continueTo }: DesignsPageP
       {!isLoading && designs.length > 0 && (
         <div className="ui-list">
           {designs.map((d) => {
-            const lc = LIFECYCLE[d.lifecycle_status] ?? LIFECYCLE.draft;
+            const lc = {
+              tone: LIFECYCLE_TONE[d.lifecycle_status] ?? LIFECYCLE_TONE.draft,
+              label: LIFECYCLE_LABEL[d.lifecycle_status] ?? LIFECYCLE_LABEL.draft,
+            };
             return (
               <div key={d.id} className="ui-list-row">
                 <div style={{ flex: 1, minWidth: 0 }}>

@@ -15,7 +15,8 @@ interface LifecycleTransitionButtonProps {
 const VALID_TRANSITIONS: Record<string, { label: string; value: string }[]> = {
   draft:         [{ label: "Propose", value: "proposed" }],
   proposed:      [{ label: "Mark Current", value: "current" }, { label: "Return to Draft", value: "draft" }],
-  current:       [{ label: "Deprecate", value: "deprecated" }],
+  current:       [{ label: "Deprecate", value: "deprecated" }, { label: "Mark Complete", value: "complete" }],
+  complete:      [{ label: "Deprecate", value: "deprecated" }, { label: "Reinstate as Current", value: "current" }],
   deprecated:    [{ label: "Decommission", value: "decommissioned" }, { label: "Reinstate as Current", value: "current" }],
   decommissioned: [],
 };
