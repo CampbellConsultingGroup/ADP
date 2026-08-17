@@ -2,6 +2,10 @@
 // the same shell either way, only gating the design-dependent pieces
 // (the requirements sidebar) on a resolved designId. There is no longer a
 // Structured Form tab or an AI-extraction review step (both removed).
+//
+// Recommendations is a tab of Intake's own flow (not a top-level AppView) --
+// its RecommendationPage requires a non-null designId, so the tab shows an
+// empty-state message instead of mounting it when no design exists yet.
 import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
@@ -24,6 +28,9 @@ vi.mock("../business/BusinessContextPanel", () => ({
 vi.mock("./CapabilityGapPanel", () => ({
   default: () => <div>CapabilityGapPanel-stub</div>,
 }));
+vi.mock("../recommend/RecommendationPage", () => ({
+  default: ({ designId }: { designId: string }) => <div>RecommendationPage-stub designId={designId}</div>,
+}));
 
 describe("IntakePage with no design selected yet", () => {
   it("still renders the Intake form (not blocked or redirected)", () => {
@@ -37,11 +44,19 @@ describe("IntakePage with no design selected yet", () => {
     expect(screen.getByText(/appear here once the design starts/i)).toBeTruthy();
   });
 
-  it("only offers Intake and LLM Settings tabs (no Structured Form)", () => {
+  it("offers Intake, Recommendations, and LLM Settings tabs (no Structured Form)", () => {
     render(<IntakePage designId={null} onNavigate={vi.fn()} />);
     expect(screen.queryByText("Structured Form")).toBeNull();
     expect(screen.getByText("Intake")).toBeTruthy();
+    expect(screen.getByText("Recommendations")).toBeTruthy();
     expect(screen.getByText("⚙ LLM Settings")).toBeTruthy();
+  });
+
+  it("shows an empty-state message instead of Recommendations when no design exists yet", () => {
+    render(<IntakePage designId={null} onNavigate={vi.fn()} />);
+    fireEvent.click(screen.getByText("Recommendations"));
+    expect(screen.queryByText(/RecommendationPage-stub/)).toBeNull();
+    expect(screen.getByText(/save a business problem first/i)).toBeTruthy();
   });
 });
 
@@ -62,5 +77,11 @@ describe("IntakePage with a design already selected", () => {
     render(<IntakePage designId="DSN-001" onNavigate={vi.fn()} />);
     fireEvent.click(screen.getByText("⚙ LLM Settings"));
     expect(screen.getByText("LLMSettings-stub")).toBeTruthy();
+  });
+
+  it("switches to the Recommendations tab, passing the resolved designId through", () => {
+    render(<IntakePage designId="DSN-001" onNavigate={vi.fn()} />);
+    fireEvent.click(screen.getByText("Recommendations"));
+    expect(screen.getByText(/RecommendationPage-stub designId=DSN-001/)).toBeTruthy();
   });
 });

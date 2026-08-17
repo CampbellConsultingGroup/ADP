@@ -8,7 +8,6 @@ export type AppView =
   | "insights"
   | "designs"
   | "intake"
-  | "recommend"
   | "canvas-v2"
   | "knowledge"
   | "portfolio"

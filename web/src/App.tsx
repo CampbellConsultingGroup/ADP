@@ -5,7 +5,6 @@ import DesignsPage from "./designs/DesignsPage";
 import { C4DesignView } from "./canvas-v2/C4DesignView";
 import IntakePage from "./intake/IntakePage";
 import KnowledgePage from "./knowledge/KnowledgePage";
-import RecommendationPage from "./recommend/RecommendationPage";
 import PortfolioPage from "./portfolio/PortfolioPage";
 import GovernancePage from "./governance/GovernancePage";
 import BusinessPage from "./business/BusinessPage";
@@ -18,18 +17,19 @@ import AdminPage from "./admin/AdminPage";
 import { AppShell } from "./ui";
 import type { AppView } from "./shell";
 
-// Recommendations/C4 Design have no meaning without a design (they operate on
-// requirements/elements that only exist once one does) -- clicking either from
-// the always-visible Design nav group with no design selected detours through
-// the Designs list (to pick or create one) rather than silently landing on
-// that same list with no explanation.
+// C4 Design has no meaning without a design (it operates on elements that only
+// exist once one does) -- clicking it from the always-visible Design nav group
+// with no design selected detours through the Designs list (to pick or create
+// one) rather than silently landing on that same list with no explanation.
 //
 // Intake is deliberately NOT here: it's where a design starts (capturing the
 // Business Problem), so it must be reachable directly with no detour at all --
 // see IntakePage/IntakeTextForm, which create the design lazily on first submit.
-const DESIGN_ONLY_VIEWS: AppView[] = ["recommend", "canvas-v2"];
+// Recommendations is no longer a top-level view at all -- it's a tab inside
+// IntakePage itself (the second step of Intake's own flow), so it needs no
+// entry here either.
+const DESIGN_ONLY_VIEWS: AppView[] = ["canvas-v2"];
 const DESIGN_ONLY_VIEW_LABELS: Record<string, string> = {
-  recommend: "Recommendations",
   "canvas-v2": "C4 Design",
 };
 
@@ -63,6 +63,20 @@ export default function App(): React.ReactElement {
     setCurrentDesignId(id);
     setView(pendingView ?? "intake");
     setPendingView(null);
+  };
+
+  // Nav bar "Intake" click == "New Design": always resets to a blank Intake
+  // form, even if a design is currently selected. Deliberately distinct from
+  // onNavigate("intake") -- that generic path is also used by onSelectDesign
+  // (Open a design -> populated Intake) and by the governance tabs'
+  // onSelectDesign(id); onNavigate("intake") pattern, both of which must keep
+  // landing on the *selected* design's data, not a blank one. This handler is
+  // wired only to the nav bar's Intake button (see AppShell's onStartNewDesign
+  // prop), so none of those other call sites are affected.
+  const onStartNewDesign = () => {
+    setCurrentDesignId(null);
+    setPendingView(null);
+    setView("intake");
   };
 
   const onGenerateDiagram = (seed: DiagramSeed) => {
@@ -126,9 +140,6 @@ export default function App(): React.ReactElement {
     }
 
     // Design-scoped views.
-    if (view === "recommend") {
-      return <RecommendationPage designId={currentDesignId} onNavigate={onNavigate} />;
-    }
     // ADP-914.13: C4DesignView is now the sole design-editing surface -- the legacy
     // Workspace/C4Canvas ("canvas") fallback it replaced is deleted. Every remaining
     // design-scoped view falls through to it (matches the pre-914.13 fallback shape,
@@ -137,7 +148,7 @@ export default function App(): React.ReactElement {
   }
 
   return (
-    <AppShell currentView={view} onNavigate={onNavigate} designId={currentDesignId}>
+    <AppShell currentView={view} onNavigate={onNavigate} designId={currentDesignId} onStartNewDesign={onStartNewDesign}>
       {renderPage()}
     </AppShell>
   );

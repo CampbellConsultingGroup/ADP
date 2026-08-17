@@ -5,6 +5,7 @@ import RequirementsList from "./RequirementsList";
 import LLMSettings from "./LLMSettings";
 import BusinessContextPanel from "../business/BusinessContextPanel";
 import CapabilityGapPanel from "./CapabilityGapPanel";
+import RecommendationPage from "../recommend/RecommendationPage";
 
 interface IntakePageProps {
   // null until a design exists -- Intake is always reachable directly (it's
@@ -17,7 +18,10 @@ interface IntakePageProps {
   onDesignCreated?: (designId: string) => void;
 }
 
-type Tab = "intake" | "settings";
+// "recommend" is a step of Intake's own flow (not a top-level AppView) -- see
+// AppShell's Design nav section, which no longer has a separate Recommendations
+// entry at all.
+type Tab = "intake" | "recommend" | "settings";
 
 export default function IntakePage({ designId, onNavigate, onDesignCreated }: IntakePageProps): React.ReactElement {
   const [activeTab, setActiveTab] = useState<Tab>("intake");
@@ -27,6 +31,7 @@ export default function IntakePage({ designId, onNavigate, onDesignCreated }: In
 
   const TABS: { id: Tab; label: string }[] = [
     { id: "intake", label: "Intake" },
+    { id: "recommend", label: "Recommendations" },
     { id: "settings", label: "⚙ LLM Settings" },
   ];
 
@@ -76,6 +81,16 @@ export default function IntakePage({ designId, onNavigate, onDesignCreated }: In
                   </div>
                 )}
               </div>
+            )}
+
+            {activeTab === "recommend" && (
+              designId ? (
+                <RecommendationPage designId={designId} onNavigate={onNavigate} />
+              ) : (
+                <div style={{ padding: 16, fontSize: 13, color: "var(--ink-3)" }}>
+                  Recommendations appear here once the design starts — save a business problem first.
+                </div>
+              )
             )}
 
             {activeTab === "settings" && <LLMSettings />}

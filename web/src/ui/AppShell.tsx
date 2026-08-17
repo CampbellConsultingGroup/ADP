@@ -14,6 +14,10 @@ interface NavDef {
   label: string;
   icon: string;
   hue?: "biz" | "ent" | "sol" | "tec";
+  // Overrides the default onNavigate(view) call -- used by the Design
+  // section's "Intake" entry to reset to a blank/new-design state instead of
+  // the generic per-view navigation (see AppShell's onStartNewDesign prop).
+  onClick?: () => void;
 }
 
 const PRIMARY: NavDef[] = [
@@ -45,19 +49,6 @@ const OVERSIGHT: NavDef[] = [
   { view: "governance", label: "Governance", icon: "shield" },
   { view: "knowledge", label: "Knowledge", icon: "book", hue: "tec" },
 ];
-// Always rendered (not gated on a design being selected) -- it's the entry
-// point into any design in the first place, as well as the home for
-// per-design views once inside one. See the render logic below for how the
-// section label adapts to whether a design is currently selected.
-const DESIGN_SCOPED: NavDef[] = [
-  { view: "intake", label: "Intake", icon: "inbox" },
-  { view: "recommend", label: "Recommendations", icon: "spark" },
-  { view: "designs", label: "Designs", icon: "sol" },
-  // ADP-914.13: the legacy "Canvas" item (C4Canvas/Workspace, ADP-SPEC-054's research.md
-  // Decision 8 called it "canvas") is retired -- this is now the sole design-editing entry
-  // point, so it drops the "(Preview)" qualifier that distinguished it from the alternative.
-  { view: "canvas-v2", label: "C4 Design", icon: "sol" },
-];
 // ADP-SPEC-042: gated at the route/nav level on the distinct platform_admin
 // role, not folded into ARCHITECTURE — this surface has its own permission
 // (MANAGE_AGENT_PROMPTS), not implied by any architect role.
@@ -76,7 +67,6 @@ const TITLES: Record<AppView, string> = {
   governance: "Governance",
   knowledge: "Knowledge",
   intake: "Requirements Intake",
-  recommend: "Recommendations",
   "canvas-v2": "C4 Design",
   diagrams: "Diagrams",
   strategy: "Strategy",
@@ -102,7 +92,7 @@ function NavItem({
   const active = current === def.view;
   const cls = `shell-navitem${active ? " active" : ""}${active && def.hue ? ` hue-${def.hue}` : ""}`;
   return (
-    <button className={cls} onClick={() => onNavigate(def.view)}>
+    <button className={cls} onClick={def.onClick ?? (() => onNavigate(def.view))}>
       <Icon name={def.icon} size={18} />
       {def.label}
       {def.hue && <span className="dot" style={{ background: HUE_VARS[def.hue] }} />}
@@ -114,14 +104,35 @@ interface AppShellProps {
   currentView: AppView;
   onNavigate: (view: AppView) => void;
   designId?: string | null;
+  // "Intake" nav click == "New Design": resets to a blank Intake form even if
+  // a design is currently selected. Optional -- falls back to plain
+  // onNavigate("intake") if omitted (e.g. in tests that don't wire it up).
+  onStartNewDesign?: () => void;
   children: React.ReactNode;
 }
 
-export function AppShell({ currentView, onNavigate, designId, children }: AppShellProps): React.ReactElement {
+export function AppShell({ currentView, onNavigate, designId, onStartNewDesign, children }: AppShellProps): React.ReactElement {
   const { user, logout } = useAuth();
   const { cycle } = useTheme();
   const inDesign = !!designId;
   const initials = user ? user.username.slice(0, 2).toUpperCase() : "AD";
+
+  // Defined inside the component (unlike PRIMARY/ARCHITECTURE/OVERSIGHT above)
+  // because "Intake" needs to close over the onStartNewDesign prop. Always
+  // rendered (not gated on a design being selected) -- it's the entry point
+  // into any design in the first place, as well as the home for per-design
+  // views once inside one. Recommendations is no longer a top-level entry --
+  // it's a tab inside IntakePage itself (the second step of Intake's own
+  // flow). See the render logic below for how the section label adapts to
+  // whether a design is currently selected.
+  const DESIGN_SCOPED: NavDef[] = [
+    { view: "designs", label: "Designs", icon: "sol" },
+    { view: "intake", label: "Intake", icon: "inbox", onClick: onStartNewDesign },
+    // ADP-914.13: the legacy "Canvas" item (C4Canvas/Workspace, ADP-SPEC-054's research.md
+    // Decision 8 called it "canvas") is retired -- this is now the sole design-editing entry
+    // point, so it drops the "(Preview)" qualifier that distinguished it from the alternative.
+    { view: "canvas-v2", label: "C4 Design", icon: "sol" },
+  ];
 
   return (
     <div className="shell">
