@@ -29,8 +29,11 @@ vi.mock("../api/intake", async () => {
   };
 });
 
+let existingDesignData: { business_problem?: string | null; desired_outcome?: string | null } | undefined;
+
 vi.mock("../api/designs", () => ({
   useCreateDesign: () => ({ mutateAsync: createDesignMutateAsync, isError: false }),
+  useDesign: () => ({ data: existingDesignData }),
 }));
 
 vi.mock("../api/business", () => ({
@@ -60,6 +63,33 @@ beforeEach(() => {
   createDesignMutateAsync.mockReset();
   addRequirementMutateAsync.mockReset().mockResolvedValue({ requirement_id: "REQ-001" });
   linkCapabilityMutateAsync.mockReset().mockResolvedValue({ items: [] });
+  existingDesignData = undefined;
+});
+
+describe("IntakeTextForm prefill from an existing design", () => {
+  it("pre-fills Business Problem and Desired Outcome from the design's saved data", () => {
+    existingDesignData = { business_problem: "Checkout is slow", desired_outcome: "Checkout is fast" };
+    render(<IntakeTextForm designId="DSN-EXISTING" onSubmitted={vi.fn()} />);
+
+    expect((screen.getByLabelText(/Business Problem/i) as HTMLTextAreaElement).value).toBe("Checkout is slow");
+    expect((screen.getByLabelText(/Desired Outcome/i) as HTMLTextAreaElement).value).toBe("Checkout is fast");
+  });
+
+  it("leaves the fields blank when the design has no saved business problem yet", () => {
+    existingDesignData = { business_problem: null, desired_outcome: null };
+    render(<IntakeTextForm designId="DSN-EXISTING" onSubmitted={vi.fn()} />);
+
+    expect((screen.getByLabelText(/Business Problem/i) as HTMLTextAreaElement).value).toBe("");
+    expect((screen.getByLabelText(/Desired Outcome/i) as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("does not clobber an in-progress edit once prefilled", () => {
+    existingDesignData = { business_problem: "Checkout is slow", desired_outcome: "Checkout is fast" };
+    render(<IntakeTextForm designId="DSN-EXISTING" onSubmitted={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText(/Business Problem/i), { target: { value: "Edited by user" } });
+    expect((screen.getByLabelText(/Business Problem/i) as HTMLTextAreaElement).value).toBe("Edited by user");
+  });
 });
 
 describe("IntakeTextForm deferred design creation (Intake is always reachable)", () => {
