@@ -89,6 +89,7 @@ from adp.application.models import (
 )
 from adp.authz.enforcement import require_action_dep
 from adp.authz.roles import ActionType
+from adp.compliance.models import ControlMappingListResponse
 from adp.strategy.models import StrategicObjectiveListResponse
 
 logger = logging.getLogger(__name__)
@@ -125,6 +126,16 @@ async def _get_strategy_session():
     from adp.strategy import store as sstore
 
     factory = sstore._get_session_factory()
+    async with factory() as session:
+        yield session
+
+
+async def _get_compliance_session():
+    """A compliance-scoped session (COMPLY-02 research.md D7), used only by the
+    reverse-lookup GET /applications/{id}/compliance-mappings endpoint below."""
+    from adp.compliance import store as cstore
+
+    factory = cstore._get_session_factory()
     async with factory() as session:
         yield session
 
@@ -209,6 +220,28 @@ async def get_application_objectives(
     from adp.strategy import store as sstore
 
     return await sstore.list_objectives_for_application(app_id, strategy_session)
+
+
+@applications_router.get(
+    "/{app_id}/compliance-mappings",
+    response_model=ControlMappingListResponse,
+    dependencies=[Depends(_require_governance_read)],
+)
+async def get_application_compliance_mappings(
+    app_id: str,
+    session: AsyncSession = Depends(_get_session),
+    compliance_session: AsyncSession = Depends(_get_compliance_session),
+):
+    """Reverse lookup (FR-012): every Control mapped to this Application. Gated by
+    READ_APPLICATION_GOVERNANCE (Clarification Session 2026-08-18; research.md D2) -- the
+    same permission that already protects this Application's other governance data."""
+    if await astore.get_application(app_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
+
+    from adp.compliance import store as cstore
+
+    items = await cstore.list_mappings_for_application(app_id, compliance_session)
+    return ControlMappingListResponse(items=items, total=len(items))
 
 
 @applications_router.patch("/{app_id}", response_model=Application)

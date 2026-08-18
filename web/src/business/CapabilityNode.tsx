@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MATURITY_LEVEL_LABEL, STRATEGIC_RELEVANCE_LABEL, useDeleteCapability, useUpdateCapability } from "../api/business";
+import { useCapabilityComplianceMappings } from "../api/compliance";
 import type { MaturityLevel, StrategicRelevance } from "../api/business";
 import type { CapabilityTreeNode } from "./CapabilityTree";
 import CapabilityForm from "./CapabilityForm";
@@ -39,6 +40,7 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
   const [addingChild, setAddingChild] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showLinks, setShowLinks] = useState(false);
+  const [showCompliance, setShowCompliance] = useState(false);
   const [showAgentReview, setShowAgentReview] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
 
@@ -182,6 +184,13 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
               Links
             </button>
             <button
+              onClick={() => setShowCompliance(!showCompliance)}
+              title="Mapped compliance controls"
+              style={{ ...actionBtn, color: showCompliance ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
+            >
+              Compliance
+            </button>
+            <button
               onClick={() => setShowAgentReview(!showAgentReview)}
               title="Ask the business architecture expert to review this capability"
               style={{ ...actionBtn, color: showAgentReview ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
@@ -228,6 +237,24 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
         </div>
       )}
 
+      {showCompliance && (
+        <div
+          style={{
+            marginLeft: 20,
+            marginBottom: 6,
+            padding: "8px 12px",
+            background: "var(--accent-wash)",
+            border: "1px solid var(--accent)",
+            borderRadius: 4,
+          }}
+        >
+          <p style={{ fontSize: 11, fontWeight: 600, color: "var(--accent-2)", margin: "0 0 0.25rem" }}>
+            Mapped Compliance Controls
+          </p>
+          <CapabilityComplianceMappings capabilityId={capability.id} />
+        </div>
+      )}
+
       {showAgentReview && (
         <div
           style={{
@@ -262,3 +289,27 @@ const actionBtn: React.CSSProperties = {
   padding: "1px 5px",
   borderRadius: 3,
 };
+
+/** Read-only reverse-lookup list (COMPLY-02 US3) -- mapping creation/editing happens on the
+ *  Control's own side (compliance/ControlMappingsEditor.tsx), not here. */
+function CapabilityComplianceMappings({ capabilityId }: { capabilityId: string }): React.ReactElement {
+  const { data, isLoading } = useCapabilityComplianceMappings(capabilityId);
+
+  if (isLoading) {
+    return <p style={{ fontSize: 11, color: "var(--ink-3)", margin: 0 }}>Loading…</p>;
+  }
+  const items = data?.items ?? [];
+  if (items.length === 0) {
+    return <p style={{ fontSize: 11, color: "var(--ink-3)", margin: 0 }}>No controls mapped yet.</p>;
+  }
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      {items.map((m) => (
+        <div key={m.control_id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11 }}>
+          <span style={{ color: "var(--ink)" }}>{m.control_id}</span>
+          <span style={{ color: "var(--ink-3)" }}>{m.compliance_status.replace("_", " ")}</span>
+        </div>
+      ))}
+    </div>
+  );
+}

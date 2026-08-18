@@ -347,3 +347,84 @@ def test_admin_prompts_action_grant_matrix() -> None:
     assert not is_permitted(PersonaRole.SOLUTION_ARCHITECT, ActionType.MANAGE_AGENT_PROMPTS)
     assert not is_permitted(PersonaRole.TECHNICAL_ARCHITECT, ActionType.MANAGE_AGENT_PROMPTS)
     assert not is_permitted(PersonaRole.REVIEWER, ActionType.MANAGE_AGENT_PROMPTS)
+
+
+# ── COMPLY-01: Compliance Framework & Control Registry ─────────────────────────
+
+def test_reviewer_denied_compliance_write(app: FastAPI) -> None:
+    """A REVIEWER cannot create a framework (WRITE_COMPLIANCE)."""
+    resp = _client_as(app, PersonaRole.REVIEWER).post(
+        "/api/v1/compliance/frameworks", json={}
+    )
+    assert resp.status_code == 403
+
+
+def test_compliance_write_route_maps_to_action() -> None:
+    from adp.authz.roles import ActionType
+    assert (
+        required_action_for("POST", "/api/v1/compliance/frameworks")
+        == ActionType.WRITE_COMPLIANCE
+    )
+    assert (
+        required_action_for("PATCH", "/api/v1/compliance/frameworks/{framework_id}")
+        == ActionType.WRITE_COMPLIANCE
+    )
+    assert (
+        required_action_for("DELETE", "/api/v1/compliance/frameworks/{framework_id}")
+        == ActionType.WRITE_COMPLIANCE
+    )
+    assert (
+        required_action_for(
+            "POST", "/api/v1/compliance/frameworks/{framework_id}/controls"
+        )
+        == ActionType.WRITE_COMPLIANCE
+    )
+    assert (
+        required_action_for("PATCH", "/api/v1/compliance/controls/{control_id}")
+        == ActionType.WRITE_COMPLIANCE
+    )
+    assert (
+        required_action_for("DELETE", "/api/v1/compliance/controls/{control_id}")
+        == ActionType.WRITE_COMPLIANCE
+    )
+
+
+def test_compliance_read_routes_are_ungated() -> None:
+    assert required_action_for("GET", "/api/v1/compliance/frameworks") is None
+    assert required_action_for("GET", "/api/v1/compliance/frameworks/{framework_id}") is None
+
+
+def test_compliance_action_grant_matrix() -> None:
+    from adp.authz.permissions import is_permitted
+    from adp.authz.roles import ActionType
+    assert is_permitted(PersonaRole.ENTERPRISE_ARCHITECT, ActionType.WRITE_COMPLIANCE)
+    assert is_permitted(PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_COMPLIANCE)
+    assert is_permitted(PersonaRole.SOLUTION_ARCHITECT, ActionType.WRITE_COMPLIANCE)
+    assert is_permitted(PersonaRole.TECHNICAL_ARCHITECT, ActionType.WRITE_COMPLIANCE)
+    assert not is_permitted(PersonaRole.REVIEWER, ActionType.WRITE_COMPLIANCE)
+
+
+# ── COMPLY-02: Control Mappings (Traceability Links) ───────────────────────────
+# test_control_forward_lookup_filters_application_rows_without_governance_read (the third
+# check named in tasks.md T033) needs real mapping data to assert *which* rows survive
+# filtering, not just a 403/200 -- that data-level assertion lives in the Docker-gated
+# tests/integration/test_compliance_mappings_api.py instead, consistent with this file's
+# own no-DB-required design (a 403 short-circuits before any session/store dependency
+# runs, which is what keeps every test in this file DB-free).
+
+def test_reviewer_denied_compliance_mapping_write(app: FastAPI) -> None:
+    """A REVIEWER cannot upsert a mapping (WRITE_COMPLIANCE) -- covered by the existing
+    /api/v1/compliance/ prefix rule, not a new mapping-specific rule."""
+    resp = _client_as(app, PersonaRole.REVIEWER).put(
+        "/api/v1/compliance/controls/c1/mappings/capabilities/cap1", json={}
+    )
+    assert resp.status_code == 403
+
+
+def test_application_mapping_read_requires_governance_permission(app: FastAPI) -> None:
+    """A role lacking READ_APPLICATION_GOVERNANCE is denied the Application-targeted
+    reverse-lookup route, mirroring the existing governance-panel gate."""
+    resp = _client_as(app, PersonaRole.REVIEWER).get(
+        "/api/v1/applications/app1/compliance-mappings"
+    )
+    assert resp.status_code == 403

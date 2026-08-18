@@ -1,6 +1,6 @@
 # ADP Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-08-14 (ADP-c44 objective detail legibility fixed)
+Auto-generated from all feature plans. Last updated: 2026-08-18 (923-derived-compliance-status COMPLY-03 implemented)
 
 ## Active Technologies
 - Python 3.11+ + SQLAlchemy 2.x (async ORM), asyncpg (PostgreSQL async driver), Alembic (migrations), testcontainers-python (PostgreSQL container for integration tests), pydantic-settings (database URL config) (002-design-store)
@@ -91,6 +91,11 @@ Auto-generated from all feature plans. Last updated: 2026-08-14 (ADP-c44 objecti
 - N/A — no new persisted data; second dropdown's dimension is component-local `useState` in `PortfolioPage.tsx`, same lifecycle as the first. (ADP-3wa)
 - TypeScript 5.x + React 18 (frontend only — no backend touched at all). + None new. Reuses `groupApplications()`/`bucketsFromResult()` (ADP-8xo/ADP-3wa) as the value source for "Filter by" -- a filter value's app list is just one bucket's `.apps`. (ADP-9ye)
 - N/A — no new persisted data; filter field/value are component-local `useState` in `PortfolioPage.tsx`. (ADP-9ye)
+- Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) — both existing stacks + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic v2, React 18, TanStack Query v5 — all existing stack; zero new packages (921-compliance-framework-registry)
+- PostgreSQL 16 — two new tables (`regulatory_frameworks`, `controls`) via migration `032` (down_revision `031`, confirmed against the real on-disk chain — research.md D7); self-referencing FK with `ON DELETE CASCADE` (D2); composite `UNIQUE(framework_id, code)` (D6) (921-compliance-framework-registry)
+- PostgreSQL 16 — five new tables (`control_capability_mapping`, `control_application_mapping`, `control_design_mapping`, `control_pattern_mapping`, `control_organization_mapping`) via migration `033` (down_revision `032` — research.md D8); `ON DELETE CASCADE` on every FK leg (both `control_id` and each target leg); composite PKs on the four entity-targeted tables, single-column PK on the estate-wide table (research.md D1); named `CHECK` constraints on `compliance_status` per table (922-control-mappings)
+- Python 3.12 (backend only — no frontend file touched) + None new. Adds `compute_compliance_status()` (pure, no I/O) and `get_entity_compliance_status()` (thin async dispatch) to the already-existing `adp.compliance.store` (COMPLY-01/COMPLY-02), reusing its existing `list_mappings_for_{capability,application,design,pattern}()` functions and the existing `ComplianceStatus`/`MappingTargetType` enums from `adp.compliance.models` — zero new packages. (923-derived-compliance-status)
+- PostgreSQL 16 — no migration. Reads the five existing `control_*_mapping` tables (migration `033`, COMPLY-02) exclusively through already-existing store functions; this feature owns no SQL of its own. (923-derived-compliance-status)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -135,7 +140,166 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
-- ADP-9ye: Implemented (feature, no `specs/` directory — planned via plan mode, not speckit) — direct
+- 923-derived-compliance-status: Implemented (COMPLY-03, the derived-status spec of the Compliance
+  Domain bundle, building directly on 921's `RegulatoryFramework`/`Control` registry and 922's
+  `ControlMapping` traceability links) — full `/speckit.specify` → `/speckit.plan` → `/speckit.tasks`
+  → `/speckit.implement` cycle for a pure `compute_compliance_status()` aggregation function
+  (minimum-aggregation, mirroring the Health rubric's `MIN()` and
+  `adp.strategy.store.compute_status()`'s own precedent for a derived-status pure function — one
+  Non-Compliant control anywhere dominates the result rather than being averaged away) plus a thin
+  `get_entity_compliance_status()` async dispatch wrapper that gathers a real Capability/
+  Application/Design/Pattern's current `ControlMapping` statuses via COMPLY-02's already-existing
+  `list_mappings_for_*` functions and forwards them to it. One real gap in the source bundle's own
+  proposed aggregation rule was found and resolved with the user during `/speckit.specify`, not
+  guessed at: what an entity whose every mapped control is Not Applicable (none Compliant) should
+  derive to — the bundle's own Open Questions section named this exact hole without resolving it.
+  Resolved to a distinct `NOT_APPLICABLE` outcome, not folded into `NOT_ASSESSED`, so "this
+  framework doesn't apply here" reads differently from "nobody has looked yet." No new table, no
+  new endpoint — deliberately scoped per the bundle's own stated implementation order
+  ("`compute_compliance_status()` should be built and tested as a standalone pure function before
+  it's wired into any store or router"); a caller is explicit future work, expected in COMPLY-04.
+  `get_entity_compliance_status()`'s `entity_type` dispatch is restricted to the four
+  FK-enforced, entity-targeted mapping types — `ORGANIZATION` (the estate-wide scope COMPLY-02 also
+  supports) has no per-entity lookup at all and raises `ValueError` rather than silently returning a
+  status, since it has no natural per-entity status to derive (that's COMPLY-04's framework-wide
+  rollup concern instead). Both new functions live in `adp.compliance.store` (not `models.py`),
+  matching the direct precedent of `compute_status()` (`adp.strategy.store`) and
+  `compute_business_value_score()` (`adp.application.store`) — both store-layer despite being
+  I/O-free. **A deliberate deviation from the task list's literal micro-sequencing, recorded rather
+  than silently patched over**: tasks.md called for landing the aggregation's branches incrementally
+  with `NotImplementedError` placeholders between each user-story phase (a "walking skeleton"
+  pattern); all tests were still written first per spec.md's user stories and confirmed to fail
+  (`ImportError`, since neither function existed yet) before implementation, but the five-branch
+  decision table was then implemented in one pass rather than three separate edits, since an
+  intentionally-wrong intermediate state added no genuine incremental-risk-reduction value for a
+  function this small. New `tests/unit/compliance/test_compliance_status.py` (16 tests: the full
+  status-combination matrix, a determinism/order-independence check, and a parametrized end-to-end
+  dispatch test across all four entity types using an in-memory SQLite fixture mirroring
+  `tests/contract/test_compliance_mappings_api.py`'s own `cstore._metadata.create_all()` pattern —
+  no Docker/testcontainers needed for this feature at all, unlike 921/922's integration suites).
+  1542 backend tests (was 1526, +16), `ruff`/`mypy` both clean. Verified live against a real local
+  Postgres (available in this environment, unlike 921/922's own sessions) rather than relying on
+  the SQLite fixture alone: created a temporary `RegulatoryFramework`/two `Control`s, mapped both to
+  a real seeded `Application` (Compliant + Non-Compliant), confirmed `NOT_ASSESSED` before mapping
+  and `NON_COMPLIANT` after, confirmed `ORGANIZATION` correctly raises against a real DB session,
+  then deleted the mappings/controls/framework and confirmed zero leftover rows. See
+  `specs/923-derived-compliance-status/`.
+- **Security fix (post-923, same branch)**: ran `/security-review` against the full uncommitted
+  compliance-domain diff (921/922/923 combined). A 2-phase agent process (identify → independently
+  re-verify with false-positive filtering, confidence ≥ 8/10 required to survive) confirmed one
+  real finding: `RegulatoryFramework.source_url` (COMPLY-01) had no scheme validation anywhere —
+  `web/src/compliance/FrameworkDetail.tsx` rendered it directly as `<a href={source_url}>`, so a
+  `WRITE_COMPLIANCE`-holding user (Solution/Technical Architect and above) could plant a
+  `javascript:...` payload that executes in any other authenticated user's browser on click
+  (framework reads are open to everyone; React's default escaping does not cover dangerous URI
+  *schemes* in attribute values, only markup injection — confirmed from first principles, not
+  React's general reputation). Fixed both ends: `adp.compliance.models` now rejects any
+  `source_url` whose scheme isn't `http`/`https` via a new shared `_validate_source_url()` field
+  validator on both `RegulatoryFrameworkCreate`/`Update` (8 new backend tests); `FrameworkDetail.tsx`
+  additionally never renders the link unless `isHttpUrl()` confirms the scheme client-side too — a
+  defense-in-depth backstop for any row that predates the validator or reached the database by a
+  path other than these two models (2 new frontend tests). 1551 backend tests (was 1542, +9), 505
+  frontend tests (was 503, +2), `ruff`/`mypy`/`tsc`/`adp-generate --check` all clean, plus a live
+  check against real Postgres confirming both `Create` and `Update` reject a `javascript:`/`data:`
+  payload and accept `https://`.
+- 922-control-mappings: Implemented (COMPLY-02, the traceability-link spec of the Compliance Domain
+  bundle, building directly on 921's `RegulatoryFramework`/`Control` registry) — full `/speckit.specify`
+  → `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle for `ControlMapping`: linking a
+  Control to the Capability, Application, Design, Pattern (a `knowledge_items` row of kind `pattern`), or
+  a standing estate-wide obligation it governs, each carrying its own `compliance_status`/`evidence_ref`/
+  `assessed_at`/`assessed_by`. Three structural questions the source bundle explicitly left open
+  (`docs/speckit-compliance-bundle_1.md`) were put to the user directly during `/speckit.specify` rather
+  than guessed at, all resolved to the recommended option: five parallel, fully FK-enforced mapping
+  tables (four entity-targeted + one estate-wide with a single-column `control_id` PK) instead of one
+  polymorphic table; estate-wide obligations in scope; and a mapping's read visibility inherits its
+  target's own existing gate — Application-targeted mappings require `READ_APPLICATION_GOVERNANCE` (the
+  same gate already protecting that Application's other governance data), everything else stays open.
+  New migration `033` (`down_revision="032"`, confirmed against the real chain head). **A real
+  mid-implementation correction, caught by actually running the contract test rather than trusting the
+  plan**: the plan called for Postgres's `ON CONFLICT DO UPDATE` for the upsert (mirroring `tags.py`'s
+  idiom), but that turned out not to be a real precedent for this use case — `tags.py`'s own upsert is
+  only ever exercised through a fully-mocked store, and every COMPLY-01/02 contract test runs the full
+  router against a SQLite fixture, which cannot compile a `postgresql.insert()` construct at all. Fixed
+  by switching to select-then-branch (mirroring `DesignStore.save()`'s own established idiom for the
+  identical class of problem), which is dialect-portable and, once actually checked, the more consistent
+  choice anyway — documented as a revised decision in research.md D3, not silently patched over. Writes
+  and the Control-forward lookup (`GET .../controls/{id}/mappings`, which filters out Application rows
+  inline for a caller lacking the governance permission rather than 403ing the whole response) live in
+  `adp.compliance` (extended, not replaced); the four reverse-lookup endpoints live on each target's own
+  existing router (business/application/designs/knowledge), each importing `adp.compliance.store` for a
+  same-physical-DB query via a new `_get_compliance_session()` helper — mirroring ADP-d8u.2's own
+  cross-package reverse-lookup precedent exactly, and requiring zero cross-package Python imports inside
+  `adp.compliance` itself (target existence/kind validation goes through narrow same-DB mirror tables,
+  extending `adp.strategy.store`'s own `design_exists`/`application_exists` idiom). Caught two other
+  pre-existing "compliance" naming collisions before they could cause confusion, confirmed by reading
+  each directly rather than assumed: `governance/ComplianceTab.tsx` is COMPLY-04's future home for
+  LLM-as-Judge validation-*exception* rollups, an unrelated concept; `ApplicationDetail.tsx`'s existing
+  "Risk & Compliance" tab is APM's own `risk_compliance_contribution` score (ADP-SPEC-038 US3) — the new
+  Application tab is deliberately named "Regulatory Compliance" to disambiguate, and `ComplianceTab.tsx`
+  was left untouched. Frontend: a new shared `ControlMappingsEditor.tsx` (create/edit/delete a mapping,
+  reused across all five target shapes, mirroring `useLinkFeedback`'s own extract-once precedent) wired
+  into `ControlTree.tsx`'s per-control row; reverse-lookup display added inline to `CapabilityNode.tsx`
+  (no separate Capability detail screen exists — 043-capability-heat-map's own precedent) and as a new
+  `ApplicationComplianceMappings.tsx` panel/tab on `ApplicationDetail.tsx`. Design and Pattern
+  reverse-lookup ship API-only this pass — deliberately, not an oversight: neither domain has an
+  established single-entity detail screen to embed a UI into, confirmed by direct search before deciding
+  rather than guessed. 1526 backend tests (was 1500, +26: 14 unit, 10 contract, 2 authz), 503 frontend
+  tests (was 489, +14), `ruff`/`mypy`/`tsc`/`adp-generate --check` all clean. Docker was unavailable in
+  this environment (same constraint 921 hit), so the testcontainers-gated integration suite (18 tests
+  covering every acceptance scenario plus cascade-delete behavior) is written and will run in CI but
+  wasn't executed locally; verified instead via all 24 SQLite-backed contract tests (including two
+  full-stack fixtures wiring business/application/compliance stores together for the reverse-lookup
+  routes) plus a full live walkthrough against a real local Postgres and running backend — every mapping
+  shape, re-mapping-updates-in-place, both cascade directions, the pattern-kind 422, and manual
+  delete-then-404 all confirmed live, test data cleaned up afterward. The REVIEWER-role 403 check was
+  confirmed via `tests/authz/test_enforcement.py` instead of curl (no dev-mode `X-Role` header exists),
+  matching 921's own established pattern. See `specs/922-control-mappings/`.
+- 921-compliance-framework-registry: Implemented (COMPLY-01 only, of a five-spec Compliance Domain
+  bundle from `docs/speckit-compliance-bundle_1.md`) — full `/speckit.specify` → `/speckit.clarify` →
+  `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle for a `RegulatoryFramework` registry
+  (NIST, GDPR, SOC 2, ...) with a self-referencing `Control` hierarchy beneath each framework.
+  COMPLY-02 (cross-domain control mappings), COMPLY-03 (derived compliance status), COMPLY-04 (rollup
+  reporting), and COMPLY-05 (Strategy linkage) are explicitly out of scope and unbuilt. One
+  `/speckit.clarify` question resolved before planning: a new dedicated `ActionType.WRITE_COMPLIANCE`
+  (mirroring `WRITE_APPLICATION`'s per-domain-permission precedent) rather than reusing
+  `WRITE_BUSINESS_ARCH` the way Strategy did — Compliance is framed as its own cross-cutting domain, not
+  a Business Architecture sub-concern. New sibling package `adp.compliance` (not folded into
+  `adp.business`, whose core files were measured at 2,920 lines — already past the ~2,800-line threshold
+  that historically triggered `adp.strategy`'s own split) via migration 032 (`down_revision="031"`,
+  confirmed against the real on-disk chain rather than this file's own narrative history, which lagged
+  it by 13 migrations). Control nesting is deliberately unbounded (no `level` column, unlike
+  `business_capabilities`' fixed 3-level scheme) — the source doc's GDPR walkthrough showed depth
+  genuinely varies clause-by-clause within one framework (Art. 5 wants six children, Art. 33 stands
+  alone). A deliberate, explicitly-documented divergence from Business Capability's own precedent:
+  both `controls.framework_id` and the self-referencing `controls.parent_id` use DB-level
+  `ON DELETE CASCADE` (spec FR-005/FR-013 require cascade-with-disclosure, not
+  `delete_capability`'s block-via-`ChildCapabilitiesExist`) — verified live against the real local
+  Postgres, including a 3-generation cascade (grandparent→parent→child, confirming Postgres's
+  self-referencing FK cascade recurses correctly, not just one level). Cycle/cross-framework-parent
+  rejection is application-layer (store walks from the proposed parent toward the root before
+  committing), mirroring `create_capability`'s own precedent for the same class of
+  un-DB-constrainable rule; code uniqueness is DB-level (`UNIQUE(framework_id, code)`), not just an
+  app-layer check. Frontend: a new top-level "Compliance" nav entry beside Governance;
+  `CompliancePage` is self-contained (mirrors `StrategyPage`'s pattern, not `BusinessPage`'s
+  prop-threaded tabs); delete actions disclose scope via a client-side descendant count computed from
+  the already-fetched tree (no new "preview" endpoint). Caught and fixed three regressions in
+  `tests/authz/test_permissions.py` from the `PERMISSIONS_VERSION` 1.8.0→1.9.0 bump (a pinned-version
+  assertion and two completeness checks needing new-action entries) during a full-suite run before
+  declaring done — the kind of drift a partial test run would have missed. 1500 backend tests (was
+  1491, +9), 489 frontend tests (was 483, +6), `ruff`/`mypy`/`tsc`/`adp-generate --check` all clean.
+  Verified end-to-end against a live local Postgres via direct API calls for every scenario (framework
+  CRUD, the GDPR Art. 5/Art. 33 granularity example, duplicate-code 409, cycle/cross-framework 422,
+  multi-level cascade delete, live REVIEWER-role 403) rather than relying on the Docker-gated
+  testcontainers integration suite alone, since Docker was unavailable in this environment (that suite
+  is written and will run in CI). One real gap surfaced and fixed during polish: quickstart.md's
+  authz scenario assumed a dev-mode `X-Role` override header that doesn't exist anywhere in the
+  codebase (confirmed by direct grep) — corrected to point at the actual mechanism
+  (`tests/authz/test_enforcement.py::test_reviewer_denied_compliance_write`, a role-overridden
+  `TestClient`) instead of a curl command that could never have worked. Live browser (Playwright)
+  walkthrough was attempted but blocked by an existing browser-profile lock outside this session's
+  control (`SingletonLock` pointing to a Windows-host process) — left un-run rather than force-clearing
+  a lock that might belong to a real session; `tsc`, the full Vitest suite, and direct API verification
+  cover the same UI logic paths. See `specs/921-compliance-framework-registry/`.
   follow-up right after ADP-3wa shipped: "time to add filter by option. it should be limited to value that
   limit the selection of applications." A real ambiguity resolved via `AskUserQuestion` before designing:
   the field dropdown's scope. Confirmed to be the same 5 Group By dimensions PLUS 3 more bounded-enum
@@ -159,7 +323,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   5 for the page's filter UI behavior), `tsc` clean, no backend file touched. Full live Playwright
   walkthrough of the empty-field case, a real narrowing case (TIME=Migrate → exactly 1 app), Clear filter
   restoring the full set, and filter+cross-tab composing correctly together.
-- ADP-3wa: Implemented (feature, no `specs/` directory — planned via plan mode, not speckit) — direct
   follow-up request right after ADP-8xo shipped: "time to add a second drop down for the portfolio screen.
   same values. allow the selection of 2 different cuts of the application portfolio at the same time. if
   the same value is choosen in both drop downs the view will look like it does today with a single
@@ -184,7 +347,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   behavior), `tsc` clean, no backend file touched. Full live Playwright walkthrough of all three states
   (default flat view, an active cross-tab with real app names in cells, and both dropdowns reset to the
   same non-default value correctly reverting to the flat view) against a running local stack.
-- ADP-8xo: Implemented (bug/feature capture, no `specs/` directory — planned via plan mode, not speckit) —
   "plan out how to accomplish this on the Portfolio screen" for the 8 recurring APM grouping dimensions the
   user described (business capability, domain/value-stream, TIME, technology layer, 7R, ownership,
   criticality, application type), following up on the ADP-v2n TIME-2x2 mockup investigation earlier in the
@@ -217,7 +379,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   `ruff`/`mypy`/`tsc`/`adp-generate --check` all clean, plus a full live Playwright walkthrough of all 5
   dimensions against real seeded data (including the dynamic-bucket-set and fixed-empty-bucket edge cases)
   and both shared-dependency regression checks (Overview's summary tile, Governance's lifecycle badges).
-- 920-capability-diagram-select: Implemented (ADP-3up.2, both user stories) — a direct user request
   interjected mid-turn while investigating the ADP-c44 bug reports above ("business capability diagram
   should be multi-select — capabilities should come over to the diagram tool with the relationships").
   Replaces `CapabilityNode.tsx`'s old single-purpose "⛶ Generate Diagram" per-row button (which called
@@ -243,7 +404,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   345 before this feature), `tsc`/`adp-generate --check` clean, backend suite (1378 tests) run unchanged
   as a no-op sanity check since this feature touches no backend file at all. See
   `specs/920-capability-diagram-select/`.
-- ADP-c44: Fixed (bug, not a speckit feature — no `specs/` directory) — a direct follow-up to ADP-5wf,
   reported live on the same screen: "once data is saved there is nowhere to see it again" and "no save
   button to save the linked items." Investigated live before touching any code (per this session's own
   established discipline): both mechanisms actually already worked correctly — the objective's own fields
@@ -275,7 +435,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   auto-cleared by the time the screenshot returned — a tooling-latency limitation, not a functional gap,
   and not worth stretching the timeout to chase given the unit coverage already exercises the exact code
   path deterministically).
-- ADP-5wf: Fixed (bug, not a speckit feature — no `specs/` directory) — a user-reported "no way to save"
   on the Strategy Objectives screen, root-caused live via direct reproduction rather than assumed. Both
   `ObjectiveForm.tsx` (create) and `ObjectiveDetail.tsx` (edit) shared an identical, flawed `hasMetric`
   check requiring only *one* of `metric_name`/`target_value`/`target_unit`/`direction` to be set before
@@ -296,7 +455,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   created and deleted via a direct API call for cleanup was deleted *while* the user had it open/cached,
   which looked like a second "data loss" bug but was actually just my own cleanup timing; clarified rather
   than left ambiguous.
-- 043-capability-heat-map: Implemented (ADP-3up.1, all three user stories) — a "Heat Map" tab on the
   Business Architecture screen: every business capability as one cell in the same flat L1/L2/L3 hierarchy
   as the existing capability tree (FR-002, resolved via `/speckit-clarify` — no domain grouping), shaded by
   a selectable metric (maturity level, default, or strategic relevance). **A stale-branch incident, not a
@@ -323,7 +481,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   Playwright walkthrough (default maturity coloring, the metric switch to strategic relevance, and a real
   drill-through click landing on and highlighting the correct row with its live-edited values, using
   real seeded-then-cleaned-up capability data). See `specs/043-capability-heat-map/`.
-- 919-insights-dashboard: Implemented (ADP-t3h, all three user stories) — the first genuinely
   non-architect-facing screen in ADP: a new "Insights" nav entry (sibling to Overview, not under the
   architect-facing Architecture section) holding an applications heat map, one cell per application,
   color-coded by a user-selectable dimension. **Not bead-driven from a source requirements doc like every
@@ -356,7 +513,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   business-criticality's all-"Unclassified" rendering since that field isn't seeded in the demo data at
   all) against a running local stack, test data cleaned up afterward via a direct DB delete (no API delete
   path exists for a cost record). See `specs/919-insights-dashboard/`.
-- 918-strategy-rollups: Implemented (ADP-d8u.7, all three user stories) — three read-only rollups composed entirely from existing data, no new tables anywhere. **A significant ground-truth correction confirmed before writing the spec**: the source doc's "Strategy stat tile + domain card on Overview" was already shipped in ADP-d8u.3 (PR #62, predating this bead) — confirmed via direct reads of `OverviewPage.tsx` and `strategy/router.py`'s existing `/summary` endpoint; this feature only enriches that endpoint's existing data, adding no new card. US1 — `GET /strategy/heatmap`, a theme × status matrix (resolved via a real clarification: full matrix with an optional single-theme filter, not a flat breakdown), new "Heat Map" tab on `StrategyPage.tsx`. US2 — `GET /business/orphans` (capabilities/value streams with zero strategic linkage), surfaced as both a badge and a toggle filter on the existing Capability Map and Value Streams screens (also a real clarification: both, not either alone) — implemented via a new pair of lightweight read-only mirror tables in `adp.business.store` (`_strategic_objective_capabilities`/`_strategic_objective_value_streams`), the exact symmetric counterpart to ADP-d8u.2's own `_designs`/`_applications` mirrors in `adp.strategy.store`, confirming that pattern generalizes cleanly in the reverse direction. US3 — enriches the *existing* `GET /strategy/summary` with a 5-way objective status breakdown and an initiative count (both of this bead's stated dependencies, ADP-d8u.5 and ADP-d8u.6, are now merged, so the initiative count ships unconditionally rather than the source doc's deferred fallback). Status isn't a column any SQL `GROUP BY` can compute (`compute_status()` derives it from progress-history trend, ADP-d8u.5) — both the heat map and the enriched summary reuse `list_objectives()`'s own established per-row `_status_for_objective()` loop rather than duplicating that logic in SQL, a design decision carried straight from research.md, not discovered mid-implementation. One implementation-time consequence handled carefully: `get_summary_stats()`'s existing tests mocked a single Postgres-only `session.execute()` call (real NOW()/EXTRACT() SQL, untestable against SQLite) — adding the second, Python-side status-tally query required extending those mocks (not just adding new ones) so both the atomic-aggregate path and the tally path stay independently verifiable; the tally itself (`_tally_objective_statuses`) is tested directly against a real SQLite fixture, mirroring `_reaches()`'s own precedent from ADP-d8u.6 of splitting out the portable, no-Postgres-syntax piece for direct testability. No new package on either side of this feature — `adp.strategy`'s three core files (1,889 lines pre-feature) and `adp.business`'s (2,847 lines, exactly the historical split threshold) both stayed under their extend-vs-split thresholds, since neither addition introduces a new domain concept. 1375 backend tests (was 1327 before ADP-d8u.2/.6/.7 combined, +20 for this feature specifically), 292 frontend tests (was 265 before this trio, +9 for this feature), `ruff`/`mypy`/`tsc`/`adp-generate --check` all clean — plus a full live Playwright walkthrough (the heat-map matrix and its theme filter, the orphan badge appearing/disappearing correctly around a real link/unlink, the toggle filter, and the enriched Overview card's new at-risk/on-track split and initiative count) against a running local stack, test data cleaned up afterward. See `specs/918-strategy-rollups/`.
 
 
 <!-- MANUAL ADDITIONS START -->
@@ -422,7 +578,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (15777 symbols, 25678 relationships, 220 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (16340 symbols, 26405 relationships, 222 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

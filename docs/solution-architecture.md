@@ -492,6 +492,55 @@ The application portfolio management epic (`adp.application`, ADP-SPEC-038) exte
 
 **Frontend**: each sensitive-category panel (`RiskPanel`, `CostPanel`, `GovernancePanel`) follows the same shape — a `useApplicationX(appId)` query with `retry: false` and a graceful "you don't have permission" render when the fetch error contains `403`, plus a Save button and toast. The non-sensitive `QualityPanel` and `TechFitPanel` need no 403-handling. All panels are tabs on the shared `ApplicationDetail` component.
 
+## Compliance Framework & Control Registry
+
+COMPLY-01 (`adp.compliance`, migration 032) is the reference-data foundation of ADP's Compliance
+domain: a `RegulatoryFramework` registry (NIST, GDPR, SOC 2, ...) and a self-referencing `Control`
+hierarchy beneath each framework. It is a new top-level package, a sibling to `adp.business` and
+`adp.application`, not folded into either — `adp.business`'s core files were already past the
+~2,800-line threshold that historically triggered `adp.strategy`'s own split from `adp.business`,
+and Compliance is explicitly a cross-cutting domain in its own right, not a Business Architecture
+sub-concern. Only this first spec of a five-spec bundle is implemented; COMPLY-02 (cross-domain
+control mappings), COMPLY-03 (derived compliance status), COMPLY-04 (rollup reporting), and
+COMPLY-05 (Strategy linkage) remain unbuilt.
+
+**RegulatoryFramework**: `name`, `jurisdiction`, `authority`, `version` (tracked independently of
+`name`, since a framework can be revised without changing what it's called), an optional
+`effective_date` (null = perpetually current), and an optional `source_url`. No lifecycle status
+field in this pass — no evidence yet that frameworks need status tracking distinct from
+`effective_date`.
+
+**Control**: a self-referencing hierarchy (`parent_id` FK) with **no fixed depth cap**, unlike
+`business_capabilities`' hard 3-level scheme — real frameworks nest at genuinely varying depth even
+within the same framework (GDPR Art. 5 wants six children, Art. 33 stands alone as one leaf), so
+depth is derived at read time rather than stored. `code` is unique within its own framework via a
+DB-level `UNIQUE(framework_id, code)` composite constraint, not globally.
+
+**Cascading delete — a deliberate divergence from Business Capability's precedent**: both
+`controls.framework_id` and the self-referencing `controls.parent_id` use `ON DELETE CASCADE`.
+Deleting a framework or a control removes every control beneath it, at every level, via Postgres's
+native FK cascade — no application-layer recursion needed. This is the opposite of
+`business_capabilities`' `delete_capability`, which *rejects* deletion when children exist
+(`ChildCapabilitiesExist`). The frontend discloses the deletion's scope (a descendant count computed
+client-side from the already-fetched control tree) in a confirmation dialog before calling delete —
+no dedicated "preview" endpoint exists for this.
+
+**Hierarchy validation** (cycle and cross-framework-parent rejection) is application-layer, not
+DB-level — Postgres cannot express "no cycles in a self-referencing FK" as a `CHECK` constraint. The
+store walks from a proposed new parent toward the root before committing an update, mirroring
+`create_capability`'s own precedent for the identical class of un-DB-constrainable rule.
+
+**Authorization**: a new `ActionType.WRITE_COMPLIANCE` (`PERMISSIONS_VERSION` 1.8.0 → 1.9.0), granted
+to the three architect roles — the same `WRITE_APPLICATION`/`WRITE_DIAGRAM` shape (a new dedicated
+action per top-level domain), not a reuse of `WRITE_BUSINESS_ARCH` the way Strategy chose. Reads are
+ungated, matching every other registry domain.
+
+**Frontend**: a new top-level "Compliance" nav entry (`web/src/compliance/`), placed beside
+Governance. `CompliancePage` is self-contained (mirrors `StrategyPage`'s pattern, not
+`BusinessPage`'s prop-threaded tabs) — it holds the selected-framework state itself and toggles
+between `FrameworkList` and `FrameworkDetail`. `ControlTree` recursively renders the framework's
+control hierarchy with inline add/edit/delete at every node.
+
 ## Agent Review
 
 ADP-SPEC-039 provides a reusable "AI expert review" pattern: any screen can add a button that asks an LLM to review one entity and its directly linked context, propose suggestions, and require an explicit human accept/reject before any suggestion touches the database. ADP-SPEC-040 extends this with a *portfolio-scope* review of the whole capability tree at once. The pattern is split into a domain-agnostic toolkit (`adp.agents`, `web/src/agent-review/`) and thin per-domain adapters — Business Capabilities (`adp.business.agent_review`, `web/src/business/agentReviewDetail.tsx`) is the first and, so far, only adapter.
@@ -586,7 +635,7 @@ Authentication is implemented via `AuthMiddleware` (Starlette middleware) that v
 
 `ADP_AUTH_ENABLED` (default: `true`) is the runtime toggle. Setting `ADP_AUTH_ENABLED=false` bypasses validation, which is required for local development without Keycloak and for the real-stack E2E test suite.
 
-Authorisation is **action-based**, not a linear role hierarchy: the `PERMISSION_GRANTS` table (`adp.authz.permissions`, version 1.4.0) maps each `PersonaRole` to the set of `ActionType`s it may perform — so a reviewer may `OVERRIDE_VERDICT` yet not `WRITE_DESIGN`. Enforcement is wired at the HTTP layer by a single application-level FastAPI dependency (`adp.authz.enforcement.enforce_route_permission`) installed on the app: every mutating route resolves to a required `ActionType` (via an explicit design/intake/recommend map plus prefix rules for the business, application, and knowledge routers) and a caller lacking that grant is refused with `403` before the endpoint runs. Safe methods (GET/HEAD/OPTIONS) are never gated — which matters for the three sensitive application-portfolio categories (ADP-SPEC-038 US3/US4/US7: risk, cost, governance), whose *reads* also need gating; each adds a dedicated `require_action_dep(ActionType.READ_APPLICATION_X)` dependency on its GET route rather than relying on the app-level dependency. A completeness test fails CI if any mutating route ships without a mapped action, keeping the policy exhaustive. When `ADP_AUTH_ENABLED=false`, the caller is the `ENTERPRISE_ARCHITECT` sentinel (all actions), so local development and the auth-disabled E2E suite are unaffected.
+Authorisation is **action-based**, not a linear role hierarchy: the `PERMISSION_GRANTS` table (`adp.authz.permissions`, version 1.9.0) maps each `PersonaRole` to the set of `ActionType`s it may perform — so a reviewer may `OVERRIDE_VERDICT` yet not `WRITE_DESIGN`. Enforcement is wired at the HTTP layer by a single application-level FastAPI dependency (`adp.authz.enforcement.enforce_route_permission`) installed on the app: every mutating route resolves to a required `ActionType` (via an explicit design/intake/recommend map plus prefix rules for the business, application, and knowledge routers) and a caller lacking that grant is refused with `403` before the endpoint runs. Safe methods (GET/HEAD/OPTIONS) are never gated — which matters for the three sensitive application-portfolio categories (ADP-SPEC-038 US3/US4/US7: risk, cost, governance), whose *reads* also need gating; each adds a dedicated `require_action_dep(ActionType.READ_APPLICATION_X)` dependency on its GET route rather than relying on the app-level dependency. A completeness test fails CI if any mutating route ships without a mapped action, keeping the policy exhaustive. When `ADP_AUTH_ENABLED=false`, the caller is the `ENTERPRISE_ARCHITECT` sentinel (all actions), so local development and the auth-disabled E2E suite are unaffected.
 
 The frontend reads `VITE_AUTH_ENABLED` to decide whether to attach Bearer tokens via the Keycloak JS adapter. When auth is enabled, all API mutations go through `apiMutation()`, which injects the `Authorization: Bearer <token>` header from the Keycloak token store.
 

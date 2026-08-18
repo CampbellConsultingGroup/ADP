@@ -50,6 +50,7 @@ from adp.business.models import (
     ValueStreamStageUpdate,
     ValueStreamUpdate,
 )
+from adp.compliance.models import ControlMappingListResponse
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,15 @@ async def _get_session():
 async def _get_application_session():
     from adp.application import store as astore
     factory = astore._get_session_factory()
+    async with factory() as session:
+        yield session
+
+
+async def _get_compliance_session():
+    """A compliance-scoped session (COMPLY-02 research.md D7), used only by the
+    reverse-lookup GET /capabilities/{id}/compliance-mappings endpoint below."""
+    from adp.compliance import store as cstore
+    factory = cstore._get_session_factory()
     async with factory() as session:
         yield session
 
@@ -925,6 +935,27 @@ async def unlink_design_from_capability(
         "business.capability.unlink_design cap_id=%s design_id=%s actor=%s",
         cap_id, design_id, actor,
     )
+
+
+# ── Capability Compliance Mappings (COMPLY-02) ─────────────────────────────────
+
+@router.get(
+    "/capabilities/{cap_id}/compliance-mappings", response_model=ControlMappingListResponse
+)
+async def get_capability_compliance_mappings(
+    cap_id: str,
+    session: AsyncSession = Depends(_get_session),
+    compliance_session: AsyncSession = Depends(_get_compliance_session),
+):
+    """Reverse lookup (FR-012): every Control mapped to this Capability. Ungated -- matches
+    every other Capability read (research.md D2 only gates Application-targeted reads)."""
+    if await bstore.get_capability(cap_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Capability {cap_id!r} not found")
+
+    from adp.compliance import store as cstore
+
+    items = await cstore.list_mappings_for_capability(cap_id, compliance_session)
+    return ControlMappingListResponse(items=items, total=len(items))
 
 
 # ── Value-Stream–Design Links (ADP-SPEC-034) ──────────────────────────────────

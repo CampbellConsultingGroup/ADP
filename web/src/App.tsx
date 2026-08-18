@@ -14,6 +14,7 @@ import TechCapPage from "./application/TechCapPage";
 import { DiagramsPage } from "./diagrams/DiagramsPage";
 import type { DiagramSeed } from "./diagrams/generators";
 import StrategyPage from "./strategy/StrategyPage";
+import CompliancePage from "./compliance/CompliancePage";
 import AdminPage from "./admin/AdminPage";
 import { AppShell } from "./ui";
 import type { AppView } from "./shell";
@@ -96,6 +97,8 @@ export default function App(): React.ReactElement {
         );
       case "strategy":
         return <StrategyPage />;
+      case "compliance":
+        return <CompliancePage />;
       case "admin":
         return <AdminPage />;
       case "knowledge":

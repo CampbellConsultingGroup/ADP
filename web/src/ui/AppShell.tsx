@@ -43,6 +43,9 @@ const ARCHITECTURE: NavDef[] = [
 const OVERSIGHT: NavDef[] = [
   { view: "portfolio", label: "APM", icon: "chart", hue: "ent" },
   { view: "governance", label: "Governance", icon: "shield" },
+  // COMPLY-01: placed beside Governance, per the source doc's own framing of
+  // Compliance as governance-adjacent (plan.md Project Structure).
+  { view: "compliance", label: "Compliance", icon: "shield", hue: "biz" },
   { view: "knowledge", label: "Knowledge", icon: "book", hue: "tec" },
 ];
 // Always rendered (not gated on a design being selected) -- it's the entry
@@ -80,6 +83,7 @@ const TITLES: Record<AppView, string> = {
   "canvas-v2": "C4 Design",
   diagrams: "Diagrams",
   strategy: "Strategy",
+  compliance: "Compliance",
   admin: "Agent Prompt Management",
 };
 

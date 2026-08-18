@@ -48,6 +48,7 @@ from adp.authz.enforcement import enforce_route_permission
 from adp.business import router as business_router_module
 from adp.business import store as bstore
 from adp.chat import router as chat_router_module
+from adp.compliance import router as compliance_router_module
 from adp.diagrams import router as diagrams_router
 from adp.export import application_arch, business_arch
 from adp.strategy import router as strategy_router
@@ -257,6 +258,7 @@ def create_app() -> FastAPI:
     app.include_router(admin_prompts_router.router)
     app.include_router(diagrams_router.router)
     app.include_router(strategy_router.router)
+    app.include_router(compliance_router_module.router)
 
     # Serve Vite-built frontend static files when running in Docker (ADP-SPEC-025)
     import os
