@@ -145,3 +145,61 @@ def test_patch_lifecycle_with_note_included_in_audit_entry(client):
     assert resp.status_code == 200
     saved: ArchitectureDescription = mock_store.save.call_args[0][0]
     assert any("Superseded by DSN-042" in e.summary for e in saved.audit_log)
+
+
+# ── "Complete" status: current -> complete -> {deprecated, current} ───────────
+
+def _client_for(lifecycle_status: LifecycleStatus):
+    from adp.api.app import create_app
+    from adp.api.routers import lifecycle as lifecycle_module
+
+    design = _make_design(lifecycle_status=lifecycle_status)
+    mock_store = AsyncMock()
+    mock_store.get = AsyncMock(return_value=design)
+    mock_store.save = AsyncMock()
+
+    app = create_app()
+    app.dependency_overrides[lifecycle_module._get_design_store] = lambda: mock_store
+    return TestClient(app, raise_server_exceptions=False), mock_store
+
+
+def test_patch_lifecycle_current_to_complete_returns_200():
+    c, _ = _client_for(LifecycleStatus.CURRENT)
+    resp = c.patch("/api/v1/designs/DSN-001/lifecycle", json={"status": "complete"})
+    assert resp.status_code == 200
+    assert resp.json()["lifecycle_status"] == "complete"
+
+
+def test_patch_lifecycle_complete_to_deprecated_returns_200():
+    c, _ = _client_for(LifecycleStatus.COMPLETE)
+    resp = c.patch("/api/v1/designs/DSN-001/lifecycle", json={"status": "deprecated"})
+    assert resp.status_code == 200
+    assert resp.json()["lifecycle_status"] == "deprecated"
+
+
+def test_patch_lifecycle_complete_to_current_returns_200():
+    c, _ = _client_for(LifecycleStatus.COMPLETE)
+    resp = c.patch("/api/v1/designs/DSN-001/lifecycle", json={"status": "current"})
+    assert resp.status_code == 200
+    assert resp.json()["lifecycle_status"] == "current"
+
+
+def test_patch_lifecycle_complete_to_decommissioned_returns_409():
+    # Not a direct edge -- complete must go through deprecated first, same as current.
+    c, _ = _client_for(LifecycleStatus.COMPLETE)
+    resp = c.patch("/api/v1/designs/DSN-001/lifecycle", json={"status": "decommissioned"})
+    assert resp.status_code == 409
+
+
+def test_patch_lifecycle_draft_to_complete_returns_409():
+    c, _ = _client_for(LifecycleStatus.DRAFT)
+    resp = c.patch("/api/v1/designs/DSN-001/lifecycle", json={"status": "complete"})
+    assert resp.status_code == 409
+
+
+def test_patch_lifecycle_complete_reset_to_draft_returns_200():
+    # The universal "reset to draft" escape hatch applies to complete too.
+    c, _ = _client_for(LifecycleStatus.COMPLETE)
+    resp = c.patch("/api/v1/designs/DSN-001/lifecycle", json={"status": "draft"})
+    assert resp.status_code == 200
+    assert resp.json()["lifecycle_status"] == "draft"

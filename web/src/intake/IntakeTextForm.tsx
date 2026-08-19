@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useSubmitIntake, useAddRequirement, type RequirementKind } from "../api/intake";
-import { useCreateDesign } from "../api/designs";
+import { useCreateDesign, useDesign } from "../api/designs";
 import { useCapabilities, useLinkDesignToCapabilities } from "../api/business";
 
 interface IntakeTextFormProps {
@@ -71,6 +71,21 @@ export default function IntakeTextForm({ designId, onDesignCreated, onSubmitted 
   const addRequirement = useAddRequirement();
   const capabilities = useCapabilities();
   const linkCapability = useLinkDesignToCapabilities();
+
+  // Prefill Business Problem / Desired Outcome from the existing design when
+  // opening Intake for a design that already has them recorded (e.g. via the
+  // Designs screen's "Open" action) -- previously these always started blank,
+  // discarding data that was already saved. `useDesign` is disabled while
+  // designId is null (a not-yet-created design has nothing to prefill from).
+  const existingDesign = useDesign(designId ?? "");
+  const [prefilledFor, setPrefilledFor] = useState<string | null>(null);
+  useEffect(() => {
+    if (designId && designId !== prefilledFor && existingDesign.data) {
+      setBusinessProblem(existingDesign.data.business_problem ?? "");
+      setDesiredOutcome(existingDesign.data.desired_outcome ?? "");
+      setPrefilledFor(designId);
+    }
+  }, [designId, existingDesign.data, prefilledFor]);
 
   const requiredFilled = businessProblem.trim().length > 0 && desiredOutcome.trim().length > 0;
   const canSubmit = requiredFilled && !isSubmitting;

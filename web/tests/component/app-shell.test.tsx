@@ -7,12 +7,15 @@
  * shell owns the entire navigation surface, so exercising it here is the
  * single-source check that complements the static SC-001 grep.
  *
- * The Design group (Intake / Recommendations / Designs / C4 Design) is
- * always rendered, not gated on a design being selected -- it's the entry
- * point into any design, and a user reported it disappearing entirely when
- * no design was open (having to select one first to even see the menu).
- * Only its label adapts: "Design" with none selected, "Design · {id}" once
- * inside one.
+ * The Design group (Designs / Intake / C4 Design) is always rendered, not
+ * gated on a design being selected -- it's the entry point into any design,
+ * and a user reported it disappearing entirely when no design was open
+ * (having to select one first to even see the menu). Only its label adapts:
+ * "Design" with none selected, "Design · {id}" once inside one.
+ *
+ * Recommendations is deliberately NOT a nav entry here: it's a tab inside
+ * the Intake screen itself (the second step of Intake's own flow), not a
+ * standalone destination -- see IntakePage.tsx's own tab bar instead.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup, within } from "@testing-library/react";
@@ -24,7 +27,7 @@ afterEach(cleanup);
 const WORKSPACE = ["Overview", "Insights"];
 const ARCHITECTURE = ["Business", "Applications", "Technical Architecture"];
 const OVERSIGHT = ["APM", "Governance", "Knowledge"];
-const DESIGN_SCOPED = ["Intake", "Recommendations", "Designs", "C4 Design"];
+const DESIGN_SCOPED = ["Designs", "Intake", "C4 Design"];
 
 function rail(): HTMLElement {
   const el = document.querySelector("nav.shell-rail");
@@ -71,6 +74,20 @@ describe("AppShell", () => {
     for (const label of DESIGN_SCOPED) {
       expect(navButton(label)).toBeTruthy();
     }
+    // Recommendations is no longer a standalone nav destination -- it's a
+    // tab inside Intake itself.
+    expect(within(rail()).queryByText("Recommendations")).toBeNull();
+  });
+
+  it("renders the Design group in Designs -> Intake -> C4 Design order", () => {
+    render(
+      <AppShell currentView="overview" onNavigate={vi.fn()} designId={null}>
+        <div />
+      </AppShell>,
+    );
+    const [designs, intake, canvas] = DESIGN_SCOPED.map((label) => navButton(label));
+    expect(designs.compareDocumentPosition(intake) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(intake.compareDocumentPosition(canvas) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("shows the Design group, labelled with the design id, when one is selected (FR-003)", () => {
@@ -107,5 +124,46 @@ describe("AppShell", () => {
 
     fireEvent.click(navButton("C4 Design"));
     expect(onNavigate).toHaveBeenCalledWith("canvas-v2");
+  });
+
+  it("clicking Intake calls onStartNewDesign, not onNavigate, when provided", () => {
+    const onNavigate = vi.fn();
+    const onStartNewDesign = vi.fn();
+    render(
+      <AppShell currentView="overview" onNavigate={onNavigate} designId="DESIGN-001" onStartNewDesign={onStartNewDesign}>
+        <div />
+      </AppShell>,
+    );
+    fireEvent.click(navButton("Intake"));
+    expect(onStartNewDesign).toHaveBeenCalledTimes(1);
+    expect(onNavigate).not.toHaveBeenCalled();
+  });
+
+  it("clicking Intake falls back to onNavigate('intake') when onStartNewDesign is omitted", () => {
+    const onNavigate = vi.fn();
+    render(
+      <AppShell currentView="overview" onNavigate={onNavigate} designId={null}>
+        <div />
+      </AppShell>,
+    );
+    fireEvent.click(navButton("Intake"));
+    expect(onNavigate).toHaveBeenCalledWith("intake");
+  });
+
+  it("onStartNewDesign does not leak to the other Design-group entries", () => {
+    const onNavigate = vi.fn();
+    const onStartNewDesign = vi.fn();
+    render(
+      <AppShell currentView="overview" onNavigate={onNavigate} designId="DESIGN-001" onStartNewDesign={onStartNewDesign}>
+        <div />
+      </AppShell>,
+    );
+    fireEvent.click(navButton("Designs"));
+    expect(onNavigate).toHaveBeenCalledWith("designs");
+
+    fireEvent.click(navButton("C4 Design"));
+    expect(onNavigate).toHaveBeenCalledWith("canvas-v2");
+
+    expect(onStartNewDesign).not.toHaveBeenCalled();
   });
 });
