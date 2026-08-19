@@ -1,6 +1,10 @@
 """Compliance Framework & Control Registry API (COMPLY-01) + Control Mappings API (COMPLY-02).
 
 GET/POST/PATCH/DELETE /api/v1/compliance/frameworks               — framework registry
+POST/GET/DELETE       /api/v1/compliance/frameworks/{id}/application-phases[/{phase_id}]
+                         — staged application dates (COMPLY-01a)
+POST/GET/DELETE       /api/v1/compliance/frameworks/{id}/amendments[/{amendment_id}]
+                         — amending legal instruments (COMPLY-01a)
 POST/PATCH/DELETE     /api/v1/compliance/frameworks/{id}/controls — control catalog
 PATCH/DELETE          /api/v1/compliance/controls/{id}            — individual control edit/delete
 PUT/DELETE            /api/v1/compliance/controls/{id}/mappings/{capabilities|applications|
@@ -37,6 +41,8 @@ from adp.authz.permissions import is_permitted
 from adp.authz.roles import ActionType
 from adp.compliance import store as cstore
 from adp.compliance.models import (
+    AmendmentNotFoundError,
+    ApplicationPhaseNotFoundError,
     ComplianceSummaryResponse,
     Control,
     ControlCreate,
@@ -48,6 +54,13 @@ from adp.compliance.models import (
     CrossFrameworkParentError,
     CyclicParentError,
     DuplicateControlCodeError,
+    DuplicateRegulationNumberError,
+    FrameworkAmendment,
+    FrameworkAmendmentCreate,
+    FrameworkAmendmentListResponse,
+    FrameworkApplicationPhase,
+    FrameworkApplicationPhaseCreate,
+    FrameworkApplicationPhaseListResponse,
     FrameworkCoverageRollup,
     InvalidPatternTargetError,
     MappingNotFoundError,
@@ -111,7 +124,10 @@ async def create_framework(
     request: Request,
     session: AsyncSession = Depends(_get_session),
 ):
-    fw = await cstore.create_framework(body, session)
+    try:
+        fw = await cstore.create_framework(body, session)
+    except DuplicateRegulationNumberError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     await session.commit()
 
     actor = _get_actor(request)
@@ -153,7 +169,10 @@ async def update_framework(
     request: Request,
     session: AsyncSession = Depends(_get_session),
 ):
-    fw = await cstore.update_framework(framework_id, body, session)
+    try:
+        fw = await cstore.update_framework(framework_id, body, session)
+    except DuplicateRegulationNumberError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if fw is None:
         raise HTTPException(status_code=404, detail=f"Framework {framework_id!r} not found")
     await session.commit()
@@ -176,6 +195,125 @@ async def delete_framework(
 
     actor = _get_actor(request)
     logger.info("compliance.framework.delete id=%s actor=%s", framework_id, actor)
+
+
+# ── Framework Application Phases & Amendments (COMPLY-01a) ──────────────────────
+
+@router.post(
+    "/frameworks/{framework_id}/application-phases",
+    response_model=FrameworkApplicationPhase,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_application_phase(
+    framework_id: str,
+    body: FrameworkApplicationPhaseCreate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    if await cstore.get_framework(framework_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Framework {framework_id!r} not found")
+    phase = await cstore.add_application_phase(framework_id, body, session)
+    await session.commit()
+
+    actor = _get_actor(request)
+    logger.info(
+        "compliance.framework.application_phase.create framework_id=%s id=%s actor=%s",
+        framework_id, phase.id, actor,
+    )
+    return phase
+
+
+@router.get(
+    "/frameworks/{framework_id}/application-phases",
+    response_model=FrameworkApplicationPhaseListResponse,
+)
+async def list_application_phases(
+    framework_id: str, session: AsyncSession = Depends(_get_session)
+):
+    if await cstore.get_framework(framework_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Framework {framework_id!r} not found")
+    items = await cstore.list_application_phases(framework_id, session)
+    return FrameworkApplicationPhaseListResponse(items=items, total=len(items))
+
+
+@router.delete(
+    "/frameworks/{framework_id}/application-phases/{phase_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_application_phase(
+    framework_id: str,
+    phase_id: str,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    try:
+        await cstore.delete_application_phase(framework_id, phase_id, session)
+    except ApplicationPhaseNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await session.commit()
+
+    actor = _get_actor(request)
+    logger.info(
+        "compliance.framework.application_phase.delete framework_id=%s id=%s actor=%s",
+        framework_id, phase_id, actor,
+    )
+
+
+@router.post(
+    "/frameworks/{framework_id}/amendments",
+    response_model=FrameworkAmendment,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_amendment(
+    framework_id: str,
+    body: FrameworkAmendmentCreate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    if await cstore.get_framework(framework_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Framework {framework_id!r} not found")
+    amendment = await cstore.add_amendment(framework_id, body, session)
+    await session.commit()
+
+    actor = _get_actor(request)
+    logger.info(
+        "compliance.framework.amendment.create framework_id=%s id=%s actor=%s",
+        framework_id, amendment.id, actor,
+    )
+    return amendment
+
+
+@router.get(
+    "/frameworks/{framework_id}/amendments", response_model=FrameworkAmendmentListResponse
+)
+async def list_amendments(framework_id: str, session: AsyncSession = Depends(_get_session)):
+    if await cstore.get_framework(framework_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Framework {framework_id!r} not found")
+    items = await cstore.list_amendments(framework_id, session)
+    return FrameworkAmendmentListResponse(items=items, total=len(items))
+
+
+@router.delete(
+    "/frameworks/{framework_id}/amendments/{amendment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def delete_amendment(
+    framework_id: str,
+    amendment_id: str,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    try:
+        await cstore.delete_amendment(framework_id, amendment_id, session)
+    except AmendmentNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    await session.commit()
+
+    actor = _get_actor(request)
+    logger.info(
+        "compliance.framework.amendment.delete framework_id=%s id=%s actor=%s",
+        framework_id, amendment_id, actor,
+    )
 
 
 # ── Compliance Rollup Reporting (COMPLY-04 US2) ──────────────────────────────

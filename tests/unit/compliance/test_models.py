@@ -129,9 +129,17 @@ class TestRegulatoryFrameworkDetail:
     def test_empty_controls_default(self):
         detail = RegulatoryFrameworkDetail(
             id="f1", name="GDPR", jurisdiction="EU", authority="EC", version="2016/679",
-            effective_date=None, source_url=None, created_at=_NOW, updated_at=_NOW,
+            effective_date=None, source_url=None,
+            # 926-framework-versioning-correction (COMPLY-01a): required-but-nullable on the read
+            # model, same convention as effective_date/source_url above.
+            regulation_number=None, celex_number=None, adoption_date=None,
+            oj_publication_date=None, entry_into_force_date=None, consolidated_as_of=None,
+            status="in_force",
+            created_at=_NOW, updated_at=_NOW,
         )
         assert detail.controls == []
+        assert detail.application_phases == []
+        assert detail.amendments == []
 
     def test_nested_controls_round_trip(self):
         child = ControlNode(
@@ -146,7 +154,11 @@ class TestRegulatoryFrameworkDetail:
         )
         detail = RegulatoryFrameworkDetail(
             id="f1", name="GDPR", jurisdiction="EU", authority="EC", version="2016/679",
-            effective_date=None, source_url=None, created_at=_NOW, updated_at=_NOW,
+            effective_date=None, source_url=None,
+            regulation_number=None, celex_number=None, adoption_date=None,
+            oj_publication_date=None, entry_into_force_date=None, consolidated_as_of=None,
+            status="in_force",
+            created_at=_NOW, updated_at=_NOW,
             controls=[parent],
         )
         assert len(detail.controls) == 1

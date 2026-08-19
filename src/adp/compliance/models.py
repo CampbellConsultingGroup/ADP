@@ -13,11 +13,17 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from enum import StrEnum
+from typing import Literal
 from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ── RegulatoryFramework ────────────────────────────────────────────────────
+
+# 926-framework-versioning-correction (COMPLY-01a): directly set by an architect, not derived --
+# neither new child concept below (application phases, amendments) records a repeal event, so a
+# full derivation from that data would always be wrong for one of the four values (research.md D3).
+FrameworkStatus = Literal["in_force", "amended", "repealed", "not_yet_applicable"]
 
 
 def _validate_source_url(v: str | None) -> str | None:
@@ -35,7 +41,13 @@ def _validate_source_url(v: str | None) -> str | None:
     return v
 
 class RegulatoryFramework(BaseModel):
-    """Read model returned by the API."""
+    """Read model returned by the API.
+
+    926-framework-versioning-correction (COMPLY-01a): regulation_number..status are additive --
+    name/jurisdiction/authority/version/effective_date/source_url above are the original COMPLY-01
+    fields, completely untouched (spec.md FR-004). All seven new fields are optional; a framework
+    that has never set any of them (every framework tracked before this feature shipped) reads
+    them back as None/the "in_force" default, not an error (spec.md FR-001/002)."""
     model_config = ConfigDict(extra="forbid")
 
     id: str
@@ -45,13 +57,24 @@ class RegulatoryFramework(BaseModel):
     version: str
     effective_date: date | None
     source_url: str | None
+    regulation_number: str | None
+    celex_number: str | None
+    adoption_date: date | None
+    oj_publication_date: date | None
+    entry_into_force_date: date | None
+    consolidated_as_of: date | None
+    status: FrameworkStatus
     created_at: datetime
     updated_at: datetime
 
 
 class RegulatoryFrameworkDetail(RegulatoryFramework):
-    """Framework with its full control hierarchy, nested by parent_id, ordered by position."""
+    """Framework with its full control hierarchy, nested by parent_id, ordered by position, plus
+    (COMPLY-01a) its application phases and amendments -- same "everything about this framework in
+    one call" nesting precedent controls already established (research.md D4)."""
     controls: list["ControlNode"] = []
+    application_phases: list["FrameworkApplicationPhase"] = []
+    amendments: list["FrameworkAmendment"] = []
 
 
 class RegulatoryFrameworkCreate(BaseModel):
@@ -71,6 +94,16 @@ class RegulatoryFrameworkCreate(BaseModel):
     version: str = Field(max_length=100)
     effective_date: date | None = None
     source_url: str | None = None
+    # 926-framework-versioning-correction (COMPLY-01a): every field below is optional -- a
+    # framework's regulation identity and legal-event dates are filled in over time, at an
+    # architect's own pace, not required at creation (spec.md FR-001/002, Clarifications).
+    regulation_number: str | None = Field(default=None, max_length=100)
+    celex_number: str | None = Field(default=None, max_length=50)
+    adoption_date: date | None = None
+    oj_publication_date: date | None = None
+    entry_into_force_date: date | None = None
+    consolidated_as_of: date | None = None
+    status: FrameworkStatus = "in_force"
 
     @field_validator("name", "jurisdiction", "authority", "version")
     @classmethod
@@ -96,6 +129,13 @@ class RegulatoryFrameworkUpdate(BaseModel):
     version: str | None = Field(default=None, max_length=100)
     effective_date: date | None = None
     source_url: str | None = None
+    regulation_number: str | None = Field(default=None, max_length=100)
+    celex_number: str | None = Field(default=None, max_length=50)
+    adoption_date: date | None = None
+    oj_publication_date: date | None = None
+    entry_into_force_date: date | None = None
+    consolidated_as_of: date | None = None
+    status: FrameworkStatus | None = None
 
     @field_validator("name", "jurisdiction", "authority", "version")
     @classmethod
@@ -193,6 +233,17 @@ class DuplicateControlCodeError(Exception):
         super().__init__(f"Control code {code!r} already exists for framework {framework_id!r}")
 
 
+class DuplicateRegulationNumberError(Exception):
+    """926-framework-versioning-correction (COMPLY-01a): raised when regulation_number is already
+    used by another framework. Router maps to HTTP 409. Never raised for two frameworks that both
+    leave regulation_number unset -- NULLs don't collide under the UNIQUE constraint (research.md
+    D2)."""
+
+    def __init__(self, regulation_number: str) -> None:
+        self.regulation_number = regulation_number
+        super().__init__(f"Regulation number {regulation_number!r} already in use")
+
+
 class CyclicParentError(Exception):
     """Raised when a proposed parent_id is the control itself or one of its own descendants.
     Router maps to HTTP 422."""
@@ -229,6 +280,98 @@ class ParentNotFoundError(Exception):
     def __init__(self, parent_id: str) -> None:
         self.parent_id = parent_id
         super().__init__(f"Parent control {parent_id!r} not found")
+
+
+# ── Framework Application Phases & Amendments (COMPLY-01a) ─────────────────────
+# Two independent one-to-many concepts hanging off RegulatoryFramework -- staged application
+# dates (spec.md US2, e.g. the EU AI Act's phased rollout) and amending legal instruments
+# (spec.md US3, e.g. DORA's growing RTS stack). Neither carries a URL field in this pass, so
+# neither reopens the source_url scheme-validation surface above (plan.md Threat Model).
+
+class FrameworkApplicationPhase(BaseModel):
+    """Read model."""
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    framework_id: str
+    phase_label: str
+    applies_from_date: date
+    description: str | None
+    created_at: datetime
+
+
+class FrameworkApplicationPhaseCreate(BaseModel):
+    """framework_id comes from the route path, not the body (mirrors ControlCreate's shape)."""
+    model_config = ConfigDict(extra="forbid")
+
+    phase_label: str = Field(max_length=255)
+    applies_from_date: date
+    description: str | None = None
+
+    @field_validator("phase_label")
+    @classmethod
+    def must_not_be_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("must not be blank")
+        return v
+
+
+class FrameworkApplicationPhaseListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[FrameworkApplicationPhase]
+    total: int
+
+
+class FrameworkAmendment(BaseModel):
+    """Read model."""
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    framework_id: str
+    amending_celex: str | None
+    amending_title: str
+    effective_date: date | None
+    created_at: datetime
+
+
+class FrameworkAmendmentCreate(BaseModel):
+    """framework_id comes from the route path, not the body."""
+    model_config = ConfigDict(extra="forbid")
+
+    amending_celex: str | None = Field(default=None, max_length=50)
+    amending_title: str = Field(max_length=255)
+    effective_date: date | None = None
+
+    @field_validator("amending_title")
+    @classmethod
+    def must_not_be_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("must not be blank")
+        return v
+
+
+class FrameworkAmendmentListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[FrameworkAmendment]
+    total: int
+
+
+class ApplicationPhaseNotFoundError(Exception):
+    """Raised when (framework_id, phase_id) has no matching row. Router maps to HTTP 404."""
+
+    def __init__(self, phase_id: str) -> None:
+        self.phase_id = phase_id
+        super().__init__(f"Application phase {phase_id!r} not found")
+
+
+class AmendmentNotFoundError(Exception):
+    """Raised when (framework_id, amendment_id) has no matching row. Router maps to HTTP 404."""
+
+    def __init__(self, amendment_id: str) -> None:
+        self.amendment_id = amendment_id
+        super().__init__(f"Amendment {amendment_id!r} not found")
 
 
 # ── ControlMapping (COMPLY-02) ──────────────────────────────────────────────

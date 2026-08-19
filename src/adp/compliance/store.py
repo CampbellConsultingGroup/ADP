@@ -15,6 +15,8 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from adp.compliance.models import (
+    AmendmentNotFoundError,
+    ApplicationPhaseNotFoundError,
     ComplianceStatus,
     ComplianceSummaryResponse,
     Control,
@@ -27,7 +29,12 @@ from adp.compliance.models import (
     CrossFrameworkParentError,
     CyclicParentError,
     DuplicateControlCodeError,
+    DuplicateRegulationNumberError,
     EntityStatusCounts,
+    FrameworkAmendment,
+    FrameworkAmendmentCreate,
+    FrameworkApplicationPhase,
+    FrameworkApplicationPhaseCreate,
     FrameworkCoverageRollup,
     InvalidPatternTargetError,
     MappingNotFoundError,
@@ -56,8 +63,44 @@ _frameworks = sa.Table(
     sa.Column("version", sa.String(100), nullable=False),
     sa.Column("effective_date", sa.Date(), nullable=True),
     sa.Column("source_url", sa.Text(), nullable=True),
+    # 926-framework-versioning-correction (COMPLY-01a): additive columns (migration 035).
+    # `status` gets a Python-side `default=` (not just the migration's server_default) so a raw
+    # `.insert()` that predates this feature -- e.g. test_compliance_status.py's own fixture --
+    # keeps working unmodified, the same way `_controls.position` already does (regression guard).
+    sa.Column("regulation_number", sa.String(100), nullable=True),
+    sa.Column("celex_number", sa.String(50), nullable=True),
+    sa.Column("adoption_date", sa.Date(), nullable=True),
+    sa.Column("oj_publication_date", sa.Date(), nullable=True),
+    sa.Column("entry_into_force_date", sa.Date(), nullable=True),
+    sa.Column("consolidated_as_of", sa.Date(), nullable=True),
+    sa.Column("status", sa.Text(), nullable=False, default="in_force"),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# 926-framework-versioning-correction (COMPLY-01a): DML-only, migration 035 owns FK/PK/CHECK.
+# String(36) PKs, ON DELETE CASCADE back to their framework -- matches _controls' own existing
+# cascade-from-framework shape exactly (research.md D1, D6).
+_framework_application_phases = sa.Table(
+    "framework_application_phase",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("framework_id", sa.String(36), nullable=False),
+    sa.Column("phase_label", sa.String(255), nullable=False),
+    sa.Column("applies_from_date", sa.Date(), nullable=False),
+    sa.Column("description", sa.Text(), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+_framework_amendments = sa.Table(
+    "framework_amendment",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("framework_id", sa.String(36), nullable=False),
+    sa.Column("amending_celex", sa.String(50), nullable=True),
+    sa.Column("amending_title", sa.String(255), nullable=False),
+    sa.Column("effective_date", sa.Date(), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
 _controls = sa.Table(
@@ -190,7 +233,27 @@ def _row_to_framework(row: Any) -> RegulatoryFramework:
     return RegulatoryFramework(
         id=row.id, name=row.name, jurisdiction=row.jurisdiction, authority=row.authority,
         version=row.version, effective_date=row.effective_date, source_url=row.source_url,
+        regulation_number=row.regulation_number, celex_number=row.celex_number,
+        adoption_date=row.adoption_date, oj_publication_date=row.oj_publication_date,
+        entry_into_force_date=row.entry_into_force_date, consolidated_as_of=row.consolidated_as_of,
+        status=row.status,
         created_at=row.created_at, updated_at=row.updated_at,
+    )
+
+
+def _row_to_application_phase(row: Any) -> FrameworkApplicationPhase:
+    return FrameworkApplicationPhase(
+        id=row.id, framework_id=row.framework_id, phase_label=row.phase_label,
+        applies_from_date=row.applies_from_date, description=row.description,
+        created_at=row.created_at,
+    )
+
+
+def _row_to_amendment(row: Any) -> FrameworkAmendment:
+    return FrameworkAmendment(
+        id=row.id, framework_id=row.framework_id, amending_celex=row.amending_celex,
+        amending_title=row.amending_title, effective_date=row.effective_date,
+        created_at=row.created_at,
     )
 
 
@@ -233,18 +296,31 @@ async def create_framework(
 ) -> RegulatoryFramework:
     fw_id = str(uuid.uuid4())
     now = _now()
-    await session.execute(
-        _frameworks.insert().values(
-            id=fw_id, name=data.name.strip(), jurisdiction=data.jurisdiction.strip(),
-            authority=data.authority.strip(), version=data.version.strip(),
-            effective_date=data.effective_date, source_url=data.source_url,
-            created_at=now, updated_at=now,
+    try:
+        await session.execute(
+            _frameworks.insert().values(
+                id=fw_id, name=data.name.strip(), jurisdiction=data.jurisdiction.strip(),
+                authority=data.authority.strip(), version=data.version.strip(),
+                effective_date=data.effective_date, source_url=data.source_url,
+                regulation_number=data.regulation_number, celex_number=data.celex_number,
+                adoption_date=data.adoption_date, oj_publication_date=data.oj_publication_date,
+                entry_into_force_date=data.entry_into_force_date,
+                consolidated_as_of=data.consolidated_as_of, status=data.status,
+                created_at=now, updated_at=now,
+            )
         )
-    )
+    except Exception as exc:
+        if data.regulation_number is not None and _is_unique_violation(exc):
+            raise DuplicateRegulationNumberError(data.regulation_number) from exc
+        raise
     return RegulatoryFramework(
         id=fw_id, name=data.name.strip(), jurisdiction=data.jurisdiction.strip(),
         authority=data.authority.strip(), version=data.version.strip(),
         effective_date=data.effective_date, source_url=data.source_url,
+        regulation_number=data.regulation_number, celex_number=data.celex_number,
+        adoption_date=data.adoption_date, oj_publication_date=data.oj_publication_date,
+        entry_into_force_date=data.entry_into_force_date,
+        consolidated_as_of=data.consolidated_as_of, status=data.status,
         created_at=now, updated_at=now,
     )
 
@@ -268,7 +344,10 @@ async def get_framework_detail(
     """Fetches the framework plus every control row where framework_id matches, assembling
     the parent_id-nested tree. Correctly returns controls=[] when no control rows exist yet
     (every case until create_control is exercised) -- this function needs no changes once
-    controls are populated (data-model.md)."""
+    controls are populated (data-model.md).
+
+    926-framework-versioning-correction (COMPLY-01a): also nests application_phases/amendments,
+    same "everything about this framework in one call" precedent as controls (research.md D4)."""
     fw = await get_framework(framework_id, session)
     if fw is None:
         return None
@@ -278,7 +357,12 @@ async def get_framework_detail(
         .order_by(_controls.c.position)
     )
     rows = list(result)
-    return RegulatoryFrameworkDetail(**fw.model_dump(), controls=_assemble_control_tree(rows))
+    application_phases = await list_application_phases(framework_id, session)
+    amendments = await list_amendments(framework_id, session)
+    return RegulatoryFrameworkDetail(
+        **fw.model_dump(), controls=_assemble_control_tree(rows),
+        application_phases=application_phases, amendments=amendments,
+    )
 
 
 async def update_framework(
@@ -295,25 +379,127 @@ async def update_framework(
             updates[field] = value.strip()
     # Nullable fields: an explicitly provided value (incl. null) clears/sets it;
     # an omitted field is left unchanged (model_fields_set distinguishes them).
-    if "effective_date" in data.model_fields_set:
-        updates["effective_date"] = data.effective_date
-    if "source_url" in data.model_fields_set:
-        updates["source_url"] = data.source_url
+    for field in (
+        "effective_date", "source_url", "regulation_number", "celex_number",
+        "adoption_date", "oj_publication_date", "entry_into_force_date", "consolidated_as_of",
+    ):
+        if field in data.model_fields_set:
+            updates[field] = getattr(data, field)
+    # status is never null in the DB (CHECK constraint) -- `None` here means "not provided",
+    # not "clear it", unlike the nullable fields above.
+    if data.status is not None:
+        updates["status"] = data.status
 
-    await session.execute(
-        _frameworks.update().where(_frameworks.c.id == framework_id).values(**updates)
-    )
+    try:
+        await session.execute(
+            _frameworks.update().where(_frameworks.c.id == framework_id).values(**updates)
+        )
+    except Exception as exc:
+        if "regulation_number" in updates and _is_unique_violation(exc):
+            raise DuplicateRegulationNumberError(updates["regulation_number"]) from exc
+        raise
     return await get_framework(framework_id, session)
 
 
 async def delete_framework(framework_id: str, session: AsyncSession) -> bool:
     """Deletes the framework. Cascading to every control beneath it, at every hierarchy
     level, is handled entirely by the migration's ON DELETE CASCADE (research.md D2) --
-    no application-layer recursion needed."""
+    no application-layer recursion needed. 926-framework-versioning-correction (COMPLY-01a):
+    its application phases and amendments cascade the same way (research.md D6)."""
     result = await session.execute(
         _frameworks.delete().where(_frameworks.c.id == framework_id)
     )
     return _rowcount(result) > 0
+
+
+# ── Framework Application Phases & Amendments CRUD (COMPLY-01a) ────────────────
+
+async def add_application_phase(
+    framework_id: str, data: FrameworkApplicationPhaseCreate, session: AsyncSession
+) -> FrameworkApplicationPhase:
+    """Caller (router) has already validated framework_id exists."""
+    phase_id = str(uuid.uuid4())
+    now = _now()
+    await session.execute(
+        _framework_application_phases.insert().values(
+            id=phase_id, framework_id=framework_id, phase_label=data.phase_label.strip(),
+            applies_from_date=data.applies_from_date, description=data.description,
+            created_at=now,
+        )
+    )
+    return FrameworkApplicationPhase(
+        id=phase_id, framework_id=framework_id, phase_label=data.phase_label.strip(),
+        applies_from_date=data.applies_from_date, description=data.description, created_at=now,
+    )
+
+
+async def list_application_phases(
+    framework_id: str, session: AsyncSession
+) -> list[FrameworkApplicationPhase]:
+    result = await session.execute(
+        sa.select(_framework_application_phases)
+        .where(_framework_application_phases.c.framework_id == framework_id)
+        .order_by(_framework_application_phases.c.applies_from_date)
+    )
+    return [_row_to_application_phase(row) for row in result]
+
+
+async def delete_application_phase(
+    framework_id: str, phase_id: str, session: AsyncSession
+) -> None:
+    result = await session.execute(
+        _framework_application_phases.delete().where(
+            _framework_application_phases.c.id == phase_id,
+            _framework_application_phases.c.framework_id == framework_id,
+        )
+    )
+    if _rowcount(result) == 0:
+        raise ApplicationPhaseNotFoundError(phase_id)
+
+
+async def add_amendment(
+    framework_id: str, data: FrameworkAmendmentCreate, session: AsyncSession
+) -> FrameworkAmendment:
+    """Caller (router) has already validated framework_id exists."""
+    amendment_id = str(uuid.uuid4())
+    now = _now()
+    await session.execute(
+        _framework_amendments.insert().values(
+            id=amendment_id, framework_id=framework_id, amending_celex=data.amending_celex,
+            amending_title=data.amending_title.strip(), effective_date=data.effective_date,
+            created_at=now,
+        )
+    )
+    return FrameworkAmendment(
+        id=amendment_id, framework_id=framework_id, amending_celex=data.amending_celex,
+        amending_title=data.amending_title.strip(), effective_date=data.effective_date,
+        created_at=now,
+    )
+
+
+async def list_amendments(framework_id: str, session: AsyncSession) -> list[FrameworkAmendment]:
+    result = await session.execute(
+        sa.select(_framework_amendments)
+        .where(_framework_amendments.c.framework_id == framework_id)
+        # nulls-last ordering, portable across SQLite (contract fixtures) and Postgres: a
+        # boolean sort key (has-a-date, descending puts True/1 first) ahead of the date itself.
+        .order_by(
+            (_framework_amendments.c.effective_date.is_(None)),
+            _framework_amendments.c.effective_date,
+        )
+    )
+    return [_row_to_amendment(row) for row in result]
+
+
+async def delete_amendment(framework_id: str, amendment_id: str, session: AsyncSession) -> None:
+    result = await session.execute(
+        _framework_amendments.delete().where(
+            _framework_amendments.c.id == amendment_id,
+            _framework_amendments.c.framework_id == framework_id,
+        )
+    )
+    if _rowcount(result) == 0:
+        raise AmendmentNotFoundError(amendment_id)
 
 
 # ── Control CRUD ──────────────────────────────────────────────────────────────

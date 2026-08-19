@@ -461,3 +461,23 @@ def test_application_targeted_initiative_lookup_requires_governance_permission(
     assert resp.status_code == 403
 
 
+# ── 926-framework-versioning-correction (COMPLY-01a): Framework Legal Dates & Identity ─────────
+
+def test_reviewer_denied_application_phase_write(app: FastAPI) -> None:
+    """A REVIEWER cannot add an application phase (WRITE_COMPLIANCE) -- covered by the existing
+    /api/v1/compliance/ prefix rule, not a new phase-specific rule."""
+    resp = _client_as(app, PersonaRole.REVIEWER).post(
+        "/api/v1/compliance/frameworks/fw1/application-phases",
+        json={"phase_label": "Phase 1", "applies_from_date": "2025-01-01"},
+    )
+    assert resp.status_code == 403
+
+
+def test_reviewer_denied_amendment_write(app: FastAPI) -> None:
+    """A REVIEWER cannot add an amendment (WRITE_COMPLIANCE)."""
+    resp = _client_as(app, PersonaRole.REVIEWER).post(
+        "/api/v1/compliance/frameworks/fw1/amendments", json={"amending_title": "RTS 1"}
+    )
+    assert resp.status_code == 403
+
+
