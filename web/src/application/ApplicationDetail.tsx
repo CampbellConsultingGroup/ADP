@@ -19,6 +19,7 @@ import QualityPanel from "./QualityPanel";
 import ObjectiveLinksPanel from "./ObjectiveLinksPanel";
 import HealthAssessmentModal from "./HealthAssessmentModal";
 import BusinessValueAssessmentModal from "./BusinessValueAssessmentModal";
+import ApplicationComplianceMappings from "./ApplicationComplianceMappings";
 
 interface Props {
   appId: string;
@@ -26,7 +27,7 @@ interface Props {
   onDeleted: () => void;
 }
 
-type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs" | "risk" | "cost" | "tech-fit" | "initiatives" | "governance" | "quality" | "objectives";
+type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs" | "risk" | "cost" | "tech-fit" | "initiatives" | "governance" | "quality" | "objectives" | "compliance-mappings";
 
 export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) {
   const { data: app, isLoading } = useApplication(appId);
@@ -67,6 +68,10 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
     { id: "governance", label: "Governance" },
     { id: "quality", label: "Quality" },
     { id: "objectives", label: "Objectives" },
+    // Deliberately NOT called "Compliance" -- the "risk" tab above is already labeled
+    // "Risk & Compliance" (APM's own risk_compliance_contribution field, ADP-SPEC-038 US3),
+    // an unrelated concept. "Regulatory Compliance" disambiguates the two (COMPLY-02).
+    { id: "compliance-mappings", label: "Regulatory Compliance" },
   ];
 
   const tabStyle = (id: Section): React.CSSProperties => ({
@@ -193,6 +198,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
         {section === "governance" && <GovernancePanel appId={appId} />}
         {section === "quality" && <QualityPanel appId={appId} />}
         {section === "objectives" && <ObjectiveLinksPanel appId={appId} />}
+        {section === "compliance-mappings" && <ApplicationComplianceMappings appId={appId} />}
       </div>
 
       {showHealthModal && (

@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.audit.writer import next_audit_id
+from adp.compliance.models import ControlMappingListResponse
 from adp.models import SCHEMA_VERSION, ArchitectureDescription, AuditEntry
 from adp.strategy.models import StrategicObjectiveListResponse
 
@@ -36,6 +37,16 @@ async def _get_strategy_session():
     from adp.strategy import store as sstore
 
     factory = sstore._get_session_factory()
+    async with factory() as session:
+        yield session
+
+
+async def _get_compliance_session():
+    """A compliance-scoped session (COMPLY-02 research.md D7), used only by the
+    reverse-lookup GET /designs/{id}/compliance-mappings endpoint below."""
+    from adp.compliance import store as cstore
+
+    factory = cstore._get_session_factory()
     async with factory() as session:
         yield session
 
@@ -208,3 +219,24 @@ async def get_design_objectives(
     from adp.strategy import store as sstore
 
     return await sstore.list_objectives_for_design(design_id, strategy_session)
+
+
+@router.get("/{design_id}/compliance-mappings", response_model=ControlMappingListResponse)
+async def get_design_compliance_mappings(
+    design_id: str,
+    store=Depends(_get_design_store),
+    compliance_session: AsyncSession = Depends(_get_compliance_session),
+):
+    """Reverse lookup (FR-012): every Control mapped to this Design. Ungated -- matches
+    every other Design read (research.md D2 only gates Application-targeted reads)."""
+    from adp.store.store import DesignNotFoundError
+
+    try:
+        await store.get(design_id)
+    except DesignNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Design {design_id!r} not found")
+
+    from adp.compliance import store as cstore
+
+    items = await cstore.list_mappings_for_design(design_id, compliance_session)
+    return ControlMappingListResponse(items=items, total=len(items))

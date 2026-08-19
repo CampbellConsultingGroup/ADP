@@ -13,18 +13,21 @@ import * as businessApi from "../api/business";
 import * as knowledgeApi from "../api/knowledge";
 import * as portfolioApi from "../api/portfolio";
 import * as strategyApi from "../api/strategy";
+import * as complianceApi from "../api/compliance";
 
 vi.mock("../api/application");
 vi.mock("../api/business");
 vi.mock("../api/knowledge");
 vi.mock("../api/portfolio");
 vi.mock("../api/strategy");
+vi.mock("../api/compliance");
 
 const mockedApplicationApi = vi.mocked(applicationApi);
 const mockedBusinessApi = vi.mocked(businessApi);
 const mockedKnowledgeApi = vi.mocked(knowledgeApi);
 const mockedPortfolioApi = vi.mocked(portfolioApi);
 const mockedStrategyApi = vi.mocked(strategyApi);
+const mockedComplianceApi = vi.mocked(complianceApi);
 
 function listResult<T>(items: T[], total?: number) {
   return {
@@ -82,6 +85,13 @@ beforeEach(() => {
     isLoading: false,
     isError: false,
   } as unknown as ReturnType<typeof strategyApi.useStrategySummary>);
+  // 924-compliance-rollup-reporting: OverviewPage now calls useComplianceSummary()
+  // unconditionally too -- default it here so every pre-existing test above is unaffected.
+  mockedComplianceApi.useComplianceSummary.mockReturnValue({
+    data: { framework_count: 3, coverage_percent: 60, at_risk_count: 2 },
+    isLoading: false,
+    isError: false,
+  } as unknown as ReturnType<typeof complianceApi.useComplianceSummary>);
 });
 
 describe("OverviewPage: Strategy domain card (051-strategy-landing-card)", () => {
@@ -106,8 +116,11 @@ describe("OverviewPage: Strategy domain card (051-strategy-landing-card)", () =>
   it("never renders a progress-percentage element on the Strategy card (FR-003)", () => {
     render(<OverviewPage onNavigate={vi.fn()} />);
 
-    expect(screen.queryByText(/%/)).toBeNull();
-    expect(screen.queryByText(/progress/i)).toBeNull();
+    // Scoped to the Strategy card itself (924-compliance-rollup-reporting's own Compliance card
+    // legitimately renders a "%" coverage figure elsewhere on the page now).
+    const strategyCard = screen.getByText("Strategy").closest(".ovw-dcard") as HTMLElement;
+    expect(within(strategyCard).queryByText(/%/)).toBeNull();
+    expect(within(strategyCard).queryByText(/progress/i)).toBeNull();
   });
 });
 
@@ -211,5 +224,48 @@ describe("OverviewPage: Strategy card status breakdown + initiative count (918-s
 
     const atRiskLabel = within(strategyCard()).getByText(/0 at risk/i);
     expect(atRiskLabel.closest(".alert")).toBeNull();
+  });
+});
+
+describe("OverviewPage: Compliance domain card (924-compliance-rollup-reporting US2)", () => {
+  function complianceCard() {
+    return screen.getByText("Compliance").closest(".ovw-dcard") as HTMLElement;
+  }
+
+  it("renders a Compliance card with the mocked framework count, coverage %, and at-risk count", () => {
+    render(<OverviewPage onNavigate={vi.fn()} />);
+
+    const card = complianceCard();
+    expect(within(card).getByText("3")).toBeTruthy(); // framework_count
+    expect(within(card).getByText("60%")).toBeTruthy(); // coverage_percent
+    expect(within(card).getByText("2")).toBeTruthy(); // at_risk_count
+    expect(within(card).getByText("Frameworks", { selector: ".m-l" })).toBeTruthy();
+    expect(within(card).getByText("Coverage")).toBeTruthy();
+    expect(within(card).getByText("At risk")).toBeTruthy();
+  });
+
+  it("shows '—' for coverage, never a misleading 0%, when coverage_percent is null (FR-009)", () => {
+    mockedComplianceApi.useComplianceSummary.mockReturnValue({
+      data: { framework_count: 0, coverage_percent: null, at_risk_count: 0 },
+      isLoading: false,
+      isError: false,
+    } as unknown as ReturnType<typeof complianceApi.useComplianceSummary>);
+
+    render(<OverviewPage onNavigate={vi.fn()} />);
+
+    const card = complianceCard();
+    expect(within(card).getByText("—")).toBeTruthy();
+    expect(within(card).queryByText("0%")).toBeNull();
+  });
+
+  it("navigates to the compliance view (not governance) when its deep-link tile is clicked", async () => {
+    const onNavigate = vi.fn();
+    const user = userEvent.setup();
+    render(<OverviewPage onNavigate={onNavigate} />);
+
+    await user.click(screen.getByTitle("Open Frameworks"));
+
+    expect(onNavigate).toHaveBeenCalledWith("compliance");
+    expect(onNavigate).not.toHaveBeenCalledWith("governance");
   });
 });

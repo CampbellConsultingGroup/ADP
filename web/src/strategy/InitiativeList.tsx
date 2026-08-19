@@ -9,6 +9,7 @@ import {
   type InitiativeStatus,
 } from "../api/strategy";
 import { Button } from "../ui";
+import InitiativeControlMappingEditor from "./InitiativeControlMappingEditor";
 import InitiativeObjectiveLinkEditor from "./InitiativeObjectiveLinkEditor";
 import NavLinkButton from "./NavLinkButton";
 import { useScrollHighlight } from "./useScrollHighlight";
@@ -89,6 +90,9 @@ function InitiativeEditForm({
 
       <h4 style={{ fontSize: 13, marginTop: 16, marginBottom: 0, color: "var(--ink)" }}>Linked Objectives</h4>
       <InitiativeObjectiveLinkEditor initiative={initiative} onNavigateToObjective={onNavigateToObjective} />
+
+      <h4 style={{ fontSize: 13, marginTop: 16, marginBottom: 0, color: "var(--ink)" }}>Linked Compliance Gaps</h4>
+      <InitiativeControlMappingEditor initiative={initiative} />
     </div>
   );
 }

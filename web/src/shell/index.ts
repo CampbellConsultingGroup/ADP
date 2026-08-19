@@ -18,4 +18,5 @@ export type AppView =
   | "technical"
   | "diagrams"
   | "strategy"
+  | "compliance"
   | "admin";

@@ -161,6 +161,11 @@ _PREFIX_ROUTE_ACTIONS: tuple[tuple[str, ActionType], ...] = (
     # for capabilities/value streams/domains); write endpoints reuse
     # WRITE_BUSINESS_ARCH (research.md Decision 3), no new ActionType.
     ("/api/v1/strategy/", ActionType.WRITE_BUSINESS_ARCH),
+    # COMPLY-01: reads (framework/control list, detail) are ungated, matching
+    # every other registry domain's convention; every mutation (frameworks and
+    # controls alike) requires the new dedicated WRITE_COMPLIANCE action
+    # (Clarification Session 2026-08-17 Q1; research.md D4).
+    ("/api/v1/compliance/", ActionType.WRITE_COMPLIANCE),
 )
 
 

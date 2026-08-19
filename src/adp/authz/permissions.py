@@ -56,7 +56,11 @@ _logger = logging.getLogger("adp.authz")
 #           does not hold it. Enterprise Architect and Platform Admin receive
 #           it automatically via their existing wildcard grants -- no change
 #           needed to either of those two entries below.
-PERMISSIONS_VERSION = "1.8.0"
+#   1.9.0 — added ActionType.WRITE_COMPLIANCE (COMPLY-01), granted to
+#           Solution/Technical Architect; Enterprise Architect and Platform
+#           Admin receive it via their existing wildcard grants -- no change
+#           to either entry. Reviewer does not hold it.
+PERMISSIONS_VERSION = "1.9.0"
 
 # ── Permission table ─────────────────────────────────────────────────────────
 # Maps each PersonaRole to the frozenset of ActionTypes it may perform.
@@ -86,6 +90,7 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.CONFIRM_AGENT_SUGGESTION,
         ActionType.USE_CHAT_ASSISTANT,
         ActionType.WRITE_DIAGRAM,
+        ActionType.WRITE_COMPLIANCE,
     }),
     PersonaRole.TECHNICAL_ARCHITECT: frozenset({
         ActionType.READ_DESIGN,
@@ -104,6 +109,7 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
         ActionType.CONFIRM_AGENT_SUGGESTION,
         ActionType.USE_CHAT_ASSISTANT,
         ActionType.WRITE_DIAGRAM,
+        ActionType.WRITE_COMPLIANCE,
     }),
     PersonaRole.REVIEWER: frozenset({
         ActionType.READ_DESIGN,

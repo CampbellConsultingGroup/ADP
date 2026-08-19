@@ -20,6 +20,7 @@ const INITIATIVE: StrategyInitiative = {
   owner: null,
   status: "planned",
   objective_ids: ["obj-1"],
+  control_mappings: [],
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 };

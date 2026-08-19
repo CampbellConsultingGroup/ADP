@@ -59,3 +59,10 @@ class ActionType(StrEnum):
     # one write action exists, matching WRITE_APPLICATION/WRITE_BUSINESS_ARCH's
     # shape (research.md Decision 5).
     WRITE_DIAGRAM = "write_diagram"
+    # COMPLY-01: creating/editing/deleting a RegulatoryFramework or Control.
+    # Reads are ungated -- only this one write action exists, matching
+    # WRITE_APPLICATION/WRITE_DIAGRAM's shape. A dedicated action rather than
+    # reusing WRITE_BUSINESS_ARCH -- Compliance is its own cross-cutting
+    # domain, not a Business Architecture sub-concern (Clarification Session
+    # 2026-08-17 Q1; research.md D4).
+    WRITE_COMPLIANCE = "write_compliance"

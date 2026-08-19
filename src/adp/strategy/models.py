@@ -119,6 +119,7 @@ class StrategicObjective(BaseModel):
     value_stream_ids: list[str] = []
     design_ids: list[str] = []
     application_ids: list[str] = []
+    control_ids: list[str] = []
     status: ObjectiveStatus
     status_reason: str | None = None
     created_at: datetime
@@ -288,6 +289,15 @@ class ObjectiveApplicationLinkCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     application_id: str
+
+
+class ObjectiveControlLinkCreate(BaseModel):
+    """925-strategy-compliance-linkage (COMPLY-05): objective -> Control traceability link -- "why
+    does this objective exist." A bare link, no compliance_status of its own (that lives on
+    ControlMapping, COMPLY-02)."""
+
+    model_config = ConfigDict(extra="forbid")
+    control_id: str
 
 
 # ── Overview dashboard summary (051-strategy-landing-card) ────────────────────

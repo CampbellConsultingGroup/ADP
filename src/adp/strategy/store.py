@@ -132,6 +132,17 @@ _objective_application_links = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
+# 925-strategy-compliance-linkage (COMPLY-05): objective -> Control traceability link ("why does
+# this objective exist"). Same bare-link shape as the two tables above -- composite PK omitted
+# here, migration 034 owns it.
+_objective_control_links = sa.Table(
+    "objective_control_links",
+    _metadata,
+    sa.Column("objective_id", sa.String(36), nullable=False),
+    sa.Column("control_id", sa.String(36), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
 # Lightweight read-only mirrors of designs/applications (research.md Decision
 # 2) -- mirrors adp.business.store's own established `_designs` precedent
 # ("designs table reference for JOIN queries (read-only; managed by
@@ -156,6 +167,72 @@ _applications = sa.Table(
     _metadata,
     sa.Column("id", sa.String(36), primary_key=True),
     sa.Column("name", sa.String(255), nullable=False),
+)
+
+# 925-strategy-compliance-linkage (COMPLY-05): read-only mirrors of the Compliance schema
+# (COMPLY-01/02), same idiom as _designs/_applications above -- existence checks plus, for the
+# five control_*_mapping mirrors, live status reads (research.md D2/D3). Never written to from
+# this module. adp.strategy continues to import zero other domain packages at the store layer.
+_controls_mirror = sa.Table(
+    "controls",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("code", sa.Text(), nullable=False),
+    sa.Column("title", sa.Text(), nullable=False),
+    sa.Column("framework_id", sa.String(36), nullable=False),
+)
+
+# Each mirror carries compliance_status/evidence_ref/assessed_at (not just the key columns) so
+# _linked_control_mappings() (adp.strategy.initiatives) can JOIN for a live status on every read
+# rather than a value captured at link-creation time (research.md D3) -- the same reason
+# _designs/_applications above carry title/name, not just id.
+_control_capability_mapping_mirror = sa.Table(
+    "control_capability_mapping",
+    _metadata,
+    sa.Column("control_id", sa.String(36), primary_key=True),
+    sa.Column("capability_id", sa.String(36), primary_key=True),
+    sa.Column("compliance_status", sa.Text(), nullable=False),
+    sa.Column("evidence_ref", sa.Text(), nullable=True),
+    sa.Column("assessed_at", sa.Date(), nullable=True),
+)
+
+_control_application_mapping_mirror = sa.Table(
+    "control_application_mapping",
+    _metadata,
+    sa.Column("control_id", sa.String(36), primary_key=True),
+    sa.Column("application_id", sa.String(36), primary_key=True),
+    sa.Column("compliance_status", sa.Text(), nullable=False),
+    sa.Column("evidence_ref", sa.Text(), nullable=True),
+    sa.Column("assessed_at", sa.Date(), nullable=True),
+)
+
+_control_design_mapping_mirror = sa.Table(
+    "control_design_mapping",
+    _metadata,
+    sa.Column("control_id", sa.String(36), primary_key=True),
+    sa.Column("design_id", sa.Text(), primary_key=True),
+    sa.Column("compliance_status", sa.Text(), nullable=False),
+    sa.Column("evidence_ref", sa.Text(), nullable=True),
+    sa.Column("assessed_at", sa.Date(), nullable=True),
+)
+
+_control_pattern_mapping_mirror = sa.Table(
+    "control_pattern_mapping",
+    _metadata,
+    sa.Column("control_id", sa.String(36), primary_key=True),
+    sa.Column("pattern_id", sa.String(), primary_key=True),
+    sa.Column("compliance_status", sa.Text(), nullable=False),
+    sa.Column("evidence_ref", sa.Text(), nullable=True),
+    sa.Column("assessed_at", sa.Date(), nullable=True),
+)
+
+_control_organization_mapping_mirror = sa.Table(
+    "control_organization_mapping",
+    _metadata,
+    sa.Column("control_id", sa.String(36), primary_key=True),
+    sa.Column("compliance_status", sa.Text(), nullable=False),
+    sa.Column("evidence_ref", sa.Text(), nullable=True),
+    sa.Column("assessed_at", sa.Date(), nullable=True),
 )
 
 
@@ -466,6 +543,7 @@ async def get_objective(objective_id: str, session: AsyncSession) -> StrategicOb
         value_stream_ids=await _linked_value_stream_ids(objective_id, session),
         design_ids=await _linked_design_ids(objective_id, session),
         application_ids=await _linked_application_ids(objective_id, session),
+        control_ids=await _linked_control_ids(objective_id, session),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -716,6 +794,14 @@ async def application_exists(application_id: str, session: AsyncSession) -> bool
     return result.first() is not None
 
 
+async def control_exists(control_id: str, session: AsyncSession) -> bool:
+    """925-strategy-compliance-linkage (COMPLY-05) -- mirrors design_exists/application_exists."""
+    result = await session.execute(
+        sa.select(_controls_mirror.c.id).where(_controls_mirror.c.id == control_id)
+    )
+    return result.first() is not None
+
+
 async def _linked_design_ids(objective_id: str, session: AsyncSession) -> list[str]:
     result = await session.execute(
         sa.select(_objective_design_links.c.design_id)
@@ -822,6 +908,67 @@ async def list_objectives_for_application(
         sa.select(_objective_application_links.c.objective_id)
         .where(_objective_application_links.c.application_id == application_id)
         .order_by(_objective_application_links.c.objective_id)
+    )
+    items = []
+    for row in result:
+        objective_row = await session.execute(
+            sa.select(_objectives).where(_objectives.c.id == row.objective_id)
+        )
+        obj = objective_row.mappings().first()
+        if obj is not None:
+            items.append(await _row_to_summary(obj, session))
+    return StrategicObjectiveListResponse(items=items, total=len(items))
+
+
+# ── Objective <-> Control links (925-strategy-compliance-linkage, COMPLY-05) ────────────────────
+
+
+async def _linked_control_ids(objective_id: str, session: AsyncSession) -> list[str]:
+    result = await session.execute(
+        sa.select(_objective_control_links.c.control_id)
+        .where(_objective_control_links.c.objective_id == objective_id)
+        .order_by(_objective_control_links.c.control_id)
+    )
+    return [row.control_id for row in result]
+
+
+async def link_objective_control(objective_id: str, control_id: str, session: AsyncSession) -> None:
+    """Caller (router) has already validated both ids exist."""
+    try:
+        await session.execute(
+            _objective_control_links.insert().values(
+                objective_id=objective_id, control_id=control_id, created_at=_now()
+            )
+        )
+    except Exception as exc:
+        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+            raise DuplicateLinkError(
+                f"Link ({objective_id!r}, {control_id!r}) already exists"
+            ) from exc
+        raise
+
+
+async def unlink_objective_control(
+    objective_id: str, control_id: str, session: AsyncSession
+) -> None:
+    result = await session.execute(
+        _objective_control_links.delete().where(
+            _objective_control_links.c.objective_id == objective_id,
+            _objective_control_links.c.control_id == control_id,
+        )
+    )
+    if _rowcount(result) == 0:
+        raise LinkNotFoundError(f"Link ({objective_id!r}, {control_id!r}) not found")
+
+
+async def list_objectives_for_control(
+    control_id: str, session: AsyncSession
+) -> StrategicObjectiveListResponse:
+    """Reverse lookup, called from adp.compliance.router."""
+    result = await session.execute(
+        sa.select(_objective_control_links.c.objective_id)
+        .where(_objective_control_links.c.control_id == control_id)
+        .order_by(_objective_control_links.c.objective_id)
     )
     items = []
     for row in result:

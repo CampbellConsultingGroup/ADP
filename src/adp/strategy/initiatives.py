@@ -20,16 +20,22 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Literal
 
 import sqlalchemy as sa
 from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.compliance.models import ComplianceStatus, MappingTargetType
 from adp.strategy.store import (
     DuplicateLinkError,
     LinkNotFoundError,
+    _control_application_mapping_mirror,
+    _control_capability_mapping_mirror,
+    _control_design_mapping_mirror,
+    _control_organization_mapping_mirror,
+    _control_pattern_mapping_mirror,
     _metadata,
     _now,
     _rowcount,
@@ -51,7 +57,39 @@ class CycleError(Exception):
     or self-referential (FR-007). The router maps this to 400."""
 
 
+class ControlMappingNotFoundError(Exception):
+    """925-strategy-compliance-linkage (COMPLY-05): raised when no ControlMapping row exists yet
+    for the given (control_id, target_type, target_id) -- an Initiative links to an
+    already-*assessed* mapping, it does not create one (data-model.md). Router maps to 404."""
+
+    def __init__(
+        self, control_id: str, target_type: "MappingTargetType", target_id: str | None
+    ) -> None:
+        self.control_id = control_id
+        self.target_type = target_type
+        self.target_id = target_id
+        super().__init__(
+            f"No ControlMapping for control {control_id!r}, target_type {target_type!r}, "
+            f"target_id {target_id!r}"
+        )
+
+
 # ── Pydantic models ──────────────────────────────────────────────────────────
+
+
+class ControlMappingRef(BaseModel):
+    """925-strategy-compliance-linkage (COMPLY-05): one InitiativeControlMapping target, plus the
+    *live* status/evidence read straight off the linked ControlMapping row via mirror-table JOIN
+    (research.md D3) -- never a value captured at link-creation time and never re-synced."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    control_id: str
+    target_type: MappingTargetType
+    target_id: str | None  # None only when target_type == ORGANIZATION
+    compliance_status: ComplianceStatus
+    evidence_ref: str | None
+    assessed_at: date | None
 
 
 class StrategyInitiative(BaseModel):
@@ -66,6 +104,7 @@ class StrategyInitiative(BaseModel):
     owner: str | None = None
     status: InitiativeStatus
     objective_ids: list[str] = []
+    control_mappings: list[ControlMappingRef] = []
     created_at: datetime
     updated_at: datetime
 
@@ -145,6 +184,73 @@ _initiative_objective_links = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
+# 925-strategy-compliance-linkage (COMPLY-05): five parallel tables, one per ControlMapping target
+# shape (research.md D1) -- mirrors COMPLY-02's own five-control_*_mapping-tables resolution one
+# level up, since ControlMapping itself has no single addressable row/id to reference. Composite
+# PK/FK (incl. the composite FK against the corresponding control_*_mapping table) omitted here,
+# same convention as every other join table in this package -- migration 034 owns those.
+_initiative_control_capability_mapping = sa.Table(
+    "initiative_control_capability_mapping",
+    _metadata,
+    sa.Column("initiative_id", sa.String(36), nullable=False),
+    sa.Column("control_id", sa.String(36), nullable=False),
+    sa.Column("capability_id", sa.String(36), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+_initiative_control_application_mapping = sa.Table(
+    "initiative_control_application_mapping",
+    _metadata,
+    sa.Column("initiative_id", sa.String(36), nullable=False),
+    sa.Column("control_id", sa.String(36), nullable=False),
+    sa.Column("application_id", sa.String(36), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+_initiative_control_design_mapping = sa.Table(
+    "initiative_control_design_mapping",
+    _metadata,
+    sa.Column("initiative_id", sa.String(36), nullable=False),
+    sa.Column("control_id", sa.String(36), nullable=False),
+    sa.Column("design_id", sa.Text(), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+_initiative_control_pattern_mapping = sa.Table(
+    "initiative_control_pattern_mapping",
+    _metadata,
+    sa.Column("initiative_id", sa.String(36), nullable=False),
+    sa.Column("control_id", sa.String(36), nullable=False),
+    sa.Column("pattern_id", sa.String(), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+_initiative_control_organization_mapping = sa.Table(
+    "initiative_control_organization_mapping",
+    _metadata,
+    sa.Column("initiative_id", sa.String(36), nullable=False),
+    sa.Column("control_id", sa.String(36), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# Dispatch tables keyed by MappingTargetType -- (link table, target-id column name or None for
+# organization) and (mirror table from adp.strategy.store, target-id column name or None).
+_LINK_TABLE_BY_TARGET_TYPE: dict[MappingTargetType, tuple[sa.Table, str | None]] = {
+    MappingTargetType.CAPABILITY: (_initiative_control_capability_mapping, "capability_id"),
+    MappingTargetType.APPLICATION: (_initiative_control_application_mapping, "application_id"),
+    MappingTargetType.DESIGN: (_initiative_control_design_mapping, "design_id"),
+    MappingTargetType.PATTERN: (_initiative_control_pattern_mapping, "pattern_id"),
+    MappingTargetType.ORGANIZATION: (_initiative_control_organization_mapping, None),
+}
+
+_MIRROR_BY_TARGET_TYPE: dict[MappingTargetType, tuple[sa.Table, str | None]] = {
+    MappingTargetType.CAPABILITY: (_control_capability_mapping_mirror, "capability_id"),
+    MappingTargetType.APPLICATION: (_control_application_mapping_mirror, "application_id"),
+    MappingTargetType.DESIGN: (_control_design_mapping_mirror, "design_id"),
+    MappingTargetType.PATTERN: (_control_pattern_mapping_mirror, "pattern_id"),
+    MappingTargetType.ORGANIZATION: (_control_organization_mapping_mirror, None),
+}
+
 _objective_dependencies = sa.Table(
     "strategic_objective_dependencies",
     _metadata,
@@ -201,6 +307,7 @@ async def get_initiative(initiative_id: str, session: AsyncSession) -> StrategyI
         owner=row["owner"],
         status=row["status"],
         objective_ids=await _linked_objective_ids(initiative_id, session),
+        control_mappings=await _linked_control_mappings(initiative_id, session),
         created_at=row["created_at"],
         updated_at=row["updated_at"],
     )
@@ -291,6 +398,145 @@ async def list_objective_initiative_ids(objective_id: str, session: AsyncSession
         .order_by(_initiative_objective_links.c.initiative_id)
     )
     return [row.initiative_id for row in result]
+
+
+# ── Initiative <-> ControlMapping links (925-strategy-compliance-linkage, COMPLY-05) ────────────
+
+
+def _target_condition(
+    mirror_or_link: sa.Table, target_col: str | None, target_id: str | None
+) -> list[Any]:
+    conditions: list[Any] = []
+    if target_col is not None:
+        conditions.append(getattr(mirror_or_link.c, target_col) == target_id)
+    return conditions
+
+
+async def link_initiative_control_mapping(
+    initiative_id: str,
+    control_id: str,
+    target_type: MappingTargetType,
+    target_id: str | None,
+    session: AsyncSession,
+) -> None:
+    """Caller (router) has already validated the initiative exists. Raises
+    ControlMappingNotFoundError if no ControlMapping row exists yet for
+    (control_id, target_type, target_id) -- an Initiative links to an already-*assessed* mapping,
+    it does not create one (data-model.md State/validation rules)."""
+    mirror, target_col = _MIRROR_BY_TARGET_TYPE[target_type]
+    conditions = [
+        mirror.c.control_id == control_id, *_target_condition(mirror, target_col, target_id),
+    ]
+    exists = (await session.execute(sa.select(mirror.c.control_id).where(*conditions))).first()
+    if exists is None:
+        raise ControlMappingNotFoundError(control_id, target_type, target_id)
+
+    link_table, link_target_col = _LINK_TABLE_BY_TARGET_TYPE[target_type]
+    values: dict[str, Any] = {
+        "initiative_id": initiative_id, "control_id": control_id, "created_at": _now(),
+    }
+    if link_target_col is not None:
+        values[link_target_col] = target_id
+    try:
+        await session.execute(link_table.insert().values(**values))
+    except Exception as exc:
+        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+            raise DuplicateLinkError(
+                f"Initiative {initiative_id!r} is already linked to control mapping "
+                f"(control_id={control_id!r}, target_type={target_type!r}, target_id={target_id!r})"
+            ) from exc
+        raise
+
+
+async def unlink_initiative_control_mapping(
+    initiative_id: str,
+    control_id: str,
+    target_type: MappingTargetType,
+    target_id: str | None,
+    session: AsyncSession,
+) -> None:
+    link_table, link_target_col = _LINK_TABLE_BY_TARGET_TYPE[target_type]
+    conditions = [
+        link_table.c.initiative_id == initiative_id,
+        link_table.c.control_id == control_id,
+        *_target_condition(link_table, link_target_col, target_id),
+    ]
+    result = await session.execute(link_table.delete().where(*conditions))
+    if _rowcount(result) == 0:
+        raise LinkNotFoundError(
+            f"Initiative {initiative_id!r} is not linked to control mapping "
+            f"(control_id={control_id!r}, target_type={target_type!r}, target_id={target_id!r})"
+        )
+
+
+async def _linked_control_mappings(
+    initiative_id: str, session: AsyncSession
+) -> list[ControlMappingRef]:
+    """Live JOIN against adp.strategy.store's read-only ControlMapping mirrors on every call --
+    compliance_status is never cached or copied onto the link row itself (FR-008, research.md
+    D3)."""
+    refs: list[ControlMappingRef] = []
+    for target_type, (link_table, link_target_col) in _LINK_TABLE_BY_TARGET_TYPE.items():
+        mirror, target_col = _MIRROR_BY_TARGET_TYPE[target_type]
+        join_condition = [link_table.c.control_id == mirror.c.control_id]
+        target_id_expr: Any = sa.literal(None)
+        if target_col is not None:
+            # Both dispatch dicts set their str-or-None target-column entry together per
+            # target_type (never one None while the other isn't) -- see _LINK_TABLE_BY_TARGET_TYPE/
+            # _MIRROR_BY_TARGET_TYPE above.
+            assert link_target_col is not None
+            join_condition.append(
+                getattr(link_table.c, link_target_col) == getattr(mirror.c, target_col)
+            )
+            target_id_expr = getattr(mirror.c, target_col)
+        query = (
+            sa.select(
+                mirror.c.control_id,
+                target_id_expr.label("target_id"),
+                mirror.c.compliance_status,
+                mirror.c.evidence_ref,
+                mirror.c.assessed_at,
+            )
+            .select_from(link_table.join(mirror, sa.and_(*join_condition)))
+            .where(link_table.c.initiative_id == initiative_id)
+        )
+        result = await session.execute(query)
+        for row in result:
+            refs.append(
+                ControlMappingRef(
+                    control_id=row.control_id,
+                    target_type=target_type,
+                    target_id=row.target_id,
+                    compliance_status=row.compliance_status,
+                    evidence_ref=row.evidence_ref,
+                    assessed_at=row.assessed_at,
+                )
+            )
+    return refs
+
+
+async def list_initiatives_for_control_mapping(
+    control_id: str,
+    target_type: MappingTargetType,
+    target_id: str | None,
+    session: AsyncSession,
+) -> StrategyInitiativeListResponse:
+    """Reverse lookup (called from adp.compliance.router -- mirrors
+    adp.strategy.store.list_objectives_for_design's exact shape)."""
+    link_table, link_target_col = _LINK_TABLE_BY_TARGET_TYPE[target_type]
+    conditions = [
+        link_table.c.control_id == control_id,
+        *_target_condition(link_table, link_target_col, target_id),
+    ]
+    result = await session.execute(
+        sa.select(link_table.c.initiative_id).where(*conditions).order_by(link_table.c.initiative_id)
+    )
+    items = []
+    for row in result:
+        initiative = await get_initiative(row.initiative_id, session)
+        if initiative is not None:
+            items.append(initiative)
+    return StrategyInitiativeListResponse(items=items, total=len(items))
 
 
 # ── Objective dependencies (research.md Decision 2) ─────────────────────────

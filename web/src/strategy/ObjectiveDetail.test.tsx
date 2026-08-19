@@ -30,6 +30,7 @@ const OBJECTIVE: StrategicObjective = {
   value_stream_ids: [],
   design_ids: [],
   application_ids: [],
+  control_ids: [],
   status: "proposed",
   status_reason: null,
   created_at: "2026-01-01T00:00:00Z",
@@ -156,6 +157,15 @@ beforeEach(() => {
     mutate: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof strategyApi.useUnlinkObjectiveApplication>);
+  // 925-strategy-compliance-linkage: ObjectiveControlLinkEditor's link/unlink mutations.
+  mockedStrategyApi.useLinkObjectiveControl.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveControl>);
+  mockedStrategyApi.useUnlinkObjectiveControl.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useUnlinkObjectiveControl>);
 });
 
 describe("ObjectiveDetail: status badge and progress history (ADP-d8u.5, T018)", () => {
@@ -205,6 +215,9 @@ describe("ObjectiveDetail: read-only display", () => {
     expect(screen.getByText(/Claims cycle time/)).toBeTruthy();
     expect(screen.getByText("No capabilities linked yet.")).toBeTruthy();
     expect(screen.getByText("No value streams linked yet.")).toBeTruthy();
+    // 925-strategy-compliance-linkage: the sixth "Linked ___" section.
+    expect(screen.getByText("Linked Controls")).toBeTruthy();
+    expect(screen.getByText("No controls linked yet.")).toBeTruthy();
   });
 
   it("labels the core fields clearly, distinct from the linked-entity sections (bug found live, 2026-08-14)", () => {

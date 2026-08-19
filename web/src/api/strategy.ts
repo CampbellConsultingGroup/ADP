@@ -4,6 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import { MAPPING_PATH_SEGMENT, type ComplianceStatus, type MappingTargetType } from "./compliance";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ export interface StrategicObjective {
   value_stream_ids: string[];
   design_ids: string[];
   application_ids: string[];
+  control_ids: string[];
   status: ObjectiveStatus;
   status_reason: string | null;
   created_at: string;
@@ -453,6 +455,37 @@ export function useApplicationObjectives(applicationId: string | null) {
   });
 }
 
+// ── Objective <-> Control link hooks (925-strategy-compliance-linkage, COMPLY-05) ───────────────
+
+export function useLinkObjectiveControl(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<string[], Error & { status?: number }, string>({
+    mutationFn: (controlId) =>
+      apiMutation<string[], { control_id: string }>(
+        "POST",
+        `/api/v1/strategy/objectives/${objectiveId}/controls`,
+        { control_id: controlId },
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+    },
+  });
+}
+
+export function useUnlinkObjectiveControl(objectiveId: string) {
+  const qc = useQueryClient();
+  return useMutation<void, Error & { status?: number }, string>({
+    mutationFn: (controlId) =>
+      apiMutation<void>(
+        "DELETE",
+        `/api/v1/strategy/objectives/${objectiveId}/controls/${controlId}`,
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+    },
+  });
+}
+
 // Application-side variants (fixed applicationId, mutate variable =
 // objectiveId) for ObjectiveLinksPanel.tsx on ApplicationDetail.tsx -- same
 // endpoint as useLinkObjectiveApplication/useUnlinkObjectiveApplication
@@ -494,6 +527,18 @@ export function useUnlinkApplicationFromObjective(applicationId: string) {
 
 export type InitiativeStatus = "planned" | "in_progress" | "blocked" | "complete" | "cancelled";
 
+// 925-strategy-compliance-linkage (COMPLY-05): one InitiativeControlMapping target, always
+// carrying a *live* compliance_status read straight off the linked ControlMapping row -- never a
+// value captured at link-creation time (research.md D3).
+export interface ControlMappingRef {
+  control_id: string;
+  target_type: MappingTargetType;
+  target_id: string | null;
+  compliance_status: ComplianceStatus;
+  evidence_ref: string | null;
+  assessed_at: string | null;
+}
+
 export interface StrategyInitiative {
   id: string;
   name: string;
@@ -501,6 +546,7 @@ export interface StrategyInitiative {
   owner: string | null;
   status: InitiativeStatus;
   objective_ids: string[];
+  control_mappings: ControlMappingRef[];
   created_at: string;
   updated_at: string;
 }
@@ -613,6 +659,61 @@ export function useObjectiveInitiatives(objectiveId: string | null) {
     queryKey: ["strategy-objective-initiatives", objectiveId],
     queryFn: () => apiGet(`/api/v1/strategy/objectives/${objectiveId}/initiatives`),
     enabled: !!objectiveId,
+  });
+}
+
+// ── Initiative <-> ControlMapping links (925-strategy-compliance-linkage, COMPLY-05) ────────────
+// Addresses a ControlMapping the same three-part way COMPLY-02's own mappingUrl() does
+// (control_id + target_type + target_id), reusing MAPPING_PATH_SEGMENT from ./compliance.
+
+export interface LinkInitiativeControlMappingArgs {
+  controlId: string;
+  targetType: MappingTargetType;
+  targetId?: string | null;
+}
+
+function initiativeControlMappingUrl(
+  initiativeId: string,
+  controlId: string,
+  targetType: MappingTargetType,
+  targetId?: string | null,
+): string {
+  const segment = MAPPING_PATH_SEGMENT[targetType];
+  const base = `/api/v1/strategy/initiatives/${initiativeId}/control-mappings/${segment}/${controlId}`;
+  return targetType === "organization" ? base : `${base}/${targetId}`;
+}
+
+export function useLinkInitiativeControlMapping(initiativeId: string) {
+  const qc = useQueryClient();
+  return useMutation<
+    StrategyInitiative,
+    Error & { status?: number },
+    LinkInitiativeControlMappingArgs
+  >({
+    mutationFn: ({ controlId, targetType, targetId }) =>
+      apiMutation<StrategyInitiative>(
+        "POST",
+        initiativeControlMappingUrl(initiativeId, controlId, targetType, targetId),
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
+      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
+    },
+  });
+}
+
+export function useUnlinkInitiativeControlMapping(initiativeId: string) {
+  const qc = useQueryClient();
+  return useMutation<void, Error & { status?: number }, LinkInitiativeControlMappingArgs>({
+    mutationFn: ({ controlId, targetType, targetId }) =>
+      apiMutation<void>(
+        "DELETE",
+        initiativeControlMappingUrl(initiativeId, controlId, targetType, targetId),
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
+      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
+    },
   });
 }
 

@@ -21,12 +21,23 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.api.deps import get_kb_session
+from adp.compliance.models import ControlMappingListResponse
 from adp.knowledge.index import KnowledgeIndex, knowledge_items
 from adp.knowledge.schema import KnowledgeItem, KnowledgeType
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/knowledge", tags=["knowledge"])
+
+
+async def _get_compliance_session():
+    """A compliance-scoped session (COMPLY-02 research.md D7), used only by the
+    reverse-lookup GET /knowledge/{id}/compliance-mappings endpoint below."""
+    from adp.compliance import store as cstore
+
+    factory = cstore._get_session_factory()
+    async with factory() as session:
+        yield session
 
 # ── Lazy embedder singleton ───────────────────────────────────────────────────
 
@@ -181,6 +192,24 @@ async def get_knowledge_item(
     """FR-002: Return a single item's full details including full_text."""
     row = await _fetch_active_row(item_id, session)
     return _row_to_detail(row)
+
+
+@router.get("/{item_id}/compliance-mappings", response_model=ControlMappingListResponse)
+async def get_knowledge_item_compliance_mappings(
+    item_id: str,
+    session: AsyncSession = Depends(get_kb_session),
+    compliance_session: AsyncSession = Depends(_get_compliance_session),
+) -> ControlMappingListResponse:
+    """Reverse lookup (COMPLY-02 FR-012): every Control mapped to this knowledge item
+    (scoped to target_type == "pattern" mappings, since only kind == "pattern" items can be
+    mapped -- research.md D5). Ungated -- matches every other knowledge item read
+    (research.md D2 only gates Application-targeted reads)."""
+    await _fetch_active_row(item_id, session)
+
+    from adp.compliance import store as cstore
+
+    items = await cstore.list_mappings_for_pattern(item_id, compliance_session)
+    return ControlMappingListResponse(items=items, total=len(items))
 
 
 @router.post("", response_model=KnowledgeItemSummary, status_code=201)
