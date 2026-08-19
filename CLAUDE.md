@@ -1,6 +1,6 @@
 # ADP Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-08-19 (924-compliance-rollup-reporting COMPLY-04 implemented)
+Auto-generated from all feature plans. Last updated: 2026-08-19 (926-framework-versioning-correction COMPLY-01a implemented)
 
 ## Active Technologies
 - Python 3.11+ + SQLAlchemy 2.x (async ORM), asyncpg (PostgreSQL async driver), Alembic (migrations), testcontainers-python (PostgreSQL container for integration tests), pydantic-settings (database URL config) (002-design-store)
@@ -100,6 +100,8 @@ Auto-generated from all feature plans. Last updated: 2026-08-19 (924-compliance-
 - PostgreSQL 16 — no migration. Both new endpoints read the existing `regulatory_frameworks`/`controls`/`control_*_mapping` tables (migrations 032/033) via two new JOIN queries in `adp.compliance.store`. (924-compliance-rollup-reporting)
 - Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) — both existing stacks + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic v2, React 18, TanStack Query v5 — all existing project dependencies; zero new packages (925-strategy-compliance-linkage)
 - PostgreSQL 16 — six new tables via migration `034` (down_revision `033`): `objective_control_links` (a bare Objective↔Control link) plus five parallel `initiative_control_{capability,application,design,pattern,organization}_mapping` tables, each with a composite FK against its corresponding `control_*_mapping` table's own composite PK (research.md D1) (925-strategy-compliance-linkage)
+- Python 3.12 (backend only — no frontend file touched, per the resolved data-model-and-API-only scope decision) + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic v2 — all existing project dependencies; zero new packages (926-framework-versioning-correction)
+- PostgreSQL 16 — one migration (`035`, down_revision `034`): seven additive columns on `regulatory_frameworks` (`regulation_number`/`celex_number`/`adoption_date`/`oj_publication_date`/`entry_into_force_date`/`consolidated_as_of`/`status`, zero existing columns altered), plus two new `String(36)`-keyed, `ON DELETE CASCADE` child tables (`framework_application_phase`, `framework_amendment`) (926-framework-versioning-correction)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -144,6 +146,55 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 926-framework-versioning-correction: Implemented (COMPLY-01a, a correction to COMPLY-01's
+  already-shipped, already-populated `RegulatoryFramework` entity) — full `/speckit.specify` →
+  `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle sourced from an addendum document
+  (`docs/compliance_update.md`) explicitly flagged by the user as generated outside this codebase
+  ("take it as guidance, the specifics are probably not aligned with our reality"). That caution
+  was warranted: the document's own justification claimed the field being replaced is `NUMERIC`
+  (it's actually `VARCHAR(100)` free text, already holding real citation strings for all three
+  currently-tracked frameworks — GDPR's own value already crams two OJ citation dates into one
+  string); its draft schema used `Integer` autoincrement PKs (this codebase uses `String(36)` UUIDs
+  everywhere, no exception found) and a field, `official_title`, that doesn't exist (the real field
+  is `name`, left untouched); `source_url` was drafted as new when it already exists (and was
+  already hardened against `javascript:`-scheme injection in an earlier security review this
+  session); and its own "out of scope" section named the wrong screen ("Governance & Standards")
+  for a wrong-screen mix-up already caught twice earlier this session from other source documents
+  making the identical assumption. All five were corrected by direct code inspection before any
+  requirement was written, recorded as Ground-Truth Corrections in spec.md rather than left as
+  guessed specifics. Extends (not replaces) `RegulatoryFramework` with a regulation identity, four
+  independent legal-event dates, and a directly-set status (`in_force`/`amended`/`repealed`/
+  `not_yet_applicable` — deliberately not derived: neither new child concept records a repeal
+  event, so partial derivation would always be wrong for one of the four values), plus two new
+  one-to-many concepts: `FrameworkApplicationPhase` (staged rollout dates, e.g. the EU AI Act's
+  phased application) and `FrameworkAmendment` (supplementing legal instruments, e.g. DORA's
+  growing RTS stack). `RegulatoryFrameworkDetail` nests both new lists alongside its existing
+  `controls`, reusing that precedent rather than inventing a new response shape. Two real scope
+  questions were put to the user directly rather than guessed: what happens to the three real
+  frameworks' existing `version` text (resolved: preserved untouched, new fields optional and
+  filled in over time — nothing is auto-parsed or deleted, since GDPR's string alone mixes two
+  distinct dates with no consistent delimiter to programmatically split) and whether this pass
+  includes the Compliance screen's UI (resolved: data-model-and-API-only — `FrameworkForm.tsx`/
+  `FrameworkDetail.tsx` are untouched, UI surfacing is explicit follow-on). One implementation-time
+  correction, caught by checking a pre-existing test file before assuming a design was safe: the
+  store-layer `status` column needed a Python-side `default=` (not just the migration's
+  `server_default=`), since `test_compliance_status.py`'s own fixture does a raw
+  `_frameworks.insert()` bypassing `create_framework()` entirely and would otherwise have broken on
+  a `NOT NULL` column with no client-side default — caught and fixed before it became a real
+  regression, confirmed by that exact test still passing unmodified. 1642 backend tests (was 1612,
+  +30: 17 unit, 11 contract, 2 authz), `ruff`/`mypy`/`adp-generate --check` all clean (no frontend
+  file touched, so no frontend suite change). 3 Docker-gated integration tests written (Docker
+  unavailable in this environment, same constraint every COMPLY-0x spec on this branch has hit) —
+  will run in CI. Verified live against the real local Postgres and running backend, migration
+  applied directly against the three real, live, already-populated frameworks with a byte-for-byte
+  before/after field comparison (not just unit-tested against synthetic data) confirming zero data
+  loss — the load-bearing guarantee this entire spec exists to uphold — plus a full walkthrough of
+  every quickstart.md scenario (legal-date recording, duplicate-`regulation_number` 409, staged
+  application phases ordered correctly, an unlimited amendment stack, cascade delete, and the
+  nested detail response) via direct API calls against the running backend, with GDPR's temporary
+  test edit fully cleared back to its original state and all temporary test frameworks deleted
+  afterward, confirmed by framework count returning to exactly 3. See
+  `specs/926-framework-versioning-correction/`.
 - 925-strategy-compliance-linkage: Implemented (COMPLY-05, the fifth and final spec of the
   Compliance Domain bundle) — full `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` →
   `/speckit.implement` cycle linking the Compliance domain (COMPLY-01–04:
@@ -250,7 +301,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   the FR-009 `null`-coverage-renders-as-"—" behavior (not a misleading "0%") and the deep-link tile
   correctly landing on the dedicated Compliance screen, not Governance. See
   `specs/924-compliance-rollup-reporting/`.
-- 923-derived-compliance-status: Implemented (COMPLY-03, the derived-status spec of the Compliance
   Domain bundle, building directly on 921's `RegulatoryFramework`/`Control` registry and 922's
   `ControlMapping` traceability links) — full `/speckit.specify` → `/speckit.plan` → `/speckit.tasks`
   → `/speckit.implement` cycle for a pure `compute_compliance_status()` aggregation function
