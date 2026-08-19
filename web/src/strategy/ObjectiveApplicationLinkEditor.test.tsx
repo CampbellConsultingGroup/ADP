@@ -27,6 +27,7 @@ const OBJECTIVE: StrategicObjective = {
   value_stream_ids: [],
   design_ids: [],
   application_ids: ["app-1"],
+  control_ids: [],
   status: "proposed",
   status_reason: null,
   created_at: "2026-01-01T00:00:00Z",

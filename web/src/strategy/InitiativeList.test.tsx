@@ -19,6 +19,7 @@ const INITIATIVE = {
   owner: "jane",
   status: "in_progress" as const,
   objective_ids: ["obj-1", "obj-2"],
+  control_mappings: [],
   created_at: "2026-01-01T00:00:00Z",
   updated_at: "2026-01-01T00:00:00Z",
 };
@@ -57,6 +58,15 @@ beforeEach(() => {
     mutate: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof strategyApi.useUnlinkInitiativeObjective>);
+  // 925-strategy-compliance-linkage: InitiativeControlMappingEditor's link/unlink mutations.
+  mockedApi.useLinkInitiativeControlMapping.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useLinkInitiativeControlMapping>);
+  mockedApi.useUnlinkInitiativeControlMapping.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof strategyApi.useUnlinkInitiativeControlMapping>);
 });
 
 describe("InitiativeList (mirrors ThemeList.tsx's convention)", () => {
@@ -156,11 +166,16 @@ describe("InitiativeList (mirrors ThemeList.tsx's convention)", () => {
     expect(screen.getByText("Linked Objectives")).toBeTruthy();
     expect(screen.getByText("Reduce cycle time")).toBeTruthy();
 
-    // Two <select>s are on screen in edit mode (Status, then the objective
-    // link editor's own) -- the objective one is the last combobox.
+    // Three <select>s are on screen in edit mode (Status, the objective link
+    // editor's own, then 925-strategy-compliance-linkage's target-type
+    // select) -- the objective one is always the second, right after Status,
+    // regardless of what other selects render after it.
     const comboboxes = screen.getAllByRole("combobox");
-    await user.selectOptions(comboboxes[comboboxes.length - 1], "obj-2");
-    await user.click(screen.getByText("Link"));
+    await user.selectOptions(comboboxes[1], "obj-2");
+    // Two "Link" buttons now render (objective editor, then
+    // 925-strategy-compliance-linkage's control-mapping editor) -- the
+    // objective editor's is first in DOM order.
+    await user.click(screen.getAllByText("Link")[0]);
 
     expect(linkMutate).toHaveBeenCalledWith("obj-2", expect.anything());
     // Clicking Link must not have also submitted the name/status form.

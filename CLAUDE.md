@@ -1,6 +1,6 @@
 # ADP Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-08-18 (923-derived-compliance-status COMPLY-03 implemented)
+Auto-generated from all feature plans. Last updated: 2026-08-19 (924-compliance-rollup-reporting COMPLY-04 implemented)
 
 ## Active Technologies
 - Python 3.11+ + SQLAlchemy 2.x (async ORM), asyncpg (PostgreSQL async driver), Alembic (migrations), testcontainers-python (PostgreSQL container for integration tests), pydantic-settings (database URL config) (002-design-store)
@@ -96,6 +96,10 @@ Auto-generated from all feature plans. Last updated: 2026-08-18 (923-derived-com
 - PostgreSQL 16 — five new tables (`control_capability_mapping`, `control_application_mapping`, `control_design_mapping`, `control_pattern_mapping`, `control_organization_mapping`) via migration `033` (down_revision `032` — research.md D8); `ON DELETE CASCADE` on every FK leg (both `control_id` and each target leg); composite PKs on the four entity-targeted tables, single-column PK on the estate-wide table (research.md D1); named `CHECK` constraints on `compliance_status` per table (922-control-mappings)
 - Python 3.12 (backend only — no frontend file touched) + None new. Adds `compute_compliance_status()` (pure, no I/O) and `get_entity_compliance_status()` (thin async dispatch) to the already-existing `adp.compliance.store` (COMPLY-01/COMPLY-02), reusing its existing `list_mappings_for_{capability,application,design,pattern}()` functions and the existing `ComplianceStatus`/`MappingTargetType` enums from `adp.compliance.models` — zero new packages. (923-derived-compliance-status)
 - PostgreSQL 16 — no migration. Reads the five existing `control_*_mapping` tables (migration `033`, COMPLY-02) exclusively through already-existing store functions; this feature owns no SQL of its own. (923-derived-compliance-status)
+- Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) — both existing stacks + None new. FastAPI ≥ 0.111, SQLAlchemy 2 async (Core, raw `sa.select()` joins mirroring `adp.compliance.store`'s existing `Table()`-object style), Pydantic v2, React 18, TanStack Query v5 — all existing project dependencies. (924-compliance-rollup-reporting)
+- PostgreSQL 16 — no migration. Both new endpoints read the existing `regulatory_frameworks`/`controls`/`control_*_mapping` tables (migrations 032/033) via two new JOIN queries in `adp.compliance.store`. (924-compliance-rollup-reporting)
+- Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) — both existing stacks + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic v2, React 18, TanStack Query v5 — all existing project dependencies; zero new packages (925-strategy-compliance-linkage)
+- PostgreSQL 16 — six new tables via migration `034` (down_revision `033`): `objective_control_links` (a bare Objective↔Control link) plus five parallel `initiative_control_{capability,application,design,pattern,organization}_mapping` tables, each with a composite FK against its corresponding `control_*_mapping` table's own composite PK (research.md D1) (925-strategy-compliance-linkage)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -140,6 +144,112 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 925-strategy-compliance-linkage: Implemented (COMPLY-05, the fifth and final spec of the
+  Compliance Domain bundle) — full `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` →
+  `/speckit.implement` cycle linking the Compliance domain (COMPLY-01–04:
+  `RegulatoryFramework`/`Control`/`ControlMapping`/derived status/rollups) back to the existing
+  Strategy domain, via two independent traceability links: `ObjectiveControlMapping` ("why does
+  this objective exist" — a bare link from a `StrategicObjective` to a `Control`) and
+  `InitiativeControlMapping` ("the remediation loop" — a `StrategyInitiative` linked to a
+  specific, already-assessed `ControlMapping`, so a `compliance_status` change becomes
+  attributable to real closed work). The bundle's third, lower-priority link
+  (`ThemeFrameworkMapping`) was explicitly deferred by the user during `/speckit.specify` and
+  tracked as bead `ADP-1ox`, not built here. A real ground-truth correction was found and
+  resolved before any code was written, not assumed: the bundle described
+  `InitiativeControlMapping` as referencing one `control_mapping_id`, but COMPLY-02 actually
+  implemented `ControlMapping` as five separate physical tables with composite PKs and no
+  synthetic id — resolved by mirroring COMPLY-02's own five-parallel-tables shape one level up,
+  each with a **composite** `ForeignKeyConstraint` against its corresponding `control_*_mapping`
+  table's own composite PK (research.md D1; migration `034`, six tables total — one bare
+  `objective_control_links` plus five `initiative_control_{capability,application,design,
+  pattern,organization}_mapping` tables). Both link types live in `adp.strategy` (extending
+  `store.py`/`initiatives.py`), not `adp.compliance` — the exact package-placement precedent
+  ADP-d8u.2 already established for "Strategy reaches into a foreign domain" via
+  `objective_design_links`/`objective_application_links` — with reverse-lookup routes on
+  `adp.compliance.router` importing `adp.strategy.store`/`adp.strategy.initiatives` through a new
+  `_get_strategy_session()` dependency, mirroring `adp/api/routers/designs.py`'s own
+  cross-package reverse-lookup precedent verbatim. `adp.strategy.store` gained read-only mirrors
+  of the Compliance schema (`_controls_mirror` plus five `control_*_mapping` mirrors, the latter
+  carrying `compliance_status`/`evidence_ref`/`assessed_at` columns, not just keys) so an
+  Initiative's linked-mapping status is always read live via JOIN on every request (research.md
+  D3) — the link tables themselves carry no status column at all, making FR-008's
+  never-drifts guarantee structural rather than a syncing job. Zero new `ActionType`, zero
+  `PERMISSIONS_VERSION` bump — both link types reuse `WRITE_BUSINESS_ARCH`, already held by the
+  identical persona set as `WRITE_COMPLIANCE`; the one new authz surface is the
+  Application-targeted Initiative reverse-lookup route inheriting `READ_APPLICATION_GOVERNANCE`
+  via a decorator-level `dependencies=[Depends(_require_governance_read)]` (spec.md FR-013,
+  mirroring `adp.application.router`'s own precedent exactly — refactored into this shape during
+  implementation after the original inline per-request check was found to force premature
+  DB-session resolution ahead of the permission check, which would have broken
+  `tests/authz/test_enforcement.py`'s explicit no-DB-required design). Frontend: a sixth "Linked
+  Controls" section on `ObjectiveDetail.tsx` (`ObjectiveControlLinkEditor.tsx`) and a new "Linked
+  Compliance Gaps" section in `InitiativeList.tsx`'s edit form (`InitiativeControlMappingEditor.tsx`,
+  showing each linked gap's live status badge); `ControlTree.tsx` gained matching read-only
+  reverse-lookup lines ("Regulatory driver for: …", "Remediation: …") on both the control row and
+  each mapping row. 1612 backend tests (was 1609, +3: 3 authz), 527 frontend tests (was 519 after
+  US1, +8 for US2's `ObjectiveControlLinkEditor.test.tsx`; 519 itself was 511 +8 for US1's own
+  `InitiativeControlMappingEditor.test.tsx`), `ruff`/`mypy`/`tsc`/`adp-generate --check` all
+  clean. Docker was unavailable in this environment (same constraint 921–923 hit), so the
+  testcontainers-gated integration suite (6 tests covering real composite-FK cascade behavior
+  across all four delete directions) is written and will run in CI but wasn't executed locally;
+  verified instead via the full SQLite-backed unit/contract suites plus a complete live
+  walkthrough against a real local Postgres and running backend/frontend: created a temporary,
+  clearly-named test Framework/two Controls/Application/Objective/Initiative, confirmed the
+  remediation-loop link (zero Objective involved), confirmed the live status update flowed
+  through the link with zero writes to the link itself, confirmed both reverse lookups from the
+  Control's own side, confirmed multiplicity (one Objective linked to two Controls) and the 409
+  duplicate-link/404 missing-target paths, confirmed cascade delete (Control removal orphans the
+  link, not the Objective), then a full browser walkthrough via Playwright of both new editor UIs
+  (including linking live through the actual form, not just via curl) and both `ControlTree.tsx`
+  reverse-lookup lines rendering correctly — all test data cleaned up afterward, confirmed by
+  count back to the three real pre-existing frameworks (GDPR, EU AI Act, DORA) and original
+  objective/initiative counts. See `specs/925-strategy-compliance-linkage/`.
+- 924-compliance-rollup-reporting: Implemented (COMPLY-04, the read-side rollup spec of the
+  Compliance Domain bundle, building directly on 921/922/923) — full `/speckit.specify` →
+  `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle for two new read-only aggregate
+  endpoints in `adp.compliance`: `GET .../frameworks/{id}/rollup` (US1, a framework × status
+  matrix — a live count of entities at each of the five `ComplianceStatus` buckets, scoped to that
+  framework's own controls, plus its estate-wide obligation status as a separate line when one
+  exists) and `GET .../summary` (US2, platform-wide framework count / overall coverage % / at-risk
+  count, backing a new sixth "Compliance" domain card on the Overview dashboard). Both directly
+  mirror already-shipped precedents rather than inventing a new pattern:
+  `918-strategy-rollups`' theme × status matrix (`GET /strategy/heatmap`, since `ComplianceStatus`
+  isn't SQL-aggregable any more than `ObjectiveStatus` was) and `051-strategy-landing-card`'s
+  Overview card. Both reuse COMPLY-03's `compute_compliance_status()` unmodified via one new
+  shared `_bucket_entities_by_status()` helper — the only thing that differs between the two
+  endpoints is which rows they feed it (framework-scoped vs. estate-wide). Two real ground-truth
+  corrections to the source bundle were found and confirmed against the actual codebase before
+  scoping, not assumed: one of the bundle's three "What to build" bullets (entity-level
+  traceability) was already fully delivered by COMPLY-02's reverse-lookup endpoints, so this spec
+  did not rebuild it; and the bundle's stated home for this feature ("the Governance & Standards
+  screen... already claims a rollup") didn't hold — no such caption exists, and Governance's own
+  `ComplianceTab.tsx` is an unrelated, already-shipped LLM-Judge validation-exceptions view (a
+  naming collision already flagged during COMPLY-02) — the rollup views live on the dedicated
+  Compliance screen instead. A real clarification was put to the user rather than guessed: whether
+  Application-targeted entities should be excluded from, or included in, the new aggregate rollup
+  counts for a caller lacking `READ_APPLICATION_GOVERNANCE` — resolved to exclude, mirroring
+  COMPLY-02's own forward-lookup filtering precedent exactly, though implemented as
+  filter-*before*-aggregate rather than filter-after-fetch (research.md D2), since aggregation
+  happens inside the store layer here, unlike COMPLY-02's own non-aggregating forward lookup. One
+  emergent, non-obvious property surfaced and explicitly tested rather than silently accepted:
+  because `compute_compliance_status()` resolves any nonempty status list containing
+  `NOT_ASSESSED` to `PARTIAL` (its own existing rule), the rollup's `not_assessed_count` bucket is
+  structurally always zero — the only way an entity reaches `NOT_ASSESSED` is having zero mapped
+  controls at all, which never produces a row to bucket in the first place; documented with a
+  dedicated invariant test rather than left as an unexplained always-zero field. 1579 backend tests
+  (was 1560, +19: 14 unit, 5 contract), 511 frontend tests (was 505, +6), `ruff`/`mypy`/`tsc`/
+  `adp-generate --check` all clean. Verified live end-to-end against a live local Postgres and a
+  running backend/frontend via Playwright: read the real rollup for an existing user-created GDPR
+  framework (correctly all-zero, no stray obligation line), created a temporary, clearly-named
+  test framework mapped to a real Application (non-compliant) and an estate-wide obligation
+  (partial), confirmed both the rollup and the summary card reflected it correctly (non-compliant
+  count 1, organization line "Partial" shown separately, coverage 0%, at-risk 1, framework count
+  incremented), confirmed 404 for an unknown framework, then cleaned up — leaving the user's three
+  real pre-existing frameworks (GDPR, EU AI Act, DORA) completely untouched, confirmed by name
+  after cleanup. The Overview dashboard's new Compliance card was confirmed live too, including
+  the FR-009 `null`-coverage-renders-as-"—" behavior (not a misleading "0%") and the deep-link tile
+  correctly landing on the dedicated Compliance screen, not Governance. See
+  `specs/924-compliance-rollup-reporting/`.
 - 923-derived-compliance-status: Implemented (COMPLY-03, the derived-status spec of the Compliance
   Domain bundle, building directly on 921's `RegulatoryFramework`/`Control` registry and 922's
   `ControlMapping` traceability links) — full `/speckit.specify` → `/speckit.plan` → `/speckit.tasks`
@@ -184,7 +294,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   and `NON_COMPLIANT` after, confirmed `ORGANIZATION` correctly raises against a real DB session,
   then deleted the mappings/controls/framework and confirmed zero leftover rows. See
   `specs/923-derived-compliance-status/`.
-- **Security fix (post-923, same branch)**: ran `/security-review` against the full uncommitted
   compliance-domain diff (921/922/923 combined). A 2-phase agent process (identify → independently
   re-verify with false-positive filtering, confidence ≥ 8/10 required to survive) confirmed one
   real finding: `RegulatoryFramework.source_url` (COMPLY-01) had no scheme validation anywhere —
@@ -202,7 +311,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   frontend tests (was 503, +2), `ruff`/`mypy`/`tsc`/`adp-generate --check` all clean, plus a live
   check against real Postgres confirming both `Create` and `Update` reject a `javascript:`/`data:`
   payload and accept `https://`.
-- 922-control-mappings: Implemented (COMPLY-02, the traceability-link spec of the Compliance Domain
   bundle, building directly on 921's `RegulatoryFramework`/`Control` registry) — full `/speckit.specify`
   → `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle for `ControlMapping`: linking a
   Control to the Capability, Application, Design, Pattern (a `knowledge_items` row of kind `pattern`), or
@@ -254,7 +362,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   delete-then-404 all confirmed live, test data cleaned up afterward. The REVIEWER-role 403 check was
   confirmed via `tests/authz/test_enforcement.py` instead of curl (no dev-mode `X-Role` header exists),
   matching 921's own established pattern. See `specs/922-control-mappings/`.
-- 921-compliance-framework-registry: Implemented (COMPLY-01 only, of a five-spec Compliance Domain
   bundle from `docs/speckit-compliance-bundle_1.md`) — full `/speckit.specify` → `/speckit.clarify` →
   `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle for a `RegulatoryFramework` registry
   (NIST, GDPR, SOC 2, ...) with a self-referencing `Control` hierarchy beneath each framework.

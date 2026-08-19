@@ -428,3 +428,36 @@ def test_application_mapping_read_requires_governance_permission(app: FastAPI) -
         "/api/v1/applications/app1/compliance-mappings"
     )
     assert resp.status_code == 403
+
+
+# ── 925-strategy-compliance-linkage (COMPLY-05): Strategy Domain Linkage ───────────────────────
+
+def test_reviewer_denied_strategy_control_link_write(app: FastAPI) -> None:
+    """A REVIEWER cannot link an Objective to a Control (WRITE_BUSINESS_ARCH) -- covered by the
+    existing /api/v1/strategy/ prefix rule, not a new control-link-specific rule."""
+    resp = _client_as(app, PersonaRole.REVIEWER).post(
+        "/api/v1/strategy/objectives/obj1/controls", json={"control_id": "c1"}
+    )
+    assert resp.status_code == 403
+
+
+def test_reviewer_denied_initiative_control_mapping_write(app: FastAPI) -> None:
+    """A REVIEWER cannot link an Initiative to a ControlMapping (WRITE_BUSINESS_ARCH)."""
+    resp = _client_as(app, PersonaRole.REVIEWER).post(
+        "/api/v1/strategy/initiatives/init1/control-mappings/applications/c1/app1"
+    )
+    assert resp.status_code == 403
+
+
+def test_application_targeted_initiative_lookup_requires_governance_permission(
+    app: FastAPI,
+) -> None:
+    """A role lacking READ_APPLICATION_GOVERNANCE is denied the Application-targeted
+    Initiative reverse-lookup route (spec.md FR-013), mirroring COMPLY-02's own
+    Application-targeted mapping-read gate."""
+    resp = _client_as(app, PersonaRole.REVIEWER).get(
+        "/api/v1/compliance/controls/c1/mappings/applications/app1/initiatives"
+    )
+    assert resp.status_code == 403
+
+

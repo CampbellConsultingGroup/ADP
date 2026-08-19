@@ -1,6 +1,11 @@
-import { useState } from "react";
-import { useFramework, useUpdateFramework, useDeleteFramework } from "../api/compliance";
-import type { ControlNode } from "../api/compliance";
+import React, { useState } from "react";
+import {
+  useFramework,
+  useUpdateFramework,
+  useDeleteFramework,
+  useFrameworkRollup,
+} from "../api/compliance";
+import type { ComplianceStatus, ControlNode, EntityStatusCounts } from "../api/compliance";
 import FrameworkForm from "./FrameworkForm";
 import ControlTree from "./ControlTree";
 
@@ -29,6 +34,58 @@ function isHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+const ROLLUP_BUCKET_LABEL: Record<keyof EntityStatusCounts, string> = {
+  compliant_count: "Compliant",
+  partial_count: "Partial",
+  non_compliant_count: "Non-compliant",
+  not_assessed_count: "Not assessed",
+  not_applicable_count: "Not applicable",
+};
+
+const STATUS_LABEL: Record<ComplianceStatus, string> = {
+  compliant: "Compliant",
+  partial: "Partial",
+  non_compliant: "Non-compliant",
+  not_assessed: "Not assessed",
+  not_applicable: "Not applicable",
+};
+
+/** Coverage rollup for this framework (COMPLY-04 US1) -- a live count of entities at each
+ *  compliance status, scoped to this framework's own controls, plus its estate-wide obligation
+ *  status as a separate line when one exists (FR-001/002/003). A caller lacking
+ *  READ_APPLICATION_GOVERNANCE sees smaller counts (Application-targeted entities excluded),
+ *  never an error -- the same framework legitimately shows different totals to different
+ *  callers (FR-007). */
+function FrameworkCoverageRollup({ frameworkId }: { frameworkId: string }): React.ReactElement {
+  const { data: rollup, isLoading } = useFrameworkRollup(frameworkId);
+
+  if (isLoading) {
+    return <p style={{ fontSize: 12, color: "var(--ink-3)" }}>Loading coverage…</p>;
+  }
+  if (!rollup) return <></>;
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <h4 style={{ fontSize: 14, marginBottom: 8 }}>Coverage</h4>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+        {(Object.keys(ROLLUP_BUCKET_LABEL) as (keyof EntityStatusCounts)[]).map((bucket) => (
+          <div key={bucket} style={{ minWidth: 90 }}>
+            <div style={{ fontSize: 20, fontWeight: 600, color: "var(--ink)" }}>
+              {rollup.entity_counts[bucket]}
+            </div>
+            <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{ROLLUP_BUCKET_LABEL[bucket]}</div>
+          </div>
+        ))}
+      </div>
+      {rollup.organization_status && (
+        <div style={{ fontSize: 12, color: "var(--ink-2)", marginTop: 8 }}>
+          Estate-wide obligation: <strong>{STATUS_LABEL[rollup.organization_status]}</strong>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function FrameworkDetail({ frameworkId, onBack }: FrameworkDetailProps) {
@@ -112,6 +169,8 @@ export default function FrameworkDetail({ frameworkId, onBack }: FrameworkDetail
           )}
         </div>
       )}
+
+      <FrameworkCoverageRollup frameworkId={frameworkId} />
 
       <h4 style={{ fontSize: 14, marginBottom: 8 }}>Controls</h4>
       <ControlTree frameworkId={frameworkId} controls={framework.controls} />

@@ -9,6 +9,11 @@ POST/DELETE /api/v1/strategy/objectives/{id}/value-streams[/{value_stream_id}]
 POST/GET /api/v1/strategy/objectives/{id}/progress
 PATCH /api/v1/strategy/objectives/{id}/progress/{as_of_date}
 PATCH /api/v1/strategy/objectives/{id}/abandon
+POST/DELETE /api/v1/strategy/objectives/{id}/controls[/{control_id}]
+    (925-strategy-compliance-linkage)
+POST/DELETE /api/v1/strategy/initiatives/{id}/control-mappings/{capabilities|applications|
+    designs|patterns}/{control_id}/{target_id}, .../organization/{control_id}
+    (925-strategy-compliance-linkage, COMPLY-05)
 
 Write endpoints are gated by ActionType.WRITE_BUSINESS_ARCH via the app-level
 `/api/v1/strategy/` prefix rule in adp.authz.enforcement (research.md
@@ -38,6 +43,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.compliance.models import MappingTargetType
 from adp.strategy import initiatives as sinit
 from adp.strategy import store as sstore
 from adp.strategy.initiatives import (
@@ -52,6 +58,7 @@ from adp.strategy.models import (
     AbandonRequest,
     ObjectiveApplicationLinkCreate,
     ObjectiveCapabilityLinkCreate,
+    ObjectiveControlLinkCreate,
     ObjectiveDesignLinkCreate,
     ObjectiveProgressCreate,
     ObjectiveProgressEntry,
@@ -473,6 +480,51 @@ async def unlink_objective_application(
     )
 
 
+# ── Links: Controls — Objective side (925-strategy-compliance-linkage, COMPLY-05) ───────────────
+
+
+@router.post("/objectives/{objective_id}/controls", status_code=status.HTTP_201_CREATED)
+async def link_objective_control(
+    objective_id: str,
+    body: ObjectiveControlLinkCreate,
+    session: AsyncSession = Depends(_get_session),
+):
+    control_id = body.control_id
+    if await sstore.get_objective(objective_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Objective {objective_id!r} not found")
+    if not await sstore.control_exists(control_id, session):
+        raise HTTPException(status_code=404, detail=f"Control {control_id!r} not found")
+    try:
+        await sstore.link_objective_control(objective_id, control_id, session)
+    except sstore.DuplicateLinkError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    await session.commit()
+    logger.info(
+        "strategy.objective.control.link objective_id=%s control_id=%s", objective_id, control_id
+    )
+    objective = await sstore.get_objective(objective_id, session)
+    assert objective is not None
+    return objective.control_ids
+
+
+@router.delete(
+    "/objectives/{objective_id}/controls/{control_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_objective_control(
+    objective_id: str, control_id: str, session: AsyncSession = Depends(_get_session)
+):
+    try:
+        await sstore.unlink_objective_control(objective_id, control_id, session)
+    except sstore.LinkNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    await session.commit()
+    logger.info(
+        "strategy.objective.control.unlink objective_id=%s control_id=%s",
+        objective_id, control_id,
+    )
+
+
 # ── Strategy Initiatives (ADP-d8u.6) ───────────────────────────────────────────
 
 
@@ -579,6 +631,196 @@ async def list_objective_initiatives(
         assert initiative is not None
         items.append(initiative)
     return StrategyInitiativeListResponse(items=items, total=len(items))
+
+
+# ── Links: Control Mappings — Initiative side (925-strategy-compliance-linkage, COMPLY-05) ──────
+# One POST/DELETE pair per ControlMapping target shape (research.md D1 -- ControlMapping itself
+# has no single addressable row, so this mirrors adp.compliance.router's own literal-route-per-
+# target-type style rather than one dynamic {target_type} segment), sharing one internal helper
+# each (avoids duplicating the exception->HTTP-status translation five times, mirroring
+# adp.compliance.router's own _translate_mapping_write_errors precedent).
+
+
+async def _link_initiative_control_mapping(
+    initiative_id: str,
+    control_id: str,
+    target_type: MappingTargetType,
+    target_id: str | None,
+    session: AsyncSession,
+) -> StrategyInitiative:
+    if await sinit.get_initiative(initiative_id, session) is None:
+        raise HTTPException(status_code=404, detail=f"Initiative {initiative_id!r} not found")
+    try:
+        await sinit.link_initiative_control_mapping(
+            initiative_id, control_id, target_type, target_id, session
+        )
+    except sinit.ControlMappingNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except sinit.DuplicateLinkError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    await session.commit()
+    logger.info(
+        "strategy.initiative.control_mapping.link initiative_id=%s control_id=%s "
+        "target_type=%s target_id=%s",
+        initiative_id, control_id, target_type.value, target_id,
+    )
+    initiative = await sinit.get_initiative(initiative_id, session)
+    assert initiative is not None
+    return initiative
+
+
+async def _unlink_initiative_control_mapping(
+    initiative_id: str,
+    control_id: str,
+    target_type: MappingTargetType,
+    target_id: str | None,
+    session: AsyncSession,
+) -> None:
+    try:
+        await sinit.unlink_initiative_control_mapping(
+            initiative_id, control_id, target_type, target_id, session
+        )
+    except sinit.LinkNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    await session.commit()
+    logger.info(
+        "strategy.initiative.control_mapping.unlink initiative_id=%s control_id=%s "
+        "target_type=%s target_id=%s",
+        initiative_id, control_id, target_type.value, target_id,
+    )
+
+
+@router.post(
+    "/initiatives/{initiative_id}/control-mappings/capabilities/{control_id}/{capability_id}",
+    response_model=StrategyInitiative,
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_initiative_capability_mapping(
+    initiative_id: str, control_id: str, capability_id: str,
+    session: AsyncSession = Depends(_get_session),
+):
+    return await _link_initiative_control_mapping(
+        initiative_id, control_id, MappingTargetType.CAPABILITY, capability_id, session
+    )
+
+
+@router.delete(
+    "/initiatives/{initiative_id}/control-mappings/capabilities/{control_id}/{capability_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_initiative_capability_mapping(
+    initiative_id: str, control_id: str, capability_id: str,
+    session: AsyncSession = Depends(_get_session),
+):
+    await _unlink_initiative_control_mapping(
+        initiative_id, control_id, MappingTargetType.CAPABILITY, capability_id, session
+    )
+
+
+@router.post(
+    "/initiatives/{initiative_id}/control-mappings/applications/{control_id}/{application_id}",
+    response_model=StrategyInitiative,
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_initiative_application_mapping(
+    initiative_id: str, control_id: str, application_id: str,
+    session: AsyncSession = Depends(_get_session),
+):
+    return await _link_initiative_control_mapping(
+        initiative_id, control_id, MappingTargetType.APPLICATION, application_id, session
+    )
+
+
+@router.delete(
+    "/initiatives/{initiative_id}/control-mappings/applications/{control_id}/{application_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_initiative_application_mapping(
+    initiative_id: str, control_id: str, application_id: str,
+    session: AsyncSession = Depends(_get_session),
+):
+    await _unlink_initiative_control_mapping(
+        initiative_id, control_id, MappingTargetType.APPLICATION, application_id, session
+    )
+
+
+@router.post(
+    "/initiatives/{initiative_id}/control-mappings/designs/{control_id}/{design_id}",
+    response_model=StrategyInitiative,
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_initiative_design_mapping(
+    initiative_id: str, control_id: str, design_id: str,
+    session: AsyncSession = Depends(_get_session),
+):
+    return await _link_initiative_control_mapping(
+        initiative_id, control_id, MappingTargetType.DESIGN, design_id, session
+    )
+
+
+@router.delete(
+    "/initiatives/{initiative_id}/control-mappings/designs/{control_id}/{design_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_initiative_design_mapping(
+    initiative_id: str, control_id: str, design_id: str,
+    session: AsyncSession = Depends(_get_session),
+):
+    await _unlink_initiative_control_mapping(
+        initiative_id, control_id, MappingTargetType.DESIGN, design_id, session
+    )
+
+
+@router.post(
+    "/initiatives/{initiative_id}/control-mappings/patterns/{control_id}/{pattern_id}",
+    response_model=StrategyInitiative,
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_initiative_pattern_mapping(
+    initiative_id: str, control_id: str, pattern_id: str,
+    session: AsyncSession = Depends(_get_session),
+):
+    return await _link_initiative_control_mapping(
+        initiative_id, control_id, MappingTargetType.PATTERN, pattern_id, session
+    )
+
+
+@router.delete(
+    "/initiatives/{initiative_id}/control-mappings/patterns/{control_id}/{pattern_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_initiative_pattern_mapping(
+    initiative_id: str, control_id: str, pattern_id: str,
+    session: AsyncSession = Depends(_get_session),
+):
+    await _unlink_initiative_control_mapping(
+        initiative_id, control_id, MappingTargetType.PATTERN, pattern_id, session
+    )
+
+
+@router.post(
+    "/initiatives/{initiative_id}/control-mappings/organization/{control_id}",
+    response_model=StrategyInitiative,
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_initiative_organization_mapping(
+    initiative_id: str, control_id: str, session: AsyncSession = Depends(_get_session),
+):
+    return await _link_initiative_control_mapping(
+        initiative_id, control_id, MappingTargetType.ORGANIZATION, None, session
+    )
+
+
+@router.delete(
+    "/initiatives/{initiative_id}/control-mappings/organization/{control_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_initiative_organization_mapping(
+    initiative_id: str, control_id: str, session: AsyncSession = Depends(_get_session),
+):
+    await _unlink_initiative_control_mapping(
+        initiative_id, control_id, MappingTargetType.ORGANIZATION, None, session
+    )
 
 
 # ── Objective Dependencies (ADP-d8u.6) ─────────────────────────────────────────

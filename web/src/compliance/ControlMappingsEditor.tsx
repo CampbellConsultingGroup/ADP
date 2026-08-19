@@ -7,13 +7,21 @@
 
 import { useState } from "react";
 import type { ComplianceStatus, ControlMapping, MappingTargetType } from "../api/compliance";
-import { useControlMappings, useDeleteMapping, useUpsertMapping } from "../api/compliance";
+import {
+  useControlMappingInitiatives,
+  useControlMappings,
+  useDeleteMapping,
+  useUpsertMapping,
+} from "../api/compliance";
 
 interface ControlMappingsEditorProps {
   controlId: string;
 }
 
-const TARGET_TYPE_LABEL: Record<MappingTargetType, string> = {
+// Exported for reuse by web/src/strategy/InitiativeControlMappingEditor.tsx
+// (925-strategy-compliance-linkage) -- same five target types / five statuses, one source of
+// truth for their display labels/colors rather than a second copy drifting out of sync.
+export const TARGET_TYPE_LABEL: Record<MappingTargetType, string> = {
   capability: "Capability",
   application: "Application",
   design: "Design",
@@ -25,7 +33,7 @@ const STATUS_OPTIONS: ComplianceStatus[] = [
   "not_assessed", "compliant", "partial", "non_compliant", "not_applicable",
 ];
 
-const STATUS_LABEL: Record<ComplianceStatus, string> = {
+export const STATUS_LABEL: Record<ComplianceStatus, string> = {
   compliant: "Compliant",
   partial: "Partial",
   non_compliant: "Non-compliant",
@@ -33,7 +41,7 @@ const STATUS_LABEL: Record<ComplianceStatus, string> = {
   not_applicable: "Not applicable",
 };
 
-const STATUS_COLOR: Record<ComplianceStatus, string> = {
+export const STATUS_COLOR: Record<ComplianceStatus, string> = {
   compliant: "var(--good, #2e7d32)",
   partial: "var(--warn, #b26a00)",
   non_compliant: "var(--crit)",
@@ -119,6 +127,7 @@ export default function ControlMappingsEditor({ controlId }: ControlMappingsEdit
                   </span>
                 )}
               </div>
+              <LinkedInitiatives controlId={controlId} targetType={m.target_type} targetId={m.target_id} />
             </div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
               <button onClick={() => setEditingKey(key)} style={{ fontSize: 11 }}>
@@ -272,5 +281,28 @@ function MappingForm({
         </button>
       </div>
     </form>
+  );
+}
+
+/** Read-only "Linked Initiatives" line for one mapping row (925-strategy-compliance-linkage,
+ *  COMPLY-05 spec.md FR-007 reverse direction) -- hidden entirely when nothing is linked, or when
+ *  the caller lacks READ_APPLICATION_GOVERNANCE for an Application-targeted mapping (403 renders
+ *  as "no data" the same way an empty result would, no error surfaced for a expected-denial). */
+function LinkedInitiatives({
+  controlId,
+  targetType,
+  targetId,
+}: {
+  controlId: string;
+  targetType: MappingTargetType;
+  targetId: string | null;
+}) {
+  const { data } = useControlMappingInitiatives(controlId, targetType, targetId);
+  const items = data?.items ?? [];
+  if (items.length === 0) return null;
+  return (
+    <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>
+      Remediation: {items.map((i) => i.name).join(", ")}
+    </div>
   );
 }

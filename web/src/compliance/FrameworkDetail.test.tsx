@@ -45,6 +45,16 @@ beforeEach(() => {
   mockedApi.useDeleteControl.mockReturnValue({
     mutate: vi.fn(), isPending: false,
   } as unknown as ReturnType<typeof complianceApi.useDeleteControl>);
+  // COMPLY-04: every test in this file renders FrameworkDetail, which now always calls
+  // useFrameworkRollup -- default to "no data yet" so pre-existing tests above are unaffected;
+  // the rollup-specific describe block below overrides this per test.
+  mockedApi.useFrameworkRollup.mockReturnValue({
+    data: undefined, isLoading: false,
+  } as unknown as ReturnType<typeof complianceApi.useFrameworkRollup>);
+  // 925-strategy-compliance-linkage: "Linked Objectives" read-only line, empty by default.
+  mockedApi.useControlObjectives.mockReturnValue({
+    data: { items: [], total: 0 },
+  } as unknown as ReturnType<typeof complianceApi.useControlObjectives>);
 });
 
 describe("FrameworkDetail (COMPLY-01 US3 — delete scope disclosure)", () => {
@@ -121,5 +131,81 @@ describe("FrameworkDetail (security review finding, 923-derived-compliance-statu
     renderWithQueryClient(<FrameworkDetail frameworkId="f1" onBack={vi.fn()} />);
 
     expect(screen.queryByRole("link", { name: "Source" })).toBeNull();
+  });
+});
+
+describe("FrameworkDetail (COMPLY-04 US1 — coverage rollup)", () => {
+  it("renders all five status-bucket counts", () => {
+    const detail: RegulatoryFrameworkDetail = { ...FRAMEWORK_BASE, controls: [] };
+    mockedApi.useFramework.mockReturnValue({
+      data: detail, isLoading: false, error: null,
+    } as unknown as ReturnType<typeof complianceApi.useFramework>);
+    mockedApi.useFrameworkRollup.mockReturnValue({
+      data: {
+        framework_id: "f1",
+        entity_counts: {
+          compliant_count: 2, partial_count: 4, non_compliant_count: 1,
+          not_assessed_count: 0, not_applicable_count: 3,
+        },
+        organization_status: null,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof complianceApi.useFrameworkRollup>);
+
+    renderWithQueryClient(<FrameworkDetail frameworkId="f1" onBack={vi.fn()} />);
+
+    screen.getByText("2");
+    screen.getByText("Compliant");
+    screen.getByText("1");
+    screen.getByText("Non-compliant");
+    screen.getByText("3");
+    screen.getByText("Not applicable");
+    screen.getByText("4");
+    screen.getByText("Partial");
+  });
+
+  it("renders the estate-wide obligation line only when present", () => {
+    const detail: RegulatoryFrameworkDetail = { ...FRAMEWORK_BASE, controls: [] };
+    mockedApi.useFramework.mockReturnValue({
+      data: detail, isLoading: false, error: null,
+    } as unknown as ReturnType<typeof complianceApi.useFramework>);
+    mockedApi.useFrameworkRollup.mockReturnValue({
+      data: {
+        framework_id: "f1",
+        entity_counts: {
+          compliant_count: 0, partial_count: 0, non_compliant_count: 0,
+          not_assessed_count: 0, not_applicable_count: 0,
+        },
+        organization_status: "partial",
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof complianceApi.useFrameworkRollup>);
+
+    renderWithQueryClient(<FrameworkDetail frameworkId="f1" onBack={vi.fn()} />);
+
+    screen.getByText("Estate-wide obligation:");
+    screen.getByText("Partial", { selector: "strong" });
+  });
+
+  it("does not render an obligation line when organization_status is null", () => {
+    const detail: RegulatoryFrameworkDetail = { ...FRAMEWORK_BASE, controls: [] };
+    mockedApi.useFramework.mockReturnValue({
+      data: detail, isLoading: false, error: null,
+    } as unknown as ReturnType<typeof complianceApi.useFramework>);
+    mockedApi.useFrameworkRollup.mockReturnValue({
+      data: {
+        framework_id: "f1",
+        entity_counts: {
+          compliant_count: 0, partial_count: 0, non_compliant_count: 0,
+          not_assessed_count: 0, not_applicable_count: 0,
+        },
+        organization_status: null,
+      },
+      isLoading: false,
+    } as unknown as ReturnType<typeof complianceApi.useFrameworkRollup>);
+
+    renderWithQueryClient(<FrameworkDetail frameworkId="f1" onBack={vi.fn()} />);
+
+    expect(screen.queryByText("Estate-wide obligation:")).toBeNull();
   });
 });

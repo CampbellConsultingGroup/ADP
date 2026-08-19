@@ -84,6 +84,24 @@ class TestRegulatoryFrameworkCreate:
         )
         assert fw.source_url is None
 
+    # ── name/jurisdiction/authority/version length caps, matching the DB columns exactly
+    #    (bug found live: a paragraph-length jurisdiction/version reached the INSERT and
+    #    crashed create_framework() with a raw 500 -- asyncpg.StringDataRightTruncationError --
+    #    instead of a clean 422) ────────────────────────────────────────────────────────────
+
+    @pytest.mark.parametrize("field", ["name", "jurisdiction", "authority"])
+    def test_255_char_field_over_limit_rejected(self, field):
+        kwargs = {"name": "X", "jurisdiction": "Y", "authority": "Z", "version": "1"}
+        kwargs[field] = "x" * 256
+        with pytest.raises(ValidationError, match="at most 255 characters"):
+            RegulatoryFrameworkCreate(**kwargs)
+
+    def test_version_over_100_chars_rejected(self):
+        with pytest.raises(ValidationError, match="at most 100 characters"):
+            RegulatoryFrameworkCreate(
+                name="X", jurisdiction="Y", authority="Z", version="x" * 101,
+            )
+
 
 class TestRegulatoryFrameworkUpdate:
     def test_empty_update_valid(self):
@@ -161,6 +179,23 @@ class TestControlCreate:
         with pytest.raises(ValidationError):
             ControlCreate(code="AC-2", title="X", description="...", bogus="nope")
 
+    # ── code/title length caps, matching the DB columns exactly (bug found live:
+    #    an over-length value used to reach the INSERT and crash with a raw 500
+    #    (asyncpg.StringDataRightTruncationError) instead of a clean 422) ────────
+
+    def test_code_over_100_chars_rejected(self):
+        with pytest.raises(ValidationError, match="at most 100 characters"):
+            ControlCreate(code="x" * 101, title="X", description="...")
+
+    def test_title_over_255_chars_rejected(self):
+        with pytest.raises(ValidationError, match="at most 255 characters"):
+            ControlCreate(code="AC-2", title="x" * 256, description="...")
+
+    def test_code_and_title_at_exact_limit_accepted(self):
+        c = ControlCreate(code="x" * 100, title="y" * 255, description="...")
+        assert len(c.code) == 100
+        assert len(c.title) == 255
+
 
 class TestControlUpdate:
     def test_empty_update_valid(self):
@@ -171,6 +206,14 @@ class TestControlUpdate:
     def test_blank_field_rejected_if_set(self, field):
         with pytest.raises(ValidationError, match="must not be blank"):
             ControlUpdate(**{field: "  "})
+
+    def test_code_over_100_chars_rejected_if_set(self):
+        with pytest.raises(ValidationError, match="at most 100 characters"):
+            ControlUpdate(code="x" * 101)
+
+    def test_title_over_255_chars_rejected_if_set(self):
+        with pytest.raises(ValidationError, match="at most 255 characters"):
+            ControlUpdate(title="x" * 256)
 
     def test_reparent_and_recode_both_settable(self):
         upd = ControlUpdate(parent_id="new-parent", code="AC-3")

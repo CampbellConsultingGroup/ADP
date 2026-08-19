@@ -43,6 +43,10 @@ beforeEach(() => {
   mockedApi.useDeleteControl.mockReturnValue({
     mutate: deleteMutate, isPending: false,
   } as unknown as ReturnType<typeof complianceApi.useDeleteControl>);
+  // 925-strategy-compliance-linkage: "Linked Objectives" read-only line, empty by default.
+  mockedApi.useControlObjectives.mockReturnValue({
+    data: { items: [], total: 0 },
+  } as unknown as ReturnType<typeof complianceApi.useControlObjectives>);
 });
 
 describe("ControlTree (COMPLY-01 US3 — delete scope disclosure)", () => {

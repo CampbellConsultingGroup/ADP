@@ -1,6 +1,11 @@
 import { useState } from "react";
 import type { ControlNode } from "../api/compliance";
-import { useCreateControl, useUpdateControl, useDeleteControl } from "../api/compliance";
+import {
+  useControlObjectives,
+  useCreateControl,
+  useUpdateControl,
+  useDeleteControl,
+} from "../api/compliance";
 import ControlMappingsEditor from "./ControlMappingsEditor";
 
 interface ControlTreeProps {
@@ -96,7 +101,12 @@ function ControlRow({
         <div style={{ flex: 1 }}>
           {editing ? (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} style={{ fontSize: 13 }} />
+              <input
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                maxLength={255}
+                style={{ fontSize: 13 }}
+              />
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -143,6 +153,8 @@ function ControlRow({
           </div>
         )}
       </div>
+
+      <LinkedObjectives controlId={node.id} />
 
       {showMappings && (
         <div style={{ marginLeft: 20, marginTop: 6 }}>
@@ -211,12 +223,14 @@ function ControlForm({
         value={code}
         onChange={(e) => setCode(e.target.value)}
         placeholder="Code (e.g. AC-2)"
+        maxLength={100}
         style={{ fontSize: 13 }}
       />
       <input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder="Title"
+        maxLength={255}
         style={{ fontSize: 13 }}
       />
       <textarea
@@ -235,5 +249,18 @@ function ControlForm({
         </button>
       </div>
     </form>
+  );
+}
+
+/** Read-only "Linked Objectives" line per control row (925-strategy-compliance-linkage, COMPLY-05
+ *  spec.md FR-003 reverse direction) -- hidden entirely when nothing is linked. */
+function LinkedObjectives({ controlId }: { controlId: string }) {
+  const { data } = useControlObjectives(controlId);
+  const items = data?.items ?? [];
+  if (items.length === 0) return null;
+  return (
+    <div style={{ marginLeft: 20, fontSize: 11, color: "var(--ink-3)" }}>
+      Regulatory driver for: {items.map((o) => o.statement).join(", ")}
+    </div>
   );
 }

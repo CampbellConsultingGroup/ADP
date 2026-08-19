@@ -41,6 +41,10 @@ beforeEach(() => {
   mockedApi.useDeleteMapping.mockReturnValue({
     mutate: deleteMutate, isPending: false,
   } as unknown as ReturnType<typeof complianceApi.useDeleteMapping>);
+  // 925-strategy-compliance-linkage: "Linked Initiatives" read-only line, empty by default.
+  mockedApi.useControlMappingInitiatives.mockReturnValue({
+    data: { items: [], total: 0 },
+  } as unknown as ReturnType<typeof complianceApi.useControlMappingInitiatives>);
 });
 
 describe("ControlMappingsEditor (COMPLY-02)", () => {

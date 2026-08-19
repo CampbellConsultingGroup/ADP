@@ -208,8 +208,10 @@ export interface ControlMappingListResponse {
   total: number;
 }
 
-/** Path segment per target type -- "organization" mappings have no target-id segment. */
-const MAPPING_PATH_SEGMENT: Record<MappingTargetType, string> = {
+/** Path segment per target type -- "organization" mappings have no target-id segment. Exported
+ * for reuse by web/src/api/strategy.ts's own InitiativeControlMapping link URLs
+ * (925-strategy-compliance-linkage), which address a ControlMapping the same three-part way. */
+export const MAPPING_PATH_SEGMENT: Record<MappingTargetType, string> = {
   capability: "capabilities",
   application: "applications",
   design: "designs",
@@ -270,6 +272,47 @@ export function useDeleteMapping(controlId: string) {
   });
 }
 
+// ── Reverse-lookup hooks — Strategy domain (925-strategy-compliance-linkage, COMPLY-05) ─────────
+// A minimal local ref shape, not the full StrategyInitiative from ../api/strategy (which itself
+// embeds control_mappings pointing back into this domain) -- this read-only "Linked Initiatives"
+// line only ever needs id/name/status.
+
+export interface InitiativeRef {
+  id: string;
+  name: string;
+  status: string;
+}
+
+export interface InitiativeRefListResponse {
+  items: InitiativeRef[];
+  total: number;
+}
+
+export function useControlObjectives(controlId: string | null) {
+  return useQuery<{ items: { id: string; statement: string }[]; total: number }>({
+    queryKey: ["control-objectives", controlId],
+    queryFn: () => apiGet(`/api/v1/compliance/controls/${controlId}/objectives`),
+    enabled: !!controlId,
+  });
+}
+
+export function useControlMappingInitiatives(
+  controlId: string | null,
+  targetType: MappingTargetType,
+  targetId?: string | null,
+) {
+  const segment = MAPPING_PATH_SEGMENT[targetType];
+  const path =
+    targetType === "organization"
+      ? `/api/v1/compliance/controls/${controlId}/mappings/organization/initiatives`
+      : `/api/v1/compliance/controls/${controlId}/mappings/${segment}/${targetId}/initiatives`;
+  return useQuery<InitiativeRefListResponse>({
+    queryKey: ["control-mapping-initiatives", controlId, targetType, targetId],
+    queryFn: () => apiGet(path),
+    enabled: !!controlId && (targetType === "organization" || !!targetId),
+  });
+}
+
 // ── Reverse-lookup hooks (COMPLY-02, US3) ─────────────────────────────────────
 
 export function useCapabilityComplianceMappings(capabilityId: string | null) {
@@ -285,5 +328,42 @@ export function useApplicationComplianceMappings(applicationId: string | null) {
     queryKey: ["application-compliance-mappings", applicationId],
     queryFn: () => apiGet(`/api/v1/applications/${applicationId}/compliance-mappings`),
     enabled: !!applicationId,
+  });
+}
+
+// ── Compliance Rollup Reporting (COMPLY-04) ─────────────────────────────────
+
+export interface EntityStatusCounts {
+  compliant_count: number;
+  partial_count: number;
+  non_compliant_count: number;
+  not_assessed_count: number;
+  not_applicable_count: number;
+}
+
+export interface FrameworkCoverageRollup {
+  framework_id: string;
+  entity_counts: EntityStatusCounts;
+  organization_status: ComplianceStatus | null;
+}
+
+export function useFrameworkRollup(frameworkId: string | null) {
+  return useQuery<FrameworkCoverageRollup>({
+    queryKey: ["compliance-framework-rollup", frameworkId],
+    queryFn: () => apiGet(`/api/v1/compliance/frameworks/${frameworkId}/rollup`),
+    enabled: !!frameworkId,
+  });
+}
+
+export interface ComplianceSummaryResponse {
+  framework_count: number;
+  coverage_percent: number | null;
+  at_risk_count: number;
+}
+
+export function useComplianceSummary() {
+  return useQuery<ComplianceSummaryResponse>({
+    queryKey: ["compliance-summary"],
+    queryFn: () => apiGet("/api/v1/compliance/summary"),
   });
 }

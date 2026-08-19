@@ -37,6 +37,12 @@ const OK_ROUTES: Record<string, unknown> = {
     upcoming_count: 3,
     past_due_count: 2,
   },
+  // 924-compliance-rollup-reporting
+  "GET /api/v1/compliance/summary": {
+    framework_count: 4,
+    coverage_percent: 75,
+    at_risk_count: 1,
+  },
 };
 
 const ERROR_TEXT = /Some metrics failed to load/;

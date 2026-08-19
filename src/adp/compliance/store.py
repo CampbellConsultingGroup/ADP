@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from adp.compliance.models import (
     ComplianceStatus,
+    ComplianceSummaryResponse,
     Control,
     ControlCreate,
     ControlMapping,
@@ -26,6 +27,8 @@ from adp.compliance.models import (
     CrossFrameworkParentError,
     CyclicParentError,
     DuplicateControlCodeError,
+    EntityStatusCounts,
+    FrameworkCoverageRollup,
     InvalidPatternTargetError,
     MappingNotFoundError,
     MappingTargetNotFoundError,
@@ -888,3 +891,236 @@ async def get_entity_compliance_status(
         mappings = await list_mappings_for_pattern(entity_id, session)
 
     return compute_compliance_status([m.compliance_status for m in mappings])
+
+
+# ── Compliance Rollup Reporting (COMPLY-04, specs/924-compliance-rollup-reporting/) ─────────
+# Two read-only aggregate views over the same COMPLY-01/02 data, both built on
+# compute_compliance_status() (COMPLY-03) via one shared bucketing helper (research.md D1).
+
+_EntityRow = tuple[MappingTargetType, str, ComplianceStatus]
+
+_FIELD_BY_STATUS: dict[ComplianceStatus, str] = {
+    ComplianceStatus.COMPLIANT: "compliant_count",
+    ComplianceStatus.PARTIAL: "partial_count",
+    ComplianceStatus.NON_COMPLIANT: "non_compliant_count",
+    ComplianceStatus.NOT_ASSESSED: "not_assessed_count",
+    ComplianceStatus.NOT_APPLICABLE: "not_applicable_count",
+}
+
+
+def _bucket_entities_by_status(rows: list[_EntityRow]) -> EntityStatusCounts:
+    """Pure, no I/O (research.md D1): groups rows by (target_type, target_id), calls
+    compute_compliance_status() once per group (COMPLY-03, unmodified), tallies the results into
+    EntityStatusCounts. Shared by both get_framework_coverage_rollup() and
+    get_compliance_summary() -- the only thing that differs between them is which rows they pass
+    in (framework-scoped vs. estate-wide, research.md D3).
+
+    Note: not_assessed_count is structurally always 0 here. An entity only appears as a group
+    when it has at least one row, and compute_compliance_status() resolves any nonempty status
+    list containing NOT_ASSESSED to PARTIAL, never NOT_ASSESSED (its rule 3) -- the only way to
+    reach NOT_ASSESSED is an empty list, which never occurs for a group that exists at all. The
+    field is still present (FR-002's "cover all five buckets"), just always 0 in practice."""
+    groups: dict[tuple[MappingTargetType, str], list[ComplianceStatus]] = {}
+    for target_type, target_id, status in rows:
+        groups.setdefault((target_type, target_id), []).append(status)
+
+    tallies = dict.fromkeys(_FIELD_BY_STATUS.values(), 0)
+    for statuses in groups.values():
+        tallies[_FIELD_BY_STATUS[compute_compliance_status(statuses)]] += 1
+
+    return EntityStatusCounts(**tallies)
+
+
+async def _framework_entity_rows(framework_id: str, session: AsyncSession) -> list[_EntityRow]:
+    """Every entity-targeted ControlMapping row whose control belongs to framework_id, tagged
+    with its target_type. Four small queries (mirrors list_mappings_for_control's own five-way-
+    union style, filtered via a join on framework_id instead of a direct control_id equality --
+    research.md D3), not one UNION, consistent with this module's existing idiom."""
+    rows: list[_EntityRow] = []
+
+    result = await session.execute(
+        sa.select(
+            _control_capability_mapping.c.capability_id,
+            _control_capability_mapping.c.compliance_status,
+        )
+        .select_from(
+            _control_capability_mapping.join(
+                _controls, _control_capability_mapping.c.control_id == _controls.c.id
+            )
+        )
+        .where(_controls.c.framework_id == framework_id)
+    )
+    rows += [
+        (MappingTargetType.CAPABILITY, r.capability_id, ComplianceStatus(r.compliance_status))
+        for r in result
+    ]
+
+    result = await session.execute(
+        sa.select(
+            _control_application_mapping.c.application_id,
+            _control_application_mapping.c.compliance_status,
+        )
+        .select_from(
+            _control_application_mapping.join(
+                _controls, _control_application_mapping.c.control_id == _controls.c.id
+            )
+        )
+        .where(_controls.c.framework_id == framework_id)
+    )
+    rows += [
+        (MappingTargetType.APPLICATION, r.application_id, ComplianceStatus(r.compliance_status))
+        for r in result
+    ]
+
+    result = await session.execute(
+        sa.select(_control_design_mapping.c.design_id, _control_design_mapping.c.compliance_status)
+        .select_from(
+            _control_design_mapping.join(
+                _controls, _control_design_mapping.c.control_id == _controls.c.id
+            )
+        )
+        .where(_controls.c.framework_id == framework_id)
+    )
+    rows += [
+        (MappingTargetType.DESIGN, r.design_id, ComplianceStatus(r.compliance_status))
+        for r in result
+    ]
+
+    result = await session.execute(
+        sa.select(
+            _control_pattern_mapping.c.pattern_id, _control_pattern_mapping.c.compliance_status
+        )
+        .select_from(
+            _control_pattern_mapping.join(
+                _controls, _control_pattern_mapping.c.control_id == _controls.c.id
+            )
+        )
+        .where(_controls.c.framework_id == framework_id)
+    )
+    rows += [
+        (MappingTargetType.PATTERN, r.pattern_id, ComplianceStatus(r.compliance_status))
+        for r in result
+    ]
+
+    return rows
+
+
+async def _framework_organization_rows(
+    framework_id: str, session: AsyncSession
+) -> list[ComplianceStatus]:
+    """Every organization-scoped (estate-wide) mapping's status for controls in this framework.
+    No target_id at all -- never fed into _bucket_entities_by_status(), which is entity-keyed;
+    aggregated separately for FrameworkCoverageRollup.organization_status (spec.md FR-003)."""
+    result = await session.execute(
+        sa.select(_control_organization_mapping.c.compliance_status)
+        .select_from(
+            _control_organization_mapping.join(
+                _controls, _control_organization_mapping.c.control_id == _controls.c.id
+            )
+        )
+        .where(_controls.c.framework_id == framework_id)
+    )
+    return [ComplianceStatus(r.compliance_status) for r in result]
+
+
+async def get_framework_coverage_rollup(
+    framework_id: str, include_application: bool, session: AsyncSession
+) -> FrameworkCoverageRollup | None:
+    """US1: one framework's coverage picture. Returns None if framework_id doesn't exist
+    (router maps to 404, mirroring get_framework_detail's own None-means-404 convention).
+
+    include_application=False drops every APPLICATION-tagged row before bucketing (research.md
+    D2 -- filter-before-aggregate, a deliberate contrast with list_control_mappings' own
+    filter-after-fetch precedent, since aggregation happens in this layer, not the router)."""
+    if await get_framework(framework_id, session) is None:
+        return None
+
+    entity_rows = await _framework_entity_rows(framework_id, session)
+    if not include_application:
+        entity_rows = [r for r in entity_rows if r[0] != MappingTargetType.APPLICATION]
+    entity_counts = _bucket_entities_by_status(entity_rows)
+
+    org_statuses = await _framework_organization_rows(framework_id, session)
+    organization_status = compute_compliance_status(org_statuses) if org_statuses else None
+
+    return FrameworkCoverageRollup(
+        framework_id=framework_id, entity_counts=entity_counts,
+        organization_status=organization_status,
+    )
+
+
+async def _estate_entity_rows(session: AsyncSession) -> list[_EntityRow]:
+    """Every entity-targeted ControlMapping row across the whole estate, no framework filter at
+    all (research.md D3) -- needed for the platform-wide summary's "overall" (cross-framework)
+    entity status, unlike _framework_entity_rows above. No join to controls needed since there is
+    no framework_id filter to apply."""
+    rows: list[_EntityRow] = []
+
+    result = await session.execute(
+        sa.select(
+            _control_capability_mapping.c.capability_id,
+            _control_capability_mapping.c.compliance_status,
+        )
+    )
+    rows += [
+        (MappingTargetType.CAPABILITY, r.capability_id, ComplianceStatus(r.compliance_status))
+        for r in result
+    ]
+
+    result = await session.execute(
+        sa.select(
+            _control_application_mapping.c.application_id,
+            _control_application_mapping.c.compliance_status,
+        )
+    )
+    rows += [
+        (MappingTargetType.APPLICATION, r.application_id, ComplianceStatus(r.compliance_status))
+        for r in result
+    ]
+
+    result = await session.execute(
+        sa.select(_control_design_mapping.c.design_id, _control_design_mapping.c.compliance_status)
+    )
+    rows += [
+        (MappingTargetType.DESIGN, r.design_id, ComplianceStatus(r.compliance_status))
+        for r in result
+    ]
+
+    result = await session.execute(
+        sa.select(
+            _control_pattern_mapping.c.pattern_id, _control_pattern_mapping.c.compliance_status
+        )
+    )
+    rows += [
+        (MappingTargetType.PATTERN, r.pattern_id, ComplianceStatus(r.compliance_status))
+        for r in result
+    ]
+
+    return rows
+
+
+async def get_compliance_summary(
+    include_application: bool, session: AsyncSession
+) -> ComplianceSummaryResponse:
+    """US2: platform-wide framework count / overall coverage % / at-risk count, backing the
+    Overview dashboard's Compliance domain card. coverage_percent is None (never a bare 0.0) when
+    zero entities anywhere have any mapped control (spec.md FR-009)."""
+    fw_count_result = await session.execute(sa.select(sa.func.count()).select_from(_frameworks))
+    framework_count = fw_count_result.scalar_one()
+
+    entity_rows = await _estate_entity_rows(session)
+    if not include_application:
+        entity_rows = [r for r in entity_rows if r[0] != MappingTargetType.APPLICATION]
+    counts = _bucket_entities_by_status(entity_rows)
+
+    total = (
+        counts.compliant_count + counts.partial_count + counts.non_compliant_count
+        + counts.not_assessed_count + counts.not_applicable_count
+    )
+    coverage_percent = None if total == 0 else 100 * counts.compliant_count / total
+    at_risk_count = counts.non_compliant_count + counts.partial_count
+
+    return ComplianceSummaryResponse(
+        framework_count=framework_count, coverage_percent=coverage_percent,
+        at_risk_count=at_risk_count,
+    )

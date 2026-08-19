@@ -32,10 +32,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
+from adp.authz.enforcement import require_action_dep
 from adp.authz.permissions import is_permitted
 from adp.authz.roles import ActionType
 from adp.compliance import store as cstore
 from adp.compliance.models import (
+    ComplianceSummaryResponse,
     Control,
     ControlCreate,
     ControlMapping,
@@ -46,6 +48,7 @@ from adp.compliance.models import (
     CrossFrameworkParentError,
     CyclicParentError,
     DuplicateControlCodeError,
+    FrameworkCoverageRollup,
     InvalidPatternTargetError,
     MappingNotFoundError,
     MappingTargetNotFoundError,
@@ -57,6 +60,8 @@ from adp.compliance.models import (
     RegulatoryFrameworkListResponse,
     RegulatoryFrameworkUpdate,
 )
+from adp.strategy.initiatives import StrategyInitiativeListResponse
+from adp.strategy.models import StrategicObjectiveListResponse
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +80,17 @@ def _get_actor(request: Request) -> str:
 
 async def _get_session():
     factory = cstore._get_session_factory()
+    async with factory() as session:
+        yield session
+
+
+async def _get_strategy_session():
+    """A strategy-scoped session (925-strategy-compliance-linkage, COMPLY-05 research.md D2),
+    used only by the reverse-lookup GET .../objectives and GET .../initiatives routes below --
+    mirrors adp/api/routers/designs.py's own _get_strategy_session() verbatim (ADP-d8u.2)."""
+    from adp.strategy import store as sstore
+
+    factory = sstore._get_session_factory()
     async with factory() as session:
         yield session
 
@@ -111,6 +127,25 @@ async def get_framework_detail(framework_id: str, session: AsyncSession = Depend
     return detail
 
 
+@router.get("/frameworks/{framework_id}/rollup", response_model=FrameworkCoverageRollup)
+async def get_framework_rollup(
+    framework_id: str,
+    session: AsyncSession = Depends(_get_session),
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Framework coverage rollup (COMPLY-04 US1, FR-001/002/003): a live count of entities at
+    each compliance status, scoped to this framework's own controls, plus its estate-wide
+    obligation status as a separate line if one exists. Application-targeted entities are
+    excluded from the counts for a caller lacking READ_APPLICATION_GOVERNANCE (FR-007) --
+    never a 403, unlike GET /applications/{id}/compliance-mappings's own route-level gate
+    (research.md D2 deliberately mirrors list_control_mappings' filtering precedent instead)."""
+    include_application = is_permitted(user.role, ActionType.READ_APPLICATION_GOVERNANCE)
+    rollup = await cstore.get_framework_coverage_rollup(framework_id, include_application, session)
+    if rollup is None:
+        raise HTTPException(status_code=404, detail=f"Framework {framework_id!r} not found")
+    return rollup
+
+
 @router.patch("/frameworks/{framework_id}", response_model=RegulatoryFramework)
 async def update_framework(
     framework_id: str,
@@ -141,6 +176,19 @@ async def delete_framework(
 
     actor = _get_actor(request)
     logger.info("compliance.framework.delete id=%s actor=%s", framework_id, actor)
+
+
+# ── Compliance Rollup Reporting (COMPLY-04 US2) ──────────────────────────────
+
+@router.get("/summary", response_model=ComplianceSummaryResponse)
+async def get_compliance_summary(
+    session: AsyncSession = Depends(_get_session),
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Platform-wide compliance summary, backing the Overview dashboard's Compliance domain
+    card (FR-004/005). Same Application-exclusion rule as the framework rollup above (FR-007)."""
+    include_application = is_permitted(user.role, ActionType.READ_APPLICATION_GOVERNANCE)
+    return await cstore.get_compliance_summary(include_application, session)
 
 
 # ── Controls ──────────────────────────────────────────────────────────────────
@@ -472,3 +520,122 @@ async def list_control_mappings(
         mappings = [m for m in mappings if m.target_type != MappingTargetType.APPLICATION]
 
     return ControlMappingListResponse(items=mappings, total=len(mappings))
+
+
+# ── Reverse lookups — Strategy domain (925-strategy-compliance-linkage, COMPLY-05) ──────────────
+# Mirrors adp/api/routers/designs.py's own cross-package reverse-lookup precedent (ADP-d8u.2):
+# store/list functions live in adp.strategy (research.md D2), called here via _get_strategy_session
+# rather than duplicated. control_exists() is checked against adp.strategy.store's own mirror of
+# the controls table, not cstore -- these routes never touch adp.compliance.store at all.
+
+
+@router.get("/controls/{control_id}/objectives", response_model=StrategicObjectiveListResponse)
+async def list_control_objectives(
+    control_id: str,
+    strategy_session: AsyncSession = Depends(_get_strategy_session),
+):
+    """Reverse lookup (spec.md FR-003): every Strategic Objective linked to this Control.
+    Ungated beyond general platform read access -- an abstract Control carries no
+    target-entity sensitivity of its own, unlike the ControlMapping-scoped routes below."""
+    from adp.strategy import store as sstore
+
+    if not await sstore.control_exists(control_id, strategy_session):
+        raise HTTPException(status_code=404, detail=f"Control {control_id!r} not found")
+    return await sstore.list_objectives_for_control(control_id, strategy_session)
+
+
+# Decorator-level dependency, applied only to the Application-targeted route below (spec.md
+# FR-013) -- mirrors adp.application.router's own `_require_governance_read` precedent exactly.
+# This runs (and can 403) BEFORE the route's own strategy_session dependency is ever asked to do
+# anything beyond construct a lazy SQLAlchemy engine (no real query, no live DB required to test
+# the denial path -- tests/authz/test_enforcement.py's own no-DB-required design).
+_require_governance_read = require_action_dep(ActionType.READ_APPLICATION_GOVERNANCE)
+
+
+async def _list_control_mapping_initiatives(
+    control_id: str,
+    target_type: MappingTargetType,
+    target_id: str | None,
+    strategy_session: AsyncSession,
+) -> StrategyInitiativeListResponse:
+    """Shared handler body for the five GET routes below (spec.md FR-007 reverse direction)."""
+    from adp.strategy import store as sstore
+
+    if not await sstore.control_exists(control_id, strategy_session):
+        raise HTTPException(status_code=404, detail=f"Control {control_id!r} not found")
+
+    from adp.strategy import initiatives as sinit
+
+    return await sinit.list_initiatives_for_control_mapping(
+        control_id, target_type, target_id, strategy_session
+    )
+
+
+@router.get(
+    "/controls/{control_id}/mappings/capabilities/{capability_id}/initiatives",
+    response_model=StrategyInitiativeListResponse,
+)
+async def list_capability_mapping_initiatives(
+    control_id: str,
+    capability_id: str,
+    strategy_session: AsyncSession = Depends(_get_strategy_session),
+):
+    return await _list_control_mapping_initiatives(
+        control_id, MappingTargetType.CAPABILITY, capability_id, strategy_session
+    )
+
+
+@router.get(
+    "/controls/{control_id}/mappings/applications/{application_id}/initiatives",
+    response_model=StrategyInitiativeListResponse,
+    dependencies=[Depends(_require_governance_read)],
+)
+async def list_application_mapping_initiatives(
+    control_id: str,
+    application_id: str,
+    strategy_session: AsyncSession = Depends(_get_strategy_session),
+):
+    return await _list_control_mapping_initiatives(
+        control_id, MappingTargetType.APPLICATION, application_id, strategy_session
+    )
+
+
+@router.get(
+    "/controls/{control_id}/mappings/designs/{design_id}/initiatives",
+    response_model=StrategyInitiativeListResponse,
+)
+async def list_design_mapping_initiatives(
+    control_id: str,
+    design_id: str,
+    strategy_session: AsyncSession = Depends(_get_strategy_session),
+):
+    return await _list_control_mapping_initiatives(
+        control_id, MappingTargetType.DESIGN, design_id, strategy_session
+    )
+
+
+@router.get(
+    "/controls/{control_id}/mappings/patterns/{pattern_id}/initiatives",
+    response_model=StrategyInitiativeListResponse,
+)
+async def list_pattern_mapping_initiatives(
+    control_id: str,
+    pattern_id: str,
+    strategy_session: AsyncSession = Depends(_get_strategy_session),
+):
+    return await _list_control_mapping_initiatives(
+        control_id, MappingTargetType.PATTERN, pattern_id, strategy_session
+    )
+
+
+@router.get(
+    "/controls/{control_id}/mappings/organization/initiatives",
+    response_model=StrategyInitiativeListResponse,
+)
+async def list_organization_mapping_initiatives(
+    control_id: str,
+    strategy_session: AsyncSession = Depends(_get_strategy_session),
+):
+    return await _list_control_mapping_initiatives(
+        control_id, MappingTargetType.ORGANIZATION, None, strategy_session
+    )

@@ -13,6 +13,7 @@ import { useCapabilities, useValueStreams, useDomains } from "../api/business";
 import { usePortfolioSummary } from "../api/portfolio";
 import { useKnowledgeItems } from "../api/knowledge";
 import { useStrategySummary } from "../api/strategy";
+import { useComplianceSummary } from "../api/compliance";
 import "./overview.css";
 
 interface OverviewPageProps {
@@ -87,6 +88,7 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
   const integrations = useIntegrations();
   const summary = usePortfolioSummary();
   const strategySummary = useStrategySummary();
+  const complianceSummary = useComplianceSummary();
 
   const appItems = apps.data?.items ?? [];
   const appCount = apps.data?.total ?? appItems.length;
@@ -113,7 +115,15 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
   const knowledgeCount = knowledge.data?.total;
   const integrationCount = integrations.data?.total;
 
-  const anyError = [apps, caps, streams, domains, techCaps, knowledge, integrations, summary, strategySummary].some((q) => q.isError);
+  const anyError = [apps, caps, streams, domains, techCaps, knowledge, integrations, summary, strategySummary, complianceSummary].some((q) => q.isError);
+
+  // 924-compliance-rollup-reporting: coverage_percent is null (not 0) when the estate has no
+  // mapped entities at all yet (spec.md FR-009) -- rendered as "—", never a misleading "0%".
+  const complianceCoveragePercent = complianceSummary.data?.coverage_percent;
+  const complianceCoverageDisplay =
+    complianceCoveragePercent === null || complianceCoveragePercent === undefined
+      ? "—"
+      : `${Math.round(complianceCoveragePercent)}%`;
 
   const stratTotalObjectives = strategySummary.data?.total_objectives;
   const stratTotalThemes = strategySummary.data?.total_themes;
@@ -246,6 +256,25 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
         { name: "Standards & Tags", icon: "tags", metric: "technology tags", view: "portfolio" },
         { name: "Knowledge Base", icon: "book", metric: `${num(knowledgeCount)} items`, view: "knowledge" },
         { name: "Rendering & Export", icon: "image", metric: "locked C4 theme", view: "designs" },
+      ],
+    },
+    {
+      // 924-compliance-rollup-reporting US2: mirrors the Strategy card's own precedent above --
+      // a live, server-computed summary (framework count / overall coverage % / at-risk count),
+      // not client-side-derived like the four original cards.
+      key: "compliance", eyebrow: "Compliance", title: "Regulatory posture across the estate",
+      desc: "Frameworks and controls, mapped against the capabilities, applications, and designs they govern.",
+      icon: "shield", hue: "var(--biz)", wash: "var(--biz-wash)",
+      metrics: [
+        { n: num(complianceSummary.data?.framework_count), l: "Frameworks" },
+        { n: complianceCoverageDisplay, l: "Coverage" },
+        { n: num(complianceSummary.data?.at_risk_count), l: "At risk" },
+      ],
+      tiles: [
+        {
+          name: "Frameworks", icon: "shield",
+          metric: `${num(complianceSummary.data?.framework_count)} frameworks`, view: "compliance",
+        },
       ],
     },
   ];

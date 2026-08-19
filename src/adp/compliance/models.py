@@ -15,7 +15,7 @@ from datetime import date, datetime
 from enum import StrEnum
 from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ── RegulatoryFramework ────────────────────────────────────────────────────
 
@@ -55,13 +55,20 @@ class RegulatoryFrameworkDetail(RegulatoryFramework):
 
 
 class RegulatoryFrameworkCreate(BaseModel):
-    """Write model for creating a framework."""
+    """Write model for creating a framework.
+
+    name/jurisdiction/authority/version are max_length-capped to match the DB columns exactly
+    (regulatory_frameworks: VARCHAR(255)/(255)/(255)/(100) -- migration 032). Without this, an
+    over-length value reaches the INSERT and fails with a raw 500
+    (asyncpg.StringDataRightTruncationError) instead of a clean 422 -- caught live: a
+    paragraph-length jurisdiction/version description crashed create_framework() before this
+    validation existed."""
     model_config = ConfigDict(extra="forbid")
 
-    name: str
-    jurisdiction: str
-    authority: str
-    version: str
+    name: str = Field(max_length=255)
+    jurisdiction: str = Field(max_length=255)
+    authority: str = Field(max_length=255)
+    version: str = Field(max_length=100)
     effective_date: date | None = None
     source_url: str | None = None
 
@@ -79,13 +86,14 @@ class RegulatoryFrameworkCreate(BaseModel):
 
 
 class RegulatoryFrameworkUpdate(BaseModel):
-    """Write model for updating a framework. All fields optional."""
+    """Write model for updating a framework. All fields optional. Same DB-column-matching
+    max_length caps as RegulatoryFrameworkCreate -- see its docstring."""
     model_config = ConfigDict(extra="forbid")
 
-    name: str | None = None
-    jurisdiction: str | None = None
-    authority: str | None = None
-    version: str | None = None
+    name: str | None = Field(default=None, max_length=255)
+    jurisdiction: str | None = Field(default=None, max_length=255)
+    authority: str | None = Field(default=None, max_length=255)
+    version: str | None = Field(default=None, max_length=100)
     effective_date: date | None = None
     source_url: str | None = None
 
@@ -133,12 +141,16 @@ class ControlNode(Control):
 
 class ControlCreate(BaseModel):
     """Write model for creating a control under a framework. `framework_id` comes from the
-    route path, not the body (mirrors ValueStreamStageCreate's shape in adp.business.models)."""
+    route path, not the body (mirrors ValueStreamStageCreate's shape in adp.business.models).
+
+    code/title are max_length-capped to match the DB columns exactly (controls: VARCHAR(100)/
+    (255) -- migration 032), same reasoning as RegulatoryFrameworkCreate's identical fix.
+    description has no cap -- it's an unbounded Text() column."""
     model_config = ConfigDict(extra="forbid")
 
     parent_id: str | None = None
-    code: str
-    title: str
+    code: str = Field(max_length=100)
+    title: str = Field(max_length=255)
     description: str
     position: int = 0
 
@@ -152,12 +164,13 @@ class ControlCreate(BaseModel):
 
 class ControlUpdate(BaseModel):
     """Write model for updating a control. All fields optional. Changing `parent_id` or `code`
-    re-runs the same cycle/cross-framework/uniqueness validation as create (research.md D5, D6)."""
+    re-runs the same cycle/cross-framework/uniqueness validation as create (research.md D5, D6).
+    Same DB-column-matching max_length caps on code/title as ControlCreate -- see its docstring."""
     model_config = ConfigDict(extra="forbid")
 
     parent_id: str | None = None
-    code: str | None = None
-    title: str | None = None
+    code: str | None = Field(default=None, max_length=100)
+    title: str | None = Field(default=None, max_length=255)
     description: str | None = None
     position: int | None = None
 
@@ -309,6 +322,45 @@ class MappingNotFoundError(Exception):
         super().__init__(
             f"No mapping from control {control_id!r} to {target_type} {target_id!r}"
         )
+
+
+# ── Compliance Rollup Reporting (COMPLY-04) ─────────────────────────────────
+# Read-only, computed views over existing data (COMPLY-01/02/03) -- no new table. Explicit
+# fields, not dict[ComplianceStatus, int], mirroring adp.strategy.models.ThemeStatusCounts's own
+# documented ART-XIII reasoning (research.md D4).
+
+class EntityStatusCounts(BaseModel):
+    """A tally of how many distinct entities landed in each of the five ComplianceStatus
+    buckets, for some scope (one framework, or the whole estate)."""
+    model_config = ConfigDict(extra="forbid")
+
+    compliant_count: int
+    partial_count: int
+    non_compliant_count: int
+    not_assessed_count: int
+    not_applicable_count: int
+
+
+class FrameworkCoverageRollup(BaseModel):
+    """One RegulatoryFramework's coverage picture (US1). organization_status is None when no
+    control in this framework has an estate-wide obligation mapped to it at all -- distinct from
+    a mapped-but-unassessed obligation, which would be NOT_ASSESSED, not None (data-model.md)."""
+    model_config = ConfigDict(extra="forbid")
+
+    framework_id: str
+    entity_counts: EntityStatusCounts
+    organization_status: ComplianceStatus | None
+
+
+class ComplianceSummaryResponse(BaseModel):
+    """Platform-wide compliance summary (US2), backing the Overview dashboard's Compliance
+    domain card. coverage_percent is None when zero entities anywhere have any mapped control at
+    all -- distinct from a genuine 0% (spec.md FR-009)."""
+    model_config = ConfigDict(extra="forbid")
+
+    framework_count: int
+    coverage_percent: float | None
+    at_risk_count: int
 
 
 RegulatoryFrameworkDetail.model_rebuild()

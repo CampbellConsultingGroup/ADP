@@ -17,6 +17,7 @@ import ObjectiveInitiativeLinkEditor from "./ObjectiveInitiativeLinkEditor";
 import ObjectiveDependencyPanel from "./ObjectiveDependencyPanel";
 import ObjectiveDesignLinkEditor from "./ObjectiveDesignLinkEditor";
 import ObjectiveApplicationLinkEditor from "./ObjectiveApplicationLinkEditor";
+import ObjectiveControlLinkEditor from "./ObjectiveControlLinkEditor";
 import { checkMetricFields } from "./objectiveMetric";
 import { Button, StatusBadge, type BadgeTone } from "../ui";
 import NavLinkButton from "./NavLinkButton";
@@ -298,6 +299,9 @@ export default function ObjectiveDetail({ objectiveId, onBack, onNavigateToTheme
 
           <h4 style={{ fontSize: 14, marginTop: 20, marginBottom: 0, color: "var(--ink)" }}>Linked Initiatives</h4>
           <ObjectiveInitiativeLinkEditor objectiveId={objective.id} onNavigateToInitiative={onNavigateToInitiative} />
+
+          <h4 style={{ fontSize: 14, marginTop: 20, marginBottom: 0, color: "var(--ink)" }}>Linked Controls</h4>
+          <ObjectiveControlLinkEditor objective={objective} />
 
           <h4 style={{ fontSize: 14, marginTop: 20, marginBottom: 0, color: "var(--ink)" }}>Dependencies</h4>
           <ObjectiveDependencyPanel objectiveId={objective.id} />

@@ -48,6 +48,7 @@ export default function FrameworkForm({ initial = {}, onSubmit, onCancel, isLoad
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
+          maxLength={255}
           style={{ display: "block", width: "100%", marginTop: 2 }}
           placeholder="NIST 800-53 Rev 5"
         />
@@ -57,6 +58,7 @@ export default function FrameworkForm({ initial = {}, onSubmit, onCancel, isLoad
         <input
           value={jurisdiction}
           onChange={(e) => setJurisdiction(e.target.value)}
+          maxLength={255}
           style={{ display: "block", width: "100%", marginTop: 2 }}
           placeholder="US-Federal"
         />
@@ -66,6 +68,7 @@ export default function FrameworkForm({ initial = {}, onSubmit, onCancel, isLoad
         <input
           value={authority}
           onChange={(e) => setAuthority(e.target.value)}
+          maxLength={255}
           style={{ display: "block", width: "100%", marginTop: 2 }}
           placeholder="NIST"
         />
@@ -75,6 +78,7 @@ export default function FrameworkForm({ initial = {}, onSubmit, onCancel, isLoad
         <input
           value={version}
           onChange={(e) => setVersion(e.target.value)}
+          maxLength={100}
           style={{ display: "block", width: "100%", marginTop: 2 }}
           placeholder="Rev 5"
         />
