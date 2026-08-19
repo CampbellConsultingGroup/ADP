@@ -1,0 +1,75 @@
+<h2 class="sr-only">Data entry form for capturing a strategic objective and linking it to capabilities and value streams</h2>
+<div style="background: var(--surface-2); border-radius: 12px; border: 0.5px solid var(--border); padding: 1.25rem 1.5rem; max-width: 640px;">
+
+<div style="margin-bottom: 1.25rem;">
+<p style="font-weight: 500; font-size: 16px; margin: 0 0 4px;">New strategic objective</p>
+<p style="font-size: 13px; color: var(--text-secondary); margin: 0;">Capture the objective and link it to the capabilities and value streams it affects.</p>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+<div>
+<label style="font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Strategic theme</label>
+<select style="width: 100%;">
+<option>Usage-based pricing</option>
+<option>Embedded distribution</option>
+<option>Claims automation</option>
+<option>Operational excellence</option>
+</select>
+</div>
+<div>
+<label style="font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Owner</label>
+<input type="text" placeholder="Name or team" style="width: 100%;" />
+</div>
+</div>
+
+<div style="margin-bottom: 12px;">
+<label style="font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Objective statement</label>
+<textarea rows="2" placeholder="What are we trying to achieve, and why now" style="width: 100%; resize: vertical;"></textarea>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+<div>
+<label style="font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Metric</label>
+<input type="text" placeholder="Claims cycle time" style="width: 100%;" />
+</div>
+<div>
+<label style="font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Target</label>
+<input type="text" placeholder="Reduce by 40%" style="width: 100%;" />
+</div>
+<div>
+<label style="font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 4px;">Horizon</label>
+<select style="width: 100%;">
+<option>Q3 2026</option>
+<option>Q4 2026</option>
+<option>FY2027</option>
+</select>
+</div>
+</div>
+
+<div style="border-top: 0.5px solid var(--border); margin: 16px 0; padding-top: 16px;">
+<p style="font-size: 13px; font-weight: 500; margin: 0 0 10px;">Linked architecture entities</p>
+
+<div style="margin-bottom: 12px;">
+<label style="font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Capabilities</label>
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
+<span style="background: var(--bg-accent); color: var(--text-accent); font-size: 12px; padding: 4px 10px; border-radius: var(--radius); display: flex; align-items: center; gap: 6px;">Risk assessment <i class="ti ti-x" style="font-size:13px; cursor:pointer;" aria-hidden="true"></i></span>
+<span style="background: var(--bg-accent); color: var(--text-accent); font-size: 12px; padding: 4px 10px; border-radius: var(--radius); display: flex; align-items: center; gap: 6px;">Pricing <i class="ti ti-x" style="font-size:13px; cursor:pointer;" aria-hidden="true"></i></span>
+</div>
+<input type="text" placeholder="Search and add a capability" style="width: 100%;" />
+</div>
+
+<div>
+<label style="font-size: 13px; color: var(--text-secondary); display: block; margin-bottom: 6px;">Value streams</label>
+<div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px;">
+<span style="background: var(--bg-accent); color: var(--text-accent); font-size: 12px; padding: 4px 10px; border-radius: var(--radius); display: flex; align-items: center; gap: 6px;">Quote to bind <i class="ti ti-x" style="font-size:13px; cursor:pointer;" aria-hidden="true"></i></span>
+</div>
+<input type="text" placeholder="Search and add a value stream" style="width: 100%;" />
+</div>
+</div>
+
+<div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px;">
+<button>Cancel</button>
+<button style="background: var(--fill-primary); color: var(--on-primary); border-color: var(--fill-primary);">Save objective</button>
+</div>
+
+</div>
