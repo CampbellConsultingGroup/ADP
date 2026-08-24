@@ -29,6 +29,42 @@ def test_create_rejects_blank_title() -> None:
         DiagramCreate(title="   ", diagram_type="flowchart")
 
 
+def test_create_rejects_title_with_backslash() -> None:
+    # ADP-6ir: confirmed ZAP false positive (High/Low confidence, empty
+    # evidence) -- its generic Path Traversal rule flagged POST /diagrams
+    # accepting and echoing back a backslash-prefixed title verbatim.
+    # title is never used to construct a filesystem path anywhere in this
+    # module; this is display-string hygiene, not a traversal fix, but it
+    # does mean the exact payload ZAP tried is now rejected with a 422.
+    with pytest.raises(ValidationError):
+        DiagramCreate(title="\\diagrams", diagram_type="flowchart")
+
+
+def test_create_rejects_title_with_dot_dot() -> None:
+    with pytest.raises(ValidationError):
+        DiagramCreate(title="../etc/passwd", diagram_type="flowchart")
+
+
+def test_create_rejects_title_with_control_character() -> None:
+    with pytest.raises(ValidationError):
+        DiagramCreate(title="Bad\x00Title", diagram_type="flowchart")
+
+
+def test_create_rejects_title_over_cap() -> None:
+    with pytest.raises(ValidationError):
+        DiagramCreate(title="x" * 201, diagram_type="flowchart")
+
+
+def test_create_accepts_title_at_cap() -> None:
+    body = DiagramCreate(title="x" * 200, diagram_type="flowchart")
+    assert len(body.title) == 200
+
+
+def test_update_rejects_title_with_backslash() -> None:
+    with pytest.raises(ValidationError):
+        DiagramUpdate(title="\\diagrams")
+
+
 def test_create_rejects_dsl_source_over_cap() -> None:
     with pytest.raises(ValidationError):
         DiagramCreate(title="Big", diagram_type="flowchart", dsl_source="x" * 50_001)
