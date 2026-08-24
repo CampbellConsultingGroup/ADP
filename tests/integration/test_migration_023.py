@@ -39,6 +39,16 @@ def _run_alembic(db_url: str, *args: str) -> None:
         raise RuntimeError(f"alembic {' '.join(args)} failed:\n{result.stderr}")
 
 
+@pytest.fixture(autouse=True)
+def _clean_tables():
+    """Override conftest.py's async autouse table-truncation fixture
+    (ADP-isj) with a no-op: this file uses its own dedicated, non-shared
+    container (see module docstring) rather than db_engine, so there's
+    nothing to truncate and no reason to force the shared container to
+    spin up just for this override."""
+    yield
+
+
 @pytest.fixture()
 def migration_db_url():
     if not _docker_available():

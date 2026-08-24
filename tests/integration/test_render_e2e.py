@@ -6,8 +6,19 @@ import base64
 import time
 from unittest.mock import MagicMock
 
+import pytest
+
 from adp.models import ArchitectureDescription, Element, Relationship
 from adp.renderer.orchestrator import RenderOrchestrator
+
+
+@pytest.fixture(autouse=True)
+def _clean_tables():
+    """Override conftest.py's async autouse table-truncation fixture
+    (ADP-isj) with a no-op: this file has no DB and mixes in plain (sync)
+    test functions, which pytest-asyncio doesn't allow to depend on an
+    async autouse fixture (confirmed by direct experiment)."""
+    yield
 
 
 def _make_full_design(num_elements: int = 4) -> ArchitectureDescription:
