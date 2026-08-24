@@ -98,7 +98,26 @@ class ExportOrchestrator:
             raise KeyError(f"Design {design_id!r} not found")
 
         model_version = getattr(design, "version", 1) or 1
-        final_path = Path(export_root) / "exports" / design_id / f"v{model_version}"
+        resolved_root = Path(export_root).resolve()
+
+        # Defense-in-depth (ADP-izw): export_root itself is now an
+        # operator-configured setting, not client input, but design_id is
+        # still a client-controlled URL path segment. Reject anything that
+        # isn't a single, literal path component outright -- a containment
+        # check against the *resolved* final path alone isn't enough on its
+        # own, since e.g. design_id=".." collapses "exports/.." straight
+        # back to resolved_root itself (still "contained", just landing at
+        # <root>/v1 instead of the intended <root>/exports/<id>/v1, which a
+        # bare containment check would miss).
+        design_id_parts = Path(design_id).parts
+        if len(design_id_parts) != 1 or design_id_parts[0] in (".", ".."):
+            raise ValueError(
+                f"Invalid design_id {design_id!r}: must be a single path component"
+            )
+
+        final_path = (resolved_root / "exports" / design_id / f"v{model_version}").resolve()
+        if resolved_root not in final_path.parents:
+            raise ValueError(f"Invalid design_id {design_id!r}: resolves outside export root")
 
         # Pre-check BEFORE creating tmpdir — no files written if path exists
         if final_path.exists():

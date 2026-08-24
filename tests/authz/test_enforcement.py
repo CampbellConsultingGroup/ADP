@@ -96,6 +96,15 @@ def test_solution_architect_denied_config(app: FastAPI) -> None:
     assert resp.status_code == 403
 
 
+def test_reviewer_denied_export(app: FastAPI) -> None:
+    """EXPORT_DESIGN is architect-tier only (ADP-izw): a reviewer is 403'd
+    before ExportOrchestrator ever runs, regardless of request body."""
+    resp = _client_as(app, PersonaRole.REVIEWER).post(
+        "/api/v1/designs/D-001/export", json={"confirmation_id": "x"}
+    )
+    assert resp.status_code == 403
+
+
 def test_architect_not_forbidden_on_write(app: FastAPI) -> None:
     """A permitted role passes the authz gate (any non-403 status is fine here)."""
     resp = _client_as(app, PersonaRole.SOLUTION_ARCHITECT).post(
