@@ -52,10 +52,15 @@ design_versions = Table(
 # Composite primary key expressed as a constraint in the migration;
 # SQLAlchemy Core doesn't require it on the Table object for queries.
 
+# Composite primary key (design_id, id) expressed as a constraint in
+# migration 036 (ADP-a64) -- id is only unique within its own design (the
+# scope next_audit_id() generates it at), not globally; SQLAlchemy Core
+# doesn't require it on the Table object for queries, mirroring
+# design_versions' own composite-PK-in-migration-only precedent above.
 audit_entries = Table(
     "audit_entries",
     metadata,
-    Column("id", Text, primary_key=True),
+    Column("id", Text, nullable=False),
     Column("design_id", String, nullable=False),
     Column("design_version", Integer, nullable=False),
     Column("actor", Text, nullable=False),
