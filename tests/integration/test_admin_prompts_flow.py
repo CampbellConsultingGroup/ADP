@@ -9,6 +9,11 @@ event loop it was created under). This test points that env var at the real
 test container and resets both modules' cached engine/factory first, so
 this test doesn't depend on whatever a previous test in the same process
 already initialized them to.
+
+(This file previously also had its own local, after-each-test DELETE of
+agent_prompt_history/agent_prompt_overrides -- removed as redundant now
+that conftest.py's directory-wide _clean_tables truncates every table
+before each test runs, ADP-isj.)
 """
 
 from __future__ import annotations
@@ -26,16 +31,6 @@ def _reset_admin_module_state(db_url, monkeypatch):
         monkeypatch.setattr(mod, "_engine", None)
         monkeypatch.setattr(mod, "_session_factory", None)
     monkeypatch.setattr(prompt_registry, "_engine_loop", None)
-
-
-@pytest.fixture(autouse=True)
-async def _cleanup_admin_tables(db_engine):
-    yield
-    import sqlalchemy as sa
-
-    async with db_engine.begin() as conn:
-        await conn.execute(sa.text("DELETE FROM agent_prompt_history"))
-        await conn.execute(sa.text("DELETE FROM agent_prompt_overrides"))
 
 
 async def test_confirmed_edit_takes_effect_for_next_chat_turn(db_engine) -> None:
