@@ -139,7 +139,7 @@ async def test_audit_trigger_fires_on_delete(store: DesignStore, db_session) -> 
     desc = _minimal("DESIGN-TRIGGER").model_copy(update={
         "audit_log": [
             AuditEntry(
-                id="AUD-T01",
+                id="AUD-001",
                 actor="a",
                 action="b",
                 affected_entity="x",
@@ -153,36 +153,62 @@ async def test_audit_trigger_fires_on_delete(store: DesignStore, db_session) -> 
 
     with pytest.raises(Exception, match="append-only"):
         await db_session.execute(
-            audit_entries.delete().where(audit_entries.c.id == "AUD-T01")
+            audit_entries.delete().where(
+                (audit_entries.c.design_id == "DESIGN-TRIGGER")
+                & (audit_entries.c.id == "AUD-001")
+            )
         )
 
 
 async def test_mutation_rolls_back_without_audit(store: DesignStore) -> None:
-    """If audit write fails (duplicate PK), the design version is also rolled back (FR-003)."""
+    """A same-design audit-entry id collision with *differing* content raises
+    and rolls back the whole save, including the design_versions insert
+    (FR-003 / ADP-4qv).
+
+    Simulates the stale-read race write_audit_record's own save() call is
+    exposed to (it doesn't pass expected_version): two writers computing the
+    same next_audit_id() from a stale audit_log could independently produce
+    two genuinely different entries under the same AUD-NNN id. That must
+    fail loudly, not silently drop one entry's audit record — distinct from
+    legitimate re-accumulation (a save re-submitting an entry that's already
+    persisted, unchanged, from a prior save of the same design), which must
+    stay a silent no-op — see test_audit_reinsertion_of_unchanged_entry_is_noop.
+    """
     import sqlalchemy as sa
 
+    from adp.store import AuditIntegrityError
     from adp.store.records import design_versions
 
-    dup_entry = AuditEntry(
-        id="AUD-DUP",
+    entry_v1 = AuditEntry(
+        id="AUD-001",
         actor="a",
-        action="b",
+        action="create",
         affected_entity="x",
         summary="First entry.",
         timestamp=_NOW,
         origin="human",
     )
-    # First save — succeeds with AUD-DUP
-    desc = _minimal("DESIGN-ROLLBACK").model_copy(update={"audit_log": [dup_entry]})
+    # First save — succeeds with AUD-001
+    desc = _minimal("DESIGN-ROLLBACK").model_copy(update={"audit_log": [entry_v1]})
     await store.save(desc, actor="test")
 
-    # Second save — duplicate AUD-DUP should trigger IntegrityError inside tx
+    # Second save — a *different* entry claiming the same id, not a
+    # re-submission of entry_v1 itself.
+    entry_v2_conflicting = AuditEntry(
+        id="AUD-001",
+        actor="b",
+        action="update",
+        affected_entity="y",
+        summary="Different entry, same id.",
+        timestamp=_NOW,
+        origin="ai",
+    )
     desc_v2 = desc.model_copy(update={
         "title": "Modified",
-        "audit_log": [dup_entry],  # same id — violates PK on audit_entries
+        "audit_log": [entry_v2_conflicting],
     })
 
-    with pytest.raises(Exception):
+    with pytest.raises(AuditIntegrityError):
         await store.save(desc_v2, actor="test", expected_version=1)
 
     # Verify version count is still 1 (no v2 committed)
@@ -191,6 +217,57 @@ async def test_mutation_rolls_back_without_audit(store: DesignStore) -> None:
             sa.select(design_versions).where(design_versions.c.design_id == "DESIGN-ROLLBACK")
         )).fetchall()
     assert len(rows) == 1, f"Expected 1 version, got {len(rows)}"
+
+
+async def test_audit_reinsertion_of_unchanged_entry_is_noop(store: DesignStore) -> None:
+    """Re-submitting an already-persisted, unchanged audit entry (the normal
+    case — audit_log accumulates all historical entries, so every save
+    re-submits everything seen so far) succeeds silently rather than raising
+    (ADP-4qv, the contrast case to test_mutation_rolls_back_without_audit)."""
+    import sqlalchemy as sa
+
+    from adp.store.records import audit_entries, design_versions
+
+    entry = AuditEntry(
+        id="AUD-001",
+        actor="a",
+        action="create",
+        affected_entity="x",
+        summary="First entry.",
+        timestamp=_NOW,
+        origin="human",
+    )
+    desc = _minimal("DESIGN-REACCUM").model_copy(update={"audit_log": [entry]})
+    await store.save(desc, actor="test")
+
+    # Second save re-submits the exact same (unchanged) entry alongside a
+    # genuinely new one — mirrors how write_audit_record always passes the
+    # full accumulated audit_log, not just the newly-appended entry.
+    entry_2 = AuditEntry(
+        id="AUD-002",
+        actor="a",
+        action="update",
+        affected_entity="x",
+        summary="Second entry.",
+        timestamp=_NOW,
+        origin="human",
+    )
+    desc_v2 = desc.model_copy(update={"audit_log": [entry, entry_2]})
+    await store.save(desc_v2, actor="test", expected_version=1)
+
+    async with store._session_factory() as session:
+        version_rows = (await session.execute(
+            sa.select(design_versions).where(
+                design_versions.c.design_id == "DESIGN-REACCUM"
+            )
+        )).fetchall()
+        audit_rows = (await session.execute(
+            sa.select(audit_entries).where(
+                audit_entries.c.design_id == "DESIGN-REACCUM"
+            )
+        )).fetchall()
+    assert len(version_rows) == 2
+    assert len(audit_rows) == 2
 
 
 # ── US3: Immutable Version History ────────────────────────────────────────────

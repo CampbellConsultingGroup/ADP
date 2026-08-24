@@ -67,6 +67,19 @@ class ConcurrencyConflictError(StoreError):
     pass
 
 
+class AuditIntegrityError(StoreError):
+    """A save's audit_log carries an entry whose id collides with an existing,
+    differently-contented audit_entries row for the same design (ADP-4qv).
+
+    next_audit_id()'s max+1 logic should make this impossible in the single-
+    writer case; this is a defense-in-depth guard against a stale-read race
+    between two concurrent writers on the same design (write_audit_record's
+    own save() call doesn't pass expected_version), which could otherwise
+    independently compute the same next AUD-NNN id for two genuinely
+    different entries and silently lose one of them.
+    """
+
+
 # ── DesignStore ───────────────────────────────────────────────────────────────
 
 
@@ -173,25 +186,63 @@ class DesignStore:
                     )
 
                 # Write audit entries atomically (FR-003).
-                # Use INSERT ... ON CONFLICT DO NOTHING because audit_log accumulates
-                # all historical entries — prior entries already exist in the table
-                # from previous saves and must not be re-inserted.
+                # Use INSERT ... ON CONFLICT ... DO UPDATE ... WHERE <content differs>
+                # because audit_log accumulates all historical entries — prior entries
+                # already exist in the table from previous saves and, when unchanged,
+                # must silently no-op rather than re-insert. Conflict target is
+                # (design_id, id), not id alone (ADP-a64) — id (AUD-NNN) is only
+                # unique within its own design, the scope next_audit_id() generates
+                # it at; a global id-only target caused every design after the first
+                # to silently lose its own AUD-001, AUD-002, ... to a same-numbered
+                # entry from an unrelated design.
+                #
+                # The DO UPDATE (rather than DO NOTHING) is deliberate (ADP-4qv): when
+                # the WHERE predicate finds the conflicting row's content genuinely
+                # differs from the entry being (re-)saved — a real same-design id
+                # collision, not legitimate re-accumulation of an unchanged entry —
+                # Postgres attempts the UPDATE, which the append-only trigger
+                # (deny_audit_mutation(), migration 001) unconditionally rejects.
+                # That raises loudly and rolls back the whole save, including the
+                # design_versions insert, instead of silently losing one entry.
                 from sqlalchemy.dialects.postgresql import insert as pg_insert
                 for entry in description.audit_log:
-                    await session.execute(
-                        pg_insert(audit_entries).values(
-                            id=entry.id,
-                            design_id=description.id,
-                            design_version=new_version,
-                            actor=entry.actor,
-                            action=entry.action,
-                            affected_entity=entry.affected_entity,
-                            summary=entry.summary,
-                            timestamp=entry.timestamp,
-                            origin=entry.origin,
-                            created_at=now,
-                        ).on_conflict_do_nothing(index_elements=["id"])
+                    stmt = pg_insert(audit_entries).values(
+                        id=entry.id,
+                        design_id=description.id,
+                        design_version=new_version,
+                        actor=entry.actor,
+                        action=entry.action,
+                        affected_entity=entry.affected_entity,
+                        summary=entry.summary,
+                        timestamp=entry.timestamp,
+                        origin=entry.origin,
+                        created_at=now,
                     )
+                    try:
+                        await session.execute(
+                            stmt.on_conflict_do_update(
+                                index_elements=["design_id", "id"],
+                                # Value is irrelevant — attempting any UPDATE at all
+                                # on this table always raises, per the trigger above.
+                                # This branch is only reached when WHERE is true.
+                                set_={"actor": stmt.excluded.actor},
+                                where=(
+                                    (audit_entries.c.actor != stmt.excluded.actor)
+                                    | (audit_entries.c.action != stmt.excluded.action)
+                                    | (audit_entries.c.affected_entity
+                                       != stmt.excluded.affected_entity)
+                                    | (audit_entries.c.summary != stmt.excluded.summary)
+                                    | (audit_entries.c.timestamp != stmt.excluded.timestamp)
+                                    | (audit_entries.c.origin != stmt.excluded.origin)
+                                ),
+                            )
+                        )
+                    except sa.exc.DBAPIError as exc:
+                        raise AuditIntegrityError(
+                            description.id,
+                            f"audit entry {entry.id!r} collides with an existing, "
+                            "differently-contented entry for this design",
+                        ) from exc
 
         log_operation("save", description.id, version_num=new_version, actor=actor)
         return DesignRecord(

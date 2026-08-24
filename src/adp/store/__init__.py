@@ -4,6 +4,7 @@ from adp.store.operations import OperationStore
 from adp.store.reasoning import ReasoningRecord, ReasoningStore, _hash_prompt
 from adp.store.records import DesignRecord, DesignVersion, VerdictChain
 from adp.store.store import (
+    AuditIntegrityError,
     ConcurrencyConflictError,
     DesignNotFoundError,
     DesignStore,
@@ -22,6 +23,7 @@ __all__ = [
     "EntityNotFoundError",
     "SchemaValidationError",
     "ConcurrencyConflictError",
+    "AuditIntegrityError",
     "OperationStore",
     "ReasoningStore",
     "ReasoningRecord",
