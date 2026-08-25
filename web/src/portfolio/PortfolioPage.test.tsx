@@ -197,7 +197,7 @@ describe("PortfolioPage (ADP-9ye — Filter by)", () => {
     expect(select.textContent).toMatch(/Criticality \/ Risk Tier/);
     expect(select.textContent).toMatch(/Lifecycle Status/);
     expect(select.textContent).toMatch(/Hosting Model/);
-    expect(select.textContent).toMatch(/Pace Layer/);
+    expect(select.textContent).toMatch(/PACE Layer/);
   });
 
   it("selecting a filter field auto-selects a value and narrows the app list", async () => {

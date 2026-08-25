@@ -174,7 +174,15 @@ test.describe("Portfolio and Governance navigation", () => {
     if (!WEB_URL) test.skip();
   });
 
-  test("clicking Portfolio in the NavBar shows the Technologies section", async ({ page }) => {
+  // ADP-st5: ADP-8xo (earlier in this project's history) replaced this
+  // screen's entire content with the Application Portfolio (PortfolioPage.tsx
+  // -- Group by/Filter by dropdowns, capability buckets), which has no
+  // page-level heading at all, and dropped the in-page "Governance Report"
+  // button -- Governance is now reached solely via its own top-level nav rail
+  // item (AppShell.tsx OVERSIGHT section). Assertions below were reconciled
+  // against the current PortfolioPage.tsx/GovernancePage.tsx/AppShell.tsx
+  // directly rather than guessed.
+  test("clicking APM in NavBar shows the Application Portfolio", async ({ page }) => {
     // App.tsx's default landing view is Overview, not Designs (no client router,
     // no persisted view state) -- navigate there explicitly. Pre-existing bug
     // found while validating ADP-914.14's new canvas-v2.spec.ts against this
@@ -188,57 +196,47 @@ test.describe("Portfolio and Governance navigation", () => {
     // landing view these tests start from without navigating through Designs first.
     await page.getByRole("button", { name: "APM", exact: true }).click();
 
-    // Portfolio page shows "Technologies" heading and "Governance Report" button
-    await expect(page.getByRole("heading", { name: "Technologies" })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole("button", { name: "Governance Report" })).toBeVisible();
+    // No page-level heading -- assert the actual Group by/Filter by controls
+    // (PortfolioPage.tsx) that replaced the old Technologies section instead.
+    await expect(page.getByLabel("Group by")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByLabel("Filter by")).toBeVisible();
   });
 
-  test("Governance Report button opens the three-tab governance page", async ({ page }) => {
+  test("Governance nav item opens the three-tab governance page", async ({ page }) => {
     await page.goto(WEB_URL);
-    // exact: true -- bare "APM" also substring-matches OverviewPage's
-    // redesigned dashboard tile ("APM Analysis TIME . 7R"), visible on the
-    // landing view these tests start from without navigating through Designs first.
-    await page.getByRole("button", { name: "APM", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Governance Report" })).toBeVisible({ timeout: 10_000 });
+    // Governance is its own top-level OVERSIGHT nav item -- no "Governance
+    // Report" button exists on the Portfolio/APM page to route through
+    // anymore (removed along with that page's old content).
+    await page.getByRole("button", { name: "Governance", exact: true }).click();
 
-    await page.getByRole("button", { name: "Governance Report" }).click();
+    // Scoped to the content area, not the whole page -- the OVERSIGHT nav
+    // rail (AppShell.tsx) has grown its own "Compliance" item (COMPLY-01)
+    // since this test was first written, which collides by name with
+    // GovernancePage's own "Compliance" tab button.
+    const content = page.locator(".shell-content");
 
     // All three governance tabs must be visible
-    await expect(page.getByRole("button", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByRole("button", { name: "Compliance" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Activity Feed" })).toBeVisible();
+    await expect(content.getByRole("button", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
+    await expect(content.getByRole("button", { name: "Compliance" })).toBeVisible();
+    await expect(content.getByRole("button", { name: "Activity Feed" })).toBeVisible();
   });
 
-  test("← Portfolio back button returns to portfolio from governance", async ({ page }) => {
+  test("← APM back button returns to the Application Portfolio from governance", async ({ page }) => {
     await page.goto(WEB_URL);
-    // exact: true -- bare "APM" also substring-matches OverviewPage's
-    // redesigned dashboard tile ("APM Analysis TIME . 7R"), visible on the
-    // landing view these tests start from without navigating through Designs first.
-    await page.getByRole("button", { name: "APM", exact: true }).click();
-    await page.getByRole("button", { name: "Governance Report" }).click();
+    await page.getByRole("button", { name: "Governance", exact: true }).click();
     await expect(page.getByRole("button", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
 
+    // GovernancePage.tsx's back button still reads "← APM" and still
+    // navigates to the "portfolio" view -- only the destination page's own
+    // content (and how you'd have gotten there originally) changed.
     await page.getByRole("button", { name: "← APM" }).click();
 
-    await expect(page.getByRole("heading", { name: "Technologies" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByLabel("Group by")).toBeVisible({ timeout: 10_000 });
   });
 
-  // Renamed from "Portfolio tab in NavBar stays highlighted when on governance
-  // page" -- that assumed an older information architecture where Governance
-  // was reachable only as a Portfolio sub-view, so the NavBar special-cased
-  // Portfolio's active style to also apply on the governance page. Governance
-  // is now its own top-level ARCHITECTURE nav item (AppShell.tsx), reachable
-  // directly from the rail as well as via Portfolio's "Governance Report"
-  // button -- confirmed live that AppShell's NavItem active check is a plain
-  // `current === def.view` equality with no such special case anymore, so
-  // "Governance" (not "Portfolio") is the item that highlights either way.
-  test("Governance tab in NavBar is highlighted when reached via Portfolio's Governance Report button", async ({ page }) => {
+  test("Governance nav item is highlighted when on the governance page", async ({ page }) => {
     await page.goto(WEB_URL);
-    // exact: true -- bare "APM" also substring-matches OverviewPage's
-    // redesigned dashboard tile ("APM Analysis TIME . 7R"), visible on the
-    // landing view these tests start from without navigating through Designs first.
-    await page.getByRole("button", { name: "APM", exact: true }).click();
-    await page.getByRole("button", { name: "Governance Report" }).click();
+    await page.getByRole("button", { name: "Governance", exact: true }).click();
     await expect(page.getByRole("button", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
 
     const governanceBtn = page.getByRole("button", { name: "Governance", exact: true });
@@ -328,7 +326,19 @@ test.describe("Business Capabilities Agent Review button", () => {
     await page.getByRole("button", { name: "Business", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Business Architecture" })).toBeVisible({ timeout: 10_000 });
 
-    const row = page.getByText(capName, { exact: true }).locator("../..");
+    // BusinessPage.tsx's default tab is "Domains", not "Capabilities" -- the
+    // capability tree (and this row) only renders once that tab is selected.
+    await page.getByRole("button", { name: "Capabilities", exact: true }).click();
+
+    // exact: false -- CapabilityNode.tsx's name <span> also renders an
+    // adjacent "no strategic linkage" orphan badge with no separating
+    // whitespace whenever the capability has zero strategic-objective
+    // linkage (918-strategy-rollups), which every freshly-created capability
+    // does. That makes the span's own text "{capName}no strategic linkage",
+    // not an exact match for capName alone -- RUN_ID keeps capName unique
+    // enough that a substring match carries no risk of matching a different
+    // row.
+    const row = page.getByText(capName).locator("../..");
     await expect(row).toBeVisible({ timeout: 10_000 });
 
     const reviewButton = row.getByRole("button", { name: /Review/ });

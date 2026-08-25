@@ -78,6 +78,69 @@ When `ADP_AUTH_ENABLED=true`, every `/api/v1/*` route requires a valid Keycloak
 bearer token; roles on the token drive RBAC. Leave it unset (or `false`) for
 local development without a Keycloak instance.
 
+#### Running Keycloak locally (WSL2 dev) — ADP-dhx
+
+Two gotchas turn "Keycloak running locally" into a blank screen when the app
+is opened from the **Windows** browser (not from inside WSL) at
+`localhost:5173`, diagnosed 2026-07-13:
+
+1. **Network**: a Keycloak bound to `127.0.0.1` only listens on WSL2's own
+   loopback, which the Windows host cannot reach even though WSL2 forwards
+   `localhost` for ports bound to *all* interfaces. Bind to `0.0.0.0` (plain
+   `-p 8080:8080`, not `-p 127.0.0.1:8080:8080`) so WSL2's localhost
+   forwarding actually exposes it.
+2. **Redirect URI**: `infra/keycloak/adp-realm.json`'s `adp-frontend` client
+   has its `redirectUris`/`webOrigins` pinned to the deployed Azure Container
+   App's own domain (baked in for that deployment, RUNBOOK's "CRITICAL: patch
+   the Keycloak realm for the new domain" section above) — it does **not**
+   include `http://localhost:5173`, so even a correctly-reachable local
+   Keycloak will reject the post-login redirect back to the dev server with
+   "Invalid parameter: redirect_uri". Patch it once per container lifetime
+   with the same `keycloak_admin_patch.py` mechanism already used for Azure
+   deployments, just pointed at the local instance instead.
+
+```bash
+# 1. Build the same realm-baked image used for deployment (no registry push needed locally)
+docker build -t adp-keycloak-local infra/keycloak
+
+# 2. Run it in dev mode (embedded H2, no Postgres/proxy config needed for local use),
+#    bound to all interfaces so the Windows browser can reach it through WSL2's
+#    localhost forwarding
+docker run --rm -p 8080:8080 \
+  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+  -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+  adp-keycloak-local start-dev --import-realm
+
+# 3. One-time per container: add the local dev origin to the adp-frontend client
+#    (reuses src/adp/ops/keycloak_admin_patch.py verbatim -- see its docstring)
+KEYCLOAK_URL="http://127.0.0.1:8080" \
+KEYCLOAK_REALM=ADPRealm \
+KEYCLOAK_ADMIN_USERNAME=admin \
+KEYCLOAK_ADMIN_PASSWORD=admin \
+KC_PATCH_TARGET=client \
+KC_PATCH_CLIENT_ID=adp-frontend \
+KC_PATCH_BODY='{"redirectUris": ["http://localhost:5173/*"], "webOrigins": ["http://localhost:5173"]}' \
+python3 src/adp/ops/keycloak_admin_patch.py
+```
+
+Then set `ADP_AUTH_ENABLED=true` / `VITE_AUTH_ENABLED=true` (delete
+`web/.env.local` if it sets `VITE_AUTH_ENABLED=false`) and open
+`http://localhost:5173` from the Windows browser — it should redirect to
+Keycloak login and back correctly.
+
+A separate, already-fixed code bug (`web/src/auth/keycloak.ts`'s
+`initKeycloak()`): React 18 StrictMode double-invokes AuthProvider's init
+effect in dev, which used to call `keycloak.init()` twice on the same
+singleton and throw "A Keycloak instance can only be initialized once" —
+`initKeycloak()` now memoizes the init promise, so this no longer reproduces
+regardless of the network/redirect-URI setup above.
+
+*(This whole subsection is written from reading the Dockerfile/realm JSON/
+patch script directly, not run end-to-end here — this environment has no
+running Docker daemon and no Windows browser to complete the live
+Windows-browser login check against. Please verify the full flow once and
+let me know before removing the no-auth workaround.)*
+
 When `ADP_BUSINESS_ARCH_EXPORT_ROOT` is set, two independent background syncs
 start:
 

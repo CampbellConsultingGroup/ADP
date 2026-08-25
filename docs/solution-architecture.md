@@ -92,7 +92,7 @@ The platform's capabilities map to architect personas. Each capability is owned 
 | Portfolio analysis | Cross-portfolio aggregation by technology, lifecycle status; dependency search | Portfolio Analysis |
 | Governance reporting | Per-design audit trail aggregation, compliance exception extraction, paginated activity feed, CSV export | Governance Reporting |
 | Business architecture | 3-level business capability model (L1 Strategic → L2 Operational → L3 Granular) and ordered value streams with stages | Business Architecture |
-| Application registry | Map applications to business capabilities, technical capabilities, value stream stages, and solution designs; track TIME/R-strategy/pace/health-score classification | Application Registry |
+| Application registry | Map applications to business capabilities, technical capabilities, value stream stages, and solution designs; track TIME/R-strategy/PACE/health-score classification | Application Registry |
 | Application portfolio management | Rationalization quadrant, identity fields, risk & compliance register, TCO/cost tracking, technical fit, decommission roadmap + transformation initiatives, ownership & governance, quality & performance signals | Application Portfolio Management |
 | LLM reasoning log | Persistent log of every LLM interaction with token counts, cost estimates, and span metadata | Reasoning Store |
 | Machine-readable output | Persist and export all artifacts as typed, queryable data; YAML/Markdown bundles to VCS | Documentation Model |
@@ -178,7 +178,7 @@ The Platform API exposes 23 FastAPI routers grouped by domain. All routes are pr
 | `/health` | ADP-SPEC-012 | Liveness check; Prometheus metrics scrape |
 | `/config` | ADP-SPEC-015 | LLM provider endpoint configuration |
 | `/business` | ADP-SPEC-033/034 | Business capability hierarchy CRUD, value stream + stage CRUD, capability–design links, value-stream–design links, and design business context reverse-lookup |
-| `/applications` | ADP-SPEC-036 | Application CRUD with TIME/R-strategy/pace-layer/health-score fields; capability links, tech-cap links, stage links, domain integrations, design links |
+| `/applications` | ADP-SPEC-036 | Application CRUD with TIME/R-strategy/PACE-layer/health-score fields; capability links, tech-cap links, stage links, domain integrations, design links |
 | `/technical-capabilities` | ADP-SPEC-036 | Technical capability hierarchy CRUD; 3-level max; parent-delete blocked when children exist |
 | `/integrations` | ADP-SPEC-036 | Point-to-point application integration registry; self-loop rejected; bidirectional permitted; filterable by app_id |
 | `/applications/rationalization` | ADP-SPEC-038 (US1) | TIME quadrant projection: business value × health score |
@@ -448,7 +448,7 @@ The application registry module (`adp.application`, ADP-SPEC-036) provides first
 |---|---|---|
 | `time_classification` | Tolerate / Invest / Migrate / Eliminate | Portfolio disposition (TIME framework) |
 | `r_strategy` | Rehost / Replatform / Repurchase / Refactor / Retire / Retain / Relocate | Migration/modernisation strategy (7R) |
-| `pace_layer` | Record / Differentiation / Innovation | Pace-layer classification |
+| `pace_layer` | Record / Differentiation / Innovation | PACE-layer classification |
 | `health_score` | 1–5 integer | Subjective health indicator; CHECK constraint at DB and Pydantic |
 
 **Technical capability hierarchy**: A separate 3-level tree (`technical_capabilities` table, adjacency-list self-referential FK) records the technical capabilities an organisation can deliver, independent of any single application. The depth limit is enforced at the API layer (422 on attempt to add a 4th level); deleting a parent with children returns 409 Conflict. Levels are derived from the parent, not stored explicitly on the creating payload.
