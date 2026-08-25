@@ -25,9 +25,14 @@ def _make_design(design_id: str = "D-001") -> ArchitectureDescription:
 
 
 @pytest.fixture()
-def client(tmp_path):
+def client(tmp_path, monkeypatch):
     from adp.api.app import create_app
     from adp.api.routers import export_router as export_module
+
+    # ADP-izw: export_root is an operator env var now, not client input --
+    # configured here so the happy-path tests below can exercise a real
+    # (mocked-orchestrator) request without a 503.
+    monkeypatch.setenv("ADP_DESIGN_EXPORT_ROOT", str(tmp_path))
 
     design = _make_design()
     mock_store = MagicMock()
@@ -46,7 +51,7 @@ def client(tmp_path):
 
 def test_export_without_confirmation_returns_422(client):
     c, _ = client
-    resp = c.post("/api/v1/designs/D-001/export", json={"confirmation_id": "", "export_root": "/tmp/test"})  # noqa: E501
+    resp = c.post("/api/v1/designs/D-001/export", json={"confirmation_id": ""})
     assert resp.status_code == 422
     body = json.dumps(resp.json())
     assert "confirmation_id" in body.lower() or "consequential" in body.lower()
@@ -54,8 +59,40 @@ def test_export_without_confirmation_returns_422(client):
 
 def test_export_without_confirmation_id_field_returns_422(client):
     c, _ = client
-    resp = c.post("/api/v1/designs/D-001/export", json={"export_root": "/tmp/test"})
+    resp = c.post("/api/v1/designs/D-001/export", json={})
     assert resp.status_code == 422
+
+
+def test_export_rejects_client_supplied_export_root(client):
+    # ADP-izw: export_root is no longer a request field at all -- extra="forbid"
+    # on ExportRequest rejects it outright rather than silently ignoring it.
+    c, _ = client
+    resp = c.post(
+        "/api/v1/designs/D-001/export",
+        json={"confirmation_id": "CONF-TEST", "export_root": "/etc"},
+    )
+    assert resp.status_code == 422
+
+
+def test_export_returns_503_when_root_not_configured(monkeypatch):
+    from adp.api.app import create_app
+    from adp.api.routers import export_router as export_module
+
+    monkeypatch.delenv("ADP_DESIGN_EXPORT_ROOT", raising=False)
+    design = _make_design()
+    mock_store = MagicMock()
+    mock_store.get = MagicMock(return_value=design)
+    app = create_app()
+
+    async def _get_store():
+        return mock_store
+
+    app.dependency_overrides[export_module.get_design_store] = _get_store
+    c = TestClient(app, raise_server_exceptions=False)
+
+    resp = c.post("/api/v1/designs/D-001/export", json={"confirmation_id": "CONF-TEST"})
+    assert resp.status_code == 503
+    assert "ADP_DESIGN_EXPORT_ROOT" in resp.json()["detail"]
 
 
 def test_export_api_returns_audit_entry_id(client, tmp_path):
@@ -73,7 +110,7 @@ def test_export_api_returns_audit_entry_id(client, tmp_path):
         )
         resp = c.post(
             "/api/v1/designs/D-001/export",
-            json={"confirmation_id": "CONF-TEST", "export_root": export_root},
+            json={"confirmation_id": "CONF-TEST"},
         )
 
     assert resp.status_code == 200

@@ -15,12 +15,21 @@ class ExportRequest(BaseModel):
     ART-VIII: confirmation_id must be a non-empty string. An empty or absent
     confirmation_id is rejected at the Pydantic validation layer — before
     the export handler runs — making it impossible to skip the confirmation gate.
+
+    export_root is deliberately NOT a request field (ADP-izw): it used to be
+    a raw, unvalidated client-supplied string fed straight into a filesystem
+    path with no containment check at all, letting any EXPORT_DESIGN-holding
+    caller write the export bundle to an arbitrary path on the server. The
+    destination is now a server-side operator setting (ADP_DESIGN_EXPORT_ROOT,
+    read in adp.api.routers.export_router), matching the precedent already
+    established by the sibling business/application-architecture export
+    features' ADP_BUSINESS_ARCH_EXPORT_ROOT env var (adp.api.app) — neither
+    of those accepts a client-supplied root either.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     confirmation_id: str
-    export_root: str
 
     @field_validator("confirmation_id")
     @classmethod

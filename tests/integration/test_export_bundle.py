@@ -106,6 +106,25 @@ def test_export_rejects_if_directory_exists(tmp_path, mock_setup):
         orch.export("D-001", str(tmp_path), confirmation_id="CONF-TEST", actor="test-actor")
 
 
+@pytest.mark.parametrize(
+    "malicious_design_id",
+    ["..", "../../etc", "foo/../../bar", "../../../../../../etc/passwd"],
+)
+def test_export_rejects_design_id_escaping_root(tmp_path, mock_setup, malicious_design_id):
+    """ADP-izw defense-in-depth: export_root is now operator-configured, but
+    design_id is still a client-controlled URL path segment. A design_id
+    containing '..' must not let the write escape exports/<design_id>/ ."""
+    from adp.export.bundle import ExportOrchestrator
+
+    mock_store, mock_render, _ = mock_setup
+    orch = ExportOrchestrator(design_store=mock_store, render_orchestrator=mock_render)
+    with pytest.raises(ValueError, match="resolves outside export root"):
+        orch.export(malicious_design_id, str(tmp_path), confirmation_id="CONF-TEST", actor="t")
+
+    # Nothing written anywhere under or above tmp_path.
+    assert list(tmp_path.iterdir()) == []
+
+
 def test_export_model_json_contains_audit_entry(tmp_path, mock_setup):
     """The exported model.json must contain an audit entry for the export action."""
     import json as _json
