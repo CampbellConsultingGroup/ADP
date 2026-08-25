@@ -106,7 +106,7 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
         </select>
       </label>
 
-      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Pace Layer
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>PACE Layer
         <select style={field} value={pace} onChange={e => setPace(e.target.value)}>
           {PACE_OPTIONS.map(o => <option key={o} value={o}>{o || "— none —"}</option>)}
         </select>

@@ -14,12 +14,24 @@ export const keycloak = new Keycloak({
   clientId: keycloakClientId,
 });
 
-export async function initKeycloak(): Promise<boolean> {
-  return keycloak.init({
-    onLoad: "login-required",
-    pkceMethod: "S256",
-    checkLoginIframe: false,
-  });
+// ADP-dhx: React 18 StrictMode (main.tsx) intentionally double-invokes effects
+// in dev, so AuthProvider's init effect calls initKeycloak() twice against the
+// same module-level `keycloak` singleton. keycloak-js throws "A Keycloak
+// instance can only be initialized once" on the second real call to
+// keycloak.init() -- memoize the in-flight/settled promise so a second call
+// (StrictMode's replay, or any other accidental re-invocation) reuses the
+// first call's result instead of re-entering keycloak.init().
+let initPromise: Promise<boolean> | null = null;
+
+export function initKeycloak(): Promise<boolean> {
+  if (!initPromise) {
+    initPromise = keycloak.init({
+      onLoad: "login-required",
+      pkceMethod: "S256",
+      checkLoginIframe: false,
+    });
+  }
+  return initPromise;
 }
 
 /** Ensure the token is valid for at least `minValidity` seconds; refresh if needed.

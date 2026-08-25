@@ -280,7 +280,7 @@ export const FILTER_FIELD_LABELS: Record<FilterField, string> = {
   ...DIMENSION_LABELS,
   lifecycle_status: "Lifecycle Status",
   hosting_model: "Hosting Model",
-  pace_layer: "Pace Layer",
+  pace_layer: "PACE Layer",
 };
 
 export const ALL_FILTER_FIELDS: FilterField[] = [...ALL_DIMENSIONS, "lifecycle_status", "hosting_model", "pace_layer"];
@@ -329,7 +329,7 @@ export function groupByPaceLayer(apps: Application[]): GroupedResult {
     PACE_LAYER_ORDER,
     (k) => k,
     (app) => app.pace_layer,
-    "missing a pace layer",
+    "missing a PACE layer",
   );
 }
 

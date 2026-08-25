@@ -174,7 +174,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
         {section === "overview" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {app.description && <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>{app.description}</p>}
-            {app.pace_layer && <div style={{ fontSize: 12, color: "var(--ink-2)" }}><strong style={{ color: "var(--ink)" }}>Pace layer:</strong> {app.pace_layer}</div>}
+            {app.pace_layer && <div style={{ fontSize: 12, color: "var(--ink-2)" }}><strong style={{ color: "var(--ink)" }}>PACE layer:</strong> {app.pace_layer}</div>}
             <div style={{ fontSize: 11, color: "var(--ink-3)" }}>
               Created {new Date(app.created_at).toLocaleDateString()} · Updated {new Date(app.updated_at).toLocaleDateString()}
             </div>
