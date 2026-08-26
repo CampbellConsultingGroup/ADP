@@ -54,7 +54,9 @@ _logger = logging.getLogger("adp.export.business_arch")
 # see _write_entity_file, so that field alone never makes an unchanged entity
 # look "changed" to the content-comparison in research.md Decision 2).
 
-def _serialize_capability(cap: BusinessCapability) -> dict[str, Any]:
+def _serialize_capability(
+    cap: BusinessCapability, linked_designs: list[str]
+) -> dict[str, Any]:
     return {
         "id": cap.id,
         "name": cap.name,
@@ -65,6 +67,11 @@ def _serialize_capability(cap: BusinessCapability) -> dict[str, Any]:
         "domain_id": cap.domain_id,
         "strategic_relevance": cap.strategic_relevance,
         "maturity_level": cap.maturity_level,
+        # 928-strategy-export, Clarification Q2: capability_design_links (spec 034) links this
+        # capability to a Design -- neither prior export increment covered it; extended here
+        # (not in adp.export.strategy) since a capability's own file is the correct home, the
+        # same reasoning _serialize_stage's own linked_capability_ids already established.
+        "linked_designs": sorted(linked_designs),
     }
 
 
@@ -79,13 +86,15 @@ def _serialize_domain(domain: BusinessDomain) -> dict[str, Any]:
     }
 
 
-def _serialize_value_stream(vs: ValueStream) -> dict[str, Any]:
+def _serialize_value_stream(vs: ValueStream, linked_designs: list[str]) -> dict[str, Any]:
     return {
         "id": vs.id,
         "name": vs.name,
         "description": vs.description,
         "stakeholder": vs.stakeholder,
         "position": vs.position,
+        # 928-strategy-export, Clarification Q2: value_stream_design_links (spec 034).
+        "linked_designs": sorted(linked_designs),
     }
 
 
@@ -114,6 +123,11 @@ class BusinessArchSnapshot:
     # stage_id -> capability_ids linked to it (possibly empty, never missing
     # a key for a stage that exists in `stages`).
     stage_links: dict[str, list[str]] = field(default_factory=dict)
+    # 928-strategy-export, Clarification Q2: capability_id/value_stream_id -> linked design_ids
+    # (possibly empty, never a missing key for an entity that exists in `capabilities`/
+    # `value_streams`).
+    capability_design_links: dict[str, list[str]] = field(default_factory=dict)
+    value_stream_design_links: dict[str, list[str]] = field(default_factory=dict)
 
 
 async def _fetch_all(session: AsyncSession) -> BusinessArchSnapshot:
@@ -136,12 +150,27 @@ async def _fetch_all(session: AsyncSession) -> BusinessArchSnapshot:
     for row in link_rows.mappings().all():
         stage_links.setdefault(row.stage_id, []).append(row.capability_id)
 
+    # 928-strategy-export, Clarification Q2: bulk group-by reads, mirroring stage_links' own
+    # pattern above -- capability_design_links/value_stream_design_links (spec 034) were
+    # explicitly deferred by both this module's own original increment and ADP-SPEC-045.
+    cap_design_rows = await session.execute(sa.select(bstore._cap_design_links))
+    capability_design_links: dict[str, list[str]] = {cap.id: [] for cap in capabilities}
+    for row in cap_design_rows.mappings().all():
+        capability_design_links.setdefault(row.capability_id, []).append(row.design_id)
+
+    vs_design_rows = await session.execute(sa.select(bstore._vs_design_links))
+    value_stream_design_links: dict[str, list[str]] = {vs.id: [] for vs in value_streams}
+    for row in vs_design_rows.mappings().all():
+        value_stream_design_links.setdefault(row.value_stream_id, []).append(row.design_id)
+
     return BusinessArchSnapshot(
         capabilities=capabilities,
         domains=domains,
         value_streams=value_streams,
         stages=stages,
         stage_links=stage_links,
+        capability_design_links=capability_design_links,
+        value_stream_design_links=value_stream_design_links,
     )
 
 
@@ -161,7 +190,9 @@ async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSessio
 
         for cap in snapshot.capabilities:
             _write_entity_file(
-                root / "capabilities" / _safe_filename(cap.id), _serialize_capability(cap), now
+                root / "capabilities" / _safe_filename(cap.id),
+                _serialize_capability(cap, snapshot.capability_design_links.get(cap.id, [])),
+                now,
             )
         for domain in snapshot.domains:
             _write_entity_file(
@@ -169,7 +200,11 @@ async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSessio
             )
         for vs in snapshot.value_streams:
             vs_dir = root / "value-streams" / _safe_path_component(vs.id)
-            _write_entity_file(vs_dir / "value-stream.json", _serialize_value_stream(vs), now)
+            _write_entity_file(
+                vs_dir / "value-stream.json",
+                _serialize_value_stream(vs, snapshot.value_stream_design_links.get(vs.id, [])),
+                now,
+            )
         for stage in snapshot.stages:
             vs_dir = root / "value-streams" / _safe_path_component(stage.value_stream_id)
             linked = snapshot.stage_links.get(stage.id, [])

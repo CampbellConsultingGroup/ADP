@@ -51,7 +51,9 @@ from adp.chat import router as chat_router_module
 from adp.compliance import router as compliance_router_module
 from adp.diagrams import router as diagrams_router
 from adp.export import application_arch, business_arch
+from adp.export import strategy as strategy_export
 from adp.strategy import router as strategy_router
+from adp.strategy import store as sstore
 from adp.telemetry.context import TraceIdFilter, generate_trace_id, set_trace_id
 from adp.telemetry.metrics import ACTIVE_REQUESTS, ERROR_COUNTER, REQUEST_COUNTER, REQUEST_LATENCY
 
@@ -89,6 +91,23 @@ async def stop_application_arch_export(task: asyncio.Task[None] | None) -> None:
     await application_arch.stop_background_sync(task)
 
 
+def start_strategy_export() -> asyncio.Task[None] | None:
+    """ADP-81p.3: start the continuous Strategy domain export sync. Reuses the
+    SAME ADP_BUSINESS_ARCH_EXPORT_ROOT/_INTERVAL_SECONDS env vars as
+    ADP-SPEC-044/045 -- no new configuration surface for this feature. No-op
+    unless that root is set."""
+    export_root = os.environ.get("ADP_BUSINESS_ARCH_EXPORT_ROOT")
+    interval = float(os.environ.get("ADP_BUSINESS_ARCH_EXPORT_INTERVAL_SECONDS", "60"))
+    return strategy_export.start_background_sync(
+        export_root, interval, sstore._get_session_factory()
+    )
+
+
+async def stop_strategy_export(task: asyncio.Task[None] | None) -> None:
+    """ADP-81p.3: stop the continuous Strategy domain export sync."""
+    await strategy_export.stop_background_sync(task)
+
+
 def _install_trace_id_logging() -> None:
     """Install TraceIdFilter on the root logger (QG-10 / FR-001).
 
@@ -103,8 +122,9 @@ def _install_trace_id_logging() -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Startup: mark stale operations failed + schedule cleanup + start the
-    business architecture export sync (ADP-SPEC-044, opt-in). Shutdown: cancel
-    both background tasks."""
+    business architecture / application registry / strategy domain export
+    syncs (ADP-SPEC-044/045/ADP-81p.3, all opt-in). Shutdown: cancel every
+    background task."""
     from adp.api.deps import get_operation_store
 
     _cleanup_task: asyncio.Task | None = None
@@ -140,6 +160,9 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # ADP-SPEC-045: opt-in continuous export of the Application registry,
     # sharing the same env vars/root as ADP-SPEC-044 above.
     _app_export_task = start_application_arch_export()
+    # ADP-81p.3: opt-in continuous export of the Strategy domain, sharing the
+    # same env vars/root as ADP-SPEC-044/045 above.
+    _strategy_export_task = start_strategy_export()
 
     yield
 
@@ -147,6 +170,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         _cleanup_task.cancel()
     await stop_business_arch_export(_export_task)
     await stop_application_arch_export(_app_export_task)
+    await stop_strategy_export(_strategy_export_task)
 
 
 def create_app() -> FastAPI:

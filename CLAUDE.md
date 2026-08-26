@@ -1,6 +1,6 @@
 # ADP Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-08-25 (926-framework-versioning-correction COMPLY-01a implemented)
+Auto-generated from all feature plans. Last updated: 2026-08-26 (926-framework-versioning-correction COMPLY-01a implemented)
 
 ## Active Technologies
 - Python 3.11+ + SQLAlchemy 2.x (async ORM), asyncpg (PostgreSQL async driver), Alembic (migrations), testcontainers-python (PostgreSQL container for integration tests), pydantic-settings (database URL config) (002-design-store)
@@ -104,6 +104,7 @@ Auto-generated from all feature plans. Last updated: 2026-08-25 (926-framework-v
 - PostgreSQL 16 — one migration (`035`, down_revision `034`): seven additive columns on `regulatory_frameworks` (`regulation_number`/`celex_number`/`adoption_date`/`oj_publication_date`/`entry_into_force_date`/`consolidated_as_of`/`status`, zero existing columns altered), plus two new `String(36)`-keyed, `ON DELETE CASCADE` child tables (`framework_application_phase`, `framework_amendment`) (926-framework-versioning-correction)
 - Python 3.12 (backend) — no frontend file touched (data-model-and-API-only, + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic v2 — all (927-theme-framework-mapping)
 - PostgreSQL 16 — one new table via migration `037` (`down_revision = "036"`): (927-theme-framework-mapping)
+- Python 3.12 + FastAPI (extends the existing lifespan hook — a third background task (928-strategy-export)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -148,6 +149,61 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 928-strategy-export: Implemented (ADP-81p.3, "Continuous export of Strategy domain to versioned
+  JSON files", ADP-81p Option 1's third domain — following ADP-SPEC-044's Business Architecture
+  export and ADP-SPEC-045's Application registry export) — full `/speckit.specify` →
+  `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle. Unlike its two predecessors, this
+  bead had not yet been spec'd at all; three real scope ambiguities were resolved via
+  `AskUserQuestion` before writing spec.md, all to the recommended option: (1) an exported
+  objective's `status` is the platform's own live `compute_status()`-derived value, not raw stored
+  columns, matching what every existing API consumer already sees; (2) `capability_design_links`/
+  `value_stream_design_links` (spec 034, deferred by both prior export increments) extend the
+  already-shipped `adp.export.business_arch`'s own capability/value-stream files (a new
+  `linked_designs` field) rather than living in the new `adp.export.strategy` module or a new file
+  location, since a capability/value-stream is the entity that owns the link; (3) the three
+  Strategy↔Compliance links added earlier this session (925/927: `objective_control_links`, five
+  `initiative_control_*_mapping` tables, `theme_framework_links`) — which postdate the bead's
+  original scope — are included in this export increment rather than deferred again. New
+  `src/adp/export/strategy.py` exports `strategy/{themes,objectives,initiatives}/<id>.json`: a
+  theme's `framework_ids`; an objective's full scalar fields, computed status/status_reason, every
+  cross-domain link (capability/value-stream/design/application/control ids), its dependency graph
+  (`depends_on_objective_ids`/`blocked_objective_ids`), its full progress history (not a summary),
+  and — closing a traceability gap the epic itself called out — the reverse `initiative_ids`
+  linking back to every initiative that references it; an initiative's own fields, `objective_ids`,
+  and its live (never-cached) compliance-mapping status per linked control. All bulk-fetched via a
+  small, fixed number of queries per reconciliation cycle (research.md Decision 4, inherited from
+  ADP-SPEC-045's own no-N+1 principle) — **with one recorded, deliberate deviation**: reusing
+  `adp.strategy.initiatives.list_initiatives()` as-is (which internally does its own 1+5-query
+  N+1 dispatch across the five `control_*_mapping` tables) rather than re-deriving that same
+  five-table `target_type` dispatch a second time inside the new export module — judged acceptable
+  at this domain's scale and documented in research.md, an inline code comment, and tasks.md rather
+  than silently patched over. Reuses `adp.export.common` verbatim (atomic writes, content-diff-aware
+  writes so an unchanged entity never rewrites, orphan file cleanup, generic background-loop
+  lifecycle) — zero new mechanism, zero new env var (still `ADP_BUSINESS_ARCH_EXPORT_ROOT`/
+  `_INTERVAL_SECONDS`, now shared three ways). `src/adp/api/app.py` gained a third
+  `start_strategy_export()`/`stop_strategy_export()` pair wired into `_lifespan` alongside the two
+  existing export tasks. No new migration, no new table — a pure read projection over
+  already-existing Strategy/Compliance schema. 1693 backend tests (was 1682, +11 unit: 6
+  serialization, 5 reconciliation via a SQLite fixture; +3 integration, Docker-gated — same
+  constraint every export/COMPLY-0x spec this session has hit, written and will run in CI), plus 2
+  existing `test_business_arch_serialize.py` tests updated and 2 new ones added for the
+  `linked_designs` extension. `ruff`/`mypy` both clean (a spurious multi-file mypy cascade was
+  investigated and ruled out as a stale-cache/batch-composition artifact, not a real regression,
+  by clearing `.mypy_cache` and confirming the canonical `mypy src/` check stayed clean throughout).
+  Verified live end-to-end against a real running backend and local Postgres (env vars pointed at
+  a scratch export root, 5-second interval): every quickstart.md scenario confirmed by direct API
+  calls plus reading the actual exported JSON off disk — theme/objective/initiative export with
+  every relationship populated, the dependency-graph and reverse-initiative-lookup fields, the
+  `linked_designs` extension on a real capability, all synthetic test data (theme, 2 objectives,
+  1 initiative, 1 capability) deleted afterward and confirmed gone (the linked Design itself,
+  `DSN-201`, cannot be deleted via any API — an established, unrelated platform limitation, not a
+  gap in this feature). Two real documentation bugs were found and fixed in quickstart.md's own
+  draft curls during this live walkthrough — wrong guessed endpoint paths for creating an
+  objective dependency (corrected to `POST .../objectives/{objective_id}/depends-on`) and for
+  linking an initiative to an objective (corrected to path-param
+  `POST .../initiatives/{initiative_id}/objectives/{objective_id}`, no body) — plus one missing
+  required field (`level`) in the capability-creation curl for Scenario 5. See
+  `specs/928-strategy-export/`.
 - 927-theme-framework-mapping: Implemented (COMPLY-05's third, deferred link — `ThemeFrameworkMapping`,
   tracked as bead ADP-1ox since 925-strategy-compliance-linkage explicitly deferred it) — full
   `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle for a coarse,
@@ -240,7 +296,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   test edit fully cleared back to its original state and all temporary test frameworks deleted
   afterward, confirmed by framework count returning to exactly 3. See
   `specs/926-framework-versioning-correction/`.
-- 925-strategy-compliance-linkage: Implemented (COMPLY-05, the fifth and final spec of the
   Compliance Domain bundle) — full `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` →
   `/speckit.implement` cycle linking the Compliance domain (COMPLY-01–04:
   `RegulatoryFramework`/`Control`/`ControlMapping`/derived status/rollups) back to the existing
