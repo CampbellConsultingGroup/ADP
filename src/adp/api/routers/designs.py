@@ -12,11 +12,13 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+from sqlalchemy import exc as sa_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.audit.writer import next_audit_id
 from adp.compliance.models import ControlMappingListResponse
 from adp.models import SCHEMA_VERSION, ArchitectureDescription, AuditEntry
+from adp.store import AuditIntegrityError
 from adp.strategy.models import StrategicObjectiveListResponse
 
 logger = logging.getLogger(__name__)
@@ -165,32 +167,68 @@ async def create_design(
             detail=f"Design limit reached ({max_designs}). Delete unused designs to create new ones.",  # noqa: E501
         )
 
-    design_id = await store.next_design_id()
     actor = _get_actor(raw_request)
     now = datetime.now(timezone.utc)
 
-    design = ArchitectureDescription(
-        schema_version=SCHEMA_VERSION,
-        id=design_id,
-        title=request_body.title,
-        description=request_body.description,
-        created_at=now,
-        updated_at=now,
-    )
+    # ADP-twl: next_design_id() computes "max existing DSN-NNN + 1" via a plain
+    # SELECT, then this function separately INSERTs that id in store.save() --
+    # there is no lock spanning the two, so two designs created close enough in
+    # time (confirmed reproducible with a handful of concurrent POSTs) can both
+    # compute the same id and race to insert it. Two distinct failure shapes
+    # result, both meaning the same thing ("someone else just claimed our id,
+    # not that anything about *this* request was invalid") and both safe to
+    # retry with a freshly-generated id:
+    #  - The common case: the loser's design_versions INSERT (version_num=1)
+    #    hits the other's already-committed row head-on -- a raw, unwrapped
+    #    IntegrityError (store.save() only wraps the *audit_entries* conflict
+    #    case -- see its own comment -- so this one reaches us as-is).
+    #  - The narrower case: our next_design_id() reads a snapshot just before
+    #    a competitor's insert for that same id lands, but by the time our own
+    #    save() runs its existing-design check moments later, the competitor
+    #    HAS landed -- so save() treats ours as an *update* (new_version=2+)
+    #    rather than a fresh create. This does not corrupt the competitor's
+    #    design: every fresh `design` object here starts from an empty
+    #    audit_log, so its one audit entry is always synthesized as "AUD-001"
+    #    regardless of the target id's real history, which collides with that
+    #    id's real, already-committed AUD-001 and raises AuditIntegrityError
+    #    -- rolling back the whole transaction (it's all one `session.begin()`
+    #    in store.save()), including the spurious version-2 insert.
+    max_attempts = 5
+    for attempt in range(max_attempts):
+        design_id = await store.next_design_id()
 
-    # ART-IX: audit entry for design creation
-    audit_id = next_audit_id(design)
-    design.audit_log.append(AuditEntry(
-        id=audit_id,
-        actor=actor,
-        action="design-created",
-        affected_entity=design_id,
-        summary=f"Design {design_id!r} created: {request_body.title[:60]}",
-        timestamp=now,
-        origin="human",
-    ))
+        design = ArchitectureDescription(
+            schema_version=SCHEMA_VERSION,
+            id=design_id,
+            title=request_body.title,
+            description=request_body.description,
+            created_at=now,
+            updated_at=now,
+        )
 
-    await store.save(design, actor=actor)
+        # ART-IX: audit entry for design creation
+        audit_id = next_audit_id(design)
+        design.audit_log.append(AuditEntry(
+            id=audit_id,
+            actor=actor,
+            action="design-created",
+            affected_entity=design_id,
+            summary=f"Design {design_id!r} created: {request_body.title[:60]}",
+            timestamp=now,
+            origin="human",
+        ))
+
+        try:
+            await store.save(design, actor=actor)
+        except (sa_exc.IntegrityError, AuditIntegrityError):
+            if attempt == max_attempts - 1:
+                raise HTTPException(
+                    status_code=503,
+                    detail="Could not allocate a unique design id under concurrent load; please retry.",  # noqa: E501
+                ) from None
+            continue
+        else:
+            break
 
     logger.info("designs.create id=%s title=%r actor=%s", design_id, request_body.title, actor)
     return design

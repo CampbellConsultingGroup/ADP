@@ -138,6 +138,92 @@ def test_create_design_audit_entry_written(client):
     assert design.audit_log[0].action == "design-created"
 
 
+# ── ADP-twl: id-collision retry ───────────────────────────────────────────────
+#
+# next_design_id() computes "max existing DSN-NNN + 1" via a plain SELECT with
+# no lock spanning it and the later INSERT, so two designs created close
+# enough in time can compute the same id and race to insert it (confirmed
+# live: a handful of concurrent POSTs against a real backend reproduces this
+# every time). Both observed failure shapes must be retried with a freshly
+# generated id, not surfaced as a hard failure.
+
+def test_create_design_retries_on_id_collision(client):
+    """Common case: our design_versions INSERT loses the race outright (a raw,
+    unwrapped IntegrityError -- store.save() only wraps the audit_entries
+    conflict case). The next attempt gets a fresh id and succeeds."""
+    import sqlalchemy.exc
+
+    c, mock_store, _ = client
+    mock_store.count_all = AsyncMock(return_value=0)
+    mock_store.next_design_id = AsyncMock(side_effect=["DSN-001", "DSN-002"])
+
+    saved: list[ArchitectureDescription] = []
+    calls = {"n": 0}
+
+    async def _save_first_call_collides(design, actor="system"):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise sqlalchemy.exc.IntegrityError("INSERT ...", {}, Exception("dup key"))
+        saved.append(design)
+
+    mock_store.save = AsyncMock(side_effect=_save_first_call_collides)
+
+    resp = c.post("/api/v1/designs", json={"title": "Racing Design"})
+    assert resp.status_code == 201
+    assert resp.json()["id"] == "DSN-002"
+    assert mock_store.next_design_id.await_count == 2
+    assert len(saved) == 1
+
+
+def test_create_design_retries_on_audit_collision(client):
+    """Narrower case: our next_design_id() reads a snapshot just before a
+    competitor's insert for that id lands; by the time save() runs its own
+    existing-design check, the competitor has landed, so save() treats ours
+    as an update to *their* design and raises AuditIntegrityError (a fresh
+    design's lone audit entry is always synthesized as "AUD-001", which
+    collides with that id's real, already-committed AUD-001). This must not
+    surface as a failure on the caller who did nothing wrong -- retry."""
+    from adp.store import AuditIntegrityError
+
+    c, mock_store, _ = client
+    mock_store.count_all = AsyncMock(return_value=0)
+    mock_store.next_design_id = AsyncMock(side_effect=["DSN-001", "DSN-002"])
+
+    saved: list[ArchitectureDescription] = []
+    calls = {"n": 0}
+
+    async def _save_first_call_collides(design, actor="system"):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise AuditIntegrityError("DSN-001", "audit entry 'AUD-001' collides")
+        saved.append(design)
+
+    mock_store.save = AsyncMock(side_effect=_save_first_call_collides)
+
+    resp = c.post("/api/v1/designs", json={"title": "Racing Design"})
+    assert resp.status_code == 201
+    assert resp.json()["id"] == "DSN-002"
+    assert len(saved) == 1
+
+
+def test_create_design_returns_503_after_exhausting_retries(client):
+    """Under sustained contention, fail loudly (503, safe to retry) rather
+    than silently hanging or bubbling an unhandled 500."""
+    import sqlalchemy.exc
+
+    c, mock_store, _ = client
+    mock_store.count_all = AsyncMock(return_value=0)
+    mock_store.next_design_id = AsyncMock(return_value="DSN-001")
+    mock_store.save = AsyncMock(
+        side_effect=sqlalchemy.exc.IntegrityError("INSERT ...", {}, Exception("dup key"))
+    )
+
+    resp = c.post("/api/v1/designs", json={"title": "Perpetually Racing Design"})
+    assert resp.status_code == 503
+    assert mock_store.next_design_id.await_count == 5
+    assert mock_store.save.await_count == 5
+
+
 # ── ADP-SPEC-030: Lifecycle filter + default status ───────────────────────────
 
 def test_list_designs_filter_by_status(client):
