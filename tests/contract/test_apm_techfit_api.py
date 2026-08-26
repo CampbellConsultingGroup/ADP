@@ -93,6 +93,56 @@ async def test_filter_by_hosting_model(client):
     assert {a["name"] for a in body["items"]} == {"Alpha", "Beta"}
 
 
+# ADP-3jj: application_type (build-vs-buy classification) -- mirrors the
+# hosting_model tests above exactly.
+
+async def test_create_with_application_type(client):
+    app = await _mk_app(client, "Legacy WMS", application_type="legacy")
+    assert app["application_type"] == "legacy"
+
+
+async def test_application_type_defaults_to_none(client):
+    app = await _mk_app(client, "Unclassified App")
+    assert app["application_type"] is None
+
+
+async def test_invalid_application_type_rejected(client):
+    resp = await client.post(
+        "/api/v1/applications", json={"name": "Bad Type", "application_type": "opensource"}
+    )
+    assert resp.status_code == 422
+
+
+async def test_patch_application_type(client):
+    app = await _mk_app(client, "COTS App")
+    resp = await client.patch(
+        f"/api/v1/applications/{app['id']}", json={"application_type": "cots"}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["application_type"] == "cots"
+
+
+async def test_patch_application_type_explicit_null_clears(client):
+    app = await _mk_app(client, "Custom App", application_type="custom")
+    resp = await client.patch(
+        f"/api/v1/applications/{app['id']}", json={"application_type": None}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["application_type"] is None
+
+
+async def test_filter_by_application_type(client):
+    await _mk_app(client, "Alpha", application_type="saas")
+    await _mk_app(client, "Beta", application_type="saas")
+    await _mk_app(client, "Gamma", application_type="custom")
+
+    resp = await client.get("/api/v1/applications", params={"application_type": "saas"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 2
+    assert {a["name"] for a in body["items"]} == {"Alpha", "Beta"}
+
+
 async def test_filter_by_tech_debt_flag(client):
     await _mk_app(client, "Flagged", tech_debt_flags=["unsupported_version"])
     await _mk_app(client, "AlsoFlagged", tech_debt_flags=["unsupported_version", "deprecated_tech"])

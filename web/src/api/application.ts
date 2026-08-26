@@ -11,6 +11,9 @@ export type IntegrationDir = "inbound" | "outbound" | "bidirectional";
 export type AppIntegrationType = "API" | "event" | "file" | "database" | "messaging" | "other";
 export type LifecycleStatus = "planned" | "active" | "sunset" | "retired";
 export type HostingModel = "on_prem" | "cloud" | "saas" | "hybrid";
+// ADP-3jj: build-vs-buy/vendor classification -- independent of HostingModel (deployment
+// location, not who built it).
+export type ApplicationType = "custom" | "cots" | "saas" | "legacy";
 
 export interface Application {
   id: string;
@@ -29,6 +32,7 @@ export interface Application {
   technical_owner: string | null;
   lifecycle_status: LifecycleStatus;
   hosting_model: HostingModel | null;
+  application_type: ApplicationType | null;
   architecture_pattern: string | null;
   tech_debt_flags: string[];
   created_at: string;
@@ -53,6 +57,7 @@ export interface ApplicationCreate {
   technical_owner?: string | null;
   lifecycle_status?: LifecycleStatus;
   hosting_model?: HostingModel | null;
+  application_type?: ApplicationType | null;
   architecture_pattern?: string | null;
   tech_debt_flags?: string[];
 }

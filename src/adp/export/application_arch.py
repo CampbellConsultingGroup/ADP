@@ -150,6 +150,7 @@ def _serialize_application(
         "technical_owner": app.technical_owner,
         "lifecycle_status": app.lifecycle_status,
         "hosting_model": app.hosting_model,
+        "application_type": app.application_type,
         "architecture_pattern": app.architecture_pattern,
         "tech_debt_flags": list(app.tech_debt_flags),
         "risk": _serialize_risk(risk),

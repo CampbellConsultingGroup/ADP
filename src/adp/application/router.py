@@ -154,6 +154,7 @@ async def list_applications(
     business_unit: Optional[str] = Query(default=None),
     lifecycle_status: Optional[str] = Query(default=None),
     hosting_model: Optional[str] = Query(default=None),
+    application_type: Optional[str] = Query(default=None),
     tech_debt_flag: Optional[str] = Query(default=None),
     session: AsyncSession = Depends(_get_session),
 ):
@@ -162,6 +163,7 @@ async def list_applications(
         business_unit=business_unit,
         lifecycle_status=lifecycle_status,
         hosting_model=hosting_model,
+        application_type=application_type,
         tech_debt_flag=tech_debt_flag,
     )
 

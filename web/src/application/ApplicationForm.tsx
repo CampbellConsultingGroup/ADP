@@ -15,6 +15,14 @@ const R_OPTIONS = ["", "Rehost", "Replatform", "Repurchase", "Refactor", "Retire
 const PACE_OPTIONS = ["", "Record", "Differentiation", "Innovation"] as const;
 const LIFECYCLE_OPTIONS = ["planned", "active", "sunset", "retired"] as const;
 const HOSTING_OPTIONS = ["", "on_prem", "cloud", "saas", "hybrid"] as const;
+const APPLICATION_TYPE_OPTIONS = ["", "custom", "cots", "saas", "legacy"] as const;
+const APPLICATION_TYPE_LABELS: Record<(typeof APPLICATION_TYPE_OPTIONS)[number], string> = {
+  "": "",
+  custom: "Custom-Built",
+  cots: "COTS",
+  saas: "SaaS",
+  legacy: "Legacy/Mainframe",
+};
 
 export default function ApplicationForm({ initial, onSave, onCancel, saving }: Props) {
   const [name, setName] = useState(initial?.name ?? "");
@@ -37,6 +45,7 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
   const [techOwner, setTechOwner] = useState<string>(initial?.technical_owner ?? "");
   const [lifecycle, setLifecycle] = useState<string>(initial?.lifecycle_status ?? "active");
   const [hostingModel, setHostingModel] = useState<string>(initial?.hosting_model ?? "");
+  const [applicationType, setApplicationType] = useState<string>(initial?.application_type ?? "");
   const [archPattern, setArchPattern] = useState<string>(initial?.architecture_pattern ?? "");
   const [techDebtFlags, setTechDebtFlags] = useState<string>((initial?.tech_debt_flags ?? []).join(", "));
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +72,7 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
         technical_owner: techOwner || null,
         lifecycle_status: (lifecycle || "active") as ApplicationCreate["lifecycle_status"],
         hosting_model: (hostingModel || null) as ApplicationCreate["hosting_model"],
+        application_type: (applicationType || null) as ApplicationCreate["application_type"],
         architecture_pattern: archPattern || null,
         tech_debt_flags: techDebtFlags.split(",").map((t) => t.trim()).filter(Boolean),
       });
@@ -203,6 +213,12 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
       <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Hosting Model
         <select style={field} value={hostingModel} onChange={e => setHostingModel(e.target.value)}>
           {HOSTING_OPTIONS.map(o => <option key={o} value={o}>{o || "— none —"}</option>)}
+        </select>
+      </label>
+
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Application Type
+        <select style={field} value={applicationType} onChange={e => setApplicationType(e.target.value)}>
+          {APPLICATION_TYPE_OPTIONS.map(o => <option key={o} value={o}>{o ? APPLICATION_TYPE_LABELS[o] : "— none —"}</option>)}
         </select>
       </label>
 

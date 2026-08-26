@@ -19,6 +19,8 @@ function detailFor(app: Application, dimension: Dimension): string | null {
       return null;
     case "criticality":
       return app.business_criticality === null ? null : `tier ${app.business_criticality}`;
+    case "application_type":
+      return null; // the bucket itself already says the type
   }
 }
 

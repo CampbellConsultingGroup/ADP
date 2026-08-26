@@ -71,6 +71,25 @@ def test_application_create_extra_fields_rejected():
         ApplicationCreate(name="App", unknown_field="x")  # type: ignore[call-arg]
 
 
+# ADP-3jj: application_type (build-vs-buy classification) accepts all 4 values,
+# defaults to None, and rejects anything outside the 4-value set.
+
+@pytest.mark.parametrize("value", ["custom", "cots", "saas", "legacy"])
+def test_application_create_accepts_all_application_types(value):
+    app = ApplicationCreate(name="App", application_type=value)
+    assert app.application_type == value
+
+
+def test_application_create_application_type_defaults_to_none():
+    app = ApplicationCreate(name="App")
+    assert app.application_type is None
+
+
+def test_application_create_invalid_application_type():
+    with pytest.raises(ValidationError):
+        ApplicationCreate(name="App", application_type="opensource")  # type: ignore[arg-type]
+
+
 # ── ApplicationUpdate ─────────────────────────────────────────────────────────
 
 def test_application_update_blank_name():
@@ -98,6 +117,19 @@ def test_application_create_rejects_business_value():
 def test_application_update_rejects_business_value():
     with pytest.raises(ValidationError):
         ApplicationUpdate(business_value=4)  # type: ignore[call-arg]
+
+
+def test_application_update_application_type_explicit_none_clears():
+    # model_fields_set-based clear-vs-omit semantics (adp.application.store.update_application)
+    # rely on the field being explicitly set to None here, not merely absent.
+    update = ApplicationUpdate(application_type=None)
+    assert "application_type" in update.model_fields_set
+    assert update.application_type is None
+
+
+def test_application_update_invalid_application_type():
+    with pytest.raises(ValidationError):
+        ApplicationUpdate(application_type="opensource")  # type: ignore[arg-type]
 
 
 # ── HealthAssessmentSubmit ────────────────────────────────────────────────────

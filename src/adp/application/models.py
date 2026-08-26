@@ -29,6 +29,11 @@ LifecycleStatus = Literal["planned", "active", "sunset", "retired"]
 # ADP-SPEC-038 (APM US5): technical fit depth.
 HostingModel = Literal["on_prem", "cloud", "saas", "hybrid"]
 
+# ADP-3jj: build-vs-buy/vendor classification -- independent of HostingModel (deployment
+# location, not who built it); an app can be application_type="custom" and
+# hosting_model="saas" simultaneously (spec.md Edge Cases).
+ApplicationType = Literal["custom", "cots", "saas", "legacy"]
+
 # docs/application-health-assessment-spec.md: the six health-rubric
 # dimensions (docs/health-table.md's six rows), in the same order the rubric
 # table lists them.
@@ -136,6 +141,7 @@ class Application(BaseModel):
     technical_owner: str | None = None
     lifecycle_status: LifecycleStatus = "active"
     hosting_model: HostingModel | None = None
+    application_type: ApplicationType | None = None
     architecture_pattern: str | None = None
     tech_debt_flags: list[str] = Field(default_factory=list)
     created_at: datetime
@@ -163,6 +169,7 @@ class ApplicationCreate(BaseModel):
     technical_owner: str | None = None
     lifecycle_status: LifecycleStatus = "active"
     hosting_model: HostingModel | None = None
+    application_type: ApplicationType | None = None
     architecture_pattern: str | None = None
     tech_debt_flags: list[str] = Field(default_factory=list)
 
@@ -193,6 +200,7 @@ class ApplicationUpdate(BaseModel):
     technical_owner: str | None = None
     lifecycle_status: LifecycleStatus | None = None
     hosting_model: HostingModel | None = None
+    application_type: ApplicationType | None = None
     architecture_pattern: str | None = None
     tech_debt_flags: list[str] | None = None
 

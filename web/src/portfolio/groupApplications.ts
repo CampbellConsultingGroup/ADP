@@ -15,7 +15,8 @@
 import type { Application } from "../api/application";
 import type { ApplicationCapabilityGroupLink } from "../api/portfolio";
 
-export type Dimension = "capability" | "time" | "r_strategy" | "business_unit" | "criticality";
+export type Dimension = "capability" | "time" | "r_strategy" | "business_unit" | "criticality"
+  | "application_type";
 
 export const DIMENSION_LABELS: Record<Dimension, string> = {
   capability: "Business Capability",
@@ -23,16 +24,19 @@ export const DIMENSION_LABELS: Record<Dimension, string> = {
   r_strategy: "7R Strategy",
   business_unit: "Ownership / Business Unit",
   criticality: "Criticality / Risk Tier",
+  application_type: "Application Type",
 };
 
 // Business capability first (the primary EA-native axis), matching the
-// requester's own numbered ordering.
+// requester's own numbered ordering. application_type (ADP-3jj) is a later
+// follow-on addition, appended last rather than reordering the original 5.
 export const ALL_DIMENSIONS: Dimension[] = [
   "capability",
   "time",
   "r_strategy",
   "business_unit",
   "criticality",
+  "application_type",
 ];
 
 export interface Bucket {
@@ -121,6 +125,27 @@ export function groupByCriticality(apps: Application[]): GroupedResult {
   );
 }
 
+// ADP-3jj: build-vs-buy/vendor classification -- a fixed, known enum (like
+// hosting model or PACE layer), not free text, so it uses bucketize() with a
+// fixed order rather than groupByBusinessUnit's dynamic/alphabetical one.
+const APPLICATION_TYPE_ORDER = ["custom", "cots", "saas", "legacy"] as const;
+const APPLICATION_TYPE_LABELS: Record<(typeof APPLICATION_TYPE_ORDER)[number], string> = {
+  custom: "Custom-Built",
+  cots: "COTS",
+  saas: "SaaS",
+  legacy: "Legacy/Mainframe",
+};
+
+export function groupByApplicationType(apps: Application[]): GroupedResult {
+  return bucketize(
+    apps,
+    APPLICATION_TYPE_ORDER,
+    (k) => APPLICATION_TYPE_LABELS[k],
+    (app) => app.application_type,
+    "missing an application type",
+  );
+}
+
 // The one dimension with a dynamic, data-driven bucket set rather than a fixed,
 // known enum -- owning_business_unit is free text on the Application model.
 export function groupByBusinessUnit(apps: Application[]): GroupedResult {
@@ -183,6 +208,8 @@ export function groupApplications(
       return groupByBusinessUnit(apps);
     case "criticality":
       return groupByCriticality(apps);
+    case "application_type":
+      return groupByApplicationType(apps);
   }
 }
 

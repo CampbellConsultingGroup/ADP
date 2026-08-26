@@ -105,6 +105,8 @@ Auto-generated from all feature plans. Last updated: 2026-08-26 (926-framework-v
 - Python 3.12 (backend) — no frontend file touched (data-model-and-API-only, + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic v2 — all (927-theme-framework-mapping)
 - PostgreSQL 16 — one new table via migration `037` (`down_revision = "036"`): (927-theme-framework-mapping)
 - Python 3.12 + FastAPI (extends the existing lifespan hook — a third background task (928-strategy-export)
+- Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) — both existing + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic (929-application-type-cots)
+- PostgreSQL 16 — one additive migration (`039`, `down_revision="038"`): one nullable (929-application-type-cots)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -149,6 +151,49 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 929-application-type-cots: Implemented (ADP-3jj, "Application type (COTS/custom/SaaS/legacy)
+  grouping dimension for Application Portfolio" — follow-on from ADP-8xo, deferred at that time
+  because no such field existed on `Application` at all) — full `/speckit.specify` →
+  `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle. Zero `AskUserQuestion` rounds
+  were needed: every design decision (four-value set, nullable/no-default, dropdown UI shape,
+  fixed bucket order, filter-parameter parity) directly mirrors `hosting_model`'s own
+  already-shipped precedent (ADP-SPEC-038, migration 016) on the exact same `Application` entity,
+  confirmed by direct read before writing spec.md rather than guessed. New
+  `application_type: Literal["custom", "cots", "saas", "legacy"] | None` field added via migration
+  `039` (nullable `TEXT` + `CHECK` constraint + filter index, mirroring migration 016's
+  `hosting_model` shape line-for-line) — independent of `hosting_model` (build-vs-buy/vendor
+  classification vs. deployment location; an app can be `custom` + `saas` simultaneously, spec.md
+  Edge Cases). Backend: `adp.application.models`/`store`/`router` gain the field end-to-end
+  (create/update/list-filter, mirroring `hosting_model`'s exact code shape at every layer);
+  `adp.export.application_arch`'s existing `_serialize_application()` (ADP-SPEC-045) also gained
+  the field, closing a gap that would otherwise have left file-based AI/tool consumers silently
+  out of sync with the API the moment this feature shipped. Frontend: an "Application Type"
+  dropdown in `ApplicationForm.tsx`, a conditional read line in `ApplicationDetail.tsx` (matching
+  `pace_layer`'s own convention), and — the bead's actual deliverable — a sixth Group By/Then
+  By/Filter by dimension on the Application Portfolio screen (`groupByApplicationType` in
+  `groupApplications.ts`, fixed Custom→COTS→SaaS→Legacy bucket order, matching
+  `groupByHostingModel`/`groupByPaceLayer`'s own fixed-enum convention rather than
+  `groupByBusinessUnit`'s dynamic one); `ALL_FILTER_FIELDS`/`FILTER_FIELD_LABELS` inherited the new
+  dimension automatically (both are defined as spreads of `ALL_DIMENSIONS`/`DIMENSION_LABELS`, so
+  no separate edit was needed there). Deliberately out of scope, per the bead's own title and
+  research.md D4: no change to the separate Insights `ApplicationsHeatMap.tsx` screen (an
+  independently-defined `Dimension` type, confirmed by direct read) — matching how this session's
+  two prior Portfolio-dimension features (ADP-6w4/ADP-9ye) were also scoped to the Portfolio screen
+  only. 1707 backend tests (was 1693, +14: 8 unit model-validation, 6 contract create/update/
+  filter/invalid-value — mirroring `hosting_model`'s own original test shapes exactly), 574
+  frontend tests (was 570, +4 for `groupByApplicationType`), `ruff`/`mypy`/`tsc` all clean. One
+  exhaustive-switch compile error was caught and fixed during the `tsc` pass, not by any test:
+  `BucketCard.tsx`'s `detailFor()` switches exhaustively over `Dimension` and needed a new
+  `"application_type"` case. Two frontend `Application` object-literal fixtures
+  (`PortfolioPage.test.tsx`, `tests/component/application-registry.test.tsx`) needed the new
+  required field added, also caught by `tsc`, not a test failure. Verified live end-to-end against
+  a real running backend and local Postgres (migration applied directly, `alembic current`
+  confirmed `039 (head)`): every quickstart.md scenario confirmed via direct API calls (create with
+  a type, 422 on an invalid value, explicit-`null` clears via `PATCH` — corrected from an initially
+  wrong `PUT` guess in the quickstart draft itself, filter query param), plus a live Playwright
+  walkthrough of the Portfolio screen's Group By/Filter by dropdowns showing the real test
+  application in its correct COTS bucket. Test application cleaned up afterward. See
+  `specs/929-application-type-cots/`.
 - 928-strategy-export: Implemented (ADP-81p.3, "Continuous export of Strategy domain to versioned
   JSON files", ADP-81p Option 1's third domain — following ADP-SPEC-044's Business Architecture
   export and ADP-SPEC-045's Application registry export) — full `/speckit.specify` →
@@ -247,7 +292,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   gone in both cases with the surviving side left untouched) all confirmed via direct API calls, with
   every test Theme/Framework/link created during verification cleaned up afterward (confirmed by a
   direct row-count check back to zero). See `specs/927-theme-framework-mapping/`.
-- 926-framework-versioning-correction: Implemented (COMPLY-01a, a correction to COMPLY-01's
   already-shipped, already-populated `RegulatoryFramework` entity) — full `/speckit.specify` →
   `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle sourced from an addendum document
   (`docs/compliance_update.md`) explicitly flagged by the user as generated outside this codebase
@@ -834,7 +878,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (18129 symbols, 28998 relationships, 240 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (18484 symbols, 29519 relationships, 241 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

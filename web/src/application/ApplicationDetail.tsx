@@ -29,6 +29,14 @@ interface Props {
 
 type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs" | "risk" | "cost" | "tech-fit" | "initiatives" | "governance" | "quality" | "objectives" | "compliance-mappings";
 
+// ADP-3jj: matches ApplicationForm.tsx's own APPLICATION_TYPE_LABELS.
+const APPLICATION_TYPE_LABELS: Record<string, string> = {
+  custom: "Custom-Built",
+  cots: "COTS",
+  saas: "SaaS",
+  legacy: "Legacy/Mainframe",
+};
+
 export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) {
   const { data: app, isLoading } = useApplication(appId);
   const updateApp = useUpdateApplication(appId);
@@ -175,6 +183,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {app.description && <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>{app.description}</p>}
             {app.pace_layer && <div style={{ fontSize: 12, color: "var(--ink-2)" }}><strong style={{ color: "var(--ink)" }}>PACE layer:</strong> {app.pace_layer}</div>}
+            {app.application_type && <div style={{ fontSize: 12, color: "var(--ink-2)" }}><strong style={{ color: "var(--ink)" }}>Application type:</strong> {APPLICATION_TYPE_LABELS[app.application_type] ?? app.application_type}</div>}
             <div style={{ fontSize: 11, color: "var(--ink-3)" }}>
               Created {new Date(app.created_at).toLocaleDateString()} · Updated {new Date(app.updated_at).toLocaleDateString()}
             </div>
