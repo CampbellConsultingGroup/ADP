@@ -168,6 +168,12 @@ _EXPECTED: dict[tuple[PersonaRole, ActionType], bool] = {
     (PersonaRole.SOLUTION_ARCHITECT, ActionType.MANAGE_AGENT_PROMPTS): False,
     (PersonaRole.TECHNICAL_ARCHITECT, ActionType.MANAGE_AGENT_PROMPTS): False,
     (PersonaRole.REVIEWER, ActionType.MANAGE_AGENT_PROMPTS): False,
+    # manage_scoring_rubrics (v1.10.0, ADP-68z): PLATFORM_ADMIN only -- mirrors
+    # manage_agent_prompts's own precedent exactly (another admin-only screen).
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.MANAGE_SCORING_RUBRICS): False,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.MANAGE_SCORING_RUBRICS): False,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.MANAGE_SCORING_RUBRICS): False,
+    (PersonaRole.REVIEWER, ActionType.MANAGE_SCORING_RUBRICS): False,
     # write_diagram (v1.8.0, ADP-SPEC-046): the three architect roles author
     # non-C4 diagrams; reviewer cannot -- same grant shape as
     # write_business_arch/write_application (research.md Decision 5).
@@ -208,6 +214,7 @@ _EXPECTED: dict[tuple[PersonaRole, ActionType], bool] = {
     (PersonaRole.PLATFORM_ADMIN, ActionType.MANAGE_AGENT_PROMPTS): True,
     (PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_DIAGRAM): True,
     (PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_COMPLIANCE): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.MANAGE_SCORING_RUBRICS): True,
 }
 
 
@@ -259,8 +266,8 @@ def test_require_action_logs_warning_on_denial(caplog: pytest.LogCaptureFixture)
 
 
 def test_permissions_version_constant() -> None:
-    """PERMISSIONS_VERSION exists and is 1.9.0 — any permission change must bump it."""
-    assert PERMISSIONS_VERSION == "1.9.0"
+    """PERMISSIONS_VERSION exists and is 1.10.0 — any permission change must bump it."""
+    assert PERMISSIONS_VERSION == "1.10.0"
 
 
 # ── US3: Per-action confirmation requirements ────────────────────────────────
@@ -295,6 +302,10 @@ _CONFIRMATION_EXPECTED: dict[ActionType, bool] = {
     # consequential AI-originated action -- no confirmation_id gate, same
     # reasoning as write_diagram/write_business_arch/write_application.
     ActionType.WRITE_COMPLIANCE: False,
+    # manage_scoring_rubrics (v1.10.0, ADP-68z): a consequential, platform-
+    # wide-effect change identical in kind to manage_agent_prompts -- same
+    # confirmation_id gate.
+    ActionType.MANAGE_SCORING_RUBRICS: True,
 }
 
 

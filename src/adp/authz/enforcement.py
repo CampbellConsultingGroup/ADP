@@ -147,6 +147,9 @@ _PREFIX_ROUTE_ACTIONS: tuple[tuple[str, ActionType], ...] = (
     # ADP-SPEC-042: one rule covers every method under this prefix, since
     # FR-009 gates the whole admin surface -- reads included, not just writes.
     ("/api/v1/admin/agent-prompts", ActionType.MANAGE_AGENT_PROMPTS),
+    # ADP-68z: mirrors the agent-prompts prefix rule above exactly -- one rule
+    # covers every method under this prefix, reads included.
+    ("/api/v1/admin/scoring-rubrics", ActionType.MANAGE_SCORING_RUBRICS),
     ("/api/v1/knowledge", ActionType.AMEND_STANDARD),
     ("/api/v1/business/", ActionType.WRITE_BUSINESS_ARCH),
     ("/api/v1/applications", ActionType.WRITE_APPLICATION),

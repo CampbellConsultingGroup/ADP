@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, Request, Response
 
 from adp.api.routers import (
     admin_prompts_router,
+    admin_rubrics_router,
     ai_process,
     auth_proxy,
     calm,
@@ -280,6 +281,7 @@ def create_app() -> FastAPI:
     app.include_router(chat_router_module.router)
     app.include_router(auth_proxy.router)
     app.include_router(admin_prompts_router.router)
+    app.include_router(admin_rubrics_router.router)
     app.include_router(diagrams_router.router)
     app.include_router(strategy_router.router)
     app.include_router(compliance_router_module.router)

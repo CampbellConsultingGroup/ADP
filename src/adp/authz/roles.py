@@ -66,3 +66,8 @@ class ActionType(StrEnum):
     # domain, not a Business Architecture sub-concern (Clarification Session
     # 2026-08-17 Q1; research.md D4).
     WRITE_COMPLIANCE = "write_compliance"
+    # ADP-68z: editing/confirming/restoring a scoring rubric's weights (e.g.
+    # the Business Value assessment's 6-dimension weighted average). Granted
+    # only to PLATFORM_ADMIN -- mirrors MANAGE_AGENT_PROMPTS's own deliberate
+    # narrowing of ENTERPRISE_ARCHITECT's wildcard grant, see permissions.py.
+    MANAGE_SCORING_RUBRICS = "manage_scoring_rubrics"

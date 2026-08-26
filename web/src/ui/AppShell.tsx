@@ -57,6 +57,8 @@ const OVERSIGHT: NavDef[] = [
 // (MANAGE_AGENT_PROMPTS), not implied by any architect role.
 const ADMIN: NavDef[] = [
   { view: "admin", label: "Agent Prompts", icon: "shield" },
+  // ADP-68z: sibling admin surface, same platform_admin-only gate.
+  { view: "scoring-rubrics", label: "Scoring Rubrics", icon: "shield" },
 ];
 
 const TITLES: Record<AppView, string> = {
@@ -75,6 +77,7 @@ const TITLES: Record<AppView, string> = {
   strategy: "Strategy",
   compliance: "Compliance",
   admin: "Agent Prompt Management",
+  "scoring-rubrics": "Scoring Rubric Management",
 };
 
 const HUE_VARS: Record<string, string> = {

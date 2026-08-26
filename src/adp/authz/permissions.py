@@ -60,15 +60,25 @@ _logger = logging.getLogger("adp.authz")
 #           Solution/Technical Architect; Enterprise Architect and Platform
 #           Admin receive it via their existing wildcard grants -- no change
 #           to either entry. Reviewer does not hold it.
-PERMISSIONS_VERSION = "1.9.0"
+#   1.10.0 — added ActionType.MANAGE_SCORING_RUBRICS (ADP-68z, admin UI for
+#           editing scoring rubric weights). Platform Admin receives it via
+#           its existing wildcard grant -- no change to that entry. Mirrors
+#           1.7.0's MANAGE_AGENT_PROMPTS precedent exactly: Enterprise
+#           Architect's wildcard is narrowed to exclude this action too --
+#           no architect role gains admin-screen access solely by virtue of
+#           that role, this being another such screen.
+PERMISSIONS_VERSION = "1.10.0"
 
 # ── Permission table ─────────────────────────────────────────────────────────
 # Maps each PersonaRole to the frozenset of ActionTypes it may perform.
 # This is the machine-executable form of the spec's governance table.
 
 PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
-    # All actions EXCEPT MANAGE_AGENT_PROMPTS (v1.7.0) -- see changelog above.
-    PersonaRole.ENTERPRISE_ARCHITECT: frozenset(ActionType) - {ActionType.MANAGE_AGENT_PROMPTS},
+    # All actions EXCEPT MANAGE_AGENT_PROMPTS (v1.7.0) and MANAGE_SCORING_RUBRICS
+    # (v1.10.0) -- see changelog above.
+    PersonaRole.ENTERPRISE_ARCHITECT: frozenset(ActionType) - {
+        ActionType.MANAGE_AGENT_PROMPTS, ActionType.MANAGE_SCORING_RUBRICS,
+    },
     # Everything Enterprise Architect has, plus MANAGE_AGENT_PROMPTS (v1.7.0).
     PersonaRole.PLATFORM_ADMIN: frozenset(ActionType),
     PersonaRole.SOLUTION_ARCHITECT: frozenset({
@@ -131,6 +141,7 @@ REQUIRES_CONFIRMATION: frozenset[ActionType] = frozenset({
     ActionType.EXPORT_DESIGN,
     ActionType.CONFIRM_AGENT_SUGGESTION,
     ActionType.MANAGE_AGENT_PROMPTS,
+    ActionType.MANAGE_SCORING_RUBRICS,
 })
 
 

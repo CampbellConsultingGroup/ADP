@@ -109,6 +109,7 @@ Auto-generated from all feature plans. Last updated: 2026-08-26 (926-framework-v
 - PostgreSQL 16 — one additive migration (`039`, `down_revision="038"`): one nullable (929-application-type-cots)
 - Python 3.12 (backend only — no frontend file touched; this is a pure + SQLAlchemy 2 async (Core), pgvector, PostgreSQL full-text search — all (930-hybrid-search-phase)
 - PostgreSQL 16 with pgvector (migration 011, already applied) — no new migration; one (930-hybrid-search-phase)
+- PostgreSQL 16 — one new migration (`040`, `down_revision="039"`): two new tables, (931-admin-ui-editing)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -153,6 +154,54 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 931-admin-ui-editing: Implemented (ADP-68z, "UI for editing scoring rubric weights (business
+  value, and future similar composite scores)" — deferred from the Application Business Value
+  assessment build, 2026-08-15) — full `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` →
+  `/speckit.implement` cycle. The bead explicitly names its own architectural precedent ("mirroring
+  the existing Agent Prompt Management admin surface, ADP-SPEC-042"), so every structural decision
+  — registry pattern, override/history table pair, single-transaction write, optimistic-concurrency
+  `version`/409, confirmation-gate on edit and restore, `PersonaRole.PLATFORM_ADMIN`-only carve-out
+  from the Enterprise Architect wildcard — is a direct, literal mirror of that already-shipped,
+  already-reviewed feature, confirmed by reading `adp.admin.{prompt_registry,models,service}` and
+  `admin_prompts_router.py` before writing a line of spec. New `adp.admin.rubric_registry` (mirrors
+  `prompt_registry`) registers one rubric today (`business_value`, wrapping the existing
+  `BUSINESS_VALUE_WEIGHTS` constant as its fallback) but is extensible to any future rubric with
+  zero schema change — weights are stored as `JSONB` (not one column per dimension), validated by
+  each rubric's own registered callback (exactly 6 keys, sum to `1.0 ± 1e-6` for `business_value`).
+  New migration `040`: `rubric_weight_overrides`/`rubric_weight_history`, a line-for-line structural
+  mirror of migration 023. New `ActionType.MANAGE_SCORING_RUBRICS` (`PERMISSIONS_VERSION` 1.9.0 →
+  1.10.0), granted only to `PLATFORM_ADMIN`, explicitly excluded from Enterprise Architect's
+  wildcard — identical precedent to `MANAGE_AGENT_PROMPTS`. `compute_business_value_score()` gains
+  an optional `weights` parameter while staying pure/no-I/O (its own docstring's deliberate
+  invariant, shared with `adp.strategy.store.compute_status()`) — its two existing callers resolve
+  the effective weights via a new self-contained `get_effective_weights()` (mirroring
+  `get_effective_prompt()`'s exact signature and resilience property: any DB-resolution failure
+  falls back to the hardcoded default) before calling it. New "Scoring Rubrics" admin nav entry,
+  sibling to "Agent Prompts" — `ScoringRubricsPage.tsx`/`RubricEditor.tsx` (a numeric input per
+  dimension + a live running-sum indicator, since a validated weight set needs a fundamentally
+  different control than a prompt's free-text `<textarea>`)/`RubricHistory.tsx`, all new (no
+  `PromptEditor.test.tsx`/`AdminPage.test.tsx` existed to mirror either — this feature's own new
+  component tests are the first frontend coverage either admin screen has). Explicitly out of
+  scope: `BUSINESS_VALUE_EVIDENCE_CAP` (a different data shape, a score→cap lookup, not a weight
+  distribution — the bead's own text names only "weights"). 1753 backend tests (was 1721, +32: 10
+  unit registry/validator, 14 contract, 2 optional-weights-parameter, 6 authz parametrized
+  entries), 584 frontend tests (was 574, +10), `ruff`/`mypy`/`tsc` all clean. 3 Docker-gated
+  integration tests written (unavailable locally, same constraint every export/COMPLY-0x/928/930
+  suite this session has hit; will run in CI), mirroring `test_admin_prompts_flow.py`'s own
+  real-Postgres, no-restart-takes-effect guarantee — including a real
+  `compute_business_value_score()` computation confirming an overridden weight set (not the
+  default) is what's actually used. Verified live against a real running backend and local
+  Postgres: migration applied cleanly (`alembic current` confirmed `040 (head)`); the new
+  endpoint's permission denial behaves identically to the existing, already-shipped
+  `/admin/agent-prompts` endpoint under the same real dev-mode auth config (both 403 for the
+  default `enterprise_architect` role) — confirming the new authz wiring is correctly integrated,
+  not just unit-tested. The PLATFORM_ADMIN happy-path (confirm/history/restore) could not be
+  curled locally, since this environment runs `ADP_AUTH_ENABLED=false` with a hardcoded
+  `enterprise_architect` sentinel and no dev-mode role-override header exists — an accepted,
+  already-documented limitation ADP-SPEC-042's own quickstart.md hit identically; that path is
+  instead fully exercised by the 14 passing contract tests (a real dependency-override to
+  `PLATFORM_ADMIN`) and the written Docker-gated integration suite. See
+  `specs/931-admin-ui-editing/`.
 - 930-hybrid-search-phase: Implemented (ADP-7bo, "Hybrid search phase 2/3: value streams, domains,
   other text fields") — full `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` →
   `/speckit.implement` cycle. **A Ground-Truth Correction found before writing any requirement**:
@@ -236,7 +285,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   walkthrough of the Portfolio screen's Group By/Filter by dropdowns showing the real test
   application in its correct COTS bucket. Test application cleaned up afterward. See
   `specs/929-application-type-cots/`.
-- 928-strategy-export: Implemented (ADP-81p.3, "Continuous export of Strategy domain to versioned
   JSON files", ADP-81p Option 1's third domain — following ADP-SPEC-044's Business Architecture
   export and ADP-SPEC-045's Application registry export) — full `/speckit.specify` →
   `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle. Unlike its two predecessors, this
@@ -919,7 +967,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (18591 symbols, 29643 relationships, 241 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (18716 symbols, 29779 relationships, 241 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

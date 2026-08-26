@@ -152,3 +152,35 @@ class TestRounding:
         for uniform in range(1, 6):
             result = compute_business_value_score(_scores(**{k: uniform for k in _UNIFORM}))
             assert 1 <= result.business_value <= 5
+
+
+class TestOptionalWeightsParameter:
+    """ADP-68z: compute_business_value_score() gains an optional `weights`
+    parameter without disturbing its purity/no-I/O contract -- every test
+    above (which never passes `weights`) must keep passing unmodified, and an
+    explicit weights argument must actually change the result."""
+
+    def test_explicit_weights_override_the_default_constant(self) -> None:
+        scores = _scores(strategic_alignment=5, evidence_measurability=5)
+        default_result = compute_business_value_score(scores)
+
+        custom_weights = {
+            "strategic_alignment": 0.50,
+            "revenue_cost_impact": 0.10,
+            "customer_stakeholder_impact": 0.10,
+            "competitive_differentiation": 0.10,
+            "risk_compliance_contribution": 0.10,
+            "evidence_measurability": 0.10,
+        }
+        custom_result = compute_business_value_score(scores, custom_weights)
+
+        assert custom_result.weighted_average != default_result.weighted_average
+        # strategic_alignment=5 at 50% weight should pull the average higher
+        # than the default 25% weight does.
+        assert custom_result.weighted_average > default_result.weighted_average
+
+    def test_explicit_weights_none_behaves_identically_to_omitted(self) -> None:
+        scores = _scores(strategic_alignment=4)
+        assert compute_business_value_score(scores) == compute_business_value_score(
+            scores, weights=None
+        )
