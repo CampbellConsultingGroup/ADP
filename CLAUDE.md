@@ -107,6 +107,8 @@ Auto-generated from all feature plans. Last updated: 2026-08-26 (926-framework-v
 - Python 3.12 + FastAPI (extends the existing lifespan hook — a third background task (928-strategy-export)
 - Python 3.12 (backend); TypeScript 5.x + React 18 (frontend) — both existing + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic (929-application-type-cots)
 - PostgreSQL 16 — one additive migration (`039`, `down_revision="038"`): one nullable (929-application-type-cots)
+- Python 3.12 (backend only — no frontend file touched; this is a pure + SQLAlchemy 2 async (Core), pgvector, PostgreSQL full-text search — all (930-hybrid-search-phase)
+- PostgreSQL 16 with pgvector (migration 011, already applied) — no new migration; one (930-hybrid-search-phase)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -151,6 +153,46 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 930-hybrid-search-phase: Implemented (ADP-7bo, "Hybrid search phase 2/3: value streams, domains,
+  other text fields") — full `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` →
+  `/speckit.implement` cycle. **A Ground-Truth Correction found before writing any requirement**:
+  the bead's own text assumed phase 2 (value stream + domain indexing) was entirely unbuilt — direct
+  code inspection showed `041-ai-chat-assistant` had already wired `ENTITY_APPLICATION`/
+  `ENTITY_VALUE_STREAM`/`ENTITY_BUSINESS_DOMAIN` write hooks into `adp.application.store`/
+  `adp.business.store` as an incidental side effect of building the Chat Assistant's retrieval leg,
+  confirmed via `adp.chat.retrieval.DEFAULT_ENTITY_TYPES`'s own inline comment. This spec covered
+  only the real remaining gaps, found by direct inspection rather than the bead's now-partly-stale
+  framing: (1) `value_stream_stages` were never indexed at all — new `ENTITY_VALUE_STREAM_STAGE`
+  constant + write hooks in `add_stage`/`update_stage`/`delete_stage`/`reorder_stages`; (2) a latent
+  cascade-unindex bug — `delete_value_stream`'s own comment said "FK CASCADE handles stage
+  deletion," true at the DB level but unable to invoke `unindex_entity()`, silently orphaning every
+  deleted value stream's stages' index rows (fixed by reading stage ids before the cascading
+  delete); (3) `business_domains`' indexed text omitted `org_unit` (only `name`+`scope_statement`)
+  — added to both `create_domain`/`update_domain`; (4) `adp.search.backfill` covered only
+  capabilities — new `reindex_all()` covers all 6 entity types (business/technical capabilities,
+  applications, value streams, stages, domains) with a per-type count dict, `main()` updated to
+  call it; (5) zero test coverage existed for ANY of this — new or the pre-existing 041 wiring —
+  confirmed by grep across `tests/`. New `tests/unit/business/test_search_indexing.py` (11 tests,
+  monkeypatched `index_entity`/`unindex_entity` recording stubs — `SearchIndex.upsert`'s
+  Postgres-only `ON CONFLICT DO UPDATE` can't compile against SQLite, so this tier verifies store
+  wiring only) and `tests/unit/search/test_backfill.py` (3 tests, a recording fake in place of
+  `default_index()`); `tests/integration/test_search.py` extended with 3 Docker-gated tests
+  (unavailable locally, same constraint every export/COMPLY-0x/928 suite this session has hit —
+  written and will run in CI), including one exercising the real store-layer cascade fix end-to-end
+  against a live Postgres container. 1721 backend tests (was 1707, +14), `ruff`/`mypy` clean.
+  Verified live end-to-end against a real running backend and local Postgres (no migration needed —
+  confirmed via `alembic current` unchanged at `039 (head)`): every quickstart.md scenario, incl.
+  the cascade-unindex fix (indexed before delete → confirmed gone after cascading delete) and a
+  live `python -m adp.search.backfill` run indexing 135 previously-partially-unindexed entities
+  across all 6 types (22 stages, never indexed before this feature, now discoverable). **One real
+  finding surfaced only through live verification, not caught by any test**: `hybrid_search`'s
+  vector leg has no similarity threshold, so with very few rows of one `entity_type` in the index it
+  can still surface a row for a completely unrelated query — a pre-existing property of the whole
+  hybrid-search mechanism (shared by every entity type since phase 1), not a defect introduced by
+  this feature; `quickstart.md`'s rename-verification scenario was corrected to check the returned
+  hit's `text` field (the reliable signal) rather than assert zero hits for the old name. All
+  synthetic test data (2 value streams, 3 stages, 1 domain) cleaned up and confirmed deleted
+  afterward. See `specs/930-hybrid-search-phase/`.
 - 929-application-type-cots: Implemented (ADP-3jj, "Application type (COTS/custom/SaaS/legacy)
   grouping dimension for Application Portfolio" — follow-on from ADP-8xo, deferred at that time
   because no such field existed on `Application` at all) — full `/speckit.specify` →
@@ -249,7 +291,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   `POST .../initiatives/{initiative_id}/objectives/{objective_id}`, no body) — plus one missing
   required field (`level`) in the capability-creation curl for Scenario 5. See
   `specs/928-strategy-export/`.
-- 927-theme-framework-mapping: Implemented (COMPLY-05's third, deferred link — `ThemeFrameworkMapping`,
   tracked as bead ADP-1ox since 925-strategy-compliance-linkage explicitly deferred it) — full
   `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle for a coarse,
   many-to-many tag between a `StrategicTheme` and a `RegulatoryFramework`, with no fields of its own
@@ -878,7 +919,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (18484 symbols, 29519 relationships, 241 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (18591 symbols, 29643 relationships, 241 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

@@ -39,6 +39,10 @@ ENTITY_TECHNICAL_CAPABILITY = "technical_capability"
 ENTITY_APPLICATION = "application"
 ENTITY_VALUE_STREAM = "value_stream"
 ENTITY_BUSINESS_DOMAIN = "business_domain"
+# ADP-7bo (hybrid search phase 2 completion): value stream stages were never
+# indexed at all -- the one entity type from ADP-b6o's original phase-2 scope
+# that 041's incidental wiring didn't cover.
+ENTITY_VALUE_STREAM_STAGE = "value_stream_stage"
 
 _metadata = sa.MetaData()
 searchable_items = sa.Table(
