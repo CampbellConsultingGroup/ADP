@@ -18,4 +18,5 @@ export type AppView =
   | "diagrams"
   | "strategy"
   | "compliance"
-  | "admin";
+  | "admin"
+  | "scoring-rubrics";

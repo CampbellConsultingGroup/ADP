@@ -15,6 +15,7 @@ import type { DiagramSeed } from "./diagrams/generators";
 import StrategyPage from "./strategy/StrategyPage";
 import CompliancePage from "./compliance/CompliancePage";
 import AdminPage from "./admin/AdminPage";
+import ScoringRubricsPage from "./admin/ScoringRubricsPage";
 import { AppShell } from "./ui";
 import type { AppView } from "./shell";
 
@@ -115,6 +116,8 @@ export default function App(): React.ReactElement {
         return <CompliancePage />;
       case "admin":
         return <AdminPage />;
+      case "scoring-rubrics":
+        return <ScoringRubricsPage />;
       case "knowledge":
         return <KnowledgePage onNavigate={onNavigate} designId={currentDesignId} />;
       case "intake":

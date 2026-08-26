@@ -727,6 +727,7 @@ async def upsert_health_assessment(
 
 def compute_business_value_score(
     scores: dict[BusinessValueDimension, int],
+    weights: dict[BusinessValueDimension, float] | None = None,
 ) -> BusinessValueAssessmentResult:
     """Pure, no-I/O aggregation (spec §5, mirrors adp.strategy.store.
     compute_status()'s own precedent for derived-value functions): a
@@ -738,8 +739,17 @@ def compute_business_value_score(
     doesn't zero it out, except evidence_measurability, which additionally
     caps how high the *result* can land (spec §5.2's cap table), independent
     of its own 10% weight in the average.
+
+    ADP-68z: `weights` is optional and defaults to the hardcoded
+    BUSINESS_VALUE_WEIGHTS constant, preserving this function's purity/no-I/O
+    guarantee -- callers (both below) resolve the *effective* weights (an
+    admin-saved override, if any, else the fallback) via
+    adp.admin.rubric_registry.get_effective_weights() BEFORE calling this
+    function, mirroring how adp.admin.prompt_registry.get_effective_prompt()
+    is the one I/O-touching layer for agent prompts.
     """
-    raw_score = sum(scores[dim] * BUSINESS_VALUE_WEIGHTS[dim] for dim in BUSINESS_VALUE_DIMENSIONS)
+    effective_weights = weights if weights is not None else BUSINESS_VALUE_WEIGHTS
+    raw_score = sum(scores[dim] * effective_weights[dim] for dim in BUSINESS_VALUE_DIMENSIONS)
     evidence_score = scores["evidence_measurability"]
     cap = BUSINESS_VALUE_EVIDENCE_CAP[evidence_score]
     capped_value = min(raw_score, cap) if cap is not None else raw_score
@@ -775,11 +785,21 @@ async def get_business_value_assessment(
         )
         for row in rows
     ]
-    computed_result = (
-        compute_business_value_score({row.dimension: row.score for row in rows})
-        if len(rows) == len(BUSINESS_VALUE_DIMENSIONS)
-        else None
-    )
+    computed_result = None
+    if len(rows) == len(BUSINESS_VALUE_DIMENSIONS):
+        # ADP-68z: resolve the effective (admin-overridden, or fallback) weights
+        # before calling the pure aggregation function -- see that function's
+        # own docstring for why this resolution happens here, not inside it.
+        from adp.admin.rubric_registry import get_effective_weights
+
+        effective = await get_effective_weights("business_value")
+        # rubric_registry's types are rubric-agnostic (dict[str, float]); the
+        # actual keys are always valid BusinessValueDimension literals, enforced
+        # by this rubric's own registered validator before ever being stored.
+        weights = cast("dict[BusinessValueDimension, float]", effective.weights)
+        computed_result = compute_business_value_score(
+            {row.dimension: row.score for row in rows}, weights
+        )
     return BusinessValueAssessmentResponse(
         application_id=app_id, entries=entries, result=computed_result
     )
@@ -827,7 +847,12 @@ async def upsert_business_value_assessment(
                 )
             )
 
-    computed_result = compute_business_value_score(scores)
+    # ADP-68z: resolve the effective (admin-overridden, or fallback) weights first.
+    from adp.admin.rubric_registry import get_effective_weights
+
+    effective = await get_effective_weights("business_value")
+    weights = cast("dict[BusinessValueDimension, float]", effective.weights)
+    computed_result = compute_business_value_score(scores, weights)
     await session.execute(
         _applications.update()
         .where(_applications.c.id == app_id)
