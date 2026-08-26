@@ -30,17 +30,18 @@ def _cap(**overrides) -> BusinessCapability:
 
 
 def test_serialize_capability_includes_all_fields() -> None:
-    result = _serialize_capability(_cap())
+    result = _serialize_capability(_cap(), ["DSN-1"])
     assert result == {
         "id": "cap-1", "name": "Risk Assessment", "description": "Evaluate risk",
         "level": 2, "parent_id": "cap-parent", "position": 0,
         "domain_id": "domain-1", "strategic_relevance": 1, "maturity_level": 3,
+        "linked_designs": ["DSN-1"],
     }
 
 
 def test_serialize_capability_unclassified_fields_are_explicit_null() -> None:
     result = _serialize_capability(
-        _cap(domain_id=None, strategic_relevance=None, maturity_level=None)
+        _cap(domain_id=None, strategic_relevance=None, maturity_level=None), []
     )
     assert result["domain_id"] is None
     assert result["strategic_relevance"] is None
@@ -49,6 +50,12 @@ def test_serialize_capability_unclassified_fields_are_explicit_null() -> None:
     assert "domain_id" in result
     assert "strategic_relevance" in result
     assert "maturity_level" in result
+
+
+def test_serialize_capability_empty_linked_designs_is_empty_list_not_omitted() -> None:
+    result = _serialize_capability(_cap(), [])
+    assert result["linked_designs"] == []
+    assert "linked_designs" in result
 
 
 def test_serialize_domain() -> None:
@@ -69,11 +76,20 @@ def test_serialize_value_stream() -> None:
         id="vs-1", name="Order-to-Cash", description="...", stakeholder="VP Sales",
         position=0, created_at=_NOW, updated_at=_NOW,
     )
-    result = _serialize_value_stream(vs)
+    result = _serialize_value_stream(vs, ["DSN-1", "DSN-2"])
     assert result == {
         "id": "vs-1", "name": "Order-to-Cash", "description": "...",
-        "stakeholder": "VP Sales", "position": 0,
+        "stakeholder": "VP Sales", "position": 0, "linked_designs": ["DSN-1", "DSN-2"],
     }
+
+
+def test_serialize_value_stream_empty_linked_designs_is_empty_list_not_omitted() -> None:
+    vs = ValueStream(
+        id="vs-1", name="Order-to-Cash", description=None, stakeholder=None,
+        position=0, created_at=_NOW, updated_at=_NOW,
+    )
+    result = _serialize_value_stream(vs, [])
+    assert result["linked_designs"] == []
 
 
 def test_serialize_stage_includes_linked_capability_ids_sorted() -> None:
@@ -101,6 +117,6 @@ def test_serialization_is_deterministic_across_calls() -> None:
     """Same input -> byte-identical JSON text (sorted keys), required for
     content-based change detection (research.md Decision 2) to work at all."""
     cap = _cap()
-    text1 = json.dumps(_serialize_capability(cap), sort_keys=True)
-    text2 = json.dumps(_serialize_capability(cap), sort_keys=True)
+    text1 = json.dumps(_serialize_capability(cap, ["DSN-1"]), sort_keys=True)
+    text2 = json.dumps(_serialize_capability(cap, ["DSN-1"]), sort_keys=True)
     assert text1 == text2
