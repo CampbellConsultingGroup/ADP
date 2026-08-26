@@ -75,6 +75,7 @@ from adp.strategy.models import (
     StrategicThemeListResponse,
     StrategicThemeUpdate,
     StrategyHeatMapResponse,
+    ThemeFrameworkLinkCreate,
 )
 
 logger = logging.getLogger(__name__)
@@ -163,6 +164,48 @@ async def delete_theme(
     await session.commit()
     actor = _get_actor(raw_request)
     logger.info("strategy.theme.delete theme_id=%s actor=%s", theme_id, actor)
+
+
+# ── Theme <-> Framework links (927-theme-framework-mapping, COMPLY-05 link #3) ──────────────────
+
+
+@router.post("/themes/{theme_id}/frameworks", status_code=status.HTTP_201_CREATED)
+async def link_theme_framework(
+    theme_id: str,
+    body: ThemeFrameworkLinkCreate,
+    session: AsyncSession = Depends(_get_session),
+):
+    framework_id = body.framework_id
+    if not await sstore.theme_exists(theme_id, session):
+        raise HTTPException(status_code=404, detail=f"Theme {theme_id!r} not found")
+    if not await sstore.framework_exists(framework_id, session):
+        raise HTTPException(status_code=404, detail=f"Framework {framework_id!r} not found")
+    try:
+        await sstore.link_theme_framework(theme_id, framework_id, session)
+    except sstore.DuplicateLinkError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    await session.commit()
+    logger.info(
+        "strategy.theme.framework.link theme_id=%s framework_id=%s", theme_id, framework_id
+    )
+    return await sstore.list_framework_ids_for_theme(theme_id, session)
+
+
+@router.delete(
+    "/themes/{theme_id}/frameworks/{framework_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_theme_framework(
+    theme_id: str, framework_id: str, session: AsyncSession = Depends(_get_session)
+):
+    try:
+        await sstore.unlink_theme_framework(theme_id, framework_id, session)
+    except sstore.LinkNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    await session.commit()
+    logger.info(
+        "strategy.theme.framework.unlink theme_id=%s framework_id=%s", theme_id, framework_id
+    )
 
 
 # ── Objectives ────────────────────────────────────────────────────────────────

@@ -41,6 +41,7 @@ class StrategicTheme(BaseModel):
     owner: str | None = None
     priority: int | None = None
     created_at: datetime
+    framework_ids: list[str] = []  # 927-theme-framework-mapping -- mirrors control_ids exactly
 
 
 class StrategicThemeCreate(BaseModel):
@@ -298,6 +299,15 @@ class ObjectiveControlLinkCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
     control_id: str
+
+
+class ThemeFrameworkLinkCreate(BaseModel):
+    """927-theme-framework-mapping (COMPLY-05, link #3): theme -> RegulatoryFramework coarse
+    grouping tag. A bare link, no fields of its own beyond the reference -- unlike ControlMapping,
+    this carries no status/evidence payload at all."""
+
+    model_config = ConfigDict(extra="forbid")
+    framework_id: str
 
 
 # ── Overview dashboard summary (051-strategy-landing-card) ────────────────────

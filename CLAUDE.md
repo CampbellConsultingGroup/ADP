@@ -1,6 +1,6 @@
 # ADP Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-08-19 (926-framework-versioning-correction COMPLY-01a implemented)
+Auto-generated from all feature plans. Last updated: 2026-08-25 (926-framework-versioning-correction COMPLY-01a implemented)
 
 ## Active Technologies
 - Python 3.11+ + SQLAlchemy 2.x (async ORM), asyncpg (PostgreSQL async driver), Alembic (migrations), testcontainers-python (PostgreSQL container for integration tests), pydantic-settings (database URL config) (002-design-store)
@@ -102,6 +102,8 @@ Auto-generated from all feature plans. Last updated: 2026-08-19 (926-framework-v
 - PostgreSQL 16 — six new tables via migration `034` (down_revision `033`): `objective_control_links` (a bare Objective↔Control link) plus five parallel `initiative_control_{capability,application,design,pattern,organization}_mapping` tables, each with a composite FK against its corresponding `control_*_mapping` table's own composite PK (research.md D1) (925-strategy-compliance-linkage)
 - Python 3.12 (backend only — no frontend file touched, per the resolved data-model-and-API-only scope decision) + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic v2 — all existing project dependencies; zero new packages (926-framework-versioning-correction)
 - PostgreSQL 16 — one migration (`035`, down_revision `034`): seven additive columns on `regulatory_frameworks` (`regulation_number`/`celex_number`/`adoption_date`/`oj_publication_date`/`entry_into_force_date`/`consolidated_as_of`/`status`, zero existing columns altered), plus two new `String(36)`-keyed, `ON DELETE CASCADE` child tables (`framework_application_phase`, `framework_amendment`) (926-framework-versioning-correction)
+- Python 3.12 (backend) — no frontend file touched (data-model-and-API-only, + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic v2 — all (927-theme-framework-mapping)
+- PostgreSQL 16 — one new table via migration `037` (`down_revision = "036"`): (927-theme-framework-mapping)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -146,6 +148,49 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 927-theme-framework-mapping: Implemented (COMPLY-05's third, deferred link — `ThemeFrameworkMapping`,
+  tracked as bead ADP-1ox since 925-strategy-compliance-linkage explicitly deferred it) — full
+  `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle for a coarse,
+  many-to-many tag between a `StrategicTheme` and a `RegulatoryFramework`, with no fields of its own
+  beyond the two references and a timestamp — unlike the two sibling COMPLY-05 links (which carry or
+  reference a `compliance_status`), this is a grouping tag, not an assessed relationship. One real
+  scope question was put to the user directly during `/speckit.specify` rather than guessed: whether
+  this pass ships UI surfacing or stays data-model-and-API-only — resolved to API-only, matching the
+  precedent set by `926-framework-versioning-correction`; UI (a tag editor on the Theme screen, a
+  reverse-lookup display on the Framework screen) is filed as a separate follow-on bead (`ADP-0md`,
+  blocked on this spec). Every structural decision mirrors `925-strategy-compliance-linkage`'s own
+  already-shipped precedent one level up rather than inventing a new one: the link lives in
+  `adp.strategy` (the domain that already reaches into other domains via read-only mirror tables),
+  with the reverse lookup on `adp.compliance.router` importing `adp.strategy.store` through the
+  `_get_strategy_session()` dependency 925 already added — reused verbatim, zero new dependency code.
+  `StrategicTheme` gains `framework_ids: list[str]`, mirroring `StrategicObjective.control_ids`
+  exactly; the reverse lookup returns full `StrategicThemeListResponse` summaries, matching
+  `list_objectives_for_control`'s own asymmetric shape (id-list forward, full-summary reverse).
+  Duplicate-link (409) and not-found (404) handling reuse the existing `DuplicateLinkError`/
+  `LinkNotFoundError` exceptions verbatim — no new exception type. Zero new `ActionType`, zero
+  `PERMISSIONS_VERSION` bump, zero `enforcement.py` change — writes reuse the existing
+  `("/api/v1/strategy/", WRITE_BUSINESS_ARCH)` prefix rule; the reverse-lookup route is ungated
+  beyond general platform read access, matching `GET /controls/{id}/objectives`'s own precedent (a
+  `RegulatoryFramework` carries no target-entity sensitivity of its own). One new migration (`037`,
+  one table: `theme_framework_links`, composite PK, `ON DELETE CASCADE` on both legs). 22/22 tasks
+  complete: migration (verified upgrade→downgrade→upgrade clean), `_row_to_theme` converted to async
+  (three call sites updated: `list_themes`, `get_theme`, `create_theme`'s inline construction —
+  `update_theme` needed no change, it already delegates to `get_theme`), 10 new unit tests
+  (`tests/unit/strategy/test_theme_framework_links.py`), 12 new contract tests
+  (`tests/contract/test_theme_framework_links_api.py`, full-stack httpx client against a real
+  `create_app()` mirroring 925's own fixture precedent exactly), 3 new integration tests
+  (`tests/integration/test_theme_framework_links_api.py`, testcontainers-gated — Docker unavailable
+  in this environment, same constraint every COMPLY-0x spec on this branch has hit; written and will
+  run in CI). 1682 backend tests total (1679 + the 3 pre-existing, unrelated LLM-stub-vs-real-key
+  failures already present before this feature — confirmed environmental, not a regression, by the
+  926/twl sessions' own prior investigation), `ruff`/`mypy` clean. Verified live end-to-end against a
+  real local Postgres and running backend: every quickstart.md scenario (create, duplicate 409,
+  missing-target 404 both directions, many-to-many tagging, empty reverse lookup, removal, repeat-
+  delete 404, and — directly against real Postgres FK cascade behavior, not just the SQLite contract
+  fixture — deleting a linked Theme and separately a linked Framework, confirming the link row is
+  gone in both cases with the surviving side left untouched) all confirmed via direct API calls, with
+  every test Theme/Framework/link created during verification cleaned up afterward (confirmed by a
+  direct row-count check back to zero). See `specs/927-theme-framework-mapping/`.
 - 926-framework-versioning-correction: Implemented (COMPLY-01a, a correction to COMPLY-01's
   already-shipped, already-populated `RegulatoryFramework` entity) — full `/speckit.specify` →
   `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle sourced from an addendum document
@@ -255,7 +300,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   reverse-lookup lines rendering correctly — all test data cleaned up afterward, confirmed by
   count back to the three real pre-existing frameworks (GDPR, EU AI Act, DORA) and original
   objective/initiative counts. See `specs/925-strategy-compliance-linkage/`.
-- 924-compliance-rollup-reporting: Implemented (COMPLY-04, the read-side rollup spec of the
   Compliance Domain bundle, building directly on 921/922/923) — full `/speckit.specify` →
   `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle for two new read-only aggregate
   endpoints in `adp.compliance`: `GET .../frameworks/{id}/rollup` (US1, a framework × status
