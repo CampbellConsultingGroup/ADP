@@ -12,6 +12,7 @@ import pytest
 from adp.search import (
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_TECHNICAL_CAPABILITY,
+    ENTITY_VALUE_STREAM_STAGE,
     SearchIndex,
 )
 
@@ -102,3 +103,54 @@ async def test_delete_removes_from_index(db_session):
 
     hits = await idx.hybrid_search("alpha order", db_session, limit=5)
     assert all(h.entity_id != "A" for h in hits)
+
+
+# ── ADP-7bo: value_stream_stage round-trip + the cascade-unindex fix ────────
+
+
+async def test_value_stream_stage_round_trips(db_session):
+    """The new entity_type constant works through the real SQL path exactly
+    like every sibling entity_type -- confirms ENTITY_VALUE_STREAM_STAGE is a
+    plain data value with no special-casing needed anywhere in the SQL layer."""
+    idx = SearchIndex(embedder=_FakeEmbedder())
+    await idx.upsert(ENTITY_VALUE_STREAM_STAGE, "S", "Alpha fraud triage", db_session)
+
+    hits = await idx.hybrid_search(
+        "alpha", db_session, entity_types=[ENTITY_VALUE_STREAM_STAGE], limit=5
+    )
+    assert {h.entity_id for h in hits} == {"S"}
+
+
+async def test_delete_value_stream_cascades_to_unindex_its_stages(db_session, monkeypatch):
+    """The real store-layer round-trip for the cascade-unindex fix (FR-004):
+    add_stage indexes via the module-level index_entity/unindex_entity helpers
+    (adp.business.store), which read the process-global default_index() --
+    pointed here at a fake-embedder-backed SearchIndex so the whole path runs
+    for real against this test's live Postgres container, not just the direct
+    idx.upsert() calls the other tests in this file use."""
+    import adp.search.index as search_index_module
+    from adp.business import store as bstore
+    from adp.business.models import ValueStreamCreate, ValueStreamStageCreate
+
+    monkeypatch.setattr(
+        search_index_module, "_default_index", SearchIndex(embedder=_FakeEmbedder())
+    )
+
+    vs = await bstore.create_value_stream(ValueStreamCreate(name="Alpha Claims"), db_session)
+    stage = await bstore.add_stage(
+        vs.id, ValueStreamStageCreate(name="Alpha Fraud Triage"), db_session
+    )
+
+    idx = search_index_module.default_index()
+    hits_before = await idx.hybrid_search(
+        "alpha fraud", db_session, entity_types=[ENTITY_VALUE_STREAM_STAGE], limit=5
+    )
+    assert {h.entity_id for h in hits_before} == {stage.id}
+
+    deleted = await bstore.delete_value_stream(vs.id, db_session)
+    assert deleted is True
+
+    hits_after = await idx.hybrid_search(
+        "alpha fraud", db_session, entity_types=[ENTITY_VALUE_STREAM_STAGE], limit=5
+    )
+    assert hits_after == []

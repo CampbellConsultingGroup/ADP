@@ -50,6 +50,7 @@ from adp.search import (
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
     ENTITY_VALUE_STREAM,
+    ENTITY_VALUE_STREAM_STAGE,
     build_text,
     index_entity,
     unindex_entity,
@@ -464,11 +465,20 @@ async def update_value_stream(
 
 
 async def delete_value_stream(vs_id: str, session: AsyncSession) -> bool:
-    # FK CASCADE handles stage deletion
+    # ADP-7bo: read stage ids before the cascading delete -- FK CASCADE handles
+    # stage deletion at the DB level, but can't call unindex_entity() itself, so
+    # each stage's search-index row would otherwise be silently orphaned.
+    stage_ids_result = await session.execute(
+        sa.select(_stages.c.id).where(_stages.c.value_stream_id == vs_id)
+    )
+    stage_ids = [row.id for row in stage_ids_result]
+
     result = await session.execute(_value_streams.delete().where(_value_streams.c.id == vs_id))
     deleted = _rowcount(result) > 0
     if deleted:
         await unindex_entity(ENTITY_VALUE_STREAM, vs_id, session)
+        for stage_id in stage_ids:
+            await unindex_entity(ENTITY_VALUE_STREAM_STAGE, stage_id, session)
     return deleted
 
 
@@ -487,13 +497,17 @@ async def add_stage(
             position=data.position,
         )
     )
-    return ValueStreamStage(
+    stage = ValueStreamStage(
         id=stage_id,
         value_stream_id=vs_id,
         name=data.name.strip(),
         description=data.description,
         position=data.position,
     )
+    await index_entity(
+        ENTITY_VALUE_STREAM_STAGE, stage_id, build_text(stage.name, stage.description), session
+    )
+    return stage
 
 
 async def update_stage(
@@ -526,14 +540,24 @@ async def update_stage(
         sa.select(_stages).where(_stages.c.id == stage_id, _stages.c.value_stream_id == vs_id)
     )
     row = result2.mappings().first()
-    return _row_to_stage(row) if row else None
+    if row is None:
+        return None
+    refreshed = _row_to_stage(row)
+    await index_entity(
+        ENTITY_VALUE_STREAM_STAGE, stage_id, build_text(refreshed.name, refreshed.description),
+        session,
+    )
+    return refreshed
 
 
 async def delete_stage(vs_id: str, stage_id: str, session: AsyncSession) -> bool:
     result = await session.execute(
         _stages.delete().where(_stages.c.id == stage_id, _stages.c.value_stream_id == vs_id)
     )
-    return _rowcount(result) > 0
+    deleted = _rowcount(result) > 0
+    if deleted:
+        await unindex_entity(ENTITY_VALUE_STREAM_STAGE, stage_id, session)
+    return deleted
 
 
 async def reorder_stages(
@@ -545,6 +569,13 @@ async def reorder_stages(
     """
     incoming_ids = {s.id for s in ordered_stages}
 
+    # ADP-7bo: read the dropped-stage ids before deleting, so they can be
+    # unindexed afterward -- the DB-level delete alone can't call unindex_entity.
+    existing_ids_result = await session.execute(
+        sa.select(_stages.c.id).where(_stages.c.value_stream_id == vs_id)
+    )
+    dropped_ids = {row.id for row in existing_ids_result} - incoming_ids
+
     # Delete stages not in the new list
     await session.execute(
         _stages.delete().where(
@@ -552,6 +583,8 @@ async def reorder_stages(
             _stages.c.id.not_in(incoming_ids),
         )
     )
+    for dropped_id in dropped_ids:
+        await unindex_entity(ENTITY_VALUE_STREAM_STAGE, dropped_id, session)
 
     # Upsert each stage with its new position
     result_stages = []
@@ -569,6 +602,12 @@ async def reorder_stages(
             _stages.update().where(
                 _stages.c.id == stage_item.id, _stages.c.value_stream_id == vs_id
             ).values(name=stage_item.name, description=stage_item.description, position=position)
+        )
+        # ADP-7bo: reindex every surviving stage under its (possibly renamed) text --
+        # reorder_stages can rename a stage as a side effect of reordering.
+        await index_entity(
+            ENTITY_VALUE_STREAM_STAGE, stage_item.id,
+            build_text(stage_item.name, stage_item.description), session,
         )
         result_stages.append(
             ValueStreamStage(
@@ -951,7 +990,8 @@ async def create_domain(data: BusinessDomainCreate, session: AsyncSession) -> Bu
         updated_at=now,
     )
     await index_entity(
-        ENTITY_BUSINESS_DOMAIN, domain_id, build_text(data.name, data.scope_statement), session
+        ENTITY_BUSINESS_DOMAIN, domain_id,
+        build_text(data.name, data.scope_statement, data.org_unit), session,
     )
     return domain
 
@@ -988,7 +1028,7 @@ async def update_domain(
     refreshed = _row_to_domain(result2.mappings().first())
     await index_entity(
         ENTITY_BUSINESS_DOMAIN, domain_id,
-        build_text(refreshed.name, refreshed.scope_statement), session,
+        build_text(refreshed.name, refreshed.scope_statement, refreshed.org_unit), session,
     )
     return refreshed
 
