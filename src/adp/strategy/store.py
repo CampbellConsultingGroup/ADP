@@ -143,6 +143,16 @@ _objective_control_links = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
+# 927-theme-framework-mapping (COMPLY-05, link #3): theme <-> Framework coarse grouping tag. Same
+# bare-link shape as the table above -- composite PK omitted here, migration 037 owns it.
+_theme_framework_links = sa.Table(
+    "theme_framework_links",
+    _metadata,
+    sa.Column("theme_id", sa.String(36), nullable=False),
+    sa.Column("framework_id", sa.String(36), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
 # Lightweight read-only mirrors of designs/applications (research.md Decision
 # 2) -- mirrors adp.business.store's own established `_designs` precedent
 # ("designs table reference for JOIN queries (read-only; managed by
@@ -235,6 +245,15 @@ _control_organization_mapping_mirror = sa.Table(
     sa.Column("assessed_at", sa.Date(), nullable=True),
 )
 
+# 927-theme-framework-mapping: read-only mirror of regulatory_frameworks (id + name only, same
+# idiom as _designs/_applications above) -- existence checks for theme_framework_links only.
+_regulatory_frameworks = sa.Table(
+    "regulatory_frameworks",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.Text(), nullable=False),
+)
+
 
 class DuplicateLinkError(Exception):
     """Raised when a link already exists (mirrors adp.business.models's)."""
@@ -296,7 +315,10 @@ def _rowcount(result: Any) -> int:
 # ── Themes ────────────────────────────────────────────────────────────────────
 
 
-def _row_to_theme(row: Any) -> StrategicTheme:
+async def _row_to_theme(row: Any, session: AsyncSession) -> StrategicTheme:
+    """927-theme-framework-mapping: async now (was sync) to populate framework_ids live on every
+    read, mirroring _row_to_summary's own established async-construction-helper precedent for
+    StrategicObjective/control_ids."""
     return StrategicTheme(
         id=row.id,
         name=row.name,
@@ -304,6 +326,7 @@ def _row_to_theme(row: Any) -> StrategicTheme:
         owner=row.owner,
         priority=row.priority,
         created_at=row.created_at,
+        framework_ids=await list_framework_ids_for_theme(row.id, session),
     )
 
 
@@ -334,12 +357,13 @@ async def create_theme(body: StrategicThemeCreate, session: AsyncSession) -> Str
         owner=body.owner,
         priority=body.priority,
         created_at=now,
+        framework_ids=[],  # brand-new theme has no links yet -- no query needed
     )
 
 
 async def list_themes(session: AsyncSession) -> StrategicThemeListResponse:
     result = await session.execute(sa.select(_themes).order_by(_themes.c.name))
-    items = [_row_to_theme(row) for row in result.mappings().all()]
+    items = [await _row_to_theme(row, session) for row in result.mappings().all()]
     return StrategicThemeListResponse(items=items, total=len(items))
 
 
@@ -353,7 +377,7 @@ async def theme_exists(theme_id: str, session: AsyncSession) -> bool:
 async def get_theme(theme_id: str, session: AsyncSession) -> StrategicTheme | None:
     result = await session.execute(sa.select(_themes).where(_themes.c.id == theme_id))
     row = result.mappings().first()
-    return _row_to_theme(row) if row is not None else None
+    return await _row_to_theme(row, session) if row is not None else None
 
 
 async def update_theme(
@@ -802,6 +826,14 @@ async def control_exists(control_id: str, session: AsyncSession) -> bool:
     return result.first() is not None
 
 
+async def framework_exists(framework_id: str, session: AsyncSession) -> bool:
+    """927-theme-framework-mapping -- mirrors control_exists exactly."""
+    result = await session.execute(
+        sa.select(_regulatory_frameworks.c.id).where(_regulatory_frameworks.c.id == framework_id)
+    )
+    return result.first() is not None
+
+
 async def _linked_design_ids(objective_id: str, session: AsyncSession) -> list[str]:
     result = await session.execute(
         sa.select(_objective_design_links.c.design_id)
@@ -979,6 +1011,65 @@ async def list_objectives_for_control(
         if obj is not None:
             items.append(await _row_to_summary(obj, session))
     return StrategicObjectiveListResponse(items=items, total=len(items))
+
+
+# ── Theme <-> Framework links (927-theme-framework-mapping, COMPLY-05 link #3) ──────────────────
+
+
+async def list_framework_ids_for_theme(theme_id: str, session: AsyncSession) -> list[str]:
+    """Bare id list -- mirrors _linked_control_ids's exact shape. Shared by the create/delete
+    routes' own response (research.md D2) and by _row_to_theme's framework_ids field below."""
+    result = await session.execute(
+        sa.select(_theme_framework_links.c.framework_id)
+        .where(_theme_framework_links.c.theme_id == theme_id)
+        .order_by(_theme_framework_links.c.framework_id)
+    )
+    return [row.framework_id for row in result]
+
+
+async def link_theme_framework(theme_id: str, framework_id: str, session: AsyncSession) -> None:
+    """Caller (router) has already validated both ids exist."""
+    try:
+        await session.execute(
+            _theme_framework_links.insert().values(
+                theme_id=theme_id, framework_id=framework_id, created_at=_now()
+            )
+        )
+    except Exception as exc:
+        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+            raise DuplicateLinkError(
+                f"Link ({theme_id!r}, {framework_id!r}) already exists"
+            ) from exc
+        raise
+
+
+async def unlink_theme_framework(theme_id: str, framework_id: str, session: AsyncSession) -> None:
+    result = await session.execute(
+        _theme_framework_links.delete().where(
+            _theme_framework_links.c.theme_id == theme_id,
+            _theme_framework_links.c.framework_id == framework_id,
+        )
+    )
+    if _rowcount(result) == 0:
+        raise LinkNotFoundError(f"Link ({theme_id!r}, {framework_id!r}) not found")
+
+
+async def list_themes_for_framework(
+    framework_id: str, session: AsyncSession
+) -> StrategicThemeListResponse:
+    """Reverse lookup, called from adp.compliance.router."""
+    result = await session.execute(
+        sa.select(_theme_framework_links.c.theme_id)
+        .where(_theme_framework_links.c.framework_id == framework_id)
+        .order_by(_theme_framework_links.c.theme_id)
+    )
+    items = []
+    for row in result:
+        theme_row = await session.execute(sa.select(_themes).where(_themes.c.id == row.theme_id))
+        theme = theme_row.mappings().first()
+        if theme is not None:
+            items.append(await _row_to_theme(theme, session))
+    return StrategicThemeListResponse(items=items, total=len(items))
 
 
 # ── Overview dashboard summary (051-strategy-landing-card) ────────────────────

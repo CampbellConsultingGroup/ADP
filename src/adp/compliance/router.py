@@ -74,7 +74,7 @@ from adp.compliance.models import (
     RegulatoryFrameworkUpdate,
 )
 from adp.strategy.initiatives import StrategyInitiativeListResponse
-from adp.strategy.models import StrategicObjectiveListResponse
+from adp.strategy.models import StrategicObjectiveListResponse, StrategicThemeListResponse
 
 logger = logging.getLogger(__name__)
 
@@ -680,6 +680,24 @@ async def list_control_objectives(
     if not await sstore.control_exists(control_id, strategy_session):
         raise HTTPException(status_code=404, detail=f"Control {control_id!r} not found")
     return await sstore.list_objectives_for_control(control_id, strategy_session)
+
+
+# ── Reverse lookup — 927-theme-framework-mapping (COMPLY-05, link #3) ────────────────────────────
+
+
+@router.get("/frameworks/{framework_id}/themes", response_model=StrategicThemeListResponse)
+async def list_framework_themes(
+    framework_id: str,
+    strategy_session: AsyncSession = Depends(_get_strategy_session),
+):
+    """Reverse lookup (spec.md FR-005): every Strategic Theme tagged onto this Framework.
+    Ungated beyond general platform read access -- a RegulatoryFramework carries no
+    target-entity sensitivity of its own, mirroring list_control_objectives above."""
+    from adp.strategy import store as sstore
+
+    if not await sstore.framework_exists(framework_id, strategy_session):
+        raise HTTPException(status_code=404, detail=f"Framework {framework_id!r} not found")
+    return await sstore.list_themes_for_framework(framework_id, strategy_session)
 
 
 # Decorator-level dependency, applied only to the Application-targeted route below (spec.md
