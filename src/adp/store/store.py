@@ -420,19 +420,19 @@ class DesignStore:
             return int(row.scalar() or 0)
 
     async def next_design_id(self) -> str:
-        """Generate the next DSN-NNN id atomically (ADP-SPEC-025)."""
-        import re
+        """Generate the next DSN-NNN id (ADP-SPEC-025).
 
+        ADP-3fh: a real Postgres SEQUENCE (design_id_seq, migration 038), not the old
+        "SELECT max(existing ids) + 1" scan -- that read-then-insert-elsewhere shape had no lock
+        spanning the two, so concurrent callers could compute the same "next" id and race to
+        insert it (confirmed reproducible under real concurrent load; ADP-twl's retry loop in
+        create_design() papers over the resulting collision but doesn't remove it). nextval() is
+        atomic and lock-free by construction, so this removes the race structurally instead.
+        """
         async with self._session_factory() as session:
-            rows = await session.execute(sa.select(designs.c.id))
-            all_ids = [r[0] for r in rows.fetchall()]
-
-        max_n = 0
-        for did in all_ids:
-            m = re.match(r"^DSN-(\d+)$", did)
-            if m:
-                max_n = max(max_n, int(m.group(1)))
-        return f"DSN-{max_n + 1:03d}"
+            result = await session.execute(sa.text("SELECT nextval('design_id_seq')"))
+            n = result.scalar_one()
+        return f"DSN-{n:03d}"
 
     async def dispose(self) -> None:
         """Release database connections."""
