@@ -5,22 +5,28 @@ columns (element_technology_tags B-tree indexes, designs.lifecycle_status index)
 No new DB tables or migrations required.
 
 Endpoints:
-  GET /api/v1/portfolio/technologies              — technology landscape aggregation
-  GET /api/v1/portfolio/designs                   — combined technology + lifecycle filter
-  GET /api/v1/portfolio/search                    — cross-design element/technology search
   GET /api/v1/portfolio/summary                   — portfolio health summary header
   GET /api/v1/portfolio/applications-heatmap      — applications heat map (919-insights-dashboard)
   GET /api/v1/portfolio/application-capability-groups — app-capability links, bulk (ADP-8xo)
+
+ADP-704: /technologies, /designs, and /search (the old design-technology-landscape trio) were
+retired here. ADP-8xo's Application Portfolio pivot deleted every UI hook/component that called
+them (usePortfolioTechnologies/usePortfolioDesigns/usePortfolioSearch,
+TechnologyLandscape.tsx/PortfolioDesignList.tsx/DependencySearch.tsx); the endpoints themselves
+were deliberately left in place at the time (Phase-C-style, mirroring the ADP-914.9
+C4Canvas-retirement precedent: prove the replacement first, retire old surface only after). No
+UI dependency resurfaced in the time since (re-confirmed via a fresh grep before removing), and no
+request for a standalone technology/lifecycle browser screen materialized either, so this is a
+straight deletion, not a re-home.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
 from decimal import Decimal
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -37,48 +43,6 @@ router = APIRouter(prefix="/api/v1/portfolio", tags=["portfolio"])
 
 
 # ── Response models ────────────────────────────────────────────────────────────
-
-class TechnologyCountItem(BaseModel):
-    technology: str
-    design_count: int
-
-
-class TechnologiesResponse(BaseModel):
-    technologies: list[TechnologyCountItem]
-    total_unique: int
-
-
-class PortfolioDesignSummary(BaseModel):
-    id: str
-    title: str
-    lifecycle_status: str
-    overdue_review: bool
-    element_count: int
-    primary_technology: str | None
-
-
-class PortfolioDesignsResponse(BaseModel):
-    designs: list[PortfolioDesignSummary]
-    total: int
-    page: int
-    page_size: int
-
-
-class PortfolioSearchResult(BaseModel):
-    id: str
-    title: str
-    lifecycle_status: str
-    overdue_review: bool
-    element_count: int
-    primary_technology: str | None
-    matched_elements: list[str]
-
-
-class PortfolioSearchResponse(BaseModel):
-    designs: list[PortfolioSearchResult]
-    total: int
-    truncated: bool
-
 
 class PortfolioSummaryResponse(BaseModel):
     total_designs: int
@@ -109,151 +73,6 @@ class ApplicationCapabilityGroupsResponse(BaseModel):
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
-
-@router.get("/technologies", response_model=TechnologiesResponse)
-async def get_portfolio_technologies(
-    session: AsyncSession = Depends(get_kb_session),
-) -> TechnologiesResponse:
-    """Top technologies across portfolio by distinct design count."""
-    result = await session.execute(
-        sa.text(
-            """
-            SELECT technology, COUNT(DISTINCT design_id) AS design_count
-            FROM element_technology_tags
-            WHERE technology IS NOT NULL
-            GROUP BY technology
-            ORDER BY design_count DESC
-            LIMIT 50
-            """
-        )
-    )
-    rows = result.fetchall()
-    items = [
-        TechnologyCountItem(technology=r.technology, design_count=r.design_count)
-        for r in rows
-    ]
-    return TechnologiesResponse(technologies=items, total_unique=len(items))
-
-
-@router.get("/designs", response_model=PortfolioDesignsResponse)
-async def get_portfolio_designs(
-    technology: str | None = Query(default=None),
-    status: str | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=200),
-    session: AsyncSession = Depends(get_kb_session),
-) -> PortfolioDesignsResponse:
-    """Designs filtered by technology and/or lifecycle status using indexed columns."""
-    now = datetime.now(timezone.utc)
-    offset = (page - 1) * page_size
-
-    # Build optional filter clauses dynamically — asyncpg cannot infer NULL param types
-    # and '::text' cast suffix confuses SQLAlchemy's text() parameter parser.
-    filter_clauses: list[str] = []
-    filter_params: dict = {}
-    if technology is not None:
-        filter_clauses.append("ett.technology ILIKE '%' || :technology || '%'")
-        filter_params["technology"] = technology
-    if status is not None:
-        filter_clauses.append("d.lifecycle_status = :status")
-        filter_params["status"] = status
-
-    where = ("WHERE " + " AND ".join(filter_clauses)) if filter_clauses else ""
-
-    result = await session.execute(
-        sa.text(
-            f"""
-            SELECT DISTINCT
-                d.id,
-                d.title,
-                d.lifecycle_status,
-                d.review_due,
-                ett.technology AS primary_technology
-            FROM designs d
-            LEFT JOIN element_technology_tags ett ON d.id = ett.design_id
-            {where}
-            ORDER BY d.title
-            LIMIT :limit OFFSET :offset
-            """  # nosec B608 - filter clauses are hardcoded; values bound as params
-        ),
-        {**filter_params, "limit": page_size, "offset": offset},
-    )
-    rows = result.fetchall()
-
-    designs = []
-    for r in rows:
-        overdue = bool(r.review_due and r.review_due < now.replace(tzinfo=None))
-        designs.append(PortfolioDesignSummary(
-            id=r.id,
-            title=r.title,
-            lifecycle_status=r.lifecycle_status,
-            overdue_review=overdue,
-            element_count=0,
-            primary_technology=r.primary_technology,
-        ))
-
-    return PortfolioDesignsResponse(
-        designs=designs,
-        total=len(designs),
-        page=page,
-        page_size=page_size,
-    )
-
-
-@router.get("/search", response_model=PortfolioSearchResponse)
-async def search_portfolio(
-    q: str = Query(min_length=2),
-    session: AsyncSession = Depends(get_kb_session),
-) -> PortfolioSearchResponse:
-    """Cross-design element and technology keyword search."""
-    now = datetime.now(timezone.utc)
-
-    result = await session.execute(
-        sa.text(
-            """
-            SELECT DISTINCT
-                d.id AS design_id,
-                d.title,
-                d.lifecycle_status,
-                d.review_due,
-                ett.element_id,
-                ett.element_name,
-                ett.technology
-            FROM element_technology_tags ett
-            JOIN designs d ON d.id = ett.design_id
-            WHERE ett.technology ILIKE '%' || :q || '%'
-               OR ett.element_name ILIKE '%' || :q || '%'
-            ORDER BY d.title
-            LIMIT 200
-            """
-        ),
-        {"q": q},
-    )
-    rows = result.fetchall()
-
-    truncated = len(rows) == 200
-
-    designs_map: dict[str, dict] = {}
-    for r in rows:
-        did = r.design_id
-        if did not in designs_map:
-            overdue = bool(r.review_due and r.review_due < now.replace(tzinfo=None))
-            designs_map[did] = {
-                "id": did,
-                "title": r.title,
-                "lifecycle_status": r.lifecycle_status,
-                "overdue_review": overdue,
-                "element_count": 0,
-                "primary_technology": r.technology,
-                "matched_elements": [],
-            }
-        tech_label = f" (technology: {r.technology})" if r.technology else ""
-        elem_label = r.element_name or r.element_id
-        designs_map[did]["matched_elements"].append(f"{elem_label}{tech_label}")
-
-    results = [PortfolioSearchResult(**d) for d in designs_map.values()]
-    return PortfolioSearchResponse(designs=results, total=len(results), truncated=truncated)
-
 
 @router.get("/summary", response_model=PortfolioSummaryResponse)
 async def get_portfolio_summary(

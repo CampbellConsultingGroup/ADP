@@ -258,13 +258,6 @@ test.describe("New-router API smoke (real DB)", () => {
     expect(typeof body.total_designs).toBe("number");
   });
 
-  test("GET /api/v1/portfolio/technologies returns 200 with technologies array", async ({ request }) => {
-    const resp = await request.get(`${API_URL}/api/v1/portfolio/technologies`);
-    expect(resp.status()).toBe(200);
-    const body = await resp.json() as { technologies: unknown[] };
-    expect(Array.isArray(body.technologies)).toBe(true);
-  });
-
   test("GET /api/v1/governance/status returns 200 with designs array", async ({ request }) => {
     const resp = await request.get(`${API_URL}/api/v1/governance/status`);
     expect(resp.status()).toBe(200);
