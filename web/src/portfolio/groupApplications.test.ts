@@ -10,6 +10,7 @@ import {
   crossTabApplications,
   fieldHasBuckets,
   filterApplications,
+  groupByApplicationType,
   groupByBusinessUnit,
   groupByCapability,
   groupByCriticality,
@@ -39,6 +40,7 @@ function app(overrides: Partial<Application> & { id: string; name: string }): Ap
     technical_owner: null,
     lifecycle_status: "active",
     hosting_model: null,
+    application_type: null,
     architecture_pattern: null,
     tech_debt_flags: [],
     created_at: "2026-01-01T00:00:00Z",
@@ -307,6 +309,31 @@ describe("groupByPaceLayer (ADP-9ye)", () => {
     const apps = [app({ id: "1", name: "A", pace_layer: "Innovation" })];
     const result = groupByPaceLayer(apps);
     expect(result.buckets.find((b) => b.key === "Innovation")!.apps.map((a) => a.id)).toEqual(["1"]);
+  });
+});
+
+describe("groupByApplicationType (ADP-3jj)", () => {
+  it("places apps into all 4 fixed buckets in Custom/COTS/SaaS/Legacy order", () => {
+    const result = groupByApplicationType([]);
+    expect(result.buckets.map((b) => b.key)).toEqual(["custom", "cots", "saas", "legacy"]);
+  });
+
+  it("groups by the app's application_type value", () => {
+    const apps = [app({ id: "1", name: "A", application_type: "cots" })];
+    const result = groupByApplicationType(apps);
+    expect(result.buckets.find((b) => b.key === "cots")!.apps.map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("puts a null application_type into unclassified", () => {
+    const apps = [app({ id: "1", name: "A", application_type: null })];
+    const result = groupByApplicationType(apps);
+    expect(result.unclassified.map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("groupApplications dispatches to groupByApplicationType for the 'application_type' dimension", () => {
+    const apps = [app({ id: "1", name: "A", application_type: "legacy" })];
+    const result = groupApplications("application_type", apps, []);
+    expect(result.buckets.find((b) => b.key === "legacy")!.apps.map((a) => a.id)).toEqual(["1"]);
   });
 });
 

@@ -75,6 +75,9 @@ def test_serialize_application_with_no_extension_records_is_all_null() -> None:
     assert out["id"] == "app-1"
     assert out["name"] == "Claims Processing"
     assert out["lifecycle_status"] == "active"
+    # ADP-3jj: present as explicit null, never omitted, matching hosting_model's own convention.
+    assert out["application_type"] is None
+    assert "application_type" in out
     # risk/cost/governance/quality present, all-unset (FR-018) -- never omitted.
     assert out["risk"] == {
         "security_posture": None,
@@ -112,7 +115,9 @@ def test_serialize_application_with_no_extension_records_is_all_null() -> None:
 
 
 def test_serialize_application_embeds_populated_extension_records_and_relationships() -> None:
-    app = _minimal_app(id="app-2", name="Policy Admin", time_classification="Invest")
+    app = _minimal_app(
+        id="app-2", name="Policy Admin", time_classification="Invest", application_type="cots",
+    )
     risk = ApplicationRisk(
         security_posture="adequate",
         vulnerability_status="open_low",
@@ -168,6 +173,7 @@ def test_serialize_application_embeds_populated_extension_records_and_relationsh
         ],
     )
 
+    assert out["application_type"] == "cots"
     assert out["risk"]["security_posture"] == "adequate"
     assert out["risk"]["regulatory_tags"] == ["PCI"]
     # Decimal cost amounts serialize as JSON strings, never binary floats.

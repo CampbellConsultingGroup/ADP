@@ -33,6 +33,7 @@ function app(overrides: Partial<Application> & { id: string; name: string }): Ap
     technical_owner: null,
     lifecycle_status: "active",
     hosting_model: null,
+    application_type: null,
     architecture_pattern: null,
     tech_debt_flags: [],
     created_at: "2026-01-01T00:00:00Z",
