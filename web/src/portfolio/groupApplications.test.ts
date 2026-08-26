@@ -8,6 +8,7 @@ import type { Application } from "../api/application";
 import type { ApplicationCapabilityGroupLink } from "../api/portfolio";
 import {
   crossTabApplications,
+  fieldHasBuckets,
   filterApplications,
   groupByBusinessUnit,
   groupByCapability,
@@ -18,6 +19,8 @@ import {
   groupByRStrategy,
   groupByTime,
   groupApplications,
+  isNumericFilterField,
+  operatorsForField,
 } from "./groupApplications";
 
 function app(overrides: Partial<Application> & { id: string; name: string }): Application {
@@ -349,5 +352,116 @@ describe("filterApplications (ADP-9ye)", () => {
     // app-1 is linked to both capabilities -- filtering by either independently includes it.
     expect(filterApplications("capability", "cap-1", apps, links).map((a) => a.id)).toEqual(["1"]);
     expect(filterApplications("capability", "cap-2", apps, links).map((a) => a.id).sort()).toEqual(["1", "2"]);
+  });
+});
+
+describe("operatorsForField / fieldHasBuckets / isNumericFilterField (ADP-6w4)", () => {
+  it("pure-bucket fields (v1's original 8) offer only '='", () => {
+    for (const field of [
+      "capability", "time", "r_strategy", "lifecycle_status", "hosting_model", "pace_layer",
+    ] as const) {
+      expect(operatorsForField(field)).toEqual(["eq"]);
+      expect(fieldHasBuckets(field)).toBe(true);
+    }
+  });
+
+  it("criticality and business_unit are dual-mode: still have buckets, but offer more than '='", () => {
+    expect(fieldHasBuckets("criticality")).toBe(true);
+    expect(operatorsForField("criticality")).toEqual(["eq", "gt", "gte", "lt", "lte"]);
+    expect(fieldHasBuckets("business_unit")).toBe(true);
+    expect(operatorsForField("business_unit")).toEqual(["eq", "contains", "starts_with"]);
+  });
+
+  it("health_score/business_value have no buckets at all and are numeric", () => {
+    for (const field of ["health_score", "business_value"] as const) {
+      expect(fieldHasBuckets(field)).toBe(false);
+      expect(isNumericFilterField(field)).toBe(true);
+      expect(operatorsForField(field)).toEqual(["eq", "gt", "gte", "lt", "lte"]);
+    }
+  });
+
+  it("name/vendor/description have no buckets at all and are string fields", () => {
+    for (const field of ["name", "vendor", "description"] as const) {
+      expect(fieldHasBuckets(field)).toBe(false);
+      expect(isNumericFilterField(field)).toBe(false);
+      expect(operatorsForField(field)).toEqual(["eq", "contains", "starts_with"]);
+    }
+  });
+});
+
+describe("filterApplications: comparison/string operators (ADP-6w4)", () => {
+  it("business_value: > excludes the boundary value, >= includes it", () => {
+    const apps = [
+      app({ id: "1", name: "A", business_value: 10 }),
+      app({ id: "2", name: "B", business_value: 20 }),
+      app({ id: "3", name: "C", business_value: 30 }),
+    ];
+    expect(filterApplications("business_value", "20", apps, [], "gt").map((a) => a.id)).toEqual(["3"]);
+    expect(filterApplications("business_value", "20", apps, [], "gte").map((a) => a.id).sort()).toEqual(["2", "3"]);
+    expect(filterApplications("business_value", "20", apps, [], "lt").map((a) => a.id)).toEqual(["1"]);
+    expect(filterApplications("business_value", "20", apps, [], "lte").map((a) => a.id).sort()).toEqual(["1", "2"]);
+  });
+
+  it("health_score: eq matches exactly, via the free-form path (no bucket set exists for it)", () => {
+    const apps = [
+      app({ id: "1", name: "A", health_score: 3 }),
+      app({ id: "2", name: "B", health_score: 5 }),
+    ];
+    expect(filterApplications("health_score", "3", apps, [], "eq").map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("criticality: eq still uses the v1 bucket path (tier string key), gt switches to raw numeric comparison", () => {
+    const apps = [
+      app({ id: "1", name: "A", business_criticality: 3 }),
+      app({ id: "2", name: "B", business_criticality: 5 }),
+    ];
+    // "eq" + a bucket key ("3", "5") -- byte-for-byte the same call shape v1 always used.
+    expect(filterApplications("criticality", "3", apps, []).map((a) => a.id)).toEqual(["1"]);
+    // "gt" + a raw number -- the new free-form path.
+    expect(filterApplications("criticality", "3", apps, [], "gt").map((a) => a.id)).toEqual(["2"]);
+  });
+
+  it("a numeric field with an incomplete/invalid typed value returns the full set, not zero results", () => {
+    const apps = [app({ id: "1", name: "A", business_value: 10 })];
+    expect(filterApplications("business_value", "", apps, [], "gt").map((a) => a.id)).toEqual(["1"]);
+    expect(filterApplications("business_value", "not-a-number", apps, [], "gt").map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("name: contains and starts_with are case-insensitive", () => {
+    const apps = [
+      app({ id: "1", name: "Claims Processing Core" }),
+      app({ id: "2", name: "Fraud Detection" }),
+    ];
+    expect(filterApplications("name", "claims", apps, [], "contains").map((a) => a.id)).toEqual(["1"]);
+    expect(filterApplications("name", "FRAUD", apps, [], "starts_with").map((a) => a.id)).toEqual(["2"]);
+    expect(filterApplications("name", "core", apps, [], "starts_with")).toEqual([]);
+  });
+
+  it("vendor/description: contains matches a substring", () => {
+    const apps = [
+      app({ id: "1", name: "A", vendor: "Acme Cloud Systems" }),
+      app({ id: "2", name: "B", vendor: "Other Co" }),
+    ];
+    expect(filterApplications("vendor", "cloud", apps, [], "contains").map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("business_unit: eq still uses the v1 bucket path, contains switches to the free-form path", () => {
+    const apps = [
+      app({ id: "1", name: "A", owning_business_unit: "Claims Operations" }),
+      app({ id: "2", name: "B", owning_business_unit: "Finance" }),
+    ];
+    expect(filterApplications("business_unit", "Claims Operations", apps, []).map((a) => a.id)).toEqual(["1"]);
+    expect(filterApplications("business_unit", "claims", apps, [], "contains").map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("a string field with an empty typed value returns the full set, not zero results", () => {
+    const apps = [app({ id: "1", name: "A", vendor: "Acme" })];
+    expect(filterApplications("vendor", "", apps, [], "contains").map((a) => a.id)).toEqual(["1"]);
+  });
+
+  it("a null field value never matches a comparison/string operator", () => {
+    const apps = [app({ id: "1", name: "A", business_value: null, vendor: null })];
+    expect(filterApplications("business_value", "5", apps, [], "gt")).toEqual([]);
+    expect(filterApplications("vendor", "acme", apps, [], "contains")).toEqual([]);
   });
 });

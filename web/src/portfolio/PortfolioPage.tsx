@@ -20,11 +20,21 @@
  * ADP-9ye: a third pair ("Filter by" field + value) narrows WHICH
  * applications are shown before either Group By/Then By bucket them --
  * filtering applies uniformly to both the flat grid and the cross-tab.
- * Field list (8) is deliberately wider than Group By's (5): the same 5
- * dimensions plus 3 more bounded-enum fields (lifecycle_status,
- * hosting_model, pace_layer) not otherwise surfaced on this screen. v1 is
- * equality-only, per the user's own explicit phasing request -- comparison/
- * string operators are follow-on work (ADP-6w4). */
+ * Field list (8 in v1, 13 as of ADP-6w4) is deliberately wider than Group
+ * By's (5): the same 5 dimensions plus bounded-enum/free-text/numeric fields
+ * not otherwise surfaced on this screen.
+ *
+ * ADP-6w4: comparison operators (>, <, >=, <=) for numeric/score fields
+ * (Health Score, Business Value, and Criticality/Risk Tier) and string
+ * operators (contains, starts with) for free-text fields (Name, Vendor,
+ * Description, and Ownership/Business Unit), layered onto v1's equality-only
+ * bucket dropdown rather than replacing it -- see groupApplications.ts's own
+ * "Filter by: comparison/string operators" section for the full design. An
+ * operator dropdown appears only for fields that have more than one operator
+ * (fieldHasBuckets()'s pure-bucket fields, e.g. Business Capability, never
+ * show one); the value control swaps from the v1 bucket <select> to a
+ * free-form number/text <input> whenever the field has no bucket set at all,
+ * or the chosen operator isn't "=". */
 import React, { useEffect, useMemo, useState } from "react";
 import { useApplications } from "../api/application";
 import { useApplicationCapabilityGroups } from "../api/portfolio";
@@ -33,12 +43,17 @@ import {
   ALL_FILTER_FIELDS,
   DIMENSION_LABELS,
   FILTER_FIELD_LABELS,
+  OPERATOR_LABELS,
   crossTabApplications,
+  fieldHasBuckets,
   filterApplications,
   filterFieldBuckets,
   groupApplications,
+  isNumericFilterField,
+  operatorsForField,
   type Dimension,
   type FilterField,
+  type FilterOperator,
 } from "./groupApplications";
 import BucketCard, { AppChip } from "./BucketCard";
 import CrossTabGrid from "./CrossTabGrid";
@@ -52,28 +67,41 @@ export default function PortfolioPage(): React.ReactElement {
   const [dimensionA, setDimensionA] = useState<Dimension>("capability");
   const [dimensionB, setDimensionB] = useState<Dimension>("capability");
   const [filterField, setFilterField] = useState<FilterField | "">("");
+  const [filterOperator, setFilterOperator] = useState<FilterOperator>("eq");
   const [filterValue, setFilterValue] = useState<string>("");
 
   const appItems = apps.data?.items ?? [];
   const links = capabilityGroups.data?.items ?? [];
   const sameDimension = dimensionA === dimensionB;
 
+  const filterOperatorOptions = filterField ? operatorsForField(filterField) : [];
+  const usingBucketValue = !!filterField && filterOperator === "eq" && fieldHasBuckets(filterField);
+
   const filterValueOptions = useMemo(
-    () => (filterField ? filterFieldBuckets(filterField, appItems, links) : []),
-    [filterField, appItems, links],
+    () => (filterField && usingBucketValue ? filterFieldBuckets(filterField, appItems, links) : []),
+    [filterField, usingBucketValue, appItems, links],
   );
 
   // Whenever the filter field changes (including being cleared), land on a
-  // sensible default value rather than a dead intermediate state -- mirrors
-  // ApplicationsHeatMap.tsx's own "reset selection when it becomes invalid"
-  // precedent.
+  // sensible default operator/value rather than a dead intermediate state --
+  // mirrors ApplicationsHeatMap.tsx's own "reset selection when it becomes
+  // invalid" precedent. Operator always resets to "=" (v1's original
+  // behavior for every field that only ever had one), so switching fields
+  // never strands the picker on an operator the new field doesn't support.
   useEffect(() => {
-    setFilterValue(filterValueOptions[0]?.axis.key ?? "");
-  }, [filterField, filterValueOptions]);
+    setFilterOperator("eq");
+  }, [filterField]);
+
+  useEffect(() => {
+    setFilterValue(usingBucketValue ? (filterValueOptions[0]?.axis.key ?? "") : "");
+  }, [filterField, filterOperator, usingBucketValue, filterValueOptions]);
 
   const filteredApps = useMemo(
-    () => (filterField && filterValue ? filterApplications(filterField, filterValue, appItems, links) : appItems),
-    [filterField, filterValue, appItems, links],
+    () =>
+      filterField && filterValue
+        ? filterApplications(filterField, filterValue, appItems, links, filterOperator)
+        : appItems,
+    [filterField, filterValue, filterOperator, appItems, links],
   );
 
   const grouped = useMemo(
@@ -86,7 +114,12 @@ export default function PortfolioPage(): React.ReactElement {
   );
 
   const isFiltered = filteredApps.length !== appItems.length;
-  const filterValueLabel = filterValueOptions.find((b) => b.axis.key === filterValue)?.axis.label;
+  // Bucket mode shows the bucket's own label (e.g. "On-Prem"); free-form mode
+  // shows the operator + typed value together (e.g. "> 3", "contains kong"),
+  // since there's no bucket label to look up.
+  const filterValueLabel = usingBucketValue
+    ? filterValueOptions.find((b) => b.axis.key === filterValue)?.axis.label
+    : `${OPERATOR_LABELS[filterOperator]} ${filterValue}`;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -112,7 +145,21 @@ export default function PortfolioPage(): React.ReactElement {
                 </option>
               ))}
             </select>
-            {filterField && (
+            {filterField && filterOperatorOptions.length > 1 && (
+              <select
+                aria-label="Filter operator"
+                value={filterOperator}
+                onChange={(e) => setFilterOperator(e.target.value as FilterOperator)}
+                style={{ fontSize: 13, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 4 }}
+              >
+                {filterOperatorOptions.map((op) => (
+                  <option key={op} value={op}>
+                    {OPERATOR_LABELS[op]}
+                  </option>
+                ))}
+              </select>
+            )}
+            {filterField && usingBucketValue && (
               <select
                 aria-label="Filter value"
                 value={filterValue}
@@ -125,6 +172,16 @@ export default function PortfolioPage(): React.ReactElement {
                   </option>
                 ))}
               </select>
+            )}
+            {filterField && !usingBucketValue && (
+              <input
+                aria-label="Filter value"
+                type={isNumericFilterField(filterField) ? "number" : "text"}
+                value={filterValue}
+                onChange={(e) => setFilterValue(e.target.value)}
+                placeholder={isNumericFilterField(filterField) ? "value…" : "text…"}
+                style={{ fontSize: 13, padding: "4px 8px", border: "1px solid var(--border)", borderRadius: 4, width: 100 }}
+              />
             )}
             {filterField && (
               <button

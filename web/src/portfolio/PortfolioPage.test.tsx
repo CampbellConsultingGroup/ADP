@@ -244,3 +244,111 @@ describe("PortfolioPage (ADP-9ye — Filter by)", () => {
     expect(screen.getByText("Fax Intake Tool")).toBeTruthy();
   });
 });
+
+describe("PortfolioPage (ADP-6w4 — comparison/string operators)", () => {
+  const OPERATOR_APPS: Application[] = [
+    app({
+      id: "app-1", name: "Claims Core", hosting_model: "cloud",
+      business_criticality: 3, health_score: 2, vendor: "Acme Cloud Systems",
+    }),
+    app({
+      id: "app-2", name: "Fax Intake Tool", hosting_model: "on_prem",
+      business_criticality: 5, health_score: 4, vendor: "Other Co",
+    }),
+  ];
+
+  it("a pure-bucket field (v1's original 8) shows no operator dropdown", async () => {
+    const user = userEvent.setup();
+    mockData(OPERATOR_APPS, CAPABILITY_GROUPS);
+    render(<PortfolioPage />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by" }), "hosting_model");
+
+    expect(screen.queryByRole("combobox", { name: "Filter operator" })).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Filter value" })).toBeTruthy();
+  });
+
+  it("criticality defaults to '=' with the v1 bucket dropdown, still narrowing correctly", async () => {
+    const user = userEvent.setup();
+    mockData(OPERATOR_APPS, CAPABILITY_GROUPS);
+    render(<PortfolioPage />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by" }), "criticality");
+
+    expect(screen.getByRole("combobox", { name: "Filter operator" })).toBeTruthy();
+    // Bucket dropdown (v1 behavior), not the free-form input.
+    expect(screen.getByRole("combobox", { name: "Filter value" })).toBeTruthy();
+    expect(screen.queryByPlaceholderText("value…")).toBeNull();
+  });
+
+  it("switching criticality's operator to '>' swaps the value control to a number input and narrows correctly", async () => {
+    const user = userEvent.setup();
+    mockData(OPERATOR_APPS, CAPABILITY_GROUPS);
+    render(<PortfolioPage />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by" }), "criticality");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter operator" }), "gt");
+
+    // Bucket dropdown is gone; a number input is in its place.
+    expect(screen.queryByRole("combobox", { name: "Filter value" })).toBeNull();
+    const input = screen.getByPlaceholderText("value…");
+    expect(input.getAttribute("type")).toBe("number");
+
+    await user.type(input, "3");
+
+    expect(screen.getByText("Fax Intake Tool")).toBeTruthy();
+    expect(screen.queryByText("Claims Core")).toBeNull();
+    expect(screen.getByText(/filtered to Criticality \/ Risk Tier: > 3/)).toBeTruthy();
+  });
+
+  it("a new numeric-only field (health_score) never shows a bucket dropdown, only the operator + number input", async () => {
+    const user = userEvent.setup();
+    mockData(OPERATOR_APPS, CAPABILITY_GROUPS);
+    render(<PortfolioPage />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by" }), "health_score");
+
+    expect(screen.getByRole("combobox", { name: "Filter operator" })).toBeTruthy();
+    expect(screen.queryByRole("combobox", { name: "Filter value" })).toBeNull();
+    expect(screen.getByPlaceholderText("value…").getAttribute("type")).toBe("number");
+
+    // Default operator is "=" -- app-2's health_score is 4, app-1's is 2.
+    await user.type(screen.getByPlaceholderText("value…"), "4");
+
+    expect(screen.getByText("Fax Intake Tool")).toBeTruthy();
+    expect(screen.queryByText("Claims Core")).toBeNull();
+  });
+
+  it("a new string-only field (vendor) offers contains/starts with, narrowing case-insensitively", async () => {
+    const user = userEvent.setup();
+    mockData(OPERATOR_APPS, CAPABILITY_GROUPS);
+    render(<PortfolioPage />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by" }), "vendor");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter operator" }), "contains");
+
+    const input = screen.getByPlaceholderText("text…");
+    expect(input.getAttribute("type")).toBe("text");
+    await user.type(input, "cloud");
+
+    // app-1 appears twice (linked to 2 capability buckets, default Group By) -- getAllByText.
+    expect(screen.getAllByText("Claims Core").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Fax Intake Tool")).toBeNull();
+  });
+
+  it("switching from a comparison field back to a pure-bucket field resets the operator and drops the free-form input", async () => {
+    const user = userEvent.setup();
+    mockData(OPERATOR_APPS, CAPABILITY_GROUPS);
+    render(<PortfolioPage />);
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by" }), "health_score");
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter operator" }), "gt");
+    await user.type(screen.getByPlaceholderText("value…"), "3");
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by" }), "hosting_model");
+
+    expect(screen.queryByRole("combobox", { name: "Filter operator" })).toBeNull();
+    expect(screen.queryByPlaceholderText("value…")).toBeNull();
+    expect(screen.getByRole("combobox", { name: "Filter value" })).toBeTruthy();
+  });
+});

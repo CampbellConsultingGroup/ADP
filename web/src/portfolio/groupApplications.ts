@@ -266,24 +266,32 @@ export function crossTabApplications(
 // ── Filter by (ADP-9ye) ──────────────────────────────────────────────────────
 //
 // "Limited to values that limit the selection" (the requester's own framing):
-// FilterField is deliberately WIDER than Dimension (8 fields vs. 5) -- Group
-// By/Then By stay exactly as they were, untouched. The 3 extra fields
-// (lifecycle_status, hosting_model, pace_layer) are bounded enums on
-// Application not currently used for grouping, but well suited to narrowing.
-// v1 is equality-only (pick field, pick exact value) -- comparison/string
-// operators are explicit, pre-authorized follow-on work (ADP-6w4), not
-// attempted here.
+// FilterField is deliberately WIDER than Dimension (8 fields vs. 5 in v1,
+// 13 as of ADP-6w4 below) -- Group By/Then By stay exactly as they were,
+// untouched. The 3 fields added in v1 (lifecycle_status, hosting_model,
+// pace_layer) are bounded enums on Application not currently used for
+// grouping, but well suited to narrowing. v1 shipped equality-only (pick
+// field, pick exact value); comparison/string operators are ADP-6w4, below.
 
-export type FilterField = Dimension | "lifecycle_status" | "hosting_model" | "pace_layer";
+export type FilterField = Dimension | "lifecycle_status" | "hosting_model" | "pace_layer"
+  | "health_score" | "business_value" | "name" | "vendor" | "description";
 
 export const FILTER_FIELD_LABELS: Record<FilterField, string> = {
   ...DIMENSION_LABELS,
   lifecycle_status: "Lifecycle Status",
   hosting_model: "Hosting Model",
   pace_layer: "PACE Layer",
+  health_score: "Health Score",
+  business_value: "Business Value",
+  name: "Name",
+  vendor: "Vendor",
+  description: "Description",
 };
 
-export const ALL_FILTER_FIELDS: FilterField[] = [...ALL_DIMENSIONS, "lifecycle_status", "hosting_model", "pace_layer"];
+export const ALL_FILTER_FIELDS: FilterField[] = [
+  ...ALL_DIMENSIONS, "lifecycle_status", "hosting_model", "pace_layer",
+  "health_score", "business_value", "name", "vendor", "description",
+];
 
 const LIFECYCLE_STATUS_ORDER = ["planned", "active", "sunset", "retired"] as const;
 const LIFECYCLE_STATUS_LABELS: Record<(typeof LIFECYCLE_STATUS_ORDER)[number], string> = {
@@ -345,6 +353,16 @@ export function groupByField(
       return groupByHostingModel(apps);
     case "pace_layer":
       return groupByPaceLayer(apps);
+    // ADP-6w4: these 5 fields have no bucket concept at all (continuous
+    // scores/free text, never grouped anywhere on this screen) -- fieldHasBuckets()
+    // below is what actually keeps the UI from ever calling this branch for them;
+    // this case only exists to keep the switch exhaustive over FilterField.
+    case "health_score":
+    case "business_value":
+    case "name":
+    case "vendor":
+    case "description":
+      return { buckets: [], unclassified: apps, unclassifiedReason: "not applicable to this field" };
     default:
       return groupApplications(field, apps, capabilityLinks);
   }
@@ -358,12 +376,119 @@ export function filterFieldBuckets(
   return bucketsFromResult(groupByField(field, apps, links));
 }
 
+// ── Filter by: comparison/string operators (ADP-6w4) ────────────────────────
+//
+// Layered onto v1 (ADP-9ye) without touching its behavior: every v1 field's
+// default operator is "eq", which for a field with a bucket set (fieldHasBuckets
+// below) resolves through the exact same bucket-lookup v1 always used --
+// existing call sites (filterApplications(field, value, apps, links), no 5th
+// arg) are byte-for-byte unaffected.
+//
+// health_score/business_value (continuous scores) and name/vendor/description
+// (free text) have no bucket concept at all and are new in this pass -- they
+// always use the free-form operator UI, "eq" included. criticality (a 1-5
+// score) and business_unit (free text) already had a v1 bucket dropdown; they
+// are dual-mode -- "eq" keeps using that dropdown, any other operator switches
+// to a free-form value instead, per the user's own request to add these
+// operators onto the existing fields rather than duplicate them.
+
+export type FilterOperator = "eq" | "gt" | "gte" | "lt" | "lte" | "contains" | "starts_with";
+
+const NUMERIC_ONLY_FIELDS: readonly FilterField[] = ["health_score", "business_value"];
+const STRING_ONLY_FIELDS: readonly FilterField[] = ["name", "vendor", "description"];
+const DUAL_MODE_NUMERIC_FIELDS: readonly FilterField[] = ["criticality"];
+const DUAL_MODE_STRING_FIELDS: readonly FilterField[] = ["business_unit"];
+
+export function fieldHasBuckets(field: FilterField): boolean {
+  return !NUMERIC_ONLY_FIELDS.includes(field) && !STRING_ONLY_FIELDS.includes(field);
+}
+
+// Drives the free-form <input>'s type ("number" vs. "text") once a field's
+// value control isn't the bucket dropdown -- exported since PortfolioPage.tsx
+// needs it too, not just filterApplications() below.
+export function isNumericFilterField(field: FilterField): boolean {
+  return NUMERIC_ONLY_FIELDS.includes(field) || DUAL_MODE_NUMERIC_FIELDS.includes(field);
+}
+
+export function operatorsForField(field: FilterField): FilterOperator[] {
+  if (NUMERIC_ONLY_FIELDS.includes(field) || DUAL_MODE_NUMERIC_FIELDS.includes(field)) {
+    return ["eq", "gt", "gte", "lt", "lte"];
+  }
+  if (STRING_ONLY_FIELDS.includes(field) || DUAL_MODE_STRING_FIELDS.includes(field)) {
+    return ["eq", "contains", "starts_with"];
+  }
+  return ["eq"];
+}
+
+export const OPERATOR_LABELS: Record<FilterOperator, string> = {
+  eq: "=",
+  gt: ">",
+  gte: "≥",
+  lt: "<",
+  lte: "≤",
+  contains: "contains",
+  starts_with: "starts with",
+};
+
+function numericFieldValue(app: Application, field: FilterField): number | null {
+  switch (field) {
+    case "health_score": return app.health_score;
+    case "business_value": return app.business_value;
+    case "criticality": return app.business_criticality;
+    default: return null;
+  }
+}
+
+function stringFieldValue(app: Application, field: FilterField): string | null {
+  switch (field) {
+    case "name": return app.name;
+    case "vendor": return app.vendor;
+    case "description": return app.description;
+    case "business_unit": return app.owning_business_unit;
+    default: return null;
+  }
+}
+
 export function filterApplications(
   field: FilterField,
-  valueKey: string,
+  value: string,
   apps: Application[],
   links: ApplicationCapabilityGroupLink[],
+  operator: FilterOperator = "eq",
 ): Application[] {
-  const bucket = filterFieldBuckets(field, apps, links).find((b) => b.axis.key === valueKey);
-  return bucket?.apps ?? [];
+  if (operator === "eq" && fieldHasBuckets(field)) {
+    const bucket = filterFieldBuckets(field, apps, links).find((b) => b.axis.key === value);
+    return bucket?.apps ?? [];
+  }
+
+  if (isNumericFilterField(field)) {
+    const num = Number(value);
+    if (value.trim() === "" || Number.isNaN(num)) return apps; // incomplete input -- don't flash "0 results"
+    return apps.filter((a) => {
+      const v = numericFieldValue(a, field);
+      if (v === null) return false;
+      switch (operator) {
+        case "eq": return v === num;
+        case "gt": return v > num;
+        case "gte": return v >= num;
+        case "lt": return v < num;
+        case "lte": return v <= num;
+        default: return false;
+      }
+    });
+  }
+
+  if (value.trim() === "") return apps; // incomplete input -- don't flash "0 results"
+  const needle = value.toLowerCase();
+  return apps.filter((a) => {
+    const v = stringFieldValue(a, field);
+    if (v === null) return false;
+    const haystack = v.toLowerCase();
+    switch (operator) {
+      case "eq": return haystack === needle;
+      case "contains": return haystack.includes(needle);
+      case "starts_with": return haystack.startsWith(needle);
+      default: return false;
+    }
+  });
 }
