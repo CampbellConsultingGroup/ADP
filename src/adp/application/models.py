@@ -120,6 +120,18 @@ class DuplicateAppDesignLinkError(Exception):
     """Raised when the (app_id, design_id) link already exists."""
 
 
+class UnknownFrameworkError(Exception):
+    """932-regulatory-framework-tags: raised when a submitted regulatory_tags id does not exist
+    in the governed RegulatoryFramework registry (spec.md FR-002)."""
+
+
+class FrameworkNotSelectableError(Exception):
+    """932-regulatory-framework-tags: raised when a submitted regulatory_tags id is being newly
+    added (not already linked to this application) and its framework's status is neither
+    in_force nor amended (spec.md FR-001/FR-002). An id that was already linked is never checked
+    against this rule on an unrelated save (spec.md Edge Cases)."""
+
+
 # ── Application models ────────────────────────────────────────────────────────
 
 
@@ -345,7 +357,14 @@ DrBcStatus = Literal["tested", "documented", "none"]
 
 
 class ApplicationRiskUpdate(BaseModel):
-    """Upsert body for an application's risk & compliance record."""
+    """Upsert body for an application's risk & compliance record.
+
+    932-regulatory-framework-tags (ADP-bkg): regulatory_tags is the complete desired set of
+    RegulatoryFramework ids (COMPLY-01) this application is tagged with -- full-replace semantics,
+    matching every other field on this body. No longer arbitrary free text (spec.md FR-001). A
+    newly-added id must reference an existing framework whose status is in_force or amended
+    (spec.md FR-001/FR-002); an id that was already linked is never re-validated against its
+    framework's current status (spec.md Edge Cases)."""
     model_config = ConfigDict(extra="forbid")
     security_posture: SecurityPosture | None = None
     vulnerability_status: VulnerabilityStatus | None = None

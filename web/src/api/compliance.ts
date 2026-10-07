@@ -6,6 +6,13 @@ import { apiGet, apiMutation } from "./client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
+/** 932-regulatory-framework-tags (ADP-bkg): status was added to the backend model by 926
+ * (COMPLY-01a) but never added to this frontend type, since 926 was data-model-and-API-only.
+ * Added here because the Application Risk & Compliance picker needs it to filter selectable
+ * frameworks (spec.md FR-001) — the other still-missing 926 fields are not needed by this
+ * feature and are left for a future pass (research.md D8). */
+export type FrameworkStatus = "in_force" | "amended" | "repealed" | "not_yet_applicable";
+
 export interface RegulatoryFramework {
   id: string;
   name: string;
@@ -14,6 +21,7 @@ export interface RegulatoryFramework {
   version: string;
   effective_date: string | null;
   source_url: string | null;
+  status: FrameworkStatus;
   created_at: string;
   updated_at: string;
 }
