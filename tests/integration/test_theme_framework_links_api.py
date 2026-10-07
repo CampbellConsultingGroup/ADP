@@ -1,8 +1,9 @@
 """Integration tests for Theme–Framework Mapping (927-theme-framework-mapping, COMPLY-05 link #3).
 
-Covers quickstart.md's Scenario 8 (cascade delete, both directions) -- the one case the SQLite-backed
-contract test (tests/contract/test_theme_framework_links_api.py) cannot exercise, since SQLite has no
-real FK/CASCADE enforcement without extra pragmas this project doesn't set up in that fixture.
+Covers quickstart.md's Scenario 8 (cascade delete, both directions) -- the one case the
+SQLite-backed contract test (tests/contract/test_theme_framework_links_api.py) cannot exercise,
+since SQLite has no real FK/CASCADE enforcement without extra pragmas this project doesn't set up
+in that fixture.
 
 Requires Docker (testcontainers). Skipped automatically when Docker is unavailable.
 """

@@ -77,9 +77,13 @@ async def test_link_returns_framework_ids_list(client):
 
 async def test_link_duplicate_returns_409(client):
     theme_id = await _mk_theme(client)
-    first = await client.post(f"{BASE}/themes/{theme_id}/frameworks", json={"framework_id": "FRM-1"})
+    first = await client.post(
+        f"{BASE}/themes/{theme_id}/frameworks", json={"framework_id": "FRM-1"}
+    )
     assert first.status_code == 201, first.text
-    second = await client.post(f"{BASE}/themes/{theme_id}/frameworks", json={"framework_id": "FRM-1"})
+    second = await client.post(
+        f"{BASE}/themes/{theme_id}/frameworks", json={"framework_id": "FRM-1"}
+    )
     assert second.status_code == 409, second.text
 
 

@@ -1,10 +1,11 @@
 """Theme–Framework Mapping — COMPLY-05 link #3 (927-theme-framework-mapping, ADP-1ox).
 
 One new table, `theme_framework_links`, tagging a reusable `StrategicTheme` against one or more
-`RegulatoryFramework`s (coarse portfolio grouping — see docs/speckit-compliance-bundle_1.md's COMPLY-05
-section, and specs/927-theme-framework-mapping/). Deliberately the simplest possible shape: a bare
-composite-PK join table with `ON DELETE CASCADE` on both legs, no status/evidence payload of its own,
-mirroring `objective_control_links`'s exact precedent (migration 034) one level up.
+`RegulatoryFramework`s (coarse portfolio grouping — see docs/speckit-compliance-bundle_1.md's
+COMPLY-05 section, and specs/927-theme-framework-mapping/). Deliberately the simplest possible
+shape: a bare composite-PK join table with `ON DELETE CASCADE` on both legs, no status/evidence
+payload of its own, mirroring `objective_control_links`'s exact precedent (migration 034) one
+level up.
 
 Revision ID: 037
 Revises: 036
