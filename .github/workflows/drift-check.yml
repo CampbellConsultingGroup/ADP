@@ -62,7 +62,14 @@ jobs:
         #   audited (and --strict would fail on that skip, so --strict is omitted).
         # --ignore-vuln PYSEC-2026-1325: ecdsa (transitive via python-jose) has no fixed
         #   release; ADP validates RS256 (RSA) tokens, not ECDSA. Revisit when a fix ships.
-        run: pip-audit --skip-editable --ignore-vuln PYSEC-2026-1325
+        # --ignore-vuln CVE-2026-85394: python-jose 3.5.0 (latest, no fixed release yet) fails
+        #   to validate asymmetric keys in HMAC initialization, letting an attacker holding the
+        #   service's public key forge HS256 tokens that pass verification -- but only when the
+        #   caller doesn't explicitly restrict algorithms. adp.auth.tokens.py's own jwt.decode()
+        #   always passes algorithms=["RS256"] explicitly (confirmed by direct read), so this
+        #   specific forgery path cannot succeed against ADP's usage. Tracked as ADP-gvl;
+        #   revisit when a fixed release ships.
+        run: pip-audit --skip-editable --ignore-vuln PYSEC-2026-1325 --ignore-vuln CVE-2026-85394
 
   # ── Frontend dependency CVE scan (ADP-cm9) ────────────────────────────────
   # Report-only for now: 8 known vulnerabilities (3 moderate, 2 high, 3
