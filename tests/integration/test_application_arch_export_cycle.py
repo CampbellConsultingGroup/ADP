@@ -39,8 +39,16 @@ async def test_first_cycle_bootstraps_full_export(tmp_path, db_session) -> None:
     ))
     await db_session.execute(astore._application_risk.insert().values(
         app_id="app-1", security_posture="adequate", vulnerability_status=None,
-        data_classification="confidential", regulatory_tags=["PCI"], dr_bc_status=None,
+        data_classification="confidential", dr_bc_status=None,
         end_of_life_date=None, end_of_support_date=None, updated_at=_NOW,
+    ))
+    # 932-regulatory-framework-tags (ADP-bkg): regulatory_tags is now a link table, not a column --
+    # seed a real framework plus the tag directly (this test never goes through the Compliance API).
+    await db_session.execute(astore._regulatory_frameworks.insert().values(
+        id="FRM-pci-dss", name="PCI DSS", status="in_force",
+    ))
+    await db_session.execute(astore._application_framework_tags.insert().values(
+        application_id="app-1", framework_id="FRM-pci-dss", created_at=_NOW,
     ))
     await db_session.execute(astore._app_cap_links.insert().values(
         app_id="app-1", capability_id="cap-1", fit_score=4,
@@ -54,7 +62,7 @@ async def test_first_cycle_bootstraps_full_export(tmp_path, db_session) -> None:
     app = json.loads((base / "applications" / "app-1.json").read_text(encoding="utf-8"))
     assert app["name"] == "Claims Processing"
     assert app["risk"]["security_posture"] == "adequate"
-    assert app["risk"]["regulatory_tags"] == ["PCI"]
+    assert app["risk"]["regulatory_tags"] == ["FRM-pci-dss"]
     assert app["linked_business_capabilities"] == [
         {"capability_id": "cap-1", "capability_name": "Claims Intake", "fit_score": 4}
     ]

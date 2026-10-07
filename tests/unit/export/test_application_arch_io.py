@@ -67,7 +67,7 @@ async def seeded_session(tmp_path):
         # Sensitive extension records for app-1 only.
         await session.execute(astore._application_risk.insert().values(
             app_id="app-1", security_posture="adequate", vulnerability_status=None,
-            data_classification=None, regulatory_tags=[], dr_bc_status=None,
+            data_classification=None, dr_bc_status=None,
             end_of_life_date=None, end_of_support_date=None, updated_at=_NOW,
         ))
         cost_values = {"app_id": "app-1", "currency": "USD", "horizon_years": 5, "updated_at": _NOW}

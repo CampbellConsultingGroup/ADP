@@ -70,6 +70,7 @@ from adp.application.models import (
     DuplicateAppInitiativeLinkError,
     DuplicateAppStageLinkError,
     DuplicateAppTechCapLinkError,
+    FrameworkNotSelectableError,
     HealthAssessmentEntry,
     HealthAssessmentResponse,
     HealthAssessmentSubmit,
@@ -92,6 +93,7 @@ from adp.application.models import (
     TransformationInitiativeDetail,
     TransformationInitiativeListResponse,
     TransformationInitiativeUpdate,
+    UnknownFrameworkError,
 )
 from adp.search import (
     ENTITY_APPLICATION,
@@ -229,6 +231,8 @@ _designs = sa.Table(
 )
 
 # APM US3: risk & compliance register (1:1 with applications; cascade-deletes)
+# 932-regulatory-framework-tags (ADP-bkg): regulatory_tags is no longer a column here -- it is
+# now derived from _application_framework_tags below (migration 041 dropped the column).
 _application_risk = sa.Table(
     "application_risk",
     _metadata,
@@ -236,11 +240,37 @@ _application_risk = sa.Table(
     sa.Column("security_posture", sa.Text()),
     sa.Column("vulnerability_status", sa.Text()),
     sa.Column("data_classification", sa.Text()),
-    sa.Column("regulatory_tags", sa.JSON(), nullable=False),
     sa.Column("dr_bc_status", sa.Text()),
     sa.Column("end_of_life_date", sa.Date()),
     sa.Column("end_of_support_date", sa.Date()),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# 932-regulatory-framework-tags (ADP-bkg, COMPLY-01 consumer): a bare, unassessed "this framework
+# applies to this application" tag -- no compliance_status of its own, unlike a ControlMapping.
+# DML-only Table object (no Python-level PK/FK), matching this package's existing table-definition
+# convention elsewhere in this file; the real composite PK + ON DELETE CASCADE constraints live in
+# migration 041 (research.md D1, mirroring adp.strategy.store's theme_framework_links precedent
+# one level up, 927-theme-framework-mapping).
+_application_framework_tags = sa.Table(
+    "application_framework_tags",
+    _metadata,
+    sa.Column("application_id", sa.String(36), nullable=False),
+    sa.Column("framework_id", sa.String(36), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# Read-only mirror of regulatory_frameworks (research.md D1) -- existence + status validation for
+# _application_framework_tags only, never written to from this module. adp.application continues
+# to import zero other domain packages at the store layer, mirroring adp.strategy.store's own
+# _regulatory_frameworks mirror (927-theme-framework-mapping) and adp.compliance.store's
+# _applications_mirror (the identical idiom in the opposite direction).
+_regulatory_frameworks = sa.Table(
+    "regulatory_frameworks",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.Text(), nullable=False),
+    sa.Column("status", sa.Text(), nullable=False),
 )
 
 # docs/application-health-assessment-spec.md: one *current* row per
@@ -569,12 +599,12 @@ async def fetch_rationalization(session: AsyncSession) -> RationalizationRespons
 # ── Application Risk & Compliance CRUD (US3) ──────────────────────────────────
 
 
-def _row_to_risk(row: Any) -> ApplicationRisk:
+def _row_to_risk(row: Any, regulatory_tags: list[str]) -> ApplicationRisk:
     return ApplicationRisk(
         security_posture=row.security_posture,
         vulnerability_status=row.vulnerability_status,
         data_classification=row.data_classification,
-        regulatory_tags=list(row.regulatory_tags or []),
+        regulatory_tags=regulatory_tags,
         dr_bc_status=row.dr_bc_status,
         end_of_life_date=row.end_of_life_date,
         end_of_support_date=row.end_of_support_date,
@@ -582,27 +612,71 @@ def _row_to_risk(row: Any) -> ApplicationRisk:
     )
 
 
+async def _linked_framework_ids(app_id: str, session: AsyncSession) -> list[str]:
+    """932-regulatory-framework-tags: bare id list -- mirrors list_framework_ids_for_theme's exact
+    shape (adp.strategy.store, 927-theme-framework-mapping)."""
+    result = await session.execute(
+        sa.select(_application_framework_tags.c.framework_id)
+        .where(_application_framework_tags.c.application_id == app_id)
+        .order_by(_application_framework_tags.c.framework_id)
+    )
+    return [row.framework_id for row in result]
+
+
+async def _framework_record(framework_id: str, session: AsyncSession) -> dict[str, Any] | None:
+    """932-regulatory-framework-tags: existence + status read against the read-only
+    _regulatory_frameworks mirror. Returns None if no such framework exists."""
+    result = await session.execute(
+        sa.select(_regulatory_frameworks).where(_regulatory_frameworks.c.id == framework_id)
+    )
+    row = result.mappings().first()
+    return dict(row) if row else None
+
+
 async def get_application_risk(app_id: str, session: AsyncSession) -> ApplicationRisk | None:
     result = await session.execute(
         sa.select(_application_risk).where(_application_risk.c.app_id == app_id)
     )
     row = result.mappings().first()
-    return _row_to_risk(row) if row else None
+    if row is None:
+        return None
+    tags = await _linked_framework_ids(app_id, session)
+    return _row_to_risk(row, tags)
 
 
 async def upsert_application_risk(
     app_id: str, body: ApplicationRiskUpdate, session: AsyncSession
 ) -> ApplicationRisk:
+    """932-regulatory-framework-tags (ADP-bkg, research.md D2/D4/D5): regulatory_tags is the
+    complete desired set of framework ids -- de-duplicated, diffed against the currently-linked
+    set, with every newly-added id validated (exists + status in_force/amended) before anything is
+    written. An id that was already linked is never re-validated against its framework's current
+    status (spec.md Edge Cases) -- only ids genuinely new to this application are checked."""
     values: dict[str, Any] = {
         "security_posture": body.security_posture,
         "vulnerability_status": body.vulnerability_status,
         "data_classification": body.data_classification,
-        "regulatory_tags": list(body.regulatory_tags),
         "dr_bc_status": body.dr_bc_status,
         "end_of_life_date": body.end_of_life_date,
         "end_of_support_date": body.end_of_support_date,
         "updated_at": _now(),
     }
+
+    desired_ids = set(body.regulatory_tags)
+    current_ids = set(await _linked_framework_ids(app_id, session))
+    to_add = desired_ids - current_ids
+    to_remove = current_ids - desired_ids
+
+    for framework_id in to_add:
+        record = await _framework_record(framework_id, session)
+        if record is None:
+            raise UnknownFrameworkError(f"No such regulatory framework: {framework_id!r}")
+        if record["status"] not in ("in_force", "amended"):
+            raise FrameworkNotSelectableError(
+                f"Framework {framework_id!r} has status {record['status']!r} "
+                "(must be in_force or amended to be newly tagged)"
+            )
+
     exists = (
         await session.execute(
             sa.select(_application_risk.c.app_id).where(_application_risk.c.app_id == app_id)
@@ -616,6 +690,21 @@ async def upsert_application_risk(
         )
     else:
         await session.execute(_application_risk.insert().values(app_id=app_id, **values))
+
+    if to_remove:
+        await session.execute(
+            _application_framework_tags.delete().where(
+                _application_framework_tags.c.application_id == app_id,
+                _application_framework_tags.c.framework_id.in_(to_remove),
+            )
+        )
+    for framework_id in to_add:
+        await session.execute(
+            _application_framework_tags.insert().values(
+                application_id=app_id, framework_id=framework_id, created_at=_now()
+            )
+        )
+
     risk = await get_application_risk(app_id, session)
     assert risk is not None  # just upserted
     return risk

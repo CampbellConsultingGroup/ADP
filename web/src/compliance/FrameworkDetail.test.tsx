@@ -22,6 +22,8 @@ function renderWithQueryClient(ui: ReactElement) {
 const FRAMEWORK_BASE = {
   id: "f1", name: "GDPR", jurisdiction: "EU", authority: "European Commission",
   version: "2016/679", effective_date: null, source_url: null,
+  // 932-regulatory-framework-tags (ADP-bkg): status was added to RegulatoryFramework.
+  status: "in_force" as const,
   created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
 };
 

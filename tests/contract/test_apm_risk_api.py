@@ -3,6 +3,12 @@
 Full-stack against the real store on in-memory SQLite. Auth is disabled in
 tests, so the caller is ENTERPRISE_ARCHITECT and passes the sensitive-read gate;
 the gate's denial path is covered in tests/authz/test_enforcement.py.
+
+932-regulatory-framework-tags (ADP-bkg): regulatory_tags is now a governed set of
+RegulatoryFramework ids, not free text — the fixture seeds three frameworks directly into the
+read-only _regulatory_frameworks mirror (astore._regulatory_frameworks), standing in for real
+COMPLY-01 writes this package never performs itself (mirrors
+tests/contract/test_theme_framework_links_api.py's own seeding convention).
 """
 
 from __future__ import annotations
@@ -20,6 +26,21 @@ async def client(tmp_path):
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/apm.db")
     async with engine.begin() as conn:
         await conn.run_sync(astore._metadata.create_all)
+        await conn.execute(
+            astore._regulatory_frameworks.insert().values(
+                id="FRM-1", name="GDPR", status="in_force"
+            )
+        )
+        await conn.execute(
+            astore._regulatory_frameworks.insert().values(
+                id="FRM-2", name="DORA", status="amended"
+            )
+        )
+        await conn.execute(
+            astore._regulatory_frameworks.insert().values(
+                id="FRM-3", name="Repealed Reg", status="repealed"
+            )
+        )
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     from adp.api.app import create_app
@@ -60,7 +81,7 @@ async def test_upsert_and_get_risk(client):
         json={
             "security_posture": "adequate",
             "data_classification": "confidential",
-            "regulatory_tags": ["SOX", "GDPR"],
+            "regulatory_tags": ["FRM-1", "FRM-2"],
             "dr_bc_status": "tested",
             "end_of_support_date": "2030-01-01",
         },
@@ -70,10 +91,50 @@ async def test_upsert_and_get_risk(client):
     body = got.json()
     assert body["security_posture"] == "adequate"
     assert body["data_classification"] == "confidential"
-    assert body["regulatory_tags"] == ["SOX", "GDPR"]
+    assert sorted(body["regulatory_tags"]) == ["FRM-1", "FRM-2"]
     assert body["dr_bc_status"] == "tested"
     assert body["end_of_support_date"] == "2030-01-01"
     assert body["updated_at"] is not None
+
+
+async def test_unknown_framework_id_rejected(client):
+    app_id = await _mk_app(client, "Unknown Tag App")
+    resp = await client.put(
+        f"/api/v1/applications/{app_id}/risk", json={"regulatory_tags": ["NOPE"]}
+    )
+    assert resp.status_code == 422, resp.text
+
+
+async def test_repealed_framework_cannot_be_newly_tagged(client):
+    app_id = await _mk_app(client, "Repealed Tag App")
+    resp = await client.put(
+        f"/api/v1/applications/{app_id}/risk", json={"regulatory_tags": ["FRM-1", "FRM-3"]}
+    )
+    assert resp.status_code == 422, resp.text
+    # No partial write -- FRM-1 was not saved either.
+    got = await client.get(f"/api/v1/applications/{app_id}/risk")
+    assert got.json()["regulatory_tags"] == []
+
+
+async def test_duplicate_id_in_request_persists_once(client):
+    app_id = await _mk_app(client, "Dup Tag App")
+    resp = await client.put(
+        f"/api/v1/applications/{app_id}/risk", json={"regulatory_tags": ["FRM-1", "FRM-1"]}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["regulatory_tags"] == ["FRM-1"]
+
+
+async def test_replacing_tag_set_removes_unselected(client):
+    app_id = await _mk_app(client, "Replace Tag App")
+    await client.put(
+        f"/api/v1/applications/{app_id}/risk", json={"regulatory_tags": ["FRM-1", "FRM-2"]}
+    )
+    resp = await client.put(
+        f"/api/v1/applications/{app_id}/risk", json={"regulatory_tags": ["FRM-2"]}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["regulatory_tags"] == ["FRM-2"]
 
 
 async def test_upsert_is_idempotent_update(client):

@@ -236,9 +236,21 @@ async def _fetch_all(session: AsyncSession) -> ApplicationArchSnapshot:
     initiatives_resp = await astore.list_initiatives(session)
     integrations_resp = await astore.list_integrations(None, session)
 
+    # 932-regulatory-framework-tags (ADP-bkg): regulatory_tags no longer lives on
+    # _application_risk itself -- one extra bulk query (not one per application, preserving this
+    # function's own small-fixed-number-of-queries invariant) groups every
+    # _application_framework_tags row by app_id before _row_to_risk needs it.
+    tags_by_app: dict[str, list[str]] = {}
+    for row in (
+        await session.execute(sa.select(astore._application_framework_tags))
+    ).mappings().all():
+        tags_by_app.setdefault(row["application_id"], []).append(row["framework_id"])
+
     risk_by_app: dict[str, ApplicationRisk] = {}
     for row in (await session.execute(sa.select(astore._application_risk))).mappings().all():
-        risk_by_app[row["app_id"]] = astore._row_to_risk(row)
+        risk_by_app[row["app_id"]] = astore._row_to_risk(
+            row, sorted(tags_by_app.get(row["app_id"], []))
+        )
 
     cost_by_app: dict[str, ApplicationCost] = {}
     for row in (await session.execute(sa.select(astore._application_cost))).mappings().all():

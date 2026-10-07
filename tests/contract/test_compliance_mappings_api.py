@@ -190,10 +190,25 @@ async def full_client(tmp_path):
 
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/full.db")
     async with engine.begin() as conn:
-        # Real domain schemas first; cstore's mirror tables of the same name are then
-        # skipped by create_all()'s default checkfirst=True.
+        # Real domain schemas first (bstore owns business_capabilities/designs*, astore owns
+        # applications); cstore's own narrow mirrors of those same names are then skipped by
+        # create_all()'s default checkfirst=True, exactly as this fixture always relied on.
+        # (*designs is ADP-SPEC-002's, not bstore's/astore's own -- both of those modules carry
+        # their own narrow mirror of it too, but no test here writes through that table, so it's
+        # never been load-bearing which one "wins".)
+        #
+        # 932-regulatory-framework-tags inverts this for exactly one table: astore now also
+        # carries its own narrow id/name/status *mirror* of cstore's one real, full-column
+        # "regulatory_frameworks" table (same idiom sstore already uses, 927-theme-framework-
+        # mapping) -- the one case here where cstore, not the other module, is the real owner.
+        # Excluded from astore's call below so cstore's later call can create the genuine table.
         await conn.run_sync(bstore._metadata.create_all)
-        await conn.run_sync(astore._metadata.create_all)
+        await conn.run_sync(
+            astore._metadata.create_all,
+            tables=[
+                t for t in astore._metadata.tables.values() if t.name != "regulatory_frameworks"
+            ],
+        )
         await conn.run_sync(cstore._metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
 

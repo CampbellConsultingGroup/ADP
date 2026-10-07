@@ -122,7 +122,10 @@ def test_serialize_application_embeds_populated_extension_records_and_relationsh
         security_posture="adequate",
         vulnerability_status="open_low",
         data_classification="confidential",
-        regulatory_tags=["PCI"],
+        # 932-regulatory-framework-tags (ADP-bkg): a real RegulatoryFramework id, not free text --
+        # this pure serialization test doesn't validate it (no I/O), so any string round-trips,
+        # but using a plausible id keeps the fixture honest about the new field semantics.
+        regulatory_tags=["FRM-pci-dss"],
         dr_bc_status="tested",
         end_of_life_date=date(2030, 1, 1),
         end_of_support_date=date(2029, 1, 1),
@@ -175,7 +178,7 @@ def test_serialize_application_embeds_populated_extension_records_and_relationsh
 
     assert out["application_type"] == "cots"
     assert out["risk"]["security_posture"] == "adequate"
-    assert out["risk"]["regulatory_tags"] == ["PCI"]
+    assert out["risk"]["regulatory_tags"] == ["FRM-pci-dss"]
     # Decimal cost amounts serialize as JSON strings, never binary floats.
     assert out["cost"]["acquisition"]["one_time"] == "2000.50"
     assert isinstance(out["cost"]["acquisition"]["one_time"], str)

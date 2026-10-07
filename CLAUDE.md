@@ -1,6 +1,6 @@
 # ADP Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-08-26 (926-framework-versioning-correction COMPLY-01a implemented)
+Auto-generated from all feature plans. Last updated: 2026-10-07 (926-framework-versioning-correction COMPLY-01a implemented)
 
 ## Active Technologies
 - Python 3.11+ + SQLAlchemy 2.x (async ORM), asyncpg (PostgreSQL async driver), Alembic (migrations), testcontainers-python (PostgreSQL container for integration tests), pydantic-settings (database URL config) (002-design-store)
@@ -110,6 +110,7 @@ Auto-generated from all feature plans. Last updated: 2026-08-26 (926-framework-v
 - Python 3.12 (backend only — no frontend file touched; this is a pure + SQLAlchemy 2 async (Core), pgvector, PostgreSQL full-text search — all (930-hybrid-search-phase)
 - PostgreSQL 16 with pgvector (migration 011, already applied) — no new migration; one (930-hybrid-search-phase)
 - PostgreSQL 16 — one new migration (`040`, `down_revision="039"`): two new tables, (931-admin-ui-editing)
+- PostgreSQL 16 — one new migration (`041`, `down_revision="040"`): new table (932-regulatory-framework-tags)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -154,6 +155,58 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 932-regulatory-framework-tags: Implemented (ADP-bkg, "Application Risk & Compliance: hook
+  regulatory tags to Compliance frameworks" — filed directly by the user while looking at the Risk
+  & Compliance tab, confirmed as genuinely disconnected free text before filing) — full
+  `/speckit.specify` → `/speckit.clarify` → `/speckit.plan` → `/speckit.tasks` → `/speckit.implement`
+  cycle. `ApplicationRisk.regulatory_tags` (APM US3, ADP-SPEC-038) moves from an unvalidated
+  `list[str]` of free text (e.g. `"SOX"`, `"GDPR"`) to a governed many-to-many link,
+  `ApplicationFrameworkTag`, against the real `RegulatoryFramework` registry (COMPLY-01) — a
+  lightweight, unassessed "applies here" tag, explicitly distinct from (and left untouched
+  alongside) the separate "Regulatory Compliance" tab's per-control `ControlMapping` assessed
+  status (COMPLY-02). Two real clarifications were resolved directly with the user before planning
+  rather than guessed: (1) pre-existing free-text tag values are discarded outright at migration
+  time (Option B of three), satisfied for free by dropping the old column so the new link table
+  starts empty for every application, with zero backfill/matching logic; (2) the framework picker
+  only offers `in_force`/`amended` frameworks (COMPLY-01a's `status` field) — but an
+  already-tagged framework that *later* turns `repealed` keeps its existing tag untouched, since
+  the status gate only governs newly-added ids, confirmed with a dedicated test and a live
+  PATCH-then-resave check against real Postgres. The link table deliberately lives in
+  `adp.application` (not `adp.compliance`), mirroring `theme_framework_links`' own precedent one
+  level up (927) for an unassessed tag; no new endpoint is added at all — the existing batched
+  `GET`/`PUT /applications/{app_id}/risk` gained new reconciliation/validation semantics only, no
+  new `ActionType`, no `PERMISSIONS_VERSION` bump. Two real, non-obvious regressions were caught
+  and fixed during implementation, not anticipated by the plan: (1)
+  `adp.export.application_arch._fetch_all`'s own bulk-fetch path called the store's internal
+  `_row_to_risk(row)` directly against a raw table row, bypassing the join entirely — broke the
+  moment that function's signature gained a required second parameter; fixed with one more bulk
+  query grouping tags by `app_id`, preserving the export module's own stated no-N+1 invariant
+  rather than reverting to N+1; (2) adding `adp.application.store`'s own narrow
+  `regulatory_frameworks` mirror (same idiom `adp.strategy.store` already carries since 927)
+  collided with `tests/contract/test_compliance_mappings_api.py`'s `full_client` fixture, which
+  creates both `astore` and `cstore` table metadata against one shared SQLite connection — the one
+  table where `cstore`, not the other module, is the real full-column owner, inverting that
+  fixture's existing `bstore → astore → cstore` ordering assumption; fixed by excluding that one
+  table from `astore`'s call rather than reordering the whole fixture (which would have broken the
+  three *other*, pre-existing collisions — `business_capabilities`, `designs`, `applications` —
+  the original order was already correctly tuned for). 1768 backend tests (was 1753, +15: 11 unit
+  in new `test_application_risk_framework_tags.py`, 4 new contract in extended
+  `test_apm_risk_api.py`), 589 frontend tests (was 584, +5 in new `RiskPanel.test.tsx`),
+  `ruff`/`mypy`/`tsc` all clean. 3 Docker-gated integration tests written
+  (`tests/integration/test_application_framework_tags.py`, unavailable locally — same constraint
+  every export/COMPLY-0x/928/930/931 suite this session has hit; will run in CI). Verified live
+  end-to-end against a real local Postgres (migration 041 applied, downgraded, and reapplied
+  cleanly) and a running backend/frontend: every quickstart.md scenario confirmed via direct API
+  calls against the three real, live, already-populated frameworks (GDPR, EU AI Act, DORA) plus a
+  scratch framework for the status-gate/cascade scenarios (newly-added unknown/repealed ids
+  rejected whole-write with no partial save, an already-linked framework surviving its own later
+  repeal, cascade-delete removing only the deleted framework's tag), and a full live Playwright
+  walkthrough — created a real scratch application through the actual UI, tagged it with two real
+  frameworks via the new checkbox picker, confirmed both the picker's status filtering and the
+  persisted selection survived a full page reload showing real framework names, then deleted the
+  scratch application, confirmed back to the original 18 applications and all three real
+  frameworks left completely untouched (still `in_force`, confirmed by id and name afterward). See
+  `specs/932-regulatory-framework-tags/`.
 - 931-admin-ui-editing: Implemented (ADP-68z, "UI for editing scoring rubric weights (business
   value, and future similar composite scores)" — deferred from the Application Business Value
   assessment build, 2026-08-15) — full `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` →
@@ -242,7 +295,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   hit's `text` field (the reliable signal) rather than assert zero hits for the old name. All
   synthetic test data (2 value streams, 3 stages, 1 domain) cleaned up and confirmed deleted
   afterward. See `specs/930-hybrid-search-phase/`.
-- 929-application-type-cots: Implemented (ADP-3jj, "Application type (COTS/custom/SaaS/legacy)
   grouping dimension for Application Portfolio" — follow-on from ADP-8xo, deferred at that time
   because no such field existed on `Application` at all) — full `/speckit.specify` →
   `/speckit.plan` → `/speckit.tasks` → `/speckit.implement` cycle. Zero `AskUserQuestion` rounds
@@ -967,7 +1019,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **ADP** (18716 symbols, 29779 relationships, 241 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **ADP** (19069 symbols, 30022 relationships, 238 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > Index stale? Run `node .gitnexus/run.cjs analyze` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? `npx gitnexus analyze` (npm 11 crash → `npm i -g gitnexus`; #1939).
 

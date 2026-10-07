@@ -69,6 +69,7 @@ from adp.application.models import (
     DuplicateAppInitiativeLinkError,
     DuplicateAppStageLinkError,
     DuplicateAppTechCapLinkError,
+    FrameworkNotSelectableError,
     HealthAssessmentResponse,
     HealthAssessmentSubmit,
     OutOfSupportResponse,
@@ -86,6 +87,7 @@ from adp.application.models import (
     TransformationInitiativeDetail,
     TransformationInitiativeListResponse,
     TransformationInitiativeUpdate,
+    UnknownFrameworkError,
 )
 from adp.authz.enforcement import require_action_dep
 from adp.authz.roles import ActionType
@@ -311,7 +313,10 @@ async def put_application_risk(
     app = await astore.get_application(app_id, session)
     if app is None:
         raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
-    risk = await astore.upsert_application_risk(app_id, body, session)
+    try:
+        risk = await astore.upsert_application_risk(app_id, body, session)
+    except (UnknownFrameworkError, FrameworkNotSelectableError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     await session.commit()
     logger.info("application.risk.update id=%s actor=%s", app_id, _get_actor(request))
     return risk

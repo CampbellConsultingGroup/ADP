@@ -56,7 +56,7 @@ async def seeded_engine(tmp_path):
         ))
         await session.execute(astore._application_risk.insert().values(
             app_id="app-1", security_posture="adequate", vulnerability_status=None,
-            data_classification=None, regulatory_tags=[], dr_bc_status=None,
+            data_classification=None, dr_bc_status=None,
             end_of_life_date=None, end_of_support_date=None, updated_at=_NOW,
         ))
         await session.execute(astore._app_cap_links.insert().values(
