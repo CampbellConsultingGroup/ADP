@@ -37,6 +37,14 @@ on:
       - ".github/workflows/deploy-azure.yml"
   workflow_dispatch: {}
 
+# One deploy at a time. Without this, merging several PRs back to back ran
+# overlapping deploys that collided (ContainerAppOperationInProgress) or
+# superseded each other's revisions mid-smoke-test. Queued, not cancelled:
+# GitHub keeps only the newest pending run, so the latest commit deploys last.
+concurrency:
+  group: deploy-azure
+  cancel-in-progress: false
+
 permissions:
   id-token: write
   contents: read
