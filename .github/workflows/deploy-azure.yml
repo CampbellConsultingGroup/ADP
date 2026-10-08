@@ -8,11 +8,22 @@ name: Deploy to Azure
 # deploy.sh itself uses for an app-only rollout.
 #
 # Authenticates via OIDC federated credential (no stored client secret) --
-# see the Azure AD app "adp-github-actions-deploy", federated credential
-# "adp-github-main-branch", scoped to only this repo's main branch pushes.
-# Its RBAC is minimal and scoped: AcrPush on adpacr7egbnqct354iu only,
-# Container Apps Contributor on the adp-rg resource group only -- no
-# access to Postgres, Key Vault, or networking.
+# see the Azure AD app "adp-github-actions-deploy", scoped to only this repo's
+# main branch pushes. GitHub's token subject now uses immutable IDs, so the
+# credential that matches is "adp-github-main-branch-ids"
+# (repo:CampbellConsultingGroup@308136219/ADP@1283167368:ref:refs/heads/main);
+# the older name-only "adp-github-main-branch" no longer matches (AADSTS700213).
+#
+# Its RBAC is minimal and scoped -- no access to Postgres, Key Vault, or
+# networking:
+#   - AcrPush on adpacr7egbnqct354iu (push/pull images)
+#   - Container Registry Tasks Contributor on adpacr7egbnqct354iu -- `az acr
+#     build` needs registries/read + scheduleRun; without it the build step
+#     fails with "registry could not be found"
+#   - Container Apps Contributor on the adp-rg resource group
+# All three are deleted along with adp-rg; re-create them after any
+# from-scratch rebuild (RUNBOOK.md, "restore the CD pipeline's role
+# assignments").
 
 on:
   push:
