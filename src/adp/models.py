@@ -58,9 +58,8 @@ class RequirementKind(StrEnum):
     """Requirement type. Mirrors adp.intake.models.RequirementKind's value set
     (kept as a separate canonical definition here per ART-II -- the intake
     pipeline's version is a request/response-layer concern, not the source of
-    truth for the persisted model). Only functional/non_functional are
-    presented as choices in the UI today; constraint/driver are reserved for
-    a later addition."""
+    truth for the persisted model). All four kinds are
+    presented as choices in the UI."""
 
     FUNCTIONAL = "functional"
     NON_FUNCTIONAL = "non_functional"

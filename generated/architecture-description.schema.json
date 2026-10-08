@@ -331,7 +331,7 @@
       "type": "object"
     },
     "RequirementKind": {
-      "description": "Requirement type. Mirrors adp.intake.models.RequirementKind's value set\n(kept as a separate canonical definition here per ART-II -- the intake\npipeline's version is a request/response-layer concern, not the source of\ntruth for the persisted model). Only functional/non_functional are\npresented as choices in the UI today; constraint/driver are reserved for\na later addition.",
+      "description": "Requirement type. Mirrors adp.intake.models.RequirementKind's value set\n(kept as a separate canonical definition here per ART-II -- the intake\npipeline's version is a request/response-layer concern, not the source of\ntruth for the persisted model). All four kinds are\npresented as choices in the UI.",
       "enum": [
         "functional",
         "non_functional",

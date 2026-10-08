@@ -52,9 +52,9 @@ function knownRequirementAddButton() {
   return screen.getAllByText("Add")[0];
 }
 
-function addKnownRequirement(statement: string, kindLabel = "Functional") {
+function addKnownRequirement(statement: string, kind = "functional") {
   fireEvent.change(screen.getByPlaceholderText(/single sign-on/i), { target: { value: statement } });
-  fireEvent.change(screen.getByDisplayValue("Functional"), { target: { value: kindLabel === "Functional" ? "functional" : "non_functional" } });
+  fireEvent.change(screen.getByDisplayValue("Functional"), { target: { value: kind } });
   fireEvent.click(knownRequirementAddButton());
 }
 
@@ -140,6 +140,24 @@ describe("IntakeTextForm Known Requirements typed list", () => {
 
     fireEvent.click(screen.getByTitle("Remove"));
     expect(screen.queryByText("The system must support SSO")).toBeNull();
+  });
+
+  it.each([
+    ["Constraint", "constraint", "Customer data must remain in US regions"],
+    ["Driver", "driver", "Online cancellations cost us $14M a year"],
+  ])("offers %s as a kind and submits it with kind '%s'", async (label, kind, statement) => {
+    render(<IntakeTextForm designId="DSN-001" onSubmitted={vi.fn()} />);
+    expect(screen.getByRole("option", { name: label })).toBeTruthy();
+
+    fillRequiredFields();
+    addKnownRequirement(statement, kind);
+    expect(screen.getByText(kind)).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Submit Intake"));
+
+    await waitFor(() => expect(addRequirementMutateAsync).toHaveBeenCalledWith({
+      designId: "DSN-001", statement, kind,
+    }));
   });
 
   it("submits each queued requirement against the resolved design, sequentially, on Submit", async () => {

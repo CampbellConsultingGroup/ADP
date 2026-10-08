@@ -88,19 +88,31 @@ jobs:
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --image "${{ env.ACR_NAME }}.azurecr.io/adp-api:${{ github.sha }}"
 
-      - name: Smoke test /health
+      - name: Smoke test (new revision healthy)
+        # adp-api ingress is IP-restricted, so a GitHub runner can't curl
+        # /health. Instead, wait for the revision this rollout created to
+        # pass its platform health probes and become the ready revision.
         run: |
-          API_FQDN=$(az containerapp show --name "${{ env.CONTAINER_APP }}" \
+          REV=$(az containerapp show --name "${{ env.CONTAINER_APP }}" \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
-            --query "properties.configuration.ingress.fqdn" -o tsv)
-          for i in $(seq 1 12); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 "https://$API_FQDN/health" || true)
-            if [ "$code" = "200" ]; then
-              echo "Healthy: https://$API_FQDN/health"
+            --query "properties.latestRevisionName" -o tsv)
+          echo "Waiting on revision $REV"
+          for i in $(seq 1 30); do
+            STATE=$(az containerapp revision show --name "${{ env.CONTAINER_APP }}" \
+              --resource-group "${{ env.RESOURCE_GROUP }}" --revision "$REV" \
+              --query "[properties.healthState, properties.runningState]" -o tsv | tr '\n' ' ')
+            READY=$(az containerapp show --name "${{ env.CONTAINER_APP }}" \
+              --resource-group "${{ env.RESOURCE_GROUP }}" \
+              --query "properties.latestReadyRevisionName" -o tsv)
+            echo "Attempt $i: $STATE (latest ready: $READY)"
+            case "$STATE" in
+              *Failed*|*Degraded*) echo "Revision $REV failed to start"; exit 1 ;;
+            esac
+            if [ "${STATE%% *}" = "Healthy" ] && [ "$READY" = "$REV" ]; then
+              echo "Revision $REV is healthy and ready"
               exit 0
             fi
-            echo "Attempt $i: HTTP $code, retrying..."
             sleep 10
           done
-          echo "API did not become healthy after rollout"
+          echo "Revision $REV did not become healthy after rollout"
           exit 1

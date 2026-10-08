@@ -9,7 +9,7 @@
 targetScope = 'subscription'
 
 @description('Azure region for all resources.')
-param location string = 'eastus2'
+param location string = 'centralus'
 
 @description('Name of the resource group ADP is deployed into.')
 param resourceGroupName string = 'adp-rg'
@@ -24,6 +24,9 @@ param acrSku string = 'Basic'
 @description('Postgres Flexible Server admin password. Supplied at deploy time via deploy.sh -- never hardcoded/committed.')
 @secure()
 param postgresAdminPassword string
+
+@description('Availability zone for the Postgres server, or empty to let Azure pick (see modules/postgres.bicep).')
+param postgresAvailabilityZone string = ''
 
 @description('Object ID of the principal running this deployment (az ad signed-in-user show), granted Key Vault Secrets Officer.')
 param deployerPrincipalId string
@@ -63,6 +66,7 @@ module postgres 'modules/postgres.bicep' = {
   params: {
     location: location
     adminPassword: postgresAdminPassword
+    availabilityZone: postgresAvailabilityZone
     delegatedSubnetId: network.outputs.postgresSubnetId
     privateDnsZoneId: network.outputs.privateDnsZoneId
   }

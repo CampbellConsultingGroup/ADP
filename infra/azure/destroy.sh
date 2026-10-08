@@ -25,7 +25,7 @@
 set -euo pipefail
 
 RESOURCE_GROUP="${1:-adp-rg}"
-LOCATION="${2:-eastus2}"
+LOCATION="${2:-centralus}"
 
 echo "== Resources currently in $RESOURCE_GROUP =="
 if az group exists --name "$RESOURCE_GROUP" | grep -q true; then

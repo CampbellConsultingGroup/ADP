@@ -125,7 +125,7 @@ az acr build --registry "$EXISTING_ACR" --image "adp-api:${IMAGE_TAG}" "$REPO_RO
 
 echo "== Staging the dump in a throwaway Storage Account (VNet bridge) =="
 STORAGE_NAME="adpseed$(openssl rand -hex 3)"
-az storage account create -g "$RESOURCE_GROUP" -n "$STORAGE_NAME" -l eastus2 \
+az storage account create -g "$RESOURCE_GROUP" -n "$STORAGE_NAME" -l centralus \
   --sku Standard_LRS --kind StorageV2 --min-tls-version TLS1_2 \
   --allow-blob-public-access false --output none
 az storage container create --account-name "$STORAGE_NAME" --name migration --auth-mode login --output none
