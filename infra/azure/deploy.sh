@@ -34,7 +34,7 @@
 
 set -euo pipefail
 
-LOCATION="${1:-eastus2}"
+LOCATION="${1:-centralus}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SECRETS_DIR="$SCRIPT_DIR/.secrets"

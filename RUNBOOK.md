@@ -780,7 +780,7 @@ The API app serves the built SPA from the same origin, so one URL is both UI and
 ```bash
 az containerapp show -g adp-rg -n adp-api \
   --query "properties.configuration.ingress.fqdn" -o tsv
-# → https://adp-api.<env-domain>.eastus2.azurecontainerapps.io
+# → https://adp-api.<env-domain>.centralus.azurecontainerapps.io
 ```
 
 ### Redeploy from scratch (after a destroy)
@@ -795,7 +795,7 @@ cd infra/azure
 # `az group delete` does NOT), the name is reserved and the deploy fails with
 # "A vault with the same name already exists in deleted state". Purge it first:
 az keyvault list-deleted --query "[?starts_with(name,'adp-kv-')].name" -o tsv
-# az keyvault purge --name <adp-kv-...> --location eastus2
+# az keyvault purge --name <adp-kv-...> --location <region>
 
 ./deploy.sh   # PASS 1: creates RG/network/Postgres/Key Vault/ACR/Container Apps env.
               # Keycloak/API/jobs FAIL here — their Key Vault secrets don't exist

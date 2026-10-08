@@ -58,11 +58,21 @@ async def proxy_to_keycloak(path: str, request: Request) -> Response:
             content=body,
         )
 
+    # Set-Cookie must be relayed as separate headers, never folded into one.
+    # httpx's headers.items() comma-joins repeated headers, and browsers don't
+    # split a combined Set-Cookie back apart -- Keycloak sets three session
+    # cookies on the login page, so folding them loses the session and the
+    # login form submit fails with "login timeout".
     response_headers = {
-        k: v for k, v in upstream.headers.items() if k.lower() not in _HOP_BY_HOP
+        k: v
+        for k, v in upstream.headers.items()
+        if k.lower() not in _HOP_BY_HOP and k.lower() != "set-cookie"
     }
-    return Response(
+    response = Response(
         content=upstream.content,
         status_code=upstream.status_code,
         headers=response_headers,
     )
+    for cookie in upstream.headers.get_list("set-cookie"):
+        response.headers.append("set-cookie", cookie)
+    return response

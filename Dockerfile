@@ -31,10 +31,13 @@ RUN npm run build
 FROM python:3.12-slim AS api
 WORKDIR /app
 
-# System dependencies for asyncpg (PostgreSQL client)
+# System dependencies for asyncpg (PostgreSQL client), plus libcairo2 for
+# cairosvg -- adp.diagrams.router imports it at module load, so without the
+# shared library the whole app fails to start, not just PNG export.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     gcc \
+    libcairo2 \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies

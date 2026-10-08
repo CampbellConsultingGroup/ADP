@@ -30,6 +30,9 @@ param postgresVersion string = '16'
 @description('Burstable SKU -- cheapest tier, sufficient for a single-environment deployment.')
 param skuName string = 'Standard_B1ms'
 
+@description('Availability zone to pin the server to (\'1\'/\'2\'/\'3\'), or empty to let Azure pick. Pinning works around regional SkuNotAvailable capacity errors -- eastus2 had no Standard_B1ms capacity in any zone on 2026-10-08, which is why the environment moved to centralus.')
+param availabilityZone string = ''
+
 @description('Storage size in GB (32 is the minimum tier).')
 param storageSizeGB int = 32
 
@@ -61,6 +64,7 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2025-08-01' = {
   }
   properties: {
     version: postgresVersion
+    availabilityZone: empty(availabilityZone) ? null : availabilityZone
     administratorLogin: adminUsername
     administratorLoginPassword: adminPassword
     storage: {
