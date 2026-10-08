@@ -811,6 +811,29 @@ Then run the DB migrations (one-off Container Apps Job):
 az containerapp job start -g adp-rg -n adp-migrate
 ```
 
+### CRITICAL: restore the CD pipeline's role assignments
+
+Deleting `adp-rg` also deletes every role assignment scoped to it, including
+the three that `.github/workflows/deploy-azure.yml` needs. Without them the
+"Deploy to Azure" workflow fails at its build step, e.g. with "registry could
+not be found". Re-create them after every from-scratch rebuild:
+```bash
+SP=b91abf00-5369-4973-8677-9a027d81cd66   # adp-github-actions-deploy
+ACR_ID=$(az acr show -n adpacr7egbnqct354iu --query id -o tsv)
+RG_ID=$(az group show -n adp-rg --query id -o tsv)
+for ROLE in "AcrPush" "Container Registry Tasks Contributor"; do
+  az role assignment create --assignee-object-id $SP \
+    --assignee-principal-type ServicePrincipal --role "$ROLE" --scope "$ACR_ID"
+done
+az role assignment create --assignee-object-id $SP \
+  --assignee-principal-type ServicePrincipal \
+  --role "Container Apps Contributor" --scope "$RG_ID"
+```
+The service principal and its federated credentials live in Entra ID, not in
+`adp-rg`, so they survive a teardown. GitHub's OIDC token subject now uses
+immutable IDs, so the credential that matches is `adp-github-main-branch-ids`
+(`repo:CampbellConsultingGroup@308136219/ADP@1283167368:ref:refs/heads/main`).
+
 ### CRITICAL: patch the Keycloak realm for the new domain
 
 Every fresh deploy gets a **new** env domain (e.g. `salmonfield-…`,
