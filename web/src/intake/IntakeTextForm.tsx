@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useSubmitIntake, useAddRequirement, type RequirementKind } from "../api/intake";
+import { KIND_HUE } from "./kinds";
 import { useCreateDesign, useDesign } from "../api/designs";
 import { useCapabilities, useLinkDesignToCapabilities } from "../api/business";
 
@@ -22,17 +23,12 @@ interface DraftRequirement {
   kind: RequirementKind;
 }
 
-// Only these two are selectable for now -- more kinds (constraint, driver)
-// will be added later, per explicit product decision.
 const KIND_OPTIONS: { value: RequirementKind; label: string }[] = [
   { value: "functional", label: "Functional" },
   { value: "non_functional", label: "Non-Functional" },
+  { value: "constraint", label: "Constraint" },
+  { value: "driver", label: "Driver" },
 ];
-
-const KIND_COLORS: Record<string, string> = {
-  functional: "var(--accent)",
-  non_functional: "var(--biz)",
-};
 
 const labelStyle: React.CSSProperties = {
   display: "block",
@@ -257,7 +253,7 @@ export default function IntakeTextForm({ designId, onDesignCreated, onSubmitted 
             >
               <span
                 style={{
-                  flexShrink: 0, background: KIND_COLORS[r.kind] ?? "var(--ink-3)", color: "#fff",
+                  flexShrink: 0, background: KIND_HUE[r.kind] ?? "var(--ink-3)", color: "#fff",
                   fontSize: 10, fontWeight: "bold", padding: "2px 5px", borderRadius: 3,
                 }}
               >
