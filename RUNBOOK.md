@@ -783,58 +783,69 @@ az containerapp show -g adp-rg -n adp-api \
 # → https://adp-api.<env-domain>.centralus.azurecontainerapps.io
 ```
 
-### Redeploy from scratch (after a destroy)
+### Deploy, update, or rebuild from scratch (one pass)
 
-A brand-new environment is a **two-pass bootstrap** — this is expected, not a bug
-(documented in `deploy.sh`'s own header):
+`deploy.sh` builds a complete, working environment in **one invocation**, from
+an empty subscription or against an existing one (ADP-vav). Re-running it on a
+live environment is safe and idempotent:
 
 ```bash
 cd infra/azure
-
-# If a prior Key Vault was left soft-deleted (destroy.sh purges it, but a manual
-# `az group delete` does NOT), the name is reserved and the deploy fails with
-# "A vault with the same name already exists in deleted state". Purge it first:
-az keyvault list-deleted --query "[?starts_with(name,'adp-kv-')].name" -o tsv
-# az keyvault purge --name <adp-kv-...> --location <region>
-
-./deploy.sh   # PASS 1: creates RG/network/Postgres/Key Vault/ACR/Container Apps env.
-              # Keycloak/API/jobs FAIL here — their Key Vault secrets don't exist
-              # in the brand-new vault yet. This is expected.
-
-./deploy.sh   # PASS 2: secrets are now seeded, so everything provisions. Also picks
-              # up the real Container Apps env domain and bakes it into the API
-              # image's VITE_KEYCLOAK_URL build-arg (see "frontend auth" below).
+./deploy.sh            # default region: centralus; or ./deploy.sh <region>
 ```
 
-Then run the DB migrations (one-off Container Apps Job):
-```bash
-az containerapp job start -g adp-rg -n adp-migrate
-```
+It runs in two Bicep stages with the glue between them:
 
-### CRITICAL: restore the CD pipeline's role assignments
+1. **`infra.bicep`** (subscription scope): resource group, ACR, VNet/DNS,
+   Postgres, Key Vault + managed identity (incl. its AcrPull grant), and the
+   Container Apps environment. Retried up to 3x on known-transient ARM errors
+   (e.g. Postgres briefly not seeing a just-created subnet). Stops immediately
+   on `SkuNotAvailable` (regional capacity: re-run with another region).
+2. Between stages: seeds the Key Vault secrets (the cached admin passwords in
+   `.secrets/`, the Postgres connection string, `ADP_LLM_API_KEY` from the
+   repo-root `.env`), grants the CD service principal its 3 roles if missing,
+   and builds both images, the API one with the real `VITE_KEYCLOAK_URL`.
+3. **`apps.bicep`** (resource-group scope): Keycloak, API (with the IP
+   allow-list), and the migration + Keycloak-admin jobs.
+4. After deploy: runs the DB migrations and points Keycloak's `adp-frontend`
+   client at the API's actual domain (see the realm-patch section below).
 
-Deleting `adp-rg` also deletes every role assignment scoped to it, including
-the three that `.github/workflows/deploy-azure.yml` needs. Without them the
-"Deploy to Azure" workflow fails at its build step, e.g. with "registry could
-not be found". Re-create them after every from-scratch rebuild:
-```bash
-SP=b91abf00-5369-4973-8677-9a027d81cd66   # adp-github-actions-deploy
-ACR_ID=$(az acr show -n adpacr7egbnqct354iu --query id -o tsv)
-RG_ID=$(az group show -n adp-rg --query id -o tsv)
-for ROLE in "AcrPush" "Container Registry Tasks Contributor"; do
-  az role assignment create --assignee-object-id $SP \
-    --assignee-principal-type ServicePrincipal --role "$ROLE" --scope "$ACR_ID"
-done
-az role assignment create --assignee-object-id $SP \
-  --assignee-principal-type ServicePrincipal \
-  --role "Container Apps Contributor" --scope "$RG_ID"
-```
-The service principal and its federated credentials live in Entra ID, not in
-`adp-rg`, so they survive a teardown. GitHub's OIDC token subject now uses
+Each stage prints a what-if and asks before applying.
+`ADP_DEPLOY_ASSUME_YES=1` skips the prompts; the what-if still prints.
+
+**Before the first run:**
+- **IP allow-list.** Create `infra/azure/.secrets/allowed-ips` (gitignored),
+  with one `CIDR description` per line:
+  ```
+  35.134.31.56/32   jmuir home
+  ```
+  If the file is missing but `adp-api` exists, `deploy.sh` creates it from the
+  live rules. With neither, it refuses to deploy a public API unless
+  `ADP_ALLOW_PUBLIC=1`.
+- **Soft-deleted Key Vault.** `destroy.sh` purges the vault, but a manual
+  `az group delete` does not. `deploy.sh` detects a leftover `adp-kv-*` vault
+  and prints the `az keyvault purge` command to run.
+- **Paused environment.** If `pause.sh` stopped Postgres, run `resume.sh` first;
+  `deploy.sh` checks for this.
+
+**Still manual on a brand-new environment** (neither is safe to repeat blindly):
+- Load data with `seed-data.sh`. It isn't idempotent, so re-running it duplicates rows.
+- Create Keycloak users with `src/adp/ops/keycloak_create_users.py` via the
+  `adp-keycloak-admin` job (see "Enabling MFA" below).
+
+**CD service principal.** The 3 roles `.github/workflows/deploy-azure.yml` needs
+(AcrPush + Container Registry Tasks Contributor on the ACR, Container Apps
+Contributor on `adp-rg`) are deleted along with `adp-rg`. `deploy.sh` re-grants
+any that are missing; this needs Owner / User Access Administrator on the
+subscription. The service principal and its federated credentials live in
+Entra ID, so they survive a teardown. GitHub's OIDC token subject now uses
 immutable IDs, so the credential that matches is `adp-github-main-branch-ids`
 (`repo:CampbellConsultingGroup@308136219/ADP@1283167368:ref:refs/heads/main`).
 
-### CRITICAL: patch the Keycloak realm for the new domain
+### Keycloak realm patch for the environment domain (automated by deploy.sh)
+
+`deploy.sh` runs this patch on every deploy. The manual steps below are for
+reference, or for patching without a full deploy.
 
 Every fresh deploy gets a **new** env domain (e.g. `salmonfield-…`,
 `lemondesert-…`). But `infra/keycloak/adp-realm.json`'s `redirectUris`/`webOrigins`

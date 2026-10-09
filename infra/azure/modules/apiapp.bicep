@@ -1,9 +1,14 @@
 // API container app (ADP-fnv.6) -- the one component the public actually
 // reaches. External ingress; managed identity (adp-identity) already holds
-// AcrPull (granted at resource-group scope in modules/keycloak.bicep, the
-// first consumer -- covers this app too, no re-grant needed) and Key Vault
-// Secrets User (modules/keyvault.bicep). /health is exempt from auth
-// (adp.auth.middleware._EXEMPT_PATHS) and wired as the liveness probe.
+// AcrPull and Key Vault Secrets User (both granted in modules/keyvault.bicep).
+// /health is exempt from auth (adp.auth.middleware._EXEMPT_PATHS) and wired
+// as the liveness probe.
+//
+// Ingress is IP-restricted when allowedIpRanges is non-empty: once one Allow
+// rule exists, Container Apps denies all other traffic. deploy.sh supplies
+// the list from infra/azure/.secrets/allowed-ips and refuses to deploy with
+// an empty list unless explicitly told to, so a redeploy can't silently
+// expose the app.
 //
 // minReplicas=0 (unlike Keycloak's minReplicas=1): a FastAPI/uvicorn cold
 // start is seconds, not the tens of seconds Keycloak's JVM needs, so
@@ -43,6 +48,9 @@ param keycloakClientId string = 'adp-frontend'
 @description('Port the API listens on inside the container (matches ADP_PORT).')
 param apiPort int = 8001
 
+@description('Client IP ranges allowed to reach the API, as objects { cidr: string, description: string }. Empty = no restriction (fully public).')
+param allowedIpRanges array
+
 resource apiApp 'Microsoft.App/containerApps@2025-01-01' = {
   name: 'adp-api'
   location: location
@@ -60,6 +68,12 @@ resource apiApp 'Microsoft.App/containerApps@2025-01-01' = {
         external: true
         targetPort: apiPort
         transport: 'auto'
+        ipSecurityRestrictions: [for (range, i) in allowedIpRanges: {
+          name: 'allowed-ip-${i + 1}'
+          description: range.description
+          ipAddressRange: range.cidr
+          action: 'Allow'
+        }]
       }
       registries: [
         {
