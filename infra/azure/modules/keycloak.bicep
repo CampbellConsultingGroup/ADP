@@ -4,10 +4,8 @@
 // via `start --import-realm` against infra/keycloak/adp-realm.json, baked
 // into a custom image (infra/keycloak/Dockerfile) built to ACR.
 //
-// This is also the first consumer of adp-identity for ACR image pulls, so
-// this module grants it the AcrPull role -- ADP-fnv.6 (API container app)
-// reuses that same grant, since role assignments are on the identity+scope
-// pair, not per-consuming-resource.
+// Pulls from ACR via adp-identity's AcrPull grant, made in stage 1
+// (modules/keyvault.bicep) so it has propagated before this app first pulls.
 
 @description('Azure region.')
 param location string
@@ -17,9 +15,6 @@ param environmentId string
 
 @description('User-assigned managed identity resource ID from modules/keyvault.bicep.')
 param identityId string
-
-@description('ACR resource ID -- the identity is granted AcrPull on this scope.')
-param acrId string
 
 @description('ACR login server (e.g. foo.azurecr.io).')
 param acrLoginServer string
@@ -41,16 +36,6 @@ param postgresAdminUsername string = 'adp_admin'
 
 @description('Public base URL the browser reaches Keycloak through, e.g. https://adp-api.<domain>/auth (ADP-cm9). Keycloak has internal-only ingress -- a real browser can never reach it directly, so adp-api reverse-proxies /auth/* to it. KC_HOSTNAME tells Keycloak this is its own address so it emits correct absolute URLs/issuer claims itself, rather than leaking its internal FQDN.')
 param keycloakPublicBaseUrl string
-
-resource acrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(acrId, identityId, 'AcrPull')
-  scope: resourceGroup()
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
-    principalId: reference(identityId, '2024-11-30', 'Full').properties.principalId
-    principalType: 'ServicePrincipal'
-  }
-}
 
 resource keycloakApp 'Microsoft.App/containerApps@2025-01-01' = {
   name: 'adp-keycloak'
@@ -153,9 +138,6 @@ resource keycloakApp 'Microsoft.App/containerApps@2025-01-01' = {
       }
     }
   }
-  dependsOn: [
-    acrPullAssignment
-  ]
 }
 
 output fqdn string = keycloakApp.properties.configuration.ingress.fqdn
