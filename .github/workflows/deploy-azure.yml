@@ -1,11 +1,10 @@
 name: Deploy to Azure
 
-# Builds the API image and rolls it out to the already-provisioned adp-api
-# Container App (ADP-fnv.6/.10). Does NOT run `az deployment sub create` --
-# infrastructure changes (Bicep) are applied manually via infra/azure/deploy.sh;
-# this workflow only updates the running app's image, matching
-# `az acr build` + `az containerapp update`, the same two commands
-# deploy.sh itself uses for an app-only rollout.
+# Builds the API image, runs DB migrations with it, then rolls it out to the
+# already-provisioned adp-api Container App (ADP-fnv.6/.10, ADP-0r4). Does NOT
+# run Bicep -- infrastructure changes are applied manually via
+# infra/azure/deploy.sh; this workflow only moves adp-api and its two jobs
+# (adp-migrate, adp-keycloak-admin) to the new image, and runs adp-migrate.
 #
 # Authenticates via OIDC federated credential (no stored client secret) --
 # see the Azure AD app "adp-github-actions-deploy", scoped to only this repo's
@@ -75,7 +74,7 @@ jobs:
           # Dockerfile's local-dev default and real users can never log in --
           # this exact bug shipped once already. Computed from the Container
           # Apps environment's default domain (stable, known before adp-api's
-          # own FQDN is), matching infra/azure/main.bicep's keycloakPublicBaseUrl.
+          # own FQDN is), matching infra/azure/apps.bicep's keycloakPublicBaseUrl.
           ENV_DOMAIN=$(az containerapp env show \
             --resource-group "${{ env.RESOURCE_GROUP }}" \
             --name adp-env \
@@ -99,6 +98,43 @@ jobs:
             aquasec/trivy:latest image \
             --severity HIGH,CRITICAL \
             "${{ env.ACR_NAME }}.azurecr.io/adp-api:${{ github.sha }}"
+
+      - name: Run DB migrations (adp-migrate) on the new image
+        # ADP-0r4: both jobs run the API image, but only adp-api used to be
+        # updated here, so the jobs stayed on whatever image deploy.sh last
+        # set and merged Alembic migrations were never applied. Point both
+        # jobs at the new image, then migrate BEFORE rolling out adp-api: if
+        # a migration fails, the new code never runs against an un-migrated
+        # schema (the job fails the workflow and adp-api stays as it was).
+        run: |
+          IMAGE="${{ env.ACR_NAME }}.azurecr.io/adp-api:${{ github.sha }}"
+          az containerapp job update --name adp-migrate \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --container-name migrate --image "$IMAGE" --output none
+          az containerapp job update --name adp-keycloak-admin \
+            --resource-group "${{ env.RESOURCE_GROUP }}" \
+            --container-name keycloak-admin --image "$IMAGE" --output none
+
+          EXECUTION=$(az containerapp job start --name adp-migrate \
+            --resource-group "${{ env.RESOURCE_GROUP }}" --query name -o tsv)
+          echo "Started $EXECUTION"
+          # replicaTimeout is 600s (modules/migrationjob.bicep); poll a bit longer.
+          for i in $(seq 1 70); do
+            STATUS=$(az containerapp job execution show --name adp-migrate \
+              --resource-group "${{ env.RESOURCE_GROUP }}" \
+              --job-execution-name "$EXECUTION" --query properties.status -o tsv)
+            echo "Attempt $i: $STATUS"
+            case "$STATUS" in
+              Succeeded) echo "Migrations applied"; exit 0 ;;
+              Failed|Stopped|Degraded)
+                echo "Migration $EXECUTION ended $STATUS; adp-api was NOT rolled out."
+                echo "Logs: Log Analytics table ContainerAppConsoleLogs_CL, ContainerGroupName_s startswith '$EXECUTION'"
+                exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "Migration $EXECUTION did not finish in time; adp-api was NOT rolled out."
+          exit 1
 
       - name: Roll out new image to adp-api
         run: |
