@@ -3,10 +3,10 @@
 
 Postgres remains the interactive source of truth (ART-II); this module is a
 read-only, best-effort background projection of business_capabilities,
-value_streams, value_stream_stages (with their linked capabilities), and
-business_domains onto the filesystem, for AI/tool consumption without direct
-database access (ART-III). See specs/044-business-arch-export/ for the full
-spec, research, and data model.
+value_streams, value_stream_stages (with their linked capabilities),
+business_domains, and value chains with their activities (ADP-nag) onto the
+filesystem, for AI/tool consumption without direct database access (ART-III).
+See specs/044-business-arch-export/ for the full spec, research, and data model.
 
 Sync mechanism (research.md Decision 1): a periodic full-reconciliation scan,
 not event-driven write-path hooks -- deliberately touches nothing in
@@ -34,7 +34,14 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.business import store as bstore
-from adp.business.models import BusinessCapability, BusinessDomain, ValueStream, ValueStreamStage
+from adp.business.models import (
+    BusinessCapability,
+    BusinessDomain,
+    ValueChain,
+    ValueChainActivity,
+    ValueStream,
+    ValueStreamStage,
+)
 from adp.export.common import (
     _cleanup_orphan_dirs,
     _cleanup_orphan_files,
@@ -111,6 +118,30 @@ def _serialize_stage(
     }
 
 
+def _serialize_value_chain(chain: ValueChain) -> dict[str, Any]:
+    return {
+        "id": chain.id,
+        "name": chain.name,
+        "description": chain.description,
+        "margin_label": chain.margin_label,
+        "position": chain.position,
+    }
+
+
+def _serialize_activity(
+    activity: ValueChainActivity, linked_capability_ids: list[str]
+) -> dict[str, Any]:
+    return {
+        "id": activity.id,
+        "value_chain_id": activity.value_chain_id,
+        "name": activity.name,
+        "description": activity.description,
+        "category": activity.category,
+        "position": activity.position,
+        "linked_capability_ids": sorted(linked_capability_ids),
+    }
+
+
 # ── Bulk read (research.md Decision 1 — full reconciliation, not per-write
 # hooks; reuses adp.business.store's existing functions/tables read-only) ────
 
@@ -128,6 +159,11 @@ class BusinessArchSnapshot:
     # `value_streams`).
     capability_design_links: dict[str, list[str]] = field(default_factory=dict)
     value_stream_design_links: dict[str, list[str]] = field(default_factory=dict)
+    # ADP-nag: value chains, every activity across every chain, and activity_id ->
+    # capability_ids (possibly empty, never a missing key for an activity in `activities`).
+    value_chains: list[ValueChain] = field(default_factory=list)
+    activities: list[ValueChainActivity] = field(default_factory=list)
+    activity_links: dict[str, list[str]] = field(default_factory=dict)
 
 
 async def _fetch_all(session: AsyncSession) -> BusinessArchSnapshot:
@@ -163,6 +199,17 @@ async def _fetch_all(session: AsyncSession) -> BusinessArchSnapshot:
     for row in vs_design_rows.mappings().all():
         value_stream_design_links.setdefault(row.value_stream_id, []).append(row.design_id)
 
+    # ADP-nag: same bulk pattern as stages -- one read per table, not one per chain.
+    from adp.business import value_chains as vcstore
+
+    value_chains = await vcstore.list_value_chains(session)
+    activity_rows = await session.execute(sa.select(bstore._value_chain_activities))
+    activities = [vcstore._row_to_activity(row) for row in activity_rows.mappings().all()]
+    activity_link_rows = await session.execute(sa.select(bstore._value_chain_activity_caps))
+    activity_links: dict[str, list[str]] = {activity.id: [] for activity in activities}
+    for row in activity_link_rows.mappings().all():
+        activity_links.setdefault(row.activity_id, []).append(row.capability_id)
+
     return BusinessArchSnapshot(
         capabilities=capabilities,
         domains=domains,
@@ -171,6 +218,9 @@ async def _fetch_all(session: AsyncSession) -> BusinessArchSnapshot:
         stage_links=stage_links,
         capability_design_links=capability_design_links,
         value_stream_design_links=value_stream_design_links,
+        value_chains=value_chains,
+        activities=activities,
+        activity_links=activity_links,
     )
 
 
@@ -214,6 +264,20 @@ async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSessio
                 now,
             )
 
+        for chain in snapshot.value_chains:
+            _write_entity_file(
+                root / "value-chains" / _safe_path_component(chain.id) / "value-chain.json",
+                _serialize_value_chain(chain),
+                now,
+            )
+        for activity in snapshot.activities:
+            chain_dir = root / "value-chains" / _safe_path_component(activity.value_chain_id)
+            _write_entity_file(
+                chain_dir / "activities" / _safe_filename(activity.id),
+                _serialize_activity(activity, snapshot.activity_links.get(activity.id, [])),
+                now,
+            )
+
         # Orphan cleanup (FR-004): remove files/directories for entities that
         # no longer exist. A deleted value stream's whole directory (its
         # value-stream.json plus its stages/ subtree) is removed in one step;
@@ -233,6 +297,17 @@ async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSessio
         for vs_id in live_vs_ids:
             _cleanup_orphan_files(
                 root / "value-streams" / vs_id / "stages", stage_ids_by_vs.get(vs_id, set())
+            )
+
+        live_chain_ids = {chain.id for chain in snapshot.value_chains}
+        _cleanup_orphan_dirs(root / "value-chains", live_chain_ids)
+        activity_ids_by_chain: dict[str, set[str]] = {}
+        for activity in snapshot.activities:
+            activity_ids_by_chain.setdefault(activity.value_chain_id, set()).add(activity.id)
+        for chain_id in live_chain_ids:
+            _cleanup_orphan_files(
+                root / "value-chains" / chain_id / "activities",
+                activity_ids_by_chain.get(chain_id, set()),
             )
     except Exception:
         _logger.warning("business_arch_export.cycle_failed", exc_info=True)

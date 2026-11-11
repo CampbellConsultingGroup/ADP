@@ -155,6 +155,33 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- ADP-nag (value chain data model, part of epic ADP-o9p "consume Canvas diagram-core as a package +
+  value stream & value chain diagrams"): Porter value chains as a first-class Business Architecture
+  entity, mirroring value streams. Migration `042` (`down_revision="041"`): `value_chains`
+  (`margin_label` NOT NULL default 'Margin'), `value_chain_activities` (`category` CHECK
+  primary|support, position ordered *within* its category), `value_chain_activity_capabilities`
+  (composite PK, CASCADE both legs). Tables live on `adp.business.store._metadata` (so the FK to
+  `business_capabilities` resolves and every fixture's `create_all()` picks them up); the functions
+  live in a new sibling `adp.business.value_chains` (the `adp.strategy.initiatives` split
+  precedent, since the business core files are already past the size threshold), routes appended to
+  `adp.business.router` under `/api/v1/business/value-chains` (+ `/activities`, reorder via
+  `PUT .../activities` with `{category, activity_ids}`, `/activities/{id}/capabilities`). Two
+  deliberate differences from value stream stages: activity positions are kept normalised to
+  0..n-1 per category on every add/move/delete/reorder (stages allow gaps/duplicates), and a reorder
+  only reorders (rejects a mismatched id list with 422) rather than doubling as a bulk delete. Deletes
+  remove child rows explicitly so they behave the same on SQLite (no FK enforcement) as Postgres; the
+  migration's cascade stays as the safety net. Authz rides the existing
+  `("/api/v1/business/", WRITE_BUSINESS_ARCH)` rule (no new ActionType). Search: new
+  `ENTITY_VALUE_CHAIN`/`ENTITY_VALUE_CHAIN_ACTIVITY` with write hooks and backfill; deliberately NOT
+  added to chat retrieval (`DEFAULT_ENTITY_TYPES`) -- chat/strategy/design links for value chains are
+  deferred. Export: `business-architecture/value-chains/<id>/value-chain.json` +
+  `activities/<id>.json` with `linked_capability_ids`, orphan cleanup at both levels. 1821 backend
+  tests (was 1768, +53: 27 store, 21 contract, 3 export, backfill extended), coverage 87.7%. Migration
+  042's DDL, CHECK constraint and both cascade directions were verified on the real local Postgres
+  inside a rolled-back transaction (Docker Desktop's WSL integration is off, so the new
+  `tests/integration/test_migration_042.py` runs in CI). Gotcha hit and fixed: `store.py`,
+  `models.py` and `router.py` are CRLF on main -- editing them through Python text I/O silently
+  converted them to LF and made the diff look like a full-file rewrite.
 - 932-regulatory-framework-tags: Implemented (ADP-bkg, "Application Risk & Compliance: hook
   regulatory tags to Compliance frameworks" — filed directly by the user while looking at the Risk
   & Compliance tab, confirmed as genuinely disconnected free text before filing) — full

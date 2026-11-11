@@ -22,9 +22,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from adp.application import store as astore
 from adp.application.models import ApplicationCreate, TechnicalCapabilityCreate
 from adp.business import store as bstore
+from adp.business import value_chains as vcstore
 from adp.business.models import (
     BusinessCapabilityCreate,
     BusinessDomainCreate,
+    ValueChainActivityCreate,
+    ValueChainCreate,
     ValueStreamCreate,
     ValueStreamStageCreate,
 )
@@ -34,6 +37,8 @@ from adp.search.index import (
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
     ENTITY_TECHNICAL_CAPABILITY,
+    ENTITY_VALUE_CHAIN,
+    ENTITY_VALUE_CHAIN_ACTIVITY,
     ENTITY_VALUE_STREAM,
     ENTITY_VALUE_STREAM_STAGE,
 )
@@ -79,6 +84,10 @@ async def test_reindex_all_covers_every_entity_type(session, recording_index) ->
     domain = await bstore.create_domain(
         BusinessDomainCreate(name="Underwriting", classification="strategic"), session
     )
+    chain = await vcstore.create_value_chain(ValueChainCreate(name="Retail"), session)
+    activity = await vcstore.add_activity(
+        chain.id, ValueChainActivityCreate(name="Operations", category="primary"), session
+    )
 
     counts = await bf.reindex_all(session)
 
@@ -89,6 +98,8 @@ async def test_reindex_all_covers_every_entity_type(session, recording_index) ->
     assert (ENTITY_VALUE_STREAM, vs.id) in upserted_ids
     assert (ENTITY_VALUE_STREAM_STAGE, stage.id) in upserted_ids
     assert (ENTITY_BUSINESS_DOMAIN, domain.id) in upserted_ids
+    assert (ENTITY_VALUE_CHAIN, chain.id) in upserted_ids
+    assert (ENTITY_VALUE_CHAIN_ACTIVITY, activity.id) in upserted_ids
 
     assert counts == {
         ENTITY_BUSINESS_CAPABILITY: 1,
@@ -97,6 +108,8 @@ async def test_reindex_all_covers_every_entity_type(session, recording_index) ->
         ENTITY_VALUE_STREAM: 1,
         ENTITY_VALUE_STREAM_STAGE: 1,
         ENTITY_BUSINESS_DOMAIN: 1,
+        ENTITY_VALUE_CHAIN: 1,
+        ENTITY_VALUE_CHAIN_ACTIVITY: 1,
     }
 
 
@@ -123,5 +136,7 @@ async def test_reindex_all_empty_database_returns_zero_counts(session, recording
         ENTITY_VALUE_STREAM: 0,
         ENTITY_VALUE_STREAM_STAGE: 0,
         ENTITY_BUSINESS_DOMAIN: 0,
+        ENTITY_VALUE_CHAIN: 0,
+        ENTITY_VALUE_CHAIN_ACTIVITY: 0,
     }
     assert recording_index.upserted == []
