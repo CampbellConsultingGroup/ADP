@@ -43,6 +43,9 @@ ENTITY_BUSINESS_DOMAIN = "business_domain"
 # indexed at all -- the one entity type from ADP-b6o's original phase-2 scope
 # that 041's incidental wiring didn't cover.
 ENTITY_VALUE_STREAM_STAGE = "value_stream_stage"
+# ADP-nag: value chains (Porter) and their primary/support activities.
+ENTITY_VALUE_CHAIN = "value_chain"
+ENTITY_VALUE_CHAIN_ACTIVITY = "value_chain_activity"
 
 _metadata = sa.MetaData()
 searchable_items = sa.Table(

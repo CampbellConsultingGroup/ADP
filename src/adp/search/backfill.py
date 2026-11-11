@@ -18,6 +18,8 @@ from adp.search import (
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
     ENTITY_TECHNICAL_CAPABILITY,
+    ENTITY_VALUE_CHAIN,
+    ENTITY_VALUE_CHAIN_ACTIVITY,
     ENTITY_VALUE_STREAM,
     ENTITY_VALUE_STREAM_STAGE,
     build_text,
@@ -57,7 +59,8 @@ async def reindex_capabilities(session: "AsyncSession") -> int:
 async def reindex_all(session: "AsyncSession") -> dict[str, int]:
     """Indexes every write-hooked entity type in one pass (ADP-7bo): business +
     technical capabilities (via reindex_capabilities), applications, value
-    streams, value stream stages, and business domains. Returns a per-
+    streams, value stream stages, business domains, and value chains with their activities
+    (ADP-nag). Returns a per-
     entity_type count so an operator can see exactly which type came up short
     after a partial failure, rather than just a single total."""
     from adp.application import store as astore
@@ -71,6 +74,8 @@ async def reindex_all(session: "AsyncSession") -> dict[str, int]:
         ENTITY_VALUE_STREAM: 0,
         ENTITY_VALUE_STREAM_STAGE: 0,
         ENTITY_BUSINESS_DOMAIN: 0,
+        ENTITY_VALUE_CHAIN: 0,
+        ENTITY_VALUE_CHAIN_ACTIVITY: 0,
     }
 
     cap_total = await reindex_capabilities(session)
@@ -110,6 +115,21 @@ async def reindex_all(session: "AsyncSession") -> dict[str, int]:
             build_text(domain.name, domain.scope_statement, domain.org_unit), session,
         )
         counts[ENTITY_BUSINESS_DOMAIN] += 1
+
+    from adp.business import value_chains as vcstore
+
+    for chain in await vcstore.list_value_chains(session):
+        await index.upsert(
+            ENTITY_VALUE_CHAIN, chain.id, build_text(chain.name, chain.description), session
+        )
+        counts[ENTITY_VALUE_CHAIN] += 1
+
+    activity_rows = await session.execute(sa.select(bstore._value_chain_activities))
+    for row in activity_rows.mappings().all():
+        await index.upsert(
+            ENTITY_VALUE_CHAIN_ACTIVITY, row.id, build_text(row.name, row.description), session
+        )
+        counts[ENTITY_VALUE_CHAIN_ACTIVITY] += 1
 
     return counts
 

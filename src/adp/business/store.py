@@ -161,6 +161,51 @@ _stage_caps = sa.Table(
     sa.Column("capability_id", sa.String(36), nullable=False),
 )
 
+# ── Value chain tables (ADP-nag, migration 042) ───────────────────────────────
+# Defined on this module's _metadata (not their own) so the activity ->
+# business_capabilities foreign key resolves and every fixture that calls
+# _metadata.create_all() gets them. The functions live in adp.business.value_chains.
+
+_value_chains = sa.Table(
+    "value_chains",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.String(255), nullable=False),
+    sa.Column("description", sa.Text()),
+    sa.Column("margin_label", sa.String(255), nullable=False, default="Margin"),
+    sa.Column("position", sa.Integer(), nullable=False, default=0),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+_value_chain_activities = sa.Table(
+    "value_chain_activities",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column(
+        "value_chain_id", sa.String(36),
+        sa.ForeignKey("value_chains.id", ondelete="CASCADE"), nullable=False,
+    ),
+    sa.Column("name", sa.String(255), nullable=False),
+    sa.Column("description", sa.Text()),
+    sa.Column("category", sa.Text(), nullable=False),
+    sa.Column("position", sa.Integer(), nullable=False, default=0),
+)
+
+_value_chain_activity_caps = sa.Table(
+    "value_chain_activity_capabilities",
+    _metadata,
+    sa.Column(
+        "activity_id", sa.String(36),
+        sa.ForeignKey("value_chain_activities.id", ondelete="CASCADE"), nullable=False,
+    ),
+    sa.Column(
+        "capability_id", sa.String(36),
+        sa.ForeignKey("business_capabilities.id", ondelete="CASCADE"), nullable=False,
+    ),
+    sa.PrimaryKeyConstraint("activity_id", "capability_id"),
+)
+
 # designs table reference for JOIN queries (read-only; managed by DesignStore migration 001)
 _designs = sa.Table(
     "designs",

@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator, model_validator
 
 from adp.agents.models import (
     AgentReviewOperationStatus,
@@ -478,6 +478,128 @@ class DuplicateStageCapError(Exception):
 
 class StageCapNotFoundError(Exception):
     """Raised when a stage-capability link to delete does not exist."""
+
+
+# ── ValueChain (ADP-nag) ──────────────────────────────────────────────────────
+# Porter's value chain: primary activities (the sequential chain that creates
+# value) and support activities (enable the whole chain), ending in one margin.
+# position orders activities within their own category. Activity-capability
+# links reuse the stage-capability shapes above (a capability with its domain).
+
+ActivityCategory = Literal["primary", "support"]
+
+
+def _not_blank(value: str | None, field: str) -> str | None:
+    if value is not None and not value.strip():
+        raise ValueError(f"{field} must not be blank")
+    return value
+
+
+class ValueChainActivity(BaseModel):
+    """Read model for one value chain activity, with its linked capabilities."""
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    value_chain_id: str
+    name: str
+    description: str | None
+    category: ActivityCategory
+    position: int
+    capabilities: list[StageCapabilityRef] = []
+
+
+class ValueChain(BaseModel):
+    """Read model for a value chain summary (no activities)."""
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    name: str
+    description: str | None
+    margin_label: str
+    position: int
+    created_at: datetime
+    updated_at: datetime
+
+
+class ValueChainDetail(ValueChain):
+    """Value chain with its activities, each category ordered by position."""
+    primary_activities: list[ValueChainActivity] = []
+    support_activities: list[ValueChainActivity] = []
+
+
+class ValueChainListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    items: list[ValueChain]
+    total: int
+
+
+class ValueChainCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: str | None = None
+    margin_label: str = "Margin"
+
+    @field_validator("name", "margin_label")
+    @classmethod
+    def must_not_be_blank(cls, v: str, info: ValidationInfo) -> str:
+        _not_blank(v, str(info.field_name))
+        return v
+
+
+class ValueChainUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    description: str | None = None
+    # margin_label is NOT NULL: it can be changed but not cleared.
+    margin_label: str | None = None
+
+    @field_validator("name", "margin_label")
+    @classmethod
+    def must_not_be_blank(cls, v: str | None, info: ValidationInfo) -> str | None:
+        return _not_blank(v, str(info.field_name))
+
+
+class ValueChainActivityCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    description: str | None = None
+    category: ActivityCategory
+    # None appends the activity at the end of its category.
+    position: int | None = None
+
+    @field_validator("name")
+    @classmethod
+    def name_must_not_be_blank(cls, v: str) -> str:
+        _not_blank(v, "name")
+        return v
+
+
+class ValueChainActivityUpdate(BaseModel):
+    """Changing category moves the activity to the other lane; with no position
+    given it is appended at the end of its new category."""
+    model_config = ConfigDict(extra="forbid")
+
+    name: str | None = None
+    description: str | None = None
+    category: ActivityCategory | None = None
+    position: int | None = None
+
+    @field_validator("name")
+    @classmethod
+    def name_must_not_be_blank(cls, v: str | None) -> str | None:
+        return _not_blank(v, "name")
+
+
+class ValueChainActivitiesReorder(BaseModel):
+    """Reorder one category's activities: positions 0..n-1 follow the order of
+    activity_ids, which must be exactly that category's current activities."""
+    model_config = ConfigDict(extra="forbid")
+
+    category: ActivityCategory
+    activity_ids: list[str]
 
 
 # ── Agent Review: Business Capabilities adapter (ADP-SPEC-039/040) ───────────
