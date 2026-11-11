@@ -19,10 +19,12 @@ name: Deploy to Azure
 #   - Container Registry Tasks Contributor on adpacr7egbnqct354iu -- `az acr
 #     build` needs registries/read + scheduleRun; without it the build step
 #     fails with "registry could not be found"
-#   - Container Apps Contributor on the adp-rg resource group
-# All three are deleted along with adp-rg; re-create them after any
-# from-scratch rebuild (RUNBOOK.md, "restore the CD pipeline's role
-# assignments").
+#   - Container Apps Contributor on the adp-rg resource group (adp-api)
+#   - Container Apps Jobs Contributor on the adp-rg resource group -- the
+#     role above covers containerApps only, not jobs; without this the
+#     migration step fails with "job 'adp-migrate' does not exist"
+# All four are deleted along with adp-rg; infra/azure/deploy.sh re-grants any
+# that are missing.
 
 on:
   push:

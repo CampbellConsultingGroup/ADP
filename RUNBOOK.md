@@ -803,7 +803,7 @@ It runs in two Bicep stages with the glue between them:
    on `SkuNotAvailable` (regional capacity: re-run with another region).
 2. Between stages: seeds the Key Vault secrets (the cached admin passwords in
    `.secrets/`, the Postgres connection string, `ADP_LLM_API_KEY` from the
-   repo-root `.env`), grants the CD service principal its 3 roles if missing,
+   repo-root `.env`), grants the CD service principal its 4 roles if missing,
    and builds both images, the API one with the real `VITE_KEYCLOAK_URL`.
 3. **`apps.bicep`** (resource-group scope): Keycloak, API (with the IP
    allow-list), and the migration + Keycloak-admin jobs.
@@ -833,9 +833,11 @@ Each stage prints a what-if and asks before applying.
 - Create Keycloak users with `src/adp/ops/keycloak_create_users.py` via the
   `adp-keycloak-admin` job (see "Enabling MFA" below).
 
-**CD service principal.** The 3 roles `.github/workflows/deploy-azure.yml` needs
-(AcrPush + Container Registry Tasks Contributor on the ACR, Container Apps
-Contributor on `adp-rg`) are deleted along with `adp-rg`. `deploy.sh` re-grants
+**CD service principal.** The 4 roles `.github/workflows/deploy-azure.yml` needs
+(AcrPush + Container Registry Tasks Contributor on the ACR; Container Apps
+Contributor + Container Apps Jobs Contributor on `adp-rg`) are deleted along
+with `adp-rg`. The jobs role is separate because Container Apps Contributor
+doesn't cover jobs, which CD updates and runs for migrations. `deploy.sh` re-grants
 any that are missing; this needs Owner / User Access Administrator on the
 subscription. The service principal and its federated credentials live in
 Entra ID, so they survive a teardown. GitHub's OIDC token subject now uses

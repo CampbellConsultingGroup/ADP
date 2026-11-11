@@ -17,7 +17,7 @@
 #   -- between stages, from stage 1's outputs --
 #      * seed Key Vault secrets (admin passwords, Postgres connection string
 #        from the real FQDN, ADP_LLM_API_KEY from the repo-root .env)
-#      * grant the CD service principal its 3 roles if missing (they're
+#      * grant the CD service principal its 4 roles if missing (they're
 #        deleted along with adp-rg; see .github/workflows/deploy-azure.yml)
 #      * build the Keycloak + API images, the API one with the real
 #        VITE_KEYCLOAK_URL baked in
@@ -301,6 +301,9 @@ else
   ensure_role "AcrPush" "$ACR_ID"
   ensure_role "Container Registry Tasks Contributor" "$ACR_ID"
   ensure_role "Container Apps Contributor" "$RG_ID"
+  # Container Apps Contributor covers containerApps only, NOT jobs: CD also
+  # updates and starts adp-migrate / adp-keycloak-admin (ADP-0r4).
+  ensure_role "Container Apps Jobs Contributor" "$RG_ID"
 fi
 
 echo "== Building images in $ACR_NAME =="
