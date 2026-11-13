@@ -7,10 +7,10 @@ import ApplicationForm from "./ApplicationForm";
 import RationalizationView from "./RationalizationView";
 import RoadmapView from "./RoadmapView";
 
-function ApplicationPageInner() {
+function ApplicationPageInner({ initialAppId }: { initialAppId: string | null }) {
   const { data } = useApplications();
   const createApp = useCreateApplication();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialAppId);
   const [showCreate, setShowCreate] = useState(false);
 
   const apps = data?.items ?? [];
@@ -79,7 +79,9 @@ function tabStyle(active: boolean): CSSProperties {
   };
 }
 
-export default function ApplicationPage() {
+// 933-agent-registry: initialAppId lets another screen (an agent's solution list) open a
+// specific application in the registry.
+export default function ApplicationPage({ initialAppId = null }: { initialAppId?: string | null } = {}) {
   const [view, setView] = useState<"registry" | "rationalization" | "roadmap">("registry");
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -97,7 +99,7 @@ export default function ApplicationPage() {
       <div style={{ flex: 1, overflow: "hidden" }}>
         {view === "registry" && (
           <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-3)" }}>Loading…</div>}>
-            <ApplicationPageInner />
+            <ApplicationPageInner initialAppId={initialAppId} />
           </Suspense>
         )}
         {view === "rationalization" && <RationalizationView />}

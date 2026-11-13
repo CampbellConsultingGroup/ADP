@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.application import store as astore
 from adp.application.models import (
+    AgenticSolutionHasAgentsError,
     Application,
     ApplicationCapabilityLink,
     ApplicationCapabilityLinkCreate,
@@ -255,7 +256,10 @@ async def update_application(
     request: Request,
     session: AsyncSession = Depends(_get_session),
 ):
-    app = await astore.update_application(app_id, body, session)
+    try:
+        app = await astore.update_application(app_id, body, session)
+    except AgenticSolutionHasAgentsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if app is None:
         raise HTTPException(status_code=404, detail=f"Application {app_id!r} not found")
     await session.commit()

@@ -21,6 +21,7 @@ from adp.application.models import (
     BUSINESS_VALUE_WEIGHTS,
     HEALTH_DIMENSIONS,
     TCO_BUCKET_NAMES,
+    AgenticSolutionHasAgentsError,
     Application,
     ApplicationCapabilityLink,
     ApplicationCapabilityLinkCreate,
@@ -258,6 +259,17 @@ _application_framework_tags = sa.Table(
     sa.Column("application_id", sa.String(36), nullable=False),
     sa.Column("framework_id", sa.String(36), nullable=False),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# 933-agent-registry (research.md D3): narrow mirror of adp.agentic's solution_agents, used only
+# for the reclassify guard in update_application and the explicit membership delete in
+# delete_application. adp.agentic.store owns the full table definition; any fixture creating both
+# metadatas on one connection must exclude this table from this module's create_all.
+_solution_agents = sa.Table(
+    "solution_agents",
+    _metadata,
+    sa.Column("solution_app_id", sa.String(36), nullable=False),
+    sa.Column("agent_id", sa.String(36), nullable=False),
 )
 
 # Read-only mirror of regulatory_frameworks (research.md D1) -- existence + status validation for
@@ -540,6 +552,23 @@ async def update_application(
     if existing is None:
         return None
 
+    # 933-agent-registry (Clarification Q1): an agentic solution with agents cannot be
+    # reclassified until its agents are removed.
+    if (
+        "application_type" in body.model_fields_set
+        and existing.application_type == "agentic"
+        and body.application_type != "agentic"
+    ):
+        agent_count = (
+            await session.execute(
+                sa.select(sa.func.count())
+                .select_from(_solution_agents)
+                .where(_solution_agents.c.solution_app_id == app_id)
+            )
+        ).scalar_one()
+        if agent_count:
+            raise AgenticSolutionHasAgentsError(app_id, agent_count)
+
     updates: dict[str, Any] = {"updated_at": _now()}
     if body.name is not None:
         updates["name"] = body.name.strip()
@@ -572,6 +601,11 @@ async def update_application(
 
 
 async def delete_application(app_id: str, session: AsyncSession) -> bool:
+    # 933-agent-registry: remove agent memberships explicitly (never the agents themselves) so
+    # SQLite fixtures behave like Postgres, where migration 043's CASCADE is the safety net.
+    await session.execute(
+        _solution_agents.delete().where(_solution_agents.c.solution_app_id == app_id)
+    )
     result = await session.execute(
         _applications.delete().where(_applications.c.id == app_id)
     )

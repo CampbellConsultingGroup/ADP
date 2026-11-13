@@ -19,6 +19,8 @@ from __future__ import annotations
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from adp.agentic import store as agstore
+from adp.agentic.models import AgentCreate
 from adp.application import store as astore
 from adp.application.models import ApplicationCreate, TechnicalCapabilityCreate
 from adp.business import store as bstore
@@ -33,6 +35,7 @@ from adp.business.models import (
 )
 from adp.search import backfill as bf
 from adp.search.index import (
+    ENTITY_AGENT,
     ENTITY_APPLICATION,
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
@@ -64,7 +67,13 @@ async def session(tmp_path):
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/backfill.db")
     async with engine.begin() as conn:
         await conn.run_sync(bstore._metadata.create_all)
-        await conn.run_sync(astore._metadata.create_all)
+        # astore's narrow solution_agents mirror is skipped so agstore's full table wins (933).
+        await conn.run_sync(
+            lambda c: astore._metadata.create_all(
+                c, tables=[t for t in astore._metadata.sorted_tables if t.name != "solution_agents"]
+            )
+        )
+        await conn.run_sync(agstore._metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as s:
         yield s
@@ -89,6 +98,13 @@ async def test_reindex_all_covers_every_entity_type(session, recording_index) ->
         chain.id, ValueChainActivityCreate(name="Operations", category="primary"), session
     )
 
+    agent = await agstore.create_agent(
+        AgentCreate(
+            name="Claims Triage", autonomy_level=2, human_approval="none", framework="LangGraph"
+        ),
+        session,
+    )
+
     counts = await bf.reindex_all(session)
 
     upserted_ids = {(et, eid) for et, eid, _ in recording_index.upserted}
@@ -100,6 +116,7 @@ async def test_reindex_all_covers_every_entity_type(session, recording_index) ->
     assert (ENTITY_BUSINESS_DOMAIN, domain.id) in upserted_ids
     assert (ENTITY_VALUE_CHAIN, chain.id) in upserted_ids
     assert (ENTITY_VALUE_CHAIN_ACTIVITY, activity.id) in upserted_ids
+    assert (ENTITY_AGENT, agent.id, "Claims Triage LangGraph") in recording_index.upserted
 
     assert counts == {
         ENTITY_BUSINESS_CAPABILITY: 1,
@@ -110,6 +127,7 @@ async def test_reindex_all_covers_every_entity_type(session, recording_index) ->
         ENTITY_BUSINESS_DOMAIN: 1,
         ENTITY_VALUE_CHAIN: 1,
         ENTITY_VALUE_CHAIN_ACTIVITY: 1,
+        ENTITY_AGENT: 1,
     }
 
 
@@ -138,5 +156,6 @@ async def test_reindex_all_empty_database_returns_zero_counts(session, recording
         ENTITY_BUSINESS_DOMAIN: 0,
         ENTITY_VALUE_CHAIN: 0,
         ENTITY_VALUE_CHAIN_ACTIVITY: 0,
+        ENTITY_AGENT: 0,
     }
     assert recording_index.upserted == []

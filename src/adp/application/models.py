@@ -32,7 +32,7 @@ HostingModel = Literal["on_prem", "cloud", "saas", "hybrid"]
 # ADP-3jj: build-vs-buy/vendor classification -- independent of HostingModel (deployment
 # location, not who built it); an app can be application_type="custom" and
 # hosting_model="saas" simultaneously (spec.md Edge Cases).
-ApplicationType = Literal["custom", "cots", "saas", "legacy"]
+ApplicationType = Literal["custom", "cots", "saas", "legacy", "agentic"]
 
 # docs/application-health-assessment-spec.md: the six health-rubric
 # dimensions (docs/health-table.md's six rows), in the same order the rubric
@@ -130,6 +130,19 @@ class FrameworkNotSelectableError(Exception):
     added (not already linked to this application) and its framework's status is neither
     in_force nor amended (spec.md FR-001/FR-002). An id that was already linked is never checked
     against this rule on an unrelated save (spec.md Edge Cases)."""
+
+
+class AgenticSolutionHasAgentsError(Exception):
+    """933-agent-registry (Clarification Q1): raised when an 'agentic' application that still has
+    agents (solution_agents rows) is reclassified to any other application_type."""
+
+    def __init__(self, app_id: str, agent_count: int) -> None:
+        self.app_id = app_id
+        self.agent_count = agent_count
+        super().__init__(
+            f"Application {app_id!r} is an agentic solution with {agent_count} agent(s); "
+            "remove its agents before changing its application type"
+        )
 
 
 # ── Application models ────────────────────────────────────────────────────────

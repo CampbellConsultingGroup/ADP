@@ -169,6 +169,8 @@ _PREFIX_ROUTE_ACTIONS: tuple[tuple[str, ActionType], ...] = (
     # controls alike) requires the new dedicated WRITE_COMPLIANCE action
     # (Clarification Session 2026-08-17 Q1; research.md D4).
     ("/api/v1/compliance/", ActionType.WRITE_COMPLIANCE),
+    # 933-agent-registry: agent registry writes reuse application-write (no new ActionType).
+    ("/api/v1/agentic/", ActionType.WRITE_APPLICATION),
 )
 
 

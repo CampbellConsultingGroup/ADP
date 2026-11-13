@@ -128,12 +128,13 @@ export function groupByCriticality(apps: Application[]): GroupedResult {
 // ADP-3jj: build-vs-buy/vendor classification -- a fixed, known enum (like
 // hosting model or PACE layer), not free text, so it uses bucketize() with a
 // fixed order rather than groupByBusinessUnit's dynamic/alphabetical one.
-const APPLICATION_TYPE_ORDER = ["custom", "cots", "saas", "legacy"] as const;
+const APPLICATION_TYPE_ORDER = ["custom", "cots", "saas", "legacy", "agentic"] as const;
 const APPLICATION_TYPE_LABELS: Record<(typeof APPLICATION_TYPE_ORDER)[number], string> = {
   custom: "Custom-Built",
   cots: "COTS",
   saas: "SaaS",
   legacy: "Legacy/Mainframe",
+  agentic: "Agentic (AI agents)",
 };
 
 export function groupByApplicationType(apps: Application[]): GroupedResult {

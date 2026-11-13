@@ -31,6 +31,8 @@ from datetime import datetime, timezone
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from adp.agentic import store as agstore
+from adp.agentic.models import AgentCreate
 from adp.application import store as astore
 from adp.application.models import (
     ApplicationCapabilityLinkCreate,
@@ -68,6 +70,10 @@ DEFAULT_DB_URL = "postgresql+asyncpg://adp_user:adp_pass@127.0.0.1:5432/adp"
 # Every application/business table. Order is irrelevant with CASCADE, but listing
 # them all makes the wipe explicit. knowledge_* is deliberately excluded.
 WIPE_TABLES = [
+    # 933-agent-registry: agent memberships + agents (agents are not owned by applications,
+    # so an applications TRUNCATE ... CASCADE alone would leave them behind).
+    "solution_agents",
+    "agents",
     "application_design_links",
     "application_integrations",
     "application_domain_integrations",
@@ -89,6 +95,31 @@ WIPE_TABLES = [
     "audit_entries",
     "design_versions",
     "designs",
+]
+
+# ── Agentic solution (933-agent-registry, FR-017) ─────────────────────────────
+# ADP itself, recorded as an agentic solution made of its own AI agents. prompt_ref values are the
+# agent ids registered in adp.admin.prompt_registry (042 prompt management), where one exists.
+ADP_SOLUTION = (
+    "Architecture Design Platform (ADP)",
+    "AI-assisted architecture design: intake, recommendation, validation and chat agents over "
+    "a shared architecture model.",
+)
+# (name, role, autonomy, human_approval, framework, prompt_ref, description)
+ADP_AGENTS = [
+    ("ADP Chat Assistant", "orchestrator", 1, "on_write", "Anthropic SDK (tool use)",
+     "chat_assistant", "Answers questions over the architecture estate with read-only tools."),
+    ("ADP Intake Extractor", "worker", 0, "always", "Anthropic SDK",
+     "intake_extraction", "Extracts requirements from business text; every proposal is "
+     "confirmed by an architect."),
+    ("ADP Recommendation Engine", "worker", 0, "always", "LangGraph",
+     "recommendation_generation", "Generates and compares solution options grounded in the "
+     "knowledge base."),
+    ("ADP LLM-as-Judge Critics", "reviewer", 2, "on_irreversible", "asyncio fan-out",
+     None, "Parallel critics that score a design; verdicts can be overridden by a reviewer."),
+    ("ADP Agent Review", "worker", 0, "always", "Anthropic SDK",
+     "agent_review_business_capability", "Reviews capabilities and suggests changes for "
+     "architect confirmation."),
 ]
 
 # ── Business domains ──────────────────────────────────────────────────────────
@@ -692,6 +723,30 @@ async def seed(db_url: str) -> None:
         print(f"  {n} value-stream-design links")
 
         await session.commit()
+
+    # ── Phase D: agentic solution + agents (933-agent-registry) ───────────────
+    print("Seeding agent registry...")
+    async with session_factory() as session:
+        solution = await astore.create_application(
+            ApplicationCreate(
+                name=ADP_SOLUTION[0], description=ADP_SOLUTION[1], application_type="agentic",
+                primary_owner="Architecture Platform Team",
+            ),
+            session,
+        )
+        for name, role, autonomy, approval, framework, prompt_ref, desc in ADP_AGENTS:
+            agent = await agstore.create_agent(
+                AgentCreate(
+                    name=name, description=desc, owner="Architecture Platform Team",
+                    model_provider="Anthropic", framework=framework, prompt_ref=prompt_ref,
+                    autonomy_level=autonomy, human_approval=approval,
+                    data_classification_max="internal",
+                ),
+                session,
+            )
+            await agstore.add_solution_agent(solution.id, agent.id, role, session)
+        await session.commit()
+        print(f"  1 agentic solution, {len(ADP_AGENTS)} agents")
 
     await engine.dispose()
     print("\nDone. Retail portfolio seeded.")
