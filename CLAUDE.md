@@ -1,6 +1,6 @@
 # ADP Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-10-07 (926-framework-versioning-correction COMPLY-01a implemented)
+Auto-generated from all feature plans. Last updated: 2026-11-13 (926-framework-versioning-correction COMPLY-01a implemented)
 
 ## Active Technologies
 - Python 3.11+ + SQLAlchemy 2.x (async ORM), asyncpg (PostgreSQL async driver), Alembic (migrations), testcontainers-python (PostgreSQL container for integration tests), pydantic-settings (database URL config) (002-design-store)
@@ -111,6 +111,8 @@ Auto-generated from all feature plans. Last updated: 2026-10-07 (926-framework-v
 - PostgreSQL 16 with pgvector (migration 011, already applied) — no new migration; one (930-hybrid-search-phase)
 - PostgreSQL 16 — one new migration (`040`, `down_revision="039"`): two new tables, (931-admin-ui-editing)
 - PostgreSQL 16 — one new migration (`041`, `down_revision="040"`): new table (932-regulatory-framework-tags)
+- Python 3.12 (backend); TypeScript 5.x + React 18 (frontend). Both are existing stacks. + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic v2; React 18, TanStack Query v5. All are existing, with **zero new packages**. (933-agent-registry)
+- PostgreSQL 16. Migration `043` (`down_revision="042"`) adds two new tables and re-creates one CHECK constraint on `applications`. (933-agent-registry)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -155,6 +157,34 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 933-agent-registry: Implemented (ADP-hii, P1 of the agentic-solutions plan `docs/agentic-solutions-plan.md`,
+  planning bead ADP-wma) -- full `/speckit.specify` → clarify → plan → tasks → implement cycle. An agentic
+  solution is an ordinary Application with new `application_type="agentic"`; its AI agents live in a new
+  solution-independent registry, joined many-to-many (`solution_agents`: role
+  orchestrator|worker|reviewer|router + position normalised 0..n-1). New sibling package `adp.agentic`
+  (`adp.agents` is taken by the Agent Review toolkit) with `/api/v1/agentic/agents` CRUD and
+  `/api/v1/agentic/solutions/{app_id}/agents` (+ PATCH role, PUT `/order`, DELETE). Migration `043`
+  (`down_revision="042"`): drops/re-creates `ck_app_application_type` with 'agentic' (downgrade nulls agentic
+  rows first), new `agents` (ADP 0-4 autonomy scale, human_approval, prompt_ref = version reference only,
+  data_classification_max, a2a_card_url http(s)-only, design-time cost estimates, `external_registry_ref` for
+  a future runtime-registry link) and `solution_agents` (composite PK, CASCADE both legs). Clarified with the
+  user: agents only on agentic apps (reclassifying an agentic app that still has agents → 409, guarded in
+  `adp.application.store.update_application` via a narrow `solution_agents` mirror; `delete_application`
+  deletes memberships explicitly, never agents); cost estimates gated like application cost (reads redact to
+  null + `cost_visible=false` without READ_APPLICATION_COST, setting them needs WRITE_APPLICATION_COST).
+  Writes reuse `WRITE_APPLICATION` via a new `/api/v1/agentic/` prefix rule -- no new ActionType. Audit =
+  actor-attributed structured logs (application/compliance precedent). Search `ENTITY_AGENT` (+ backfill;
+  note `/api/v1/search` defaults to capability types -- pass `entity_types=agent`), export
+  `agentic/agents/<id>.json` with `solutions[]` (new `adp.export.agentic`, 4th lifespan export task), seed
+  (`scripts/seed_retail.py` Phase D: ADP itself as an agentic solution with its 5 agents). Frontend: new
+  "Agents" nav view (`web/src/agentic/`: AgentsPage list+filters, AgentDetail with solution links that open
+  the application, AgentForm, SolutionAgentsPanel), Agents tab on agentic applications, `isHttpUrl` extracted
+  to `web/src/ui/url.ts`. Fixture gotcha: any fixture creating both `astore` and `agstore` metadata must
+  create astore first EXCLUDING `solution_agents`, then agstore (see tests/contract/test_agentic_api.py).
+  1885 backend tests (+64), 609 frontend (+20), ruff/mypy/tsc/adp-generate clean; Docker-gated
+  `tests/integration/test_migration_043.py` runs in CI. Verified live on local Postgres (migrations 042+043
+  applied) and in the browser via Playwright; scratch data cleaned up. See `specs/933-agent-registry/`.
+- 933-agent-registry: Added Python 3.12 (backend); TypeScript 5.x + React 18 (frontend). Both are existing stacks. + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic v2; React 18, TanStack Query v5. All are existing, with **zero new packages**.
 - ADP-nag (value chain data model, part of epic ADP-o9p "consume Canvas diagram-core as a package +
   value stream & value chain diagrams"): Porter value chains as a first-class Business Architecture
   entity, mirroring value streams. Migration `042` (`down_revision="041"`): `value_chains`
@@ -234,7 +264,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   scratch application, confirmed back to the original 18 applications and all three real
   frameworks left completely untouched (still `in_force`, confirmed by id and name afterward). See
   `specs/932-regulatory-framework-tags/`.
-- 931-admin-ui-editing: Implemented (ADP-68z, "UI for editing scoring rubric weights (business
   value, and future similar composite scores)" — deferred from the Application Business Value
   assessment build, 2026-08-15) — full `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` →
   `/speckit.implement` cycle. The bead explicitly names its own architectural precedent ("mirroring
@@ -282,7 +311,6 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
   instead fully exercised by the 14 passing contract tests (a real dependency-override to
   `PLATFORM_ADMIN`) and the written Docker-gated integration suite. See
   `specs/931-admin-ui-editing/`.
-- 930-hybrid-search-phase: Implemented (ADP-7bo, "Hybrid search phase 2/3: value streams, domains,
   other text fields") — full `/speckit.specify` → `/speckit.plan` → `/speckit.tasks` →
   `/speckit.implement` cycle. **A Ground-Truth Correction found before writing any requirement**:
   the bead's own text assumed phase 2 (value stream + domain indexing) was entirely unbuilt — direct

@@ -15,7 +15,7 @@ from fastapi.testclient import TestClient
 from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
 from adp.authz.enforcement import SAFE_METHODS, required_action_for
-from adp.authz.roles import PersonaRole
+from adp.authz.roles import ActionType, PersonaRole
 
 
 @pytest.fixture(autouse=True)
@@ -490,3 +490,28 @@ def test_reviewer_denied_amendment_write(app: FastAPI) -> None:
     assert resp.status_code == 403
 
 
+
+
+# ── 933-agent-registry: agent registry writes reuse WRITE_APPLICATION ─────────
+
+def test_agentic_write_routes_map_to_write_application() -> None:
+    for method, path in [
+        ("POST", "/api/v1/agentic/agents"),
+        ("PATCH", "/api/v1/agentic/agents/{agent_id}"),
+        ("DELETE", "/api/v1/agentic/agents/{agent_id}"),
+        ("POST", "/api/v1/agentic/solutions/{app_id}/agents"),
+        ("PUT", "/api/v1/agentic/solutions/{app_id}/agents/order"),
+        ("PATCH", "/api/v1/agentic/solutions/{app_id}/agents/{agent_id}"),
+        ("DELETE", "/api/v1/agentic/solutions/{app_id}/agents/{agent_id}"),
+    ]:
+        assert required_action_for(method, path) == ActionType.WRITE_APPLICATION, (method, path)
+
+
+def test_agentic_read_routes_are_ungated() -> None:
+    assert required_action_for("GET", "/api/v1/agentic/agents") is None
+    assert required_action_for("GET", "/api/v1/agentic/agents/{agent_id}") is None
+
+
+def test_reviewer_denied_agent_write(app: FastAPI) -> None:
+    resp = _client_as(app, PersonaRole.REVIEWER).post("/api/v1/agentic/agents", json={})
+    assert resp.status_code == 403

@@ -74,7 +74,7 @@ def test_application_create_extra_fields_rejected():
 # ADP-3jj: application_type (build-vs-buy classification) accepts all 4 values,
 # defaults to None, and rejects anything outside the 4-value set.
 
-@pytest.mark.parametrize("value", ["custom", "cots", "saas", "legacy"])
+@pytest.mark.parametrize("value", ["custom", "cots", "saas", "legacy", "agentic"])
 def test_application_create_accepts_all_application_types(value):
     app = ApplicationCreate(name="App", application_type=value)
     assert app.application_type == value

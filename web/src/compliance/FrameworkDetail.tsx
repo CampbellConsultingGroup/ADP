@@ -8,6 +8,7 @@ import {
 import type { ComplianceStatus, ControlNode, EntityStatusCounts } from "../api/compliance";
 import FrameworkForm from "./FrameworkForm";
 import ControlTree from "./ControlTree";
+import { isHttpUrl } from "../ui/url";
 
 interface FrameworkDetailProps {
   frameworkId: string;
@@ -20,20 +21,6 @@ function countAllControls(nodes: ControlNode[]): number {
   let total = nodes.length;
   for (const node of nodes) total += countAllControls(node.children);
   return total;
-}
-
-/** Defense-in-depth alongside the backend's http(s)-only validation on source_url (security
- *  review finding, 923-derived-compliance-status): only render the field as a clickable link if
- *  it actually parses to an http/https URL, so a value that predates the backend validator (or
- *  reached the database by some other path) can never render as a `javascript:`-executable
- *  href. */
-function isHttpUrl(value: string): boolean {
-  try {
-    const scheme = new URL(value).protocol;
-    return scheme === "http:" || scheme === "https:";
-  } catch {
-    return false;
-  }
 }
 
 const ROLLUP_BUCKET_LABEL: Record<keyof EntityStatusCounts, string> = {

@@ -14,6 +14,7 @@ import { DiagramsPage } from "./diagrams/DiagramsPage";
 import type { DiagramSeed } from "./diagrams/generators";
 import StrategyPage from "./strategy/StrategyPage";
 import CompliancePage from "./compliance/CompliancePage";
+import AgentsPage from "./agentic/AgentsPage";
 import AdminPage from "./admin/AdminPage";
 import ScoringRubricsPage from "./admin/ScoringRubricsPage";
 import { AppShell } from "./ui";
@@ -51,6 +52,8 @@ export default function App(): React.ReactElement {
   // the app, waiting to be opened in the Diagrams editor -- mirrors
   // currentDesignId/onSelectDesign below exactly (research.md Decision 3).
   const [pendingDiagramSeed, setPendingDiagramSeed] = useState<DiagramSeed | null>(null);
+  // 933-agent-registry: an application to open when an agent's solution link is followed.
+  const [pendingAppId, setPendingAppId] = useState<string | null>(null);
 
   const onNavigate = (nextView: AppView) => {
     if (!currentDesignId && DESIGN_ONLY_VIEWS.includes(nextView)) {
@@ -58,6 +61,7 @@ export default function App(): React.ReactElement {
       setView("designs");
       return;
     }
+    setPendingAppId(null);
     setView(nextView);
   };
 
@@ -100,7 +104,16 @@ export default function App(): React.ReactElement {
       case "business":
         return <BusinessPage onNavigate={onNavigate} designId={currentDesignId} onGenerateDiagram={onGenerateDiagram} />;
       case "applications":
-        return <ApplicationPage />;
+        return <ApplicationPage key={pendingAppId ?? "registry"} initialAppId={pendingAppId} />;
+      case "agents":
+        return (
+          <AgentsPage
+            onOpenSolution={(appId) => {
+              setPendingAppId(appId);
+              setView("applications");
+            }}
+          />
+        );
       case "technical":
         return <TechCapPage />;
       case "diagrams":

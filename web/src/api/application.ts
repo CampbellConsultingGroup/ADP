@@ -13,7 +13,8 @@ export type LifecycleStatus = "planned" | "active" | "sunset" | "retired";
 export type HostingModel = "on_prem" | "cloud" | "saas" | "hybrid";
 // ADP-3jj: build-vs-buy/vendor classification -- independent of HostingModel (deployment
 // location, not who built it).
-export type ApplicationType = "custom" | "cots" | "saas" | "legacy";
+// 933-agent-registry: "agentic" = a solution delivered by a set of AI agents (see web/src/agentic).
+export type ApplicationType = "custom" | "cots" | "saas" | "legacy" | "agentic";
 
 export interface Application {
   id: string;

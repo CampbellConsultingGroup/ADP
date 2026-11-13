@@ -15,13 +15,14 @@ const R_OPTIONS = ["", "Rehost", "Replatform", "Repurchase", "Refactor", "Retire
 const PACE_OPTIONS = ["", "Record", "Differentiation", "Innovation"] as const;
 const LIFECYCLE_OPTIONS = ["planned", "active", "sunset", "retired"] as const;
 const HOSTING_OPTIONS = ["", "on_prem", "cloud", "saas", "hybrid"] as const;
-const APPLICATION_TYPE_OPTIONS = ["", "custom", "cots", "saas", "legacy"] as const;
+const APPLICATION_TYPE_OPTIONS = ["", "custom", "cots", "saas", "legacy", "agentic"] as const;
 const APPLICATION_TYPE_LABELS: Record<(typeof APPLICATION_TYPE_OPTIONS)[number], string> = {
   "": "",
   custom: "Custom-Built",
   cots: "COTS",
   saas: "SaaS",
   legacy: "Legacy/Mainframe",
+  agentic: "Agentic (AI agents)",
 };
 
 export default function ApplicationForm({ initial, onSave, onCancel, saving }: Props) {

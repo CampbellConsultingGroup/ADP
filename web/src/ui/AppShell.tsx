@@ -39,6 +39,9 @@ const ARCHITECTURE: NavDef[] = [
   // nav item, not a tab bolted onto Applications) -- placed beside
   // Applications, the other "ent"-adjacent registry-style screen.
   { view: "technical", label: "Technical Architecture", icon: "tec", hue: "tec" },
+  // 933-agent-registry: the estate-wide AI agent registry, beside the application registry
+  // its agentic solutions live in.
+  { view: "agents", label: "Agents", icon: "spark", hue: "ent" },
   // ADP-SPEC-046 / ADP-914.5: standalone diagrams (flowchart/sequence/ERD/
   // UML/architecture) have no relationship to a Design (FR-011), so they sit
   // here alongside Business/Applications rather than under DESIGN_SCOPED.
@@ -76,6 +79,7 @@ const TITLES: Record<AppView, string> = {
   diagrams: "Diagrams",
   strategy: "Strategy",
   compliance: "Compliance",
+  agents: "Agent Registry",
   admin: "Agent Prompt Management",
   "scoring-rubrics": "Scoring Rubric Management",
 };

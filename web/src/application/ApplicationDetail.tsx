@@ -20,6 +20,8 @@ import ObjectiveLinksPanel from "./ObjectiveLinksPanel";
 import HealthAssessmentModal from "./HealthAssessmentModal";
 import BusinessValueAssessmentModal from "./BusinessValueAssessmentModal";
 import ApplicationComplianceMappings from "./ApplicationComplianceMappings";
+import SolutionAgentsPanel from "../agentic/SolutionAgentsPanel";
+import { errorDetail } from "../api/agentic";
 
 interface Props {
   appId: string;
@@ -27,7 +29,7 @@ interface Props {
   onDeleted: () => void;
 }
 
-type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs" | "risk" | "cost" | "tech-fit" | "initiatives" | "governance" | "quality" | "objectives" | "compliance-mappings";
+type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs" | "risk" | "cost" | "tech-fit" | "initiatives" | "governance" | "quality" | "objectives" | "compliance-mappings" | "agents";
 
 // ADP-3jj: matches ApplicationForm.tsx's own APPLICATION_TYPE_LABELS.
 const APPLICATION_TYPE_LABELS: Record<string, string> = {
@@ -35,6 +37,7 @@ const APPLICATION_TYPE_LABELS: Record<string, string> = {
   cots: "COTS",
   saas: "SaaS",
   legacy: "Legacy/Mainframe",
+  agentic: "Agentic (AI agents)",
 };
 
 export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) {
@@ -45,6 +48,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
   const [section, setSection] = useState<Section>("overview");
   const [showHealthModal, setShowHealthModal] = useState(false);
   const [showBusinessValueModal, setShowBusinessValueModal] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   if (isLoading) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
   if (!app) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Not found</div>;
@@ -52,8 +56,14 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
   const tc = app.time_classification;
 
   const handleSave = async (data: ApplicationCreate) => {
-    await updateApp.mutateAsync(data);
-    setEditing(false);
+    setSaveError(null);
+    try {
+      await updateApp.mutateAsync(data);
+      setEditing(false);
+    } catch (err) {
+      // e.g. 409: an agentic solution with agents cannot be reclassified (933, Clarification Q1).
+      setSaveError(errorDetail(err));
+    }
   };
 
   const handleDelete = async () => {
@@ -64,6 +74,8 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
 
   const tabs: { id: Section; label: string }[] = [
     { id: "overview", label: "Overview" },
+    // 933-agent-registry: only agentic solutions have agents (Clarification Q1).
+    ...(app.application_type === "agentic" ? [{ id: "agents" as Section, label: "Agents" }] : []),
     { id: "capabilities", label: "Capabilities" },
     { id: "tech-caps", label: "Tech Caps" },
     { id: "stages", label: "Stages" },
@@ -104,7 +116,8 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
     // content-area convention (e.g. BusinessPage.tsx/StrategyPage.tsx).
     return (
       <div style={{ height: "100%", overflowY: "auto" }}>
-        <ApplicationForm initial={app} onSave={handleSave} onCancel={() => setEditing(false)} saving={updateApp.isPending} />
+        {saveError && <div role="alert" style={{ color: "var(--crit)", fontSize: 13, padding: "12px 18px 0" }}>{saveError}</div>}
+        <ApplicationForm initial={app} onSave={handleSave} onCancel={() => { setEditing(false); setSaveError(null); }} saving={updateApp.isPending} />
       </div>
     );
   }
@@ -208,6 +221,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
         {section === "quality" && <QualityPanel appId={appId} />}
         {section === "objectives" && <ObjectiveLinksPanel appId={appId} />}
         {section === "compliance-mappings" && <ApplicationComplianceMappings appId={appId} />}
+        {section === "agents" && app.application_type === "agentic" && <SolutionAgentsPanel appId={appId} />}
       </div>
 
       {showHealthModal && (

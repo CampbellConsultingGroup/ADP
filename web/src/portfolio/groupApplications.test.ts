@@ -315,7 +315,7 @@ describe("groupByPaceLayer (ADP-9ye)", () => {
 describe("groupByApplicationType (ADP-3jj)", () => {
   it("places apps into all 4 fixed buckets in Custom/COTS/SaaS/Legacy order", () => {
     const result = groupByApplicationType([]);
-    expect(result.buckets.map((b) => b.key)).toEqual(["custom", "cots", "saas", "legacy"]);
+    expect(result.buckets.map((b) => b.key)).toEqual(["custom", "cots", "saas", "legacy", "agentic"]);
   });
 
   it("groups by the app's application_type value", () => {

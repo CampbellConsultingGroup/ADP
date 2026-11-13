@@ -11,6 +11,8 @@ from typing import AsyncGenerator
 
 from fastapi import Depends, FastAPI, Request, Response
 
+from adp.agentic import router as agentic_router_module
+from adp.agentic import store as agstore
 from adp.api.routers import (
     admin_prompts_router,
     admin_rubrics_router,
@@ -51,6 +53,7 @@ from adp.business import store as bstore
 from adp.chat import router as chat_router_module
 from adp.compliance import router as compliance_router_module
 from adp.diagrams import router as diagrams_router
+from adp.export import agentic as agentic_export
 from adp.export import application_arch, business_arch
 from adp.export import strategy as strategy_export
 from adp.strategy import router as strategy_router
@@ -109,6 +112,22 @@ async def stop_strategy_export(task: asyncio.Task[None] | None) -> None:
     await strategy_export.stop_background_sync(task)
 
 
+def start_agentic_export() -> asyncio.Task[None] | None:
+    """933-agent-registry: start the continuous agent registry export sync, sharing the same
+    ADP_BUSINESS_ARCH_EXPORT_ROOT/_INTERVAL_SECONDS env vars as the other export domains. No-op
+    unless that root is set."""
+    export_root = os.environ.get("ADP_BUSINESS_ARCH_EXPORT_ROOT")
+    interval = float(os.environ.get("ADP_BUSINESS_ARCH_EXPORT_INTERVAL_SECONDS", "60"))
+    return agentic_export.start_background_sync(
+        export_root, interval, agstore._get_session_factory()
+    )
+
+
+async def stop_agentic_export(task: asyncio.Task[None] | None) -> None:
+    """933-agent-registry: stop the continuous agent registry export sync."""
+    await agentic_export.stop_background_sync(task)
+
+
 def _install_trace_id_logging() -> None:
     """Install TraceIdFilter on the root logger (QG-10 / FR-001).
 
@@ -164,6 +183,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # ADP-81p.3: opt-in continuous export of the Strategy domain, sharing the
     # same env vars/root as ADP-SPEC-044/045 above.
     _strategy_export_task = start_strategy_export()
+    # 933-agent-registry: opt-in continuous export of the agent registry, same env vars/root.
+    _agentic_export_task = start_agentic_export()
 
     yield
 
@@ -172,6 +193,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await stop_business_arch_export(_export_task)
     await stop_application_arch_export(_app_export_task)
     await stop_strategy_export(_strategy_export_task)
+    await stop_agentic_export(_agentic_export_task)
 
 
 def create_app() -> FastAPI:
@@ -285,6 +307,7 @@ def create_app() -> FastAPI:
     app.include_router(diagrams_router.router)
     app.include_router(strategy_router.router)
     app.include_router(compliance_router_module.router)
+    app.include_router(agentic_router_module.router)
 
     # Serve Vite-built frontend static files when running in Docker (ADP-SPEC-025)
     import os

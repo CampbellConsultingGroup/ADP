@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 import sqlalchemy as sa
 
 from adp.search import (
+    ENTITY_AGENT,
     ENTITY_APPLICATION,
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
@@ -76,6 +77,7 @@ async def reindex_all(session: "AsyncSession") -> dict[str, int]:
         ENTITY_BUSINESS_DOMAIN: 0,
         ENTITY_VALUE_CHAIN: 0,
         ENTITY_VALUE_CHAIN_ACTIVITY: 0,
+        ENTITY_AGENT: 0,
     }
 
     cap_total = await reindex_capabilities(session)
@@ -130,6 +132,13 @@ async def reindex_all(session: "AsyncSession") -> dict[str, int]:
             ENTITY_VALUE_CHAIN_ACTIVITY, row.id, build_text(row.name, row.description), session
         )
         counts[ENTITY_VALUE_CHAIN_ACTIVITY] += 1
+
+    # 933-agent-registry: agents, indexed with the same text the store's write hooks use.
+    from adp.agentic import store as agstore
+
+    for agent in await agstore.list_agents(session):
+        await index.upsert(ENTITY_AGENT, agent.id, agstore._search_text(agent), session)
+        counts[ENTITY_AGENT] += 1
 
     return counts
 
