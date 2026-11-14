@@ -47,6 +47,11 @@ beforeEach(() => {
   api.usePatternFamily.mockReturnValue({ data: undefined } as never);
   api.usePatternVersion.mockReturnValue({ data: detail(), isLoading: false, error: null } as never);
   api.usePatternYaml.mockReturnValue({ data: "pattern: x\n", isLoading: false } as never);
+  api.useDeleteDraft.mockReturnValue(mutation());
+  api.useTransition.mockReturnValue(mutation());
+  api.useValidatePattern.mockReturnValue(mutation());
+  api.useRenderPattern.mockReturnValue(mutation());
+  api.useUpdateDraft.mockReturnValue(mutation());
 });
 
 describe("canManagePatterns", () => {
@@ -82,7 +87,8 @@ describe("PatternsPage", () => {
     expect(api.usePatternVersion).toHaveBeenLastCalledWith("ea.integration.domain-event-backbone", "1.0.0");
     expect(screen.getByText("Context.")).toBeTruthy();
     await userEvent.click(screen.getByRole("tab", { name: "YAML" }));
-    expect(screen.getByLabelText("Canonical YAML").textContent).toBe("pattern: x\n");
+    // An EA on a draft gets the editor, prefilled with the canonical YAML (US5).
+    expect((screen.getByLabelText("Draft YAML") as HTMLTextAreaElement).value).toBe("pattern: x\n");
   });
 });
 

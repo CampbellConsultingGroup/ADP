@@ -313,3 +313,54 @@ async def test_dry_run_render_forbidden_for_reviewer(app_and_client) -> None:
     _as_role(app, PersonaRole.REVIEWER)
     resp = await client.post(f"{API}/render", json={"yaml": BACKBONE, "view": "structure"})
     assert resp.status_code == 403
+
+
+# ── US5: draft editing ────────────────────────────────────────────────────────────
+async def _put(client, version: str, text: str) -> httpx.Response:
+    return await client.put(
+        f"{API}/{KEY}/versions/{version}", content=text.encode(), headers=YAML_HEADERS
+    )
+
+
+async def test_update_draft_and_errors(client) -> None:
+    await _import(client)
+    changed = re.sub(r"^summary: .*$", "summary: Edited.", BACKBONE, count=1, flags=re.M)
+    ok = await _put(client, "1.0.0", changed)
+    assert ok.status_code == 200, ok.text
+    assert ok.json()["version"]["summary"] == "Edited."
+    bad = await _put(client, "1.0.0", with_version(BACKBONE, "2.0.0"))
+    assert bad.status_code == 422
+    assert bad.json()["detail"]["issues"][0]["code"] == "U1.identity_changed"
+    assert (await _put(client, "9.9.9", BACKBONE)).status_code == 404
+    await _transition(client, "1.0.0", "proposed")
+    assert (await _put(client, "1.0.0", changed)).status_code == 409
+
+
+async def test_delete_draft(client) -> None:
+    await _import(client)
+    await _import(client, with_version(BACKBONE, "1.1.0"))
+    assert (await client.delete(f"{API}/{KEY}/versions/1.1.0")).status_code == 204
+    await _transition(client, "1.0.0", "proposed")
+    assert (await client.delete(f"{API}/{KEY}/versions/1.0.0")).status_code == 409
+    await _transition(client, "1.0.0", "draft")
+    assert (await client.delete(f"{API}/{KEY}/versions/1.0.0")).status_code == 204
+    assert (await client.get(f"{API}/{KEY}")).status_code == 404
+
+
+async def test_validate_dry_run(client) -> None:
+    resp = await client.post(f"{API}/validate", content=BACKBONE.encode(), headers=YAML_HEADERS)
+    assert resp.status_code == 200
+    assert resp.json()["ok"] is True
+    bad = await client.post(f"{API}/validate", content=INVALID.encode(), headers=YAML_HEADERS)
+    assert bad.status_code == 200 and bad.json()["ok"] is False
+    assert (await client.get(API)).json()["total"] == 0
+
+
+async def test_draft_writes_forbidden_for_non_ea(app_and_client) -> None:
+    app, client = app_and_client
+    await _import(client)
+    _as_role(app, PersonaRole.SOLUTION_ARCHITECT)
+    assert (await _put(client, "1.0.0", BACKBONE)).status_code == 403
+    assert (await client.delete(f"{API}/{KEY}/versions/1.0.0")).status_code == 403
+    resp = await client.post(f"{API}/validate", content=BACKBONE.encode(), headers=YAML_HEADERS)
+    assert resp.status_code == 403

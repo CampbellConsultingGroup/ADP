@@ -414,3 +414,82 @@ async def test_promotion_without_precomputed_embedding_uses_zero_vector(session)
     await pstore.transition(KEY, "1.0.0", _req(L.CURRENT), ACTOR, session)
     await session.commit()
     assert (await _projection(session))[0].embedding == [0.0] * 384
+
+
+# ── US5: draft editing (FR-008) ───────────────────────────────────────────────────
+async def test_update_draft_replaces_definition_and_relations(session) -> None:
+    first = await _import(session)
+    changed = with_summary(BACKBONE, "Edited summary.").replace(
+        "  - { type: requires, target: ea.data.one-sor-per-capability }\n", ""
+    )
+    result, before = await pstore.update_draft(KEY, "1.0.0", changed, ACTOR, session)
+    await session.commit()
+    assert first.version is not None and before == first.version.digest
+    assert result.version.summary == "Edited summary."
+    assert result.version.digest != before
+    assert await _count(session, pstore._relations) == 1
+
+
+@pytest.mark.parametrize(
+    ("mutate", "code"),
+    [
+        (lambda t: with_version(t, "2.0.0"), "U1.identity_changed"),
+        (
+            lambda t: t.replace("pattern: ea.integration.domain-event-backbone", "pattern: ea.x.y"),
+            "U1.identity_changed",
+        ),
+        (
+            lambda t: t.replace("kind: reference-architecture", "kind: portfolio-rule"),
+            "I3.kind_mismatch",
+        ),
+    ],
+)
+async def test_update_draft_rejects_identity_or_kind_change(session, mutate, code) -> None:
+    from adp.patterns.registry_models import InvalidPatternUpdateError
+
+    await _import(session)
+    with pytest.raises(InvalidPatternUpdateError) as exc:
+        await pstore.update_draft(KEY, "1.0.0", mutate(BACKBONE), ACTOR, session)
+    assert [i.code for i in exc.value.issues] == [code]
+
+
+async def test_update_draft_rejects_invalid_yaml(session) -> None:
+    from adp.patterns.registry_models import InvalidPatternUpdateError
+
+    await _import(session)
+    with pytest.raises(InvalidPatternUpdateError) as exc:
+        await pstore.update_draft(KEY, "1.0.0", "roles: [", ACTOR, session)
+    assert exc.value.issues[0].code.startswith("P5")
+
+
+async def test_update_and_delete_refuse_non_draft(session) -> None:
+    from adp.patterns.registry_models import NotDraftError
+
+    await _import(session)
+    await _set_lifecycle(session, KEY, "1.0.0", L.PROPOSED)
+    with pytest.raises(NotDraftError):
+        await pstore.update_draft(KEY, "1.0.0", BACKBONE, ACTOR, session)
+    with pytest.raises(NotDraftError):
+        await pstore.delete_draft(KEY, "1.0.0", session)
+
+
+async def test_delete_last_draft_deletes_family(session) -> None:
+    await _import(session)
+    await _import(session, with_version(BACKBONE, "1.1.0"))
+    assert await pstore.delete_draft(KEY, "1.1.0", session) is False
+    await session.commit()
+    assert [v.version for v in (await pstore.get_family(KEY, session)).versions] == ["1.0.0"]
+    assert await pstore.delete_draft(KEY, "1.0.0", session) is True
+    await session.commit()
+    for table in (pstore._patterns, pstore._versions, pstore._relations):
+        assert await _count(session, table) == 0
+
+
+async def test_validate_only_stores_nothing(session) -> None:
+    ok = await pstore.validate_only(BACKBONE, session)
+    assert ok.ok and ok.digest
+    assert {i.code for i in ok.issues} == {"R1.unresolved_principle", "R3.unresolved_relation"}
+    bad = await pstore.validate_only(load_fixture("V7.compile.yaml"), session)
+    assert not bad.ok
+    assert any(i.code.startswith("V7") for i in bad.issues)
+    assert await _count(session, pstore._versions) == 0

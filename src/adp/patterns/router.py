@@ -48,6 +48,8 @@ from adp.patterns.registry_models import (
     PatternRegistryError,
     PatternRelationRow,
     PatternRenderRequest,
+    PatternUpdateResult,
+    PatternValidateResult,
     PatternVersionDetail,
     PatternVersionNotFoundError,
     PatternViewKind,
@@ -305,3 +307,56 @@ async def render_draft(body: PatternRenderRequest) -> PatternViewResponse:
         )
     defn = parsed.definition
     return _view_response(PatternViewKind.STRUCTURE, render_structure(defn), compute_digest(defn))
+
+
+# ── Draft editing (US5) ───────────────────────────────────────────────────────────────
+@router.post("/validate", response_model=PatternValidateResult, openapi_extra=_YAML_BODY)
+async def validate_draft(request: Request, session: Session) -> PatternValidateResult:
+    """Dry run: parse, validate and resolve without storing anything (FR-019)."""
+    return await pstore.validate_only(await _read_yaml_body(request), session)
+
+
+@router.put(
+    "/{key}/versions/{version}", response_model=PatternUpdateResult, openapi_extra=_YAML_BODY
+)
+async def update_draft(
+    key: str, version: str, request: Request, session: Session
+) -> PatternUpdateResult:
+    body = await _read_yaml_body(request)
+    actor = _get_actor(request)
+    try:
+        result, digest_before = await pstore.update_draft(key, version, body, actor, session)
+    except PatternRegistryError as exc:
+        await session.rollback()
+        raise _registry_http_error(exc) from exc
+    await session.commit()
+    logger.info(
+        "patterns.update key=%s version=%s digest_before=%s digest_after=%s actor=%s",
+        key,
+        version,
+        digest_before,
+        result.version.digest,
+        actor,
+    )
+    return result
+
+
+@router.delete("/{key}/versions/{version}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_draft(key: str, version: str, request: Request, session: Session) -> Response:
+    actor = _get_actor(request)
+    try:
+        digest = (await pstore.get_version_detail(key, version, session)).digest
+        family_deleted = await pstore.delete_draft(key, version, session)
+    except PatternRegistryError as exc:
+        await session.rollback()
+        raise _registry_http_error(exc) from exc
+    await session.commit()
+    logger.info(
+        "patterns.delete key=%s version=%s digest=%s family_deleted=%s actor=%s",
+        key,
+        version,
+        digest,
+        family_deleted,
+        actor,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

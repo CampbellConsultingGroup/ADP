@@ -41,14 +41,18 @@ from adp.patterns.registry_models import (
     ConcurrentPromotionError,
     IllegalTransitionError,
     ImportStatus,
+    InvalidPatternUpdateError,
     LifecycleEvent,
     LifecycleTransitionRequest,
+    NotDraftError,
     PatternFamily,
     PatternImportResult,
     PatternLifecycle,
     PatternListResponse,
     PatternNotFoundError,
     PatternRelationRow,
+    PatternUpdateResult,
+    PatternValidateResult,
     PatternVersionDetail,
     PatternVersionNotFoundError,
     PatternVersionSummary,
@@ -774,3 +778,87 @@ async def traceability_inputs(
         trace(refs.controls, controls),
         trace(refs.applications, apps),
     )
+
+
+# ── Draft editing (US5, FR-008) ──────────────────────────────────────────────────────────
+async def update_draft(
+    key: str,
+    version: str,
+    text: str | bytes,
+    actor: str,
+    session: AsyncSession,
+    *,
+    engine: CelEngine | None = None,
+) -> tuple[PatternUpdateResult, str]:
+    """Replace a draft's definition (same key, version and kind). Returns the result and the
+    digest before the change (for the audit log line)."""
+    row = await _version_row(key, version, session)
+    if row.lifecycle != PatternLifecycle.DRAFT.value:
+        raise NotDraftError(key, version, row.lifecycle)
+    parsed = parse_pattern_yaml(text, engine)
+    if not parsed.ok or parsed.definition is None:
+        raise InvalidPatternUpdateError(list(parsed.issues))
+    defn = parsed.definition
+    if defn.pattern != key or defn.version != version:
+        raise InvalidPatternUpdateError(
+            [
+                _issue(
+                    "U1.identity_changed",
+                    f"a draft is edited in place: the document must stay {key}@{version} "
+                    f"(got {defn.pattern}@{defn.version}); import a new version instead",
+                )
+            ]
+        )
+    if defn.kind.value != row.kind:
+        raise InvalidPatternUpdateError(
+            [_issue("I3.kind_mismatch", f"family '{key}' is {row.kind}; kind cannot change")]
+        )
+    await session.execute(
+        _versions.update()
+        .where(_versions.c.id == row.id)
+        .values(
+            name=defn.name,
+            summary=defn.summary,
+            definition=definition_to_db(defn),
+            digest=compute_digest(defn),
+        )
+    )
+    await _replace_relations(row.id, defn, session)
+    warnings = resolve_references(defn, await load_lookups(defn, session), blocking=False)
+    updated = await _version_row(key, version, session)
+    return PatternUpdateResult(version=_summary(updated), issues=warnings), str(row.digest)
+
+
+async def delete_draft(key: str, version: str, session: AsyncSession) -> bool:
+    """Delete a draft version; returns True when that was the family's last version (the family
+    is deleted too). Child rows are removed explicitly so SQLite behaves like Postgres."""
+    row = await _version_row(key, version, session)
+    if row.lifecycle != PatternLifecycle.DRAFT.value:
+        raise NotDraftError(key, version, row.lifecycle)
+    await session.execute(_relations.delete().where(_relations.c.source_version_id == row.id))
+    await session.execute(_events.delete().where(_events.c.version_id == row.id))
+    await session.execute(_versions.delete().where(_versions.c.id == row.id))
+    remaining = (
+        await session.execute(
+            sa.select(sa.func.count()).select_from(_versions).where(_versions.c.pattern_key == key)
+        )
+    ).scalar_one()
+    if remaining == 0:
+        await session.execute(_patterns.delete().where(_patterns.c.pattern_key == key))
+        return True
+    return False
+
+
+async def validate_only(
+    text: str | bytes, session: AsyncSession, *, engine: CelEngine | None = None
+) -> PatternValidateResult:
+    """Dry run (FR-019): parse, validate and resolve without storing anything."""
+    parsed = parse_pattern_yaml(text, engine)
+    issues = list(parsed.issues)
+    digest = None
+    if parsed.definition is not None:
+        digest = compute_digest(parsed.definition)
+        issues += resolve_references(
+            parsed.definition, await load_lookups(parsed.definition, session), blocking=False
+        )
+    return PatternValidateResult(ok=parsed.ok, digest=digest, issues=issues)

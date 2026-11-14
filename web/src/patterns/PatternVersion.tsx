@@ -2,7 +2,7 @@
  * and the lifecycle / draft actions the caller is allowed to take. */
 
 import React, { useState } from "react";
-import { usePatternFamily, usePatternVersion, usePatternYaml, yamlDownloadUrl } from "../api/patterns";
+import { errorDetail, useDeleteDraft, usePatternFamily, usePatternVersion, usePatternYaml, yamlDownloadUrl } from "../api/patterns";
 import type { PatternVersionDetail } from "../api/patterns";
 import { StatusBadge } from "../ui";
 import History from "./History";
@@ -10,6 +10,8 @@ import IssueList from "./IssueList";
 import { KIND_LABELS, LIFECYCLE_LABELS, LIFECYCLE_TONES } from "./labels";
 import LifecycleDialog from "./LifecycleDialog";
 import PatternViews from "./PatternViews";
+import { useCanManagePatterns } from "./permissions";
+import YamlEditor from "./YamlEditor";
 
 type Tab = "overview" | "yaml" | "views" | "history";
 
@@ -88,8 +90,16 @@ function Overview({ detail }: { detail: PatternVersionDetail }) {
   );
 }
 
-function YamlTab({ patternKey, version }: { patternKey: string; version: string }) {
+/** Bump the minor version in a canonical YAML document (prefill for "New version"). */
+export function bumpMinor(yaml: string): string {
+  return yaml.replace(/^version: (\d+)\.(\d+)\.(\d+)$/m, (_m, major: string, minor: string) => `version: ${major}.${Number(minor) + 1}.0`);
+}
+
+function YamlTab({ patternKey, version, editable }: { patternKey: string; version: string; editable: boolean }) {
   const { data, isLoading } = usePatternYaml(patternKey, version);
+  if (editable && !isLoading && data !== undefined) {
+    return <YamlEditor key={`${patternKey}@${version}`} patternKey={patternKey} version={version} initialYaml={data} />;
+  }
   return (
     <div>
       <a className="ui-btn ui-btn-sm" href={yamlDownloadUrl(patternKey, version)} download={`${patternKey}@${version}.yaml`}>
@@ -107,6 +117,7 @@ export default function PatternVersion({
   version,
   onBack,
   onSelectVersion,
+  onNewVersion,
 }: {
   patternKey: string;
   version: string;
@@ -117,6 +128,10 @@ export default function PatternVersion({
   const [tab, setTab] = useState<Tab>("overview");
   const { data: detail, isLoading, error } = usePatternVersion(patternKey, version);
   const { data: family } = usePatternFamily(patternKey);
+  const { data: yaml } = usePatternYaml(patternKey, version);
+  const canManage = useCanManagePatterns();
+  const deleteDraft = useDeleteDraft(patternKey, version);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   if (isLoading) return <div style={{ padding: 20, fontSize: 13 }}>Loading…</div>;
   if (error || !detail) return <div style={{ padding: 20 }} role="alert">Pattern version not found.</div>;
@@ -137,6 +152,32 @@ export default function PatternVersion({
         <span style={{ fontSize: 12, color: "var(--ink-3)", fontFamily: "var(--mono, monospace)" }}>{detail.pattern_key}@{detail.version}</span>
         <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{KIND_LABELS[detail.kind]}</span>
       </div>
+      {canManage && (
+        <div style={{ display: "flex", gap: 6 }}>
+          <button type="button" className="ui-btn ui-btn-sm" disabled={!yaml} onClick={() => yaml && onNewVersion(bumpMinor(yaml))}>
+            New version
+          </button>
+          {detail.lifecycle === "draft" && (
+            <button
+              type="button"
+              className="ui-btn ui-btn-danger ui-btn-sm"
+              onClick={async () => {
+                if (!window.confirm(`Delete draft ${detail.pattern_key}@${detail.version}?`)) return;
+                setDeleteError(null);
+                try {
+                  await deleteDraft.mutateAsync();
+                  onBack();
+                } catch (err) {
+                  setDeleteError(errorDetail(err));
+                }
+              }}
+            >
+              Delete draft
+            </button>
+          )}
+        </div>
+      )}
+      {deleteError && <div className="ui-alert crit" role="alert">{deleteError}</div>}
       <LifecycleDialog detail={detail} />
       {family && family.versions.length > 1 && (
         <div aria-label="Versions" style={{ display: "flex", gap: 6, flexWrap: "wrap", fontSize: 12 }}>
@@ -167,7 +208,7 @@ export default function PatternVersion({
         ))}
       </div>
       {tab === "overview" && <Overview detail={detail} />}
-      {tab === "yaml" && <YamlTab patternKey={patternKey} version={version} />}
+      {tab === "yaml" && <YamlTab patternKey={patternKey} version={version} editable={canManage && detail.lifecycle === "draft"} />}
       {tab === "views" && <PatternViews patternKey={patternKey} version={version} />}
       {tab === "history" && <History events={detail.history} />}
     </div>
