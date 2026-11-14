@@ -115,6 +115,8 @@ Auto-generated from all feature plans. Last updated: 2026-11-14 (934-pattern-met
 - PostgreSQL 16. Migration `043` (`down_revision="042"`) adds two new tables and re-creates one CHECK constraint on `applications`. (933-agent-registry)
 - Python 3.12 runtime, 3.11+ compatible. + Pydantic v2 and `pyyaml>=6.0` (both existing). **One new runtime dependency:** `cel-expr-python==0.1.4`, pinned exactly (research D1). It ships cp311/cp312 manylinux_2_28 wheels and has no transitive dependencies. (934-pattern-metamodel)
 
+- Python 3.12 (3.11+ compatible) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; extends `adp.patterns` with registry/lifecycle/projection/render modules, writes managed rows into the existing `knowledge_items` (pgvector embedding via `adp.knowledge.embedder`), migration `044` (4 tables: ea_pattern, ea_pattern_version, ea_pattern_relation, ea_pattern_lifecycle_event) (935-pattern-registry)
+
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
 ## Project Structure
@@ -158,6 +160,7 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 935-pattern-registry: Planned (ADP-mmm.2) -- see `specs/935-pattern-registry/`.
 - 934-pattern-metamodel: Implemented (ADP-mmm.1, spec 1 of 4 in epic ADP-mmm "EA Patterns-as-Code", source
   `docs/PATTERN-01-metamodel-and-yaml.md` + the review addendum in `docs/PATTERN-00-bundle-overview.md`).
   New pure-library package `adp.patterns` (no DB/API/UI -- spec 935 adds the registry and first UI):
