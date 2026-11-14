@@ -21,9 +21,11 @@ from adp.models import SCHEMA_VERSION, ArchitectureDescription
 
 _SCHEMA_PATH = Path("generated/architecture-description.schema.json")
 _THEME_SCHEMA_PATH = Path("src/adp/theme/c4-theme.schema.json")
+_PATTERN_SCHEMA_PATH = Path("generated/pattern.schema.json")
 
 _SCHEMA_ID = "https://adp.example.org/schemas/architecture-description.schema.json"
 _THEME_SCHEMA_ID = "https://adp.example.org/schemas/c4-theme.schema.json"
+_PATTERN_SCHEMA_ID = "https://adp.example.org/schemas/pattern.schema.json"
 
 
 def generate() -> str:
@@ -48,6 +50,21 @@ def generate_theme_schema() -> str:
     schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
     schema["$id"] = _THEME_SCHEMA_ID
     schema["title"] = "ADP Locked C4 Theme"
+    return json.dumps(schema, sort_keys=True, indent=2) + "\n"
+
+
+def generate_pattern_schema() -> str:
+    """Return the EA pattern JSON Schema as a sorted, deterministic string.
+
+    Generated from PatternDefinition.model_json_schema() — spec 934 FR-016.
+    Never edit generated/pattern.schema.json by hand; run adp-generate to regenerate.
+    """
+    from adp.patterns.models import PatternDefinition
+
+    schema = PatternDefinition.model_json_schema()
+    schema["$schema"] = "https://json-schema.org/draft/2020-12/schema"
+    schema["$id"] = _PATTERN_SCHEMA_ID
+    schema["title"] = "ADP EA Pattern"
     return json.dumps(schema, sort_keys=True, indent=2) + "\n"
 
 
@@ -80,13 +97,14 @@ def _check_one(fresh: str, committed_path: Path, label: str) -> bool:
 def check(committed_path: Path = _SCHEMA_PATH) -> None:
     """Fail with a diff if any committed schema diverges from generated output.
 
-    Checks both the architecture description schema and the locked theme schema.
+    Checks the architecture description, locked theme and EA pattern schemas.
     Raises FileNotFoundError with a clear message if a committed file is absent.
     Calls sys.exit(1) on drift.
     """
     ok = True
     ok = _check_one(generate(), committed_path, "architecture-description") and ok
     ok = _check_one(generate_theme_schema(), _THEME_SCHEMA_PATH, "c4-theme") and ok
+    ok = _check_one(generate_pattern_schema(), _PATTERN_SCHEMA_PATH, "ea-pattern") and ok
     if not ok:
         sys.exit(1)
 
@@ -139,6 +157,7 @@ def main() -> None:
         for path, content, label in [
             (_SCHEMA_PATH, generate(), "architecture-description schema"),
             (_THEME_SCHEMA_PATH, generate_theme_schema(), "c4-theme schema"),
+            (_PATTERN_SCHEMA_PATH, generate_pattern_schema(), "ea-pattern schema"),
         ]:
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)

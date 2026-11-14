@@ -1,0 +1,685 @@
+{
+  "$defs": {
+    "Cardinality": {
+      "additionalProperties": false,
+      "properties": {
+        "max": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "None means unbounded",
+          "title": "Max"
+        },
+        "min": {
+          "minimum": 0,
+          "title": "Min",
+          "type": "integer"
+        },
+        "per": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Per"
+        }
+      },
+      "required": [
+        "min"
+      ],
+      "title": "Cardinality",
+      "type": "object"
+    },
+    "Constraint": {
+      "additionalProperties": false,
+      "properties": {
+        "expr": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Expr",
+          "type": "string"
+        },
+        "for_each": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "For Each"
+        },
+        "id": {
+          "pattern": "^C[0-9]{1,3}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "polarity": {
+          "$ref": "#/$defs/Polarity",
+          "default": "require"
+        },
+        "render_hint": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RenderHint"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rule": {
+          "maxLength": 280,
+          "minLength": 1,
+          "title": "Rule",
+          "type": "string"
+        },
+        "severity": {
+          "$ref": "#/$defs/Severity",
+          "default": "error"
+        }
+      },
+      "required": [
+        "id",
+        "rule",
+        "expr"
+      ],
+      "title": "Constraint",
+      "type": "object"
+    },
+    "ElementType": {
+      "description": "Each maps to an existing ADP registry entity (spec GT-1/GT-2).",
+      "enum": [
+        "business_capability",
+        "value_stream",
+        "business_domain",
+        "application",
+        "integration",
+        "technical_capability",
+        "agent"
+      ],
+      "title": "ElementType",
+      "type": "string"
+    },
+    "Motivation": {
+      "additionalProperties": false,
+      "properties": {
+        "benefits": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Benefits",
+          "type": "array"
+        },
+        "context": {
+          "title": "Context",
+          "type": "string"
+        },
+        "controls": {
+          "description": "Compliance control ids (resolved in 935)",
+          "items": {
+            "type": "string"
+          },
+          "title": "Controls",
+          "type": "array"
+        },
+        "forces": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Forces",
+          "type": "array"
+        },
+        "liabilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Liabilities",
+          "type": "array"
+        },
+        "principles": {
+          "description": "Knowledge-base principle ids (resolved in 935)",
+          "items": {
+            "type": "string"
+          },
+          "title": "Principles",
+          "type": "array"
+        },
+        "problem": {
+          "title": "Problem",
+          "type": "string"
+        }
+      },
+      "required": [
+        "context",
+        "problem"
+      ],
+      "title": "Motivation",
+      "type": "object"
+    },
+    "OwnerRole": {
+      "enum": [
+        "business",
+        "enterprise",
+        "solution",
+        "technical",
+        "security",
+        "infrastructure",
+        "identity"
+      ],
+      "title": "OwnerRole",
+      "type": "string"
+    },
+    "PatternKind": {
+      "enum": [
+        "reference-architecture",
+        "portfolio-rule",
+        "transition",
+        "anti-pattern"
+      ],
+      "title": "PatternKind",
+      "type": "string"
+    },
+    "PatternRelation": {
+      "additionalProperties": false,
+      "properties": {
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "target": {
+          "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*){1,4}$",
+          "title": "Target",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/PatternRelationType"
+        }
+      },
+      "required": [
+        "type",
+        "target"
+      ],
+      "title": "PatternRelation",
+      "type": "object"
+    },
+    "PatternRelationType": {
+      "enum": [
+        "realizes",
+        "specializes",
+        "replaces",
+        "conflicts_with",
+        "requires",
+        "alternative_to"
+      ],
+      "title": "PatternRelationType",
+      "type": "string"
+    },
+    "Plateau": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "exit_criteria": {
+          "items": {
+            "pattern": "^C[0-9]{1,3}$",
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Exit Criteria",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^PL[0-9]{1,2}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "exit_criteria"
+      ],
+      "title": "Plateau",
+      "type": "object"
+    },
+    "Polarity": {
+      "enum": [
+        "require",
+        "detect"
+      ],
+      "title": "Polarity",
+      "type": "string"
+    },
+    "RelationshipType": {
+      "description": "``owns`` is deliberately absent: no registry evidence exists for it (spec GT-3).",
+      "enum": [
+        "publishes",
+        "consumes",
+        "delivers",
+        "serves",
+        "realizes",
+        "depends_on",
+        "integrates_with"
+      ],
+      "title": "RelationshipType",
+      "type": "string"
+    },
+    "RenderHint": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/RenderHintKind"
+        },
+        "label": {
+          "maxLength": 60,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "target": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target"
+        }
+      },
+      "required": [
+        "kind",
+        "label"
+      ],
+      "title": "RenderHint",
+      "type": "object"
+    },
+    "RenderHintKind": {
+      "enum": [
+        "prohibited_edge",
+        "required_edge",
+        "note"
+      ],
+      "title": "RenderHintKind",
+      "type": "string"
+    },
+    "Role": {
+      "additionalProperties": false,
+      "properties": {
+        "cardinality": {
+          "anyOf": [
+            {
+              "pattern": "^\\s*\\d+(\\.\\.(\\d+|\\*))?(\\s+per\\s+[a-z][a-z0-9_]{0,39})?\\s*$",
+              "type": "string"
+            },
+            {
+              "type": "integer"
+            },
+            {
+              "$ref": "#/$defs/Cardinality"
+            }
+          ]
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Description"
+        },
+        "element_type": {
+          "$ref": "#/$defs/ElementType"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 60,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "selector": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Selector"
+        },
+        "stereotype": {
+          "anyOf": [
+            {
+              "maxLength": 30,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stereotype"
+        }
+      },
+      "required": [
+        "element_type",
+        "cardinality"
+      ],
+      "title": "Role",
+      "type": "object"
+    },
+    "RoleRelationship": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "pattern": "^R[0-9]{1,3}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 60,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "source": {
+          "pattern": "^[a-z][a-z0-9_]{0,39}$",
+          "title": "Source",
+          "type": "string"
+        },
+        "target": {
+          "pattern": "^[a-z][a-z0-9_]{0,39}$",
+          "title": "Target",
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/$defs/RelationshipType"
+        },
+        "via": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z][a-z0-9_]{0,39}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Via"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "target",
+        "type"
+      ],
+      "title": "RoleRelationship",
+      "type": "object"
+    },
+    "Severity": {
+      "enum": [
+        "error",
+        "warning",
+        "info"
+      ],
+      "title": "Severity",
+      "type": "string"
+    },
+    "Transition": {
+      "additionalProperties": false,
+      "properties": {
+        "from_pattern": {
+          "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*){1,4}$",
+          "title": "From Pattern",
+          "type": "string"
+        },
+        "plateaus": {
+          "items": {
+            "$ref": "#/$defs/Plateau"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Plateaus",
+          "type": "array"
+        },
+        "strategy": {
+          "$ref": "#/$defs/TransitionStrategy"
+        }
+      },
+      "required": [
+        "from_pattern",
+        "strategy",
+        "plateaus"
+      ],
+      "title": "Transition",
+      "type": "object"
+    },
+    "TransitionStrategy": {
+      "enum": [
+        "strangler",
+        "phased-coexistence",
+        "parallel-run",
+        "big-bang"
+      ],
+      "title": "TransitionStrategy",
+      "type": "string"
+    },
+    "ViewKind": {
+      "enum": [
+        "structure",
+        "conformance",
+        "transition",
+        "catalog",
+        "traceability"
+      ],
+      "title": "ViewKind",
+      "type": "string"
+    }
+  },
+  "$id": "https://adp.example.org/schemas/pattern.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "One version of an EA pattern.\n\nThere is no ``lifecycle`` field: that is registry state (GT-4).",
+  "properties": {
+    "constraints": {
+      "items": {
+        "$ref": "#/$defs/Constraint"
+      },
+      "title": "Constraints",
+      "type": "array"
+    },
+    "kind": {
+      "$ref": "#/$defs/PatternKind"
+    },
+    "known_implementations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Known Implementations",
+      "type": "array"
+    },
+    "motivation": {
+      "$ref": "#/$defs/Motivation"
+    },
+    "name": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    },
+    "owner_role": {
+      "$ref": "#/$defs/OwnerRole"
+    },
+    "pattern": {
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*){1,4}$",
+      "title": "Pattern",
+      "type": "string"
+    },
+    "relations": {
+      "items": {
+        "$ref": "#/$defs/PatternRelation"
+      },
+      "title": "Relations",
+      "type": "array"
+    },
+    "relationships": {
+      "items": {
+        "$ref": "#/$defs/RoleRelationship"
+      },
+      "title": "Relationships",
+      "type": "array"
+    },
+    "roles": {
+      "description": "Declared order is semantic",
+      "maxProperties": 25,
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z][a-z0-9_]{0,39}$": {
+          "$ref": "#/$defs/Role"
+        }
+      },
+      "title": "Roles",
+      "type": "object"
+    },
+    "summary": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "tags": {
+      "items": {
+        "maxLength": 40,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Tags",
+      "type": "array"
+    },
+    "transition": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Transition"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "version": {
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)$",
+      "title": "Version",
+      "type": "string"
+    },
+    "views": {
+      "items": {
+        "$ref": "#/$defs/ViewKind"
+      },
+      "title": "Views",
+      "type": "array"
+    }
+  },
+  "required": [
+    "pattern",
+    "version",
+    "kind",
+    "name",
+    "summary",
+    "owner_role",
+    "motivation",
+    "roles"
+  ],
+  "title": "ADP EA Pattern",
+  "type": "object"
+}

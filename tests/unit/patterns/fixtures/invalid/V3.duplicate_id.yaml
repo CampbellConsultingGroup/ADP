@@ -1,0 +1,14 @@
+# expect: V3.duplicate_id constraints[1].id
+pattern: ea.test.invalid
+version: 1.0.0
+kind: portfolio-rule
+name: Invalid fixture
+summary: Exercises one validation rule.
+owner_role: enterprise
+motivation: {context: c, problem: p}
+roles:
+  app: {element_type: application, cardinality: "1..*"}
+  cap: {element_type: business_capability, cardinality: "0..*"}
+constraints:
+  - {id: C1, rule: r, expr: "true"}
+  - {id: C1, rule: r2, expr: "false"}

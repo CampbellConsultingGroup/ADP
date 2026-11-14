@@ -1,0 +1,15 @@
+# expect: V6.antipattern_replaces relations[0]
+pattern: ea.test.invalid
+version: 1.0.0
+kind: anti-pattern
+name: Invalid fixture
+summary: Exercises one validation rule.
+owner_role: enterprise
+motivation: {context: c, problem: p}
+roles:
+  app: {element_type: application, cardinality: "1..*"}
+  cap: {element_type: business_capability, cardinality: "0..*"}
+constraints:
+  - {id: C1, rule: r, expr: "true", polarity: detect}
+relations:
+  - {type: replaces, target: ea.test.other}

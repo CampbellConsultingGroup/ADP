@@ -1,0 +1,18 @@
+# expect: V4.unknown_criterion transition.plateaus[0].exit_criteria
+pattern: ea.test.invalid
+version: 1.0.0
+kind: transition
+name: Invalid fixture
+summary: Exercises one validation rule.
+owner_role: enterprise
+motivation: {context: c, problem: p}
+roles:
+  app: {element_type: application, cardinality: "1..*"}
+  cap: {element_type: business_capability, cardinality: "0..*"}
+constraints:
+  - {id: C1, rule: r, expr: "true"}
+transition:
+  from_pattern: ea.test.old
+  strategy: strangler
+  plateaus:
+    - {id: PL1, name: one, exit_criteria: [C9]}

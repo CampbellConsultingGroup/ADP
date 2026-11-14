@@ -37,6 +37,7 @@ dependencies = [
     "prometheus-client>=0.17",
     # ── Utilities ─────────────────────────────────────────────────────────────
     "pyyaml>=6.0",
+    "cel-expr-python==0.1.4",  # CEL for EA pattern constraints (934, research D1)
     # ── Authentication (ADP-SPEC-026) ─────────────────────────────────────────
     "python-jose[cryptography]>=3.3",
     "httpx>=0.27",
