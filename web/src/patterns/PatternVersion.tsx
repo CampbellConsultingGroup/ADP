@@ -9,8 +9,9 @@ import History from "./History";
 import IssueList from "./IssueList";
 import { KIND_LABELS, LIFECYCLE_LABELS, LIFECYCLE_TONES } from "./labels";
 import LifecycleDialog from "./LifecycleDialog";
+import PatternViews from "./PatternViews";
 
-type Tab = "overview" | "yaml" | "history";
+type Tab = "overview" | "yaml" | "views" | "history";
 
 const h4: React.CSSProperties = { margin: "14px 0 6px", fontSize: 13 };
 const cell: React.CSSProperties = { padding: "5px 8px", borderBottom: "1px solid var(--border)", fontSize: 12, textAlign: "left", verticalAlign: "top" };
@@ -123,6 +124,7 @@ export default function PatternVersion({
   const tabs: { id: Tab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "yaml", label: "YAML" },
+    { id: "views", label: "Views" },
     { id: "history", label: `History (${detail.history.length})` },
   ];
 
@@ -166,6 +168,7 @@ export default function PatternVersion({
       </div>
       {tab === "overview" && <Overview detail={detail} />}
       {tab === "yaml" && <YamlTab patternKey={patternKey} version={version} />}
+      {tab === "views" && <PatternViews patternKey={patternKey} version={version} />}
       {tab === "history" && <History events={detail.history} />}
     </div>
   );

@@ -1,0 +1,8 @@
+%% adp-pattern ea.integration.mesh-to-backbone@1.0.0 view=structure digest=9b09679ce33b
+flowchart LR
+    r_backbone([«platform» Backbone · 1])
+    r_cross_domain_integration[Cross Domain Integration · 0..*]
+    classDef role fill:#85BBE0,stroke:#78A8CC
+    classDef mediator fill:#FFFFFF,stroke:#1168BD,stroke-width:2px
+    class r_cross_domain_integration role
+    class r_backbone mediator

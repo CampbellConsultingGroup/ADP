@@ -1,0 +1,7 @@
+%% adp-pattern ea.integration.point-to-point-mesh@1.0.0 view=structure digest=aacbece19380
+flowchart LR
+    r_app[App · 0..*]
+    r_direct_integration[Direct Integration · 0..*]
+    r_app -. integrates_with .-> r_app
+    classDef role fill:#85BBE0,stroke:#78A8CC
+    class r_app,r_direct_integration role

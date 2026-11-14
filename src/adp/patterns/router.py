@@ -21,7 +21,8 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from typing import Annotated, Any
+from datetime import datetime, timezone
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import JSONResponse
@@ -29,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.patterns import store as pstore
 from adp.patterns.models import PatternKind
+from adp.patterns.parse import compute_digest, parse_pattern_yaml
 from adp.patterns.projection import build_projection
 from adp.patterns.registry_models import (
     MAX_YAML_BYTES,
@@ -45,9 +47,19 @@ from adp.patterns.registry_models import (
     PatternNotFoundError,
     PatternRegistryError,
     PatternRelationRow,
+    PatternRenderRequest,
     PatternVersionDetail,
     PatternVersionNotFoundError,
+    PatternViewKind,
+    PatternViewResponse,
     PromotionBlockedError,
+)
+from adp.patterns.render import (
+    RenderedView,
+    RenderOptions,
+    render_catalog,
+    render_structure,
+    render_traceability,
 )
 
 logger = logging.getLogger(__name__)
@@ -236,3 +248,60 @@ async def transition_version(
         actor,
     )
     return detail
+
+
+# ── Views (US4, FR-017–FR-019) ────────────────────────────────────────────────────────
+def _view_response(
+    view: PatternViewKind, rendered: RenderedView, digest: str
+) -> PatternViewResponse:
+    return PatternViewResponse(
+        view=view,
+        flowchart=rendered.text,
+        digest=digest,
+        generated_at=datetime.now(timezone.utc),
+        truncated=rendered.truncated,
+    )
+
+
+@router.get("/{key}/versions/{version}/views/{view}", response_model=PatternViewResponse)
+async def get_view(
+    key: str,
+    version: str,
+    view: PatternViewKind,
+    session: Session,
+    depth: Annotated[int, Query(ge=1, le=3)] = 1,
+    direction: Literal["LR", "TB"] = "LR",
+    legend: bool = False,
+) -> PatternViewResponse:
+    opts = RenderOptions(direction=direction, include_legend=legend)
+    try:
+        if view == PatternViewKind.CATALOG:
+            focus, digest, nodes, edges = await pstore.catalog_inputs(key, version, session)
+            return _view_response(
+                view, render_catalog(focus, digest, nodes, edges, depth, opts), digest
+            )
+        defn = await pstore.get_definition(key, version, session)
+    except PatternRegistryError as exc:
+        raise _registry_http_error(exc) from exc
+    digest = compute_digest(defn)
+    if view == PatternViewKind.STRUCTURE:
+        return _view_response(view, render_structure(defn, opts), digest)
+    principles, controls, apps = await pstore.traceability_inputs(defn, session)
+    rendered = render_traceability(defn, digest, principles, controls, apps, opts)
+    return _view_response(view, rendered, digest)
+
+
+@router.post("/render", response_model=PatternViewResponse)
+async def render_draft(body: PatternRenderRequest) -> PatternViewResponse:
+    """Dry run: the structure view of unsaved YAML. Nothing is stored (FR-019)."""
+    parsed = parse_pattern_yaml(body.yaml)
+    if not parsed.ok or parsed.definition is None:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "the YAML is not a valid pattern",
+                "issues": [i.model_dump(mode="json") for i in parsed.issues],
+            },
+        )
+    defn = parsed.definition
+    return _view_response(PatternViewKind.STRUCTURE, render_structure(defn), compute_digest(defn))

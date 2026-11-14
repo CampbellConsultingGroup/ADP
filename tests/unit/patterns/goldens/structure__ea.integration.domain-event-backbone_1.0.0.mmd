@@ -1,0 +1,12 @@
+%% adp-pattern ea.integration.domain-event-backbone@1.0.0 view=structure digest=f69fdbeb4014
+flowchart LR
+    r_backbone([«platform» Backbone · 1])
+    r_domain_app[Domain App · 2..*]
+    r_cross_domain_integration[Cross Domain Integration · 0..*]
+    r_domain_app -- publishes --> r_backbone
+    r_backbone -- delivers --> r_domain_app
+    r_domain_app -. ✕ no direct cross-domain .-> r_domain_app
+    classDef role fill:#85BBE0,stroke:#78A8CC
+    classDef mediator fill:#FFFFFF,stroke:#1168BD,stroke-width:2px
+    class r_domain_app,r_cross_domain_integration role
+    class r_backbone mediator

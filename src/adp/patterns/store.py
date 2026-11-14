@@ -54,6 +54,7 @@ from adp.patterns.registry_models import (
     PatternVersionSummary,
     PromotionBlockedError,
 )
+from adp.patterns.render import CatalogEdge, CatalogNode, TraceRef
 from adp.patterns.resolve import ReferenceLookups, referenced_ids, resolve_references
 
 EMBEDDING_DIM = 384
@@ -121,9 +122,18 @@ _events = sa.Table(
 
 # ── Narrow read-only mirrors (research.md D1) ──────────────────────────────────────────
 _applications_mirror = sa.Table(
-    "applications", _metadata, sa.Column("id", sa.String(36), primary_key=True)
+    "applications",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.String(255)),
 )
-_controls_mirror = sa.Table("controls", _metadata, sa.Column("id", sa.String(36), primary_key=True))
+_controls_mirror = sa.Table(
+    "controls",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("code", sa.String(100)),
+    sa.Column("title", sa.String(255)),
+)
 # Full-column mirror: the registry writes its knowledge projection rows (research.md D6).
 _knowledge_items = sa.Table(
     "knowledge_items",
@@ -160,6 +170,10 @@ def _get_session_factory() -> async_sessionmaker:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _semver_desc(version: str) -> tuple[int, ...]:
+    return tuple(-p for p in semver_key(version))
 
 
 def semver_key(version: str) -> tuple[int, ...]:
@@ -670,3 +684,93 @@ async def transition(
         raise ConcurrentPromotionError(key) from exc
     await _sync_projection(key, session, embedding)
     return await get_version_detail(key, version, session)
+
+
+# ── View inputs (US4, research.md D10) ───────────────────────────────────────────────────
+_REPRESENTATIVE_ORDER = {
+    PatternLifecycle.CURRENT.value: 0,
+    PatternLifecycle.PROPOSED.value: 1,
+    PatternLifecycle.DRAFT.value: 2,
+    PatternLifecycle.DEPRECATED.value: 3,
+    PatternLifecycle.DECOMMISSIONED.value: 4,
+}
+
+
+def _representative(rows: list[Any]) -> Any:
+    """Current, else the latest proposed, else the latest draft (else the latest of any state)."""
+    return sorted(
+        rows,
+        key=lambda r: (
+            _REPRESENTATIVE_ORDER[r.lifecycle],
+            tuple(-p for p in semver_key(r.version)),
+        ),
+    )[0]
+
+
+async def catalog_inputs(
+    key: str, version: str, session: AsyncSession
+) -> tuple[CatalogNode, str, list[CatalogNode], list[CatalogEdge]]:
+    """The focus version plus one representative version per family and their relations.
+
+    The focus family contributes the *requested* version's relations; every other family
+    contributes its representative version's relations.
+    """
+    focus_row = await _version_row(key, version, session)
+    rows = list((await session.execute(_version_select())).all())
+    by_family: dict[str, list[Any]] = {}
+    for r in rows:
+        by_family.setdefault(r.pattern_key, []).append(r)
+    chosen = {k: _representative(v) for k, v in by_family.items()}
+    chosen[key] = focus_row
+
+    def node(r: Any) -> CatalogNode:
+        return CatalogNode(r.pattern_key, r.name, r.version, r.lifecycle, r.kind)
+
+    source_ids = {r.id: k for k, r in chosen.items()}
+    rel_rows = (
+        await session.execute(
+            sa.select(_relations).where(_relations.c.source_version_id.in_(list(source_ids)))
+        )
+    ).all()
+    edges = [
+        CatalogEdge(source_ids[r.source_version_id], r.target_pattern_key, r.relation_type)
+        for r in rel_rows
+    ]
+    return node(focus_row), focus_row.digest, [node(r) for r in chosen.values()], edges
+
+
+async def traceability_inputs(
+    defn: PatternDefinition, session: AsyncSession
+) -> tuple[list[TraceRef], list[TraceRef], list[TraceRef]]:
+    """Labels for the definition's principles, controls and known implementations; unresolved
+    ones are returned with ``resolved=False`` (shown, never dropped)."""
+    refs = referenced_ids(defn)
+
+    async def labels(
+        table_col: Any, label_expr: Any, ids: list[str], *where: Any
+    ) -> dict[str, str]:
+        if not ids:
+            return {}
+        result = await session.execute(
+            sa.select(table_col, label_expr).where(table_col.in_(set(ids)), *where)
+        )
+        return {row[0]: str(row[1] or row[0]) for row in result}
+
+    k = _knowledge_items
+    principles = await labels(
+        k.c.id, k.c.title, refs.principles, k.c.kind == "principle", k.c.active.is_(True)
+    )
+    c = _controls_mirror
+    control_label = sa.func.coalesce(c.c.code, "") + " " + sa.func.coalesce(c.c.title, "")
+    controls = await labels(c.c.id, control_label, refs.controls)
+    a = _applications_mirror
+    apps = await labels(a.c.id, a.c.name, refs.applications)
+
+    def trace(ids: list[str], found: dict[str, str]) -> list[TraceRef]:
+        return [TraceRef(i, found.get(i, i).strip() or i, i in found) for i in ids]
+
+    return (
+        trace(refs.principles, principles),
+        trace(refs.controls, controls),
+        trace(refs.applications, apps),
+    )

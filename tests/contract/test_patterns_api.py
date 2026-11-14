@@ -257,3 +257,59 @@ async def test_lifecycle_forbidden_for_non_ea(app_and_client, role) -> None:
 async def test_lifecycle_unknown_version_is_404(client) -> None:
     await _import(client)
     assert (await _transition(client, "9.9.9", "proposed")).status_code == 404
+
+
+# ── US4: views ────────────────────────────────────────────────────────────────────
+async def test_structure_view(client) -> None:
+    await _import(client)
+    resp = await client.get(f"{API}/{KEY}/versions/1.0.0/views/structure")
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["view"] == "structure"
+    assert body["flowchart"].startswith(f"%% adp-pattern {KEY}@1.0.0 view=structure digest=")
+    assert body["digest"] == (await client.get(f"{API}/{KEY}/versions/1.0.0")).json()["digest"]
+    assert body["truncated"] == []
+    tb = await client.get(f"{API}/{KEY}/versions/1.0.0/views/structure", params={"direction": "TB"})
+    assert tb.json()["flowchart"].splitlines()[1] == "flowchart TB"
+
+
+async def test_catalog_view_depth(client) -> None:
+    await _import(client)
+    await _import(client, MESH)
+    one = await client.get(f"{API}/{KEY}/versions/1.0.0/views/catalog", params={"depth": 1})
+    assert one.status_code == 200
+    text = one.json()["flowchart"]
+    assert "Point-to-Point Mesh · 1.0.0" in text
+    assert "ea.data.one-sor-per-capability · not in registry" in text
+    bad = await client.get(f"{API}/{KEY}/versions/1.0.0/views/catalog", params={"depth": 4})
+    assert bad.status_code == 422
+
+
+async def test_traceability_view_marks_unresolved(client) -> None:
+    await _import(client)
+    resp = await client.get(f"{API}/{KEY}/versions/1.0.0/views/traceability")
+    assert resp.status_code == 200
+    assert "P-API-FIRST · not found" in resp.json()["flowchart"]
+
+
+async def test_unknown_view_is_422_and_missing_version_404(client) -> None:
+    await _import(client)
+    assert (await client.get(f"{API}/{KEY}/versions/1.0.0/views/conformance")).status_code == 422
+    assert (await client.get(f"{API}/{KEY}/versions/9.9.9/views/structure")).status_code == 404
+
+
+async def test_dry_run_render_stores_nothing(client) -> None:
+    resp = await client.post(f"{API}/render", json={"yaml": BACKBONE, "view": "structure"})
+    assert resp.status_code == 200, resp.text
+    assert "r_backbone" in resp.json()["flowchart"]
+    assert (await client.get(API)).json()["total"] == 0
+    bad = await client.post(f"{API}/render", json={"yaml": INVALID, "view": "structure"})
+    assert bad.status_code == 422
+    assert bad.json()["detail"]["issues"][0]["code"].startswith("V2")
+
+
+async def test_dry_run_render_forbidden_for_reviewer(app_and_client) -> None:
+    app, client = app_and_client
+    _as_role(app, PersonaRole.REVIEWER)
+    resp = await client.post(f"{API}/render", json={"yaml": BACKBONE, "view": "structure"})
+    assert resp.status_code == 403
