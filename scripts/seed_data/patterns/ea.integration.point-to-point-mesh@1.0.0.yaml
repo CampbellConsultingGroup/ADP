@@ -1,0 +1,33 @@
+# Seed pattern (935-pattern-registry FR-023), derived from the 934 fixture of the same key.
+# Cites real seeded principles (scripts/seed_knowledge.py PRIN-*) so it can be promoted.
+pattern: ea.integration.point-to-point-mesh
+version: 1.0.0
+kind: anti-pattern
+name: Point-to-Point Mesh
+summary: Applications in different domains integrate directly with each other instead of through a shared platform.
+owner_role: enterprise
+tags: [integration]
+motivation:
+  context: Integrations grow one project at a time.
+  problem: Every new consumer adds a direct dependency; lineage and change impact become untraceable.
+  forces: [Delivery speed, Local optimisation]
+  liabilities: [Tight coupling, Unknown blast radius]
+  principles: [PRIN-004]
+roles:
+  app:
+    element_type: application
+    cardinality: "0..*"
+  direct_integration:
+    element_type: integration
+    cardinality: "0..*"
+    selector: "it.source.domain_ids.all(d, !(d in it.target.domain_ids))"
+relationships:
+  - { id: R1, source: app, target: app, type: integrates_with, required: false }
+constraints:
+  - id: C1
+    rule: A direct integration between applications in different domains.
+    for_each: direct_integration
+    expr: "true"
+    polarity: detect
+    severity: warning
+views: [structure, catalog]
