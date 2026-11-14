@@ -188,6 +188,16 @@ _EXPECTED: dict[tuple[PersonaRole, ActionType], bool] = {
     (PersonaRole.SOLUTION_ARCHITECT, ActionType.WRITE_COMPLIANCE): True,
     (PersonaRole.TECHNICAL_ARCHITECT, ActionType.WRITE_COMPLIANCE): True,
     (PersonaRole.REVIEWER, ActionType.WRITE_COMPLIANCE): False,
+    # write_pattern / govern_pattern (v1.11.0, 935-pattern-registry): Enterprise
+    # Architect only (Clarification Q1) -- via its wildcard; no other architect role.
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.WRITE_PATTERN): True,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.WRITE_PATTERN): False,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.WRITE_PATTERN): False,
+    (PersonaRole.REVIEWER, ActionType.WRITE_PATTERN): False,
+    (PersonaRole.ENTERPRISE_ARCHITECT, ActionType.GOVERN_PATTERN): True,
+    (PersonaRole.SOLUTION_ARCHITECT, ActionType.GOVERN_PATTERN): False,
+    (PersonaRole.TECHNICAL_ARCHITECT, ActionType.GOVERN_PATTERN): False,
+    (PersonaRole.REVIEWER, ActionType.GOVERN_PATTERN): False,
     # platform_admin (v1.7.0, ADP-SPEC-042): everything Enterprise Architect
     # has today, plus MANAGE_AGENT_PROMPTS -- least-surprise for existing
     # ADPAdministrator group members (research.md Decision 1).
@@ -215,6 +225,8 @@ _EXPECTED: dict[tuple[PersonaRole, ActionType], bool] = {
     (PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_DIAGRAM): True,
     (PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_COMPLIANCE): True,
     (PersonaRole.PLATFORM_ADMIN, ActionType.MANAGE_SCORING_RUBRICS): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.WRITE_PATTERN): True,
+    (PersonaRole.PLATFORM_ADMIN, ActionType.GOVERN_PATTERN): True,
 }
 
 
@@ -266,8 +278,8 @@ def test_require_action_logs_warning_on_denial(caplog: pytest.LogCaptureFixture)
 
 
 def test_permissions_version_constant() -> None:
-    """PERMISSIONS_VERSION exists and is 1.10.0 — any permission change must bump it."""
-    assert PERMISSIONS_VERSION == "1.10.0"
+    """PERMISSIONS_VERSION exists and is 1.11.0 — any permission change must bump it."""
+    assert PERMISSIONS_VERSION == "1.11.0"
 
 
 # ── US3: Per-action confirmation requirements ────────────────────────────────
@@ -306,6 +318,11 @@ _CONFIRMATION_EXPECTED: dict[ActionType, bool] = {
     # wide-effect change identical in kind to manage_agent_prompts -- same
     # confirmation_id gate.
     ActionType.MANAGE_SCORING_RUBRICS: True,
+    # write_pattern (v1.11.0, 935): an ordinary authoring write -- no gate.
+    ActionType.WRITE_PATTERN: False,
+    # govern_pattern (v1.11.0, 935 Clarification Q3): lifecycle transitions of a
+    # governed pattern (promotion rewrites the knowledge base agents cite).
+    ActionType.GOVERN_PATTERN: True,
 }
 
 

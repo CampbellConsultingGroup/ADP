@@ -39,27 +39,18 @@ async def _get_compliance_session():
     async with factory() as session:
         yield session
 
-# ── Lazy embedder singleton ───────────────────────────────────────────────────
-
-_embedder: Any = None
-
-
-def _get_embedder() -> Any:
-    global _embedder
-    if _embedder is None:
-        from adp.knowledge.embedder import EmbeddingProvider
-        _embedder = EmbeddingProvider("all-MiniLM-L6-v2")
-    return _embedder
+# ── Embedding ────────────────────────────────────────────────────────────────
 
 
 def _embed(title: str, full_text: str) -> list[float]:
-    """Generate a 384-dim embedding; fall back to zero vector on failure."""
-    try:
-        text = f"{title}\n{full_text}"
-        return _get_embedder().embed(text)
-    except Exception as exc:
-        logger.warning("Embedding generation failed, using zero vector: %s", exc)
-        return [0.0] * 384
+    """Generate a 384-dim embedding; fall back to zero vector on failure.
+
+    Delegates to the shared knowledge write-path helper (935 research D6); kept as a module
+    function so tests can patch it.
+    """
+    from adp.knowledge.embedder import embed_or_zero
+
+    return embed_or_zero(title, full_text)
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────

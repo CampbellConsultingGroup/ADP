@@ -9,3 +9,11 @@ import os
 
 # Disable auth for the entire test suite unless overridden per-test
 os.environ.setdefault("ADP_AUTH_ENABLED", "false")
+
+
+def pytest_addoption(parser):  # type: ignore[no-untyped-def]
+    # 935-pattern-registry: regenerate golden files (developer flag; CI never passes it).
+    parser.addoption(
+        "--update-goldens", action="store_true", default=False,
+        help="Rewrite golden files instead of comparing against them.",
+    )

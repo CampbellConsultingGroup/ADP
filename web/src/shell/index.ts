@@ -19,5 +19,6 @@ export type AppView =
   | "strategy"
   | "compliance"
   | "agents"
+  | "patterns"
   | "admin"
   | "scoring-rubrics";

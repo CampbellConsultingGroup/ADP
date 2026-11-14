@@ -71,3 +71,11 @@ class ActionType(StrEnum):
     # only to PLATFORM_ADMIN -- mirrors MANAGE_AGENT_PROMPTS's own deliberate
     # narrowing of ENTERPRISE_ARCHITECT's wildcard grant, see permissions.py.
     MANAGE_SCORING_RUBRICS = "manage_scoring_rubrics"
+    # 935-pattern-registry: importing/editing/deleting a draft EA pattern version and
+    # the dry-run validate/render authoring tools. Enterprise Architect only
+    # (Clarification Q1), via its wildcard grant.
+    WRITE_PATTERN = "write_pattern"
+    # 935-pattern-registry: lifecycle transitions of an EA pattern version
+    # (propose/promote/deprecate/decommission). Requires a confirmation_id (ART-VIII,
+    # Clarification Q3) because promotion rewrites the knowledge base agents cite.
+    GOVERN_PATTERN = "govern_pattern"

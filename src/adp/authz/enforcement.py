@@ -171,6 +171,9 @@ _PREFIX_ROUTE_ACTIONS: tuple[tuple[str, ActionType], ...] = (
     ("/api/v1/compliance/", ActionType.WRITE_COMPLIANCE),
     # 933-agent-registry: agent registry writes reuse application-write (no new ActionType).
     ("/api/v1/agentic/", ActionType.WRITE_APPLICATION),
+    # 935-pattern-registry: import / draft edit / draft delete / dry-run validate+render.
+    # Lifecycle transitions are mapped to GOVERN_PATTERN in the explicit map above.
+    ("/api/v1/patterns/", ActionType.WRITE_PATTERN),
 )
 
 

@@ -12,6 +12,7 @@ from typing import AsyncGenerator
 from fastapi import Depends, FastAPI, Request, Response
 
 from adp.agentic import router as agentic_router_module
+from adp.patterns import router as patterns_router_module
 from adp.agentic import store as agstore
 from adp.api.routers import (
     admin_prompts_router,
@@ -308,6 +309,7 @@ def create_app() -> FastAPI:
     app.include_router(strategy_router.router)
     app.include_router(compliance_router_module.router)
     app.include_router(agentic_router_module.router)
+    app.include_router(patterns_router_module.router)
 
     # Serve Vite-built frontend static files when running in Docker (ADP-SPEC-025)
     import os

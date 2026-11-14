@@ -53,6 +53,8 @@ const OVERSIGHT: NavDef[] = [
   // COMPLY-01: placed beside Governance, per the source doc's own framing of
   // Compliance as governance-adjacent (plan.md Project Structure).
   { view: "compliance", label: "Compliance", icon: "shield", hue: "biz" },
+  // 935-pattern-registry: governed EA patterns, beside the Knowledge base they project into.
+  { view: "patterns", label: "Patterns", icon: "sol", hue: "ent" },
   { view: "knowledge", label: "Knowledge", icon: "book", hue: "tec" },
 ];
 // ADP-SPEC-042: gated at the route/nav level on the distinct platform_admin
@@ -80,6 +82,7 @@ const TITLES: Record<AppView, string> = {
   strategy: "Strategy",
   compliance: "Compliance",
   agents: "Agent Registry",
+  patterns: "EA Patterns",
   admin: "Agent Prompt Management",
   "scoring-rubrics": "Scoring Rubric Management",
 };
