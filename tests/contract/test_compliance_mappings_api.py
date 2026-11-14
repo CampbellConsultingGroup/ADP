@@ -36,6 +36,12 @@ async def client(tmp_path):
         await conn.execute(
             cstore._knowledge_items_mirror.insert().values(id="standard-1", kind="standard")
         )
+        # 935-pattern-registry: a projected reference-architecture pattern (Clarification Q2).
+        await conn.execute(
+            cstore._knowledge_items_mirror.insert().values(
+                id="adp-pattern:ea.integration.backbone", kind="reference_architecture"
+            )
+        )
     factory = async_sessionmaker(engine, expire_on_commit=False)
 
     from adp.api.app import create_app
@@ -122,6 +128,27 @@ async def test_pattern_mapping_upsert_matches_contract(client):
     mapping = ControlMapping.model_validate(resp.json())
     assert mapping.target_type == "pattern"
     assert mapping.target_id == "pattern-1"
+
+
+async def test_pattern_mapping_accepts_reference_architecture(client):
+    """935 FR-016: reference-architecture pattern projections can be mapped to controls."""
+    ctrl = await _mk_control(client)
+    resp = await client.put(
+        f"{BASE}/controls/{ctrl['id']}/mappings/patterns/adp-pattern:ea.integration.backbone",
+        json={"compliance_status": "partial"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert ControlMapping.model_validate(resp.json()).target_type == "pattern"
+
+
+async def test_pattern_mapping_still_rejects_other_kinds(client):
+    ctrl = await _mk_control(client)
+    resp = await client.put(
+        f"{BASE}/controls/{ctrl['id']}/mappings/patterns/standard-1",
+        json={"compliance_status": "partial"},
+    )
+    assert resp.status_code == 422
+    assert "reference_architecture" in resp.text
 
 
 async def test_organization_mapping_upsert_matches_contract(client):

@@ -444,14 +444,23 @@ class MappingTargetNotFoundError(Exception):
         super().__init__(f"{target_type} {target_id!r} not found")
 
 
+# Knowledge kinds a control may be mapped to as a "pattern" target. 935-pattern-registry
+# (Clarification Q2) widened this from {'pattern'} so projected reference-architecture patterns
+# can carry control mappings too.
+PATTERN_TARGET_KINDS: frozenset[str] = frozenset({"pattern", "reference_architecture"})
+
+
 class InvalidPatternTargetError(Exception):
-    """target_id resolves to a knowledge_items row whose kind != 'pattern' (research.md D5).
-    Router maps to HTTP 422."""
+    """target_id resolves to a knowledge_items row whose kind is not a pattern target kind
+    (research.md D5; widened by 935). Router maps to HTTP 422."""
 
     def __init__(self, target_id: str, actual_kind: str) -> None:
         self.target_id = target_id
         self.actual_kind = actual_kind
-        super().__init__(f"knowledge item {target_id!r} has kind {actual_kind!r}, not 'pattern'")
+        super().__init__(
+            f"knowledge item {target_id!r} has kind {actual_kind!r}, "
+            "not 'pattern' or 'reference_architecture'"
+        )
 
 
 class MappingNotFoundError(Exception):

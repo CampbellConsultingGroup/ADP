@@ -116,11 +116,20 @@ class KnowledgeIndex:
             indexed_at=row.indexed_at,
         )
 
-    async def get_all_active_ids(self, session: "AsyncSession") -> set[str]:
-        """Return all ids where active=TRUE; used by Indexer to find deactivation candidates."""
-        rows = await session.execute(
-            sa.select(knowledge_items.c.id).where(knowledge_items.c.active.is_(True))
-        )
+    async def get_all_active_ids(
+        self,
+        session: "AsyncSession",
+        exclude_source_prefixes: tuple[str, ...] = (),
+    ) -> set[str]:
+        """Return all ids where active=TRUE; used by Indexer to find deactivation candidates.
+
+        ``exclude_source_prefixes`` drops items owned by another writer (e.g. the pattern
+        registry's ``adp-pattern:`` projections, 935 FR-014) so the sweep never deactivates them.
+        """
+        stmt = sa.select(knowledge_items.c.id).where(knowledge_items.c.active.is_(True))
+        for prefix in exclude_source_prefixes:
+            stmt = stmt.where(~knowledge_items.c.source_ref.startswith(prefix, autoescape=True))
+        rows = await session.execute(stmt)
         return {row.id for row in rows}
 
     async def mark_inactive(

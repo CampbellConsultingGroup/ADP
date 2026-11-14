@@ -36,7 +36,7 @@ from adp.patterns.parse import (
     to_canonical_json,
     to_canonical_yaml,
 )
-from adp.patterns.projection import projection_id
+from adp.patterns.projection import build_projection, projection_id
 from adp.patterns.registry_models import (
     ConcurrentPromotionError,
     IllegalTransitionError,
@@ -55,6 +55,8 @@ from adp.patterns.registry_models import (
     PromotionBlockedError,
 )
 from adp.patterns.resolve import ReferenceLookups, referenced_ids, resolve_references
+
+EMBEDDING_DIM = 384
 
 _metadata = sa.MetaData()
 _JSON = sa.JSON().with_variant(JSONB(), "postgresql")
@@ -584,8 +586,44 @@ async def _promotion_issues(defn: PatternDefinition, session: AsyncSession) -> l
 
 
 async def _sync_projection(key: str, session: AsyncSession, embedding: list[float] | None) -> None:
-    """Keep the family's knowledge item in step with its current version (US3 fills this in)."""
-    return None
+    """Keep the family's single knowledge item in step with its current version (FR-013).
+
+    A current version -> upsert (select-then-update/insert, dialect-portable; research.md D6).
+    No current version -> deactivate, never delete, so control_pattern_mapping rows survive.
+    """
+    k = _knowledge_items
+    pid = projection_id(key)
+    current = (
+        await session.execute(
+            sa.select(_versions.c.definition).where(
+                _versions.c.pattern_key == key,
+                _versions.c.lifecycle == PatternLifecycle.CURRENT.value,
+            )
+        )
+    ).first()
+    exists = (await session.execute(sa.select(k.c.id).where(k.c.id == pid))).first() is not None
+    if current is None:
+        if exists:
+            await session.execute(k.update().where(k.c.id == pid).values(active=False))
+        return
+    item = build_projection(definition_from_db(current.definition))
+    values: dict[str, Any] = {
+        "version": item.version,
+        "kind": item.kind,
+        "title": item.title,
+        "full_text": item.full_text,
+        "metadata": item.metadata,
+        "source_ref": item.source_ref,
+        "schema_version": "1.0.0",
+        "active": True,
+        "indexed_at": _now(),
+    }
+    if embedding is not None or not exists:
+        values["embedding"] = embedding if embedding is not None else [0.0] * EMBEDDING_DIM
+    if exists:
+        await session.execute(k.update().where(k.c.id == pid).values(**values))
+    else:
+        await session.execute(k.insert().values(id=pid, **values))
 
 
 async def transition(

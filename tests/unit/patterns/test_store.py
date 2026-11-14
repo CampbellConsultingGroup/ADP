@@ -336,3 +336,81 @@ async def test_concurrent_second_current_maps_to_conflict(session, monkeypatch) 
         await pstore.transition(KEY, "1.1.0", _req(L.CURRENT), ACTOR, session)
     await session.rollback()
     assert (await pstore.get_family(KEY, session)).current_version == "1.0.0"
+
+
+# ── US3: knowledge projection (FR-013) ────────────────────────────────────────────
+async def _projection(session):  # type: ignore[no-untyped-def]
+    k = pstore._knowledge_items
+    rows = (await session.execute(sa.select(k).where(k.c.source_ref.like("adp-pattern:%")))).all()
+    return rows
+
+
+async def _promote(session, version: str, embedding: list[float] | None = None):  # type: ignore[no-untyped-def]
+    detail = await pstore.transition(
+        KEY, version, _req(L.CURRENT), ACTOR, session, embedding=embedding or [0.25] * 384
+    )
+    await session.commit()
+    return detail
+
+
+async def test_drafts_and_proposals_never_project(session) -> None:
+    await _resolvable(session)
+    await _import(session)
+    await _move(session, "1.0.0", L.PROPOSED)
+    assert await _projection(session) == []
+    assert (await pstore.get_version_detail(KEY, "1.0.0", session)).knowledge_item_id is None
+
+
+async def test_first_promotion_creates_active_projection(session) -> None:
+    await _resolvable(session)
+    await _import(session)
+    await _move(session, "1.0.0", L.PROPOSED)
+    detail = await _promote(session, "1.0.0", [0.5] * 384)
+    rows = await _projection(session)
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.id == f"adp-pattern:{KEY}" == detail.knowledge_item_id
+    assert (row.kind, row.version, row.title, row.active) == (
+        "reference_architecture",
+        "1.0.0",
+        "Domain Event Backbone",
+        True,
+    )
+    assert row.metadata["managed_by"] == "pattern-registry"
+    assert row.embedding == [0.5] * 384
+
+
+async def test_later_promotion_updates_the_same_item(session) -> None:
+    await _resolvable(session)
+    await _import(session)
+    await _move(session, "1.0.0", L.PROPOSED)
+    await _promote(session, "1.0.0")
+    await _import(session, with_summary(with_version(BACKBONE, "1.1.0"), "Second edition."))
+    await _move(session, "1.1.0", L.PROPOSED)
+    await _promote(session, "1.1.0", [0.75] * 384)
+    rows = await _projection(session)
+    assert len(rows) == 1
+    assert rows[0].version == "1.1.0"
+    assert rows[0].full_text.startswith("Second edition.")
+    assert rows[0].embedding == [0.75] * 384
+
+
+async def test_no_current_version_deactivates_and_rollback_reactivates(session) -> None:
+    await _resolvable(session)
+    await _import(session)
+    await _move(session, "1.0.0", L.PROPOSED)
+    await _promote(session, "1.0.0")
+    await _move(session, "1.0.0", L.DEPRECATED)
+    rows = await _projection(session)
+    assert len(rows) == 1 and rows[0].active is False  # hidden, never deleted (mappings survive)
+    await _promote(session, "1.0.0")
+    assert (await _projection(session))[0].active is True
+
+
+async def test_promotion_without_precomputed_embedding_uses_zero_vector(session) -> None:
+    await _resolvable(session)
+    await _import(session)
+    await _move(session, "1.0.0", L.PROPOSED)
+    await pstore.transition(KEY, "1.0.0", _req(L.CURRENT), ACTOR, session)
+    await session.commit()
+    assert (await _projection(session))[0].embedding == [0.0] * 384

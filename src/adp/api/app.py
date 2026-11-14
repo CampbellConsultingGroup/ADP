@@ -12,7 +12,6 @@ from typing import AsyncGenerator
 from fastapi import Depends, FastAPI, Request, Response
 
 from adp.agentic import router as agentic_router_module
-from adp.patterns import router as patterns_router_module
 from adp.agentic import store as agstore
 from adp.api.routers import (
     admin_prompts_router,
@@ -57,6 +56,7 @@ from adp.diagrams import router as diagrams_router
 from adp.export import agentic as agentic_export
 from adp.export import application_arch, business_arch
 from adp.export import strategy as strategy_export
+from adp.patterns import router as patterns_router_module
 from adp.strategy import router as strategy_router
 from adp.strategy import store as sstore
 from adp.telemetry.context import TraceIdFilter, generate_trace_id, set_trace_id

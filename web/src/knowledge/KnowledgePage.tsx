@@ -158,6 +158,7 @@ export default function KnowledgePage(_props: KnowledgePageProps): React.ReactEl
                 key={item.id}
                 item={item}
                 onEdit={handleEdit}
+                onOpenPatterns={() => _props.onNavigate("patterns")}
               />
             ))}
           </div>
