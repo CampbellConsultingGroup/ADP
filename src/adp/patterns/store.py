@@ -24,10 +24,11 @@ from typing import Any
 import sqlalchemy as sa
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from adp.patterns.cel import CelEngine
-from adp.patterns.lifecycle import allowed_transitions_ordered
+from adp.patterns.lifecycle import allowed_transitions_ordered, is_allowed
 from adp.patterns.models import PatternDefinition, PatternIssue, PatternKind, Severity
 from adp.patterns.parse import (
     compute_digest,
@@ -35,9 +36,13 @@ from adp.patterns.parse import (
     to_canonical_json,
     to_canonical_yaml,
 )
+from adp.patterns.projection import projection_id
 from adp.patterns.registry_models import (
+    ConcurrentPromotionError,
+    IllegalTransitionError,
     ImportStatus,
     LifecycleEvent,
+    LifecycleTransitionRequest,
     PatternFamily,
     PatternImportResult,
     PatternLifecycle,
@@ -47,6 +52,7 @@ from adp.patterns.registry_models import (
     PatternVersionDetail,
     PatternVersionNotFoundError,
     PatternVersionSummary,
+    PromotionBlockedError,
 )
 from adp.patterns.resolve import ReferenceLookups, referenced_ids, resolve_references
 
@@ -133,8 +139,6 @@ _knowledge_items = sa.Table(
     sa.Column("indexed_at", sa.DateTime(timezone=True), nullable=False),
 )
 
-PROJECTION_PREFIX = "adp-pattern:"
-
 _engine: Any = None
 _session_factory: async_sessionmaker | None = None
 
@@ -154,10 +158,6 @@ def _get_session_factory() -> async_sessionmaker:
 
 def _now() -> datetime:
     return datetime.now(timezone.utc)
-
-
-def projection_id(pattern_key: str) -> str:
-    return f"{PROJECTION_PREFIX}{pattern_key}"
 
 
 def semver_key(version: str) -> tuple[int, ...]:
@@ -497,3 +497,138 @@ async def get_definition(key: str, version: str, session: AsyncSession) -> Patte
 async def get_yaml(key: str, version: str, session: AsyncSession) -> str:
     """Canonical YAML; byte-identical to the export file (FR-006, FR-020)."""
     return to_canonical_yaml(await get_definition(key, version, session))
+
+
+# ── Lifecycle (FR-007–FR-011, research.md D4) ──────────────────────────────────────────
+async def _insert_event(
+    version_id: str,
+    src: PatternLifecycle,
+    dst: PatternLifecycle,
+    reason: str,
+    confirmation_id: str,
+    actor: str,
+    at: datetime,
+    session: AsyncSession,
+    caused_by: str | None = None,
+) -> str:
+    event_id = str(uuid.uuid4())
+    await session.execute(
+        _events.insert().values(
+            id=event_id,
+            version_id=version_id,
+            from_state=src.value,
+            to_state=dst.value,
+            reason=reason,
+            confirmation_id=confirmation_id,
+            actor=actor,
+            at=at,
+            caused_by_event_id=caused_by,
+        )
+    )
+    return event_id
+
+
+async def _demote_current(
+    key: str,
+    keep_id: str,
+    promoted_version: str,
+    req: LifecycleTransitionRequest,
+    promotion_event_id: str,
+    actor: str,
+    at: datetime,
+    session: AsyncSession,
+) -> str | None:
+    """Deprecate the family's other current version, if any; returns its version string."""
+    other = (
+        await session.execute(
+            sa.select(_versions.c.id, _versions.c.version).where(
+                _versions.c.pattern_key == key,
+                _versions.c.lifecycle == PatternLifecycle.CURRENT.value,
+                _versions.c.id != keep_id,
+            )
+        )
+    ).first()
+    if other is None:
+        return None
+    await session.execute(
+        _versions.update()
+        .where(_versions.c.id == other.id)
+        .values(
+            lifecycle=PatternLifecycle.DEPRECATED.value,
+            lifecycle_changed_at=at,
+            lifecycle_changed_by=actor,
+        )
+    )
+    await _insert_event(
+        other.id,
+        PatternLifecycle.CURRENT,
+        PatternLifecycle.DEPRECATED,
+        f"Superseded by {promoted_version}: {req.reason}"[:500],
+        req.confirmation_id,
+        actor,
+        at,
+        session,
+        caused_by=promotion_event_id,
+    )
+    return str(other.version)
+
+
+async def _promotion_issues(defn: PatternDefinition, session: AsyncSession) -> list[PatternIssue]:
+    """Full re-validation plus blocking reference resolution (FR-009)."""
+    from adp.patterns.cel import default_engine
+    from adp.patterns.parse import validate_pattern
+
+    issues = [i for i in validate_pattern(defn, default_engine()) if i.severity == Severity.ERROR]
+    issues += resolve_references(defn, await load_lookups(defn, session), blocking=True)
+    return issues
+
+
+async def _sync_projection(key: str, session: AsyncSession, embedding: list[float] | None) -> None:
+    """Keep the family's knowledge item in step with its current version (US3 fills this in)."""
+    return None
+
+
+async def transition(
+    key: str,
+    version: str,
+    req: LifecycleTransitionRequest,
+    actor: str,
+    session: AsyncSession,
+    *,
+    embedding: list[float] | None = None,
+) -> PatternVersionDetail:
+    """Apply one governed lifecycle transition.
+
+    On ``-> current`` this re-validates, requires every reference to resolve, deprecates the
+    family's other current version (with its own history event pointing at the promotion) and
+    refreshes the knowledge projection. ``embedding`` is the projection's embedding, computed by
+    the caller *before* this call so no model work happens inside the transaction.
+    """
+    row = await _version_row(key, version, session)
+    src = PatternLifecycle(row.lifecycle)
+    dst = req.to
+    if not is_allowed(src, dst):
+        raise IllegalTransitionError(src.value, dst.value)
+    if dst == PatternLifecycle.CURRENT:
+        issues = await _promotion_issues(definition_from_db(row.definition), session)
+        if issues:
+            raise PromotionBlockedError(issues)
+
+    now = _now()
+    try:
+        event_id = await _insert_event(
+            row.id, src, dst, req.reason, req.confirmation_id, actor, now, session
+        )
+        if dst == PatternLifecycle.CURRENT:
+            await _demote_current(key, row.id, version, req, event_id, actor, now, session)
+        await session.execute(
+            _versions.update()
+            .where(_versions.c.id == row.id)
+            .values(lifecycle=dst.value, lifecycle_changed_at=now, lifecycle_changed_by=actor)
+        )
+        await session.flush()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise ConcurrentPromotionError(key) from exc
+    await _sync_projection(key, session, embedding)
+    return await get_version_detail(key, version, session)

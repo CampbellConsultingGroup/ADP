@@ -210,3 +210,129 @@ async def test_missing_family_and_version_raise(session) -> None:
     await _import(session)
     with pytest.raises(PatternVersionNotFoundError):
         await pstore.get_version_detail(KEY, "9.9.9", session)
+
+
+# ── US2: lifecycle (FR-007–FR-011) ────────────────────────────────────────────────
+def _req(to: L, reason: str = "Reviewed by ARB", confirmation: str = "conf-1"):  # type: ignore[no-untyped-def]
+    from adp.patterns.registry_models import LifecycleTransitionRequest
+
+    return LifecycleTransitionRequest(to=to, reason=reason, confirmation_id=confirmation)
+
+
+async def _resolvable(session) -> None:
+    """Make every reference in the backbone fixture resolve, so it can be promoted."""
+    await _principle(session, "P-API-FIRST")
+    await _principle(session, "P-NO-P2P")
+    await _import(session, MESH)
+    await _import(session, ONE_SOR)
+
+
+async def _move(session, version: str, *states: L, key: str = KEY):  # type: ignore[no-untyped-def]
+    detail = None
+    for state in states:
+        detail = await pstore.transition(key, version, _req(state), ACTOR, session)
+        await session.commit()
+    return detail
+
+
+async def test_illegal_transition_is_refused(session) -> None:
+    from adp.patterns.registry_models import IllegalTransitionError
+
+    await _import(session)
+    with pytest.raises(IllegalTransitionError):
+        await pstore.transition(KEY, "1.0.0", _req(L.CURRENT), ACTOR, session)
+
+
+async def test_propose_and_back_to_draft_records_history(session) -> None:
+    await _import(session)
+    detail = await _move(session, "1.0.0", L.PROPOSED)
+    assert detail.lifecycle == L.PROPOSED
+    assert detail.allowed_transitions == [L.DRAFT, L.CURRENT]
+    detail = await _move(session, "1.0.0", L.DRAFT)
+    assert detail.lifecycle == L.DRAFT
+    assert [(e.from_state, e.to_state) for e in detail.history] == [
+        (L.DRAFT, L.PROPOSED),
+        (L.PROPOSED, L.DRAFT),
+    ]
+    event = detail.history[0]
+    assert (event.reason, event.confirmation_id, event.actor) == (
+        "Reviewed by ARB",
+        "conf-1",
+        ACTOR,
+    )
+
+
+async def test_promotion_blocked_by_unresolved_references(session) -> None:
+    from adp.patterns.registry_models import PromotionBlockedError
+
+    await _import(session)
+    await _move(session, "1.0.0", L.PROPOSED)
+    with pytest.raises(PromotionBlockedError) as exc:
+        await pstore.transition(KEY, "1.0.0", _req(L.CURRENT), ACTOR, session)
+    assert {i.code for i in exc.value.issues} == {
+        "R1.unresolved_principle",
+        "R3.unresolved_relation",
+    }
+    assert all(i.severity == "error" for i in exc.value.issues)
+    await session.rollback()
+    assert (await pstore.get_version_detail(KEY, "1.0.0", session)).lifecycle == L.PROPOSED
+
+
+async def test_promotion_swaps_the_current_version(session) -> None:
+    await _resolvable(session)
+    await _import(session)
+    await _move(session, "1.0.0", L.PROPOSED, L.CURRENT)
+    await _import(session, with_version(BACKBONE, "1.1.0"))
+    v2 = await _move(session, "1.1.0", L.PROPOSED, L.CURRENT)
+    assert v2.lifecycle == L.CURRENT
+    v1 = await pstore.get_version_detail(KEY, "1.0.0", session)
+    assert v1.lifecycle == L.DEPRECATED
+    demotion = v1.history[-1]
+    assert (demotion.from_state, demotion.to_state) == (L.CURRENT, L.DEPRECATED)
+    promotion = v2.history[-1]
+    assert demotion.caused_by_event_id == promotion.id
+    assert demotion.confirmation_id == promotion.confirmation_id
+    family = await pstore.get_family(KEY, session)
+    assert family.current_version == "1.1.0"
+
+
+async def test_rollback_from_deprecated_demotes_the_other_current(session) -> None:
+    await _resolvable(session)
+    await _import(session)
+    await _move(session, "1.0.0", L.PROPOSED, L.CURRENT)
+    await _import(session, with_version(BACKBONE, "1.1.0"))
+    await _move(session, "1.1.0", L.PROPOSED, L.CURRENT)
+    back = await _move(session, "1.0.0", L.CURRENT)
+    assert back.lifecycle == L.CURRENT
+    assert (await pstore.get_version_detail(KEY, "1.1.0", session)).lifecycle == L.DEPRECATED
+
+
+async def test_decommissioned_is_terminal(session) -> None:
+    from adp.patterns.registry_models import IllegalTransitionError
+
+    await _resolvable(session)
+    await _import(session)
+    await _move(session, "1.0.0", L.PROPOSED, L.CURRENT, L.DEPRECATED, L.DECOMMISSIONED)
+    for state in L:
+        with pytest.raises(IllegalTransitionError):
+            await pstore.transition(KEY, "1.0.0", _req(state), ACTOR, session)
+
+
+async def test_concurrent_second_current_maps_to_conflict(session, monkeypatch) -> None:
+    """The partial unique index is the last line of defence (research D4)."""
+    from adp.patterns.registry_models import ConcurrentPromotionError
+
+    await _resolvable(session)
+    await _import(session)
+    await _move(session, "1.0.0", L.PROPOSED, L.CURRENT)
+    await _import(session, with_version(BACKBONE, "1.1.0"))
+    await _move(session, "1.1.0", L.PROPOSED)
+
+    async def _no_demote(*args, **kwargs):  # simulate a racing transaction that saw no current
+        return None
+
+    monkeypatch.setattr(pstore, "_demote_current", _no_demote)
+    with pytest.raises(ConcurrentPromotionError):
+        await pstore.transition(KEY, "1.1.0", _req(L.CURRENT), ACTOR, session)
+    await session.rollback()
+    assert (await pstore.get_family(KEY, session)).current_version == "1.0.0"

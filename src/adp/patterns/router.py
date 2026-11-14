@@ -18,6 +18,7 @@ ART-IX: every mutation emits an actor-attributed structured log line (research.m
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Callable
 from typing import Annotated, Any
@@ -28,17 +29,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.patterns import store as pstore
 from adp.patterns.models import PatternKind
+from adp.patterns.projection import build_projection
 from adp.patterns.registry_models import (
     MAX_YAML_BYTES,
+    ConcurrentPromotionError,
+    IllegalTransitionError,
     ImportStatus,
+    InvalidPatternUpdateError,
+    LifecycleTransitionRequest,
+    NotDraftError,
     PatternFamily,
     PatternImportResult,
     PatternLifecycle,
     PatternListResponse,
     PatternNotFoundError,
+    PatternRegistryError,
     PatternRelationRow,
     PatternVersionDetail,
     PatternVersionNotFoundError,
+    PromotionBlockedError,
 )
 
 logger = logging.getLogger(__name__)
@@ -174,3 +183,56 @@ async def get_version_yaml(key: str, version: str, session: Session) -> Response
         media_type="application/yaml",
         headers={"Content-Disposition": f'attachment; filename="{key}@{version}.yaml"'},
     )
+
+
+# ── Lifecycle (US2) ───────────────────────────────────────────────────────────────────
+def _registry_http_error(exc: Exception) -> HTTPException:
+    """Map a store exception to its HTTP status (data-model.md)."""
+    if isinstance(exc, (PatternNotFoundError, PatternVersionNotFoundError)):
+        return _not_found(exc)
+    if isinstance(exc, (IllegalTransitionError, ConcurrentPromotionError, NotDraftError)):
+        return HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    if isinstance(exc, (PromotionBlockedError, InvalidPatternUpdateError)):
+        return HTTPException(
+            status_code=422,
+            detail={
+                "message": str(exc),
+                "issues": [i.model_dump(mode="json") for i in exc.issues],
+            },
+        )
+    raise exc
+
+
+@router.post("/{key}/versions/{version}/lifecycle", response_model=PatternVersionDetail)
+async def transition_version(
+    key: str,
+    version: str,
+    body: LifecycleTransitionRequest,
+    request: Request,
+    session: Session,
+    embed: Annotated[EmbedFn, Depends(_get_embed)],
+) -> PatternVersionDetail:
+    actor = _get_actor(request)
+    try:
+        embedding = None
+        if body.to == PatternLifecycle.CURRENT:
+            # Compute the knowledge projection's embedding before any write (research.md D6).
+            projected = build_projection(await pstore.get_definition(key, version, session))
+            embedding = await asyncio.to_thread(embed, projected.title, projected.full_text)
+        before = await pstore.get_version_detail(key, version, session)
+        detail = await pstore.transition(key, version, body, actor, session, embedding=embedding)
+    except PatternRegistryError as exc:
+        await session.rollback()
+        raise _registry_http_error(exc) from exc
+    await session.commit()
+    logger.info(
+        "patterns.transition key=%s version=%s from=%s to=%s reason=%r confirmation_id=%s actor=%s",
+        key,
+        version,
+        before.lifecycle.value,
+        detail.lifecycle.value,
+        body.reason,
+        body.confirmation_id,
+        actor,
+    )
+    return detail

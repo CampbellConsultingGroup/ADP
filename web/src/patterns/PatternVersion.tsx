@@ -5,10 +5,12 @@ import React, { useState } from "react";
 import { usePatternFamily, usePatternVersion, usePatternYaml, yamlDownloadUrl } from "../api/patterns";
 import type { PatternVersionDetail } from "../api/patterns";
 import { StatusBadge } from "../ui";
+import History from "./History";
 import IssueList from "./IssueList";
 import { KIND_LABELS, LIFECYCLE_LABELS, LIFECYCLE_TONES } from "./labels";
+import LifecycleDialog from "./LifecycleDialog";
 
-type Tab = "overview" | "yaml";
+type Tab = "overview" | "yaml" | "history";
 
 const h4: React.CSSProperties = { margin: "14px 0 6px", fontSize: 13 };
 const cell: React.CSSProperties = { padding: "5px 8px", borderBottom: "1px solid var(--border)", fontSize: 12, textAlign: "left", verticalAlign: "top" };
@@ -121,6 +123,7 @@ export default function PatternVersion({
   const tabs: { id: Tab; label: string }[] = [
     { id: "overview", label: "Overview" },
     { id: "yaml", label: "YAML" },
+    { id: "history", label: `History (${detail.history.length})` },
   ];
 
   return (
@@ -132,6 +135,7 @@ export default function PatternVersion({
         <span style={{ fontSize: 12, color: "var(--ink-3)", fontFamily: "var(--mono, monospace)" }}>{detail.pattern_key}@{detail.version}</span>
         <span style={{ fontSize: 12, color: "var(--ink-3)" }}>{KIND_LABELS[detail.kind]}</span>
       </div>
+      <LifecycleDialog detail={detail} />
       {family && family.versions.length > 1 && (
         <div aria-label="Versions" style={{ display: "flex", gap: 6, flexWrap: "wrap", fontSize: 12 }}>
           {family.versions.map((v) => (
@@ -162,6 +166,7 @@ export default function PatternVersion({
       </div>
       {tab === "overview" && <Overview detail={detail} />}
       {tab === "yaml" && <YamlTab patternKey={patternKey} version={version} />}
+      {tab === "history" && <History events={detail.history} />}
     </div>
   );
 }

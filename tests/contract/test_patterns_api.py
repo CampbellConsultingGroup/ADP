@@ -167,3 +167,93 @@ async def test_not_found(client) -> None:
     await _import(client)
     assert (await client.get(f"{API}/{KEY}/versions/9.9.9")).status_code == 404
     assert (await client.get(f"{API}/{KEY}/versions/9.9.9/yaml")).status_code == 404
+
+
+# ── US2: lifecycle ────────────────────────────────────────────────────────────────
+ONE_SOR = (FIX / "valid" / "ea.data.one-sor-per-capability@1.0.0.yaml").read_text()
+
+
+async def _make_resolvable(client) -> None:
+    """Import the backbone's related patterns; principles are stripped so R1 cannot block."""
+    await _import(client, MESH)
+    await _import(client, ONE_SOR)
+
+
+def _no_principles(text: str) -> str:
+    return re.sub(r"^  principles: .*$", "  principles: []", text, count=1, flags=re.M)
+
+
+async def _transition(client, version: str, to: str, **extra) -> httpx.Response:
+    body = {"to": to, "reason": "ARB review 2026-11-14", "confirmation_id": f"c-{to}", **extra}
+    return await client.post(f"{API}/{KEY}/versions/{version}/lifecycle", json=body)
+
+
+async def test_lifecycle_happy_path_and_swap(client) -> None:
+    await _make_resolvable(client)
+    await _import(client, _no_principles(BACKBONE))
+    assert (await _transition(client, "1.0.0", "proposed")).status_code == 200
+    promoted = await _transition(client, "1.0.0", "current")
+    assert promoted.status_code == 200, promoted.text
+    assert promoted.json()["lifecycle"] == "current"
+    assert promoted.json()["allowed_transitions"] == ["deprecated"]
+
+    await _import(client, with_version(_no_principles(BACKBONE), "1.1.0"))
+    await _transition(client, "1.1.0", "proposed")
+    assert (await _transition(client, "1.1.0", "current")).status_code == 200
+    old = (await client.get(f"{API}/{KEY}/versions/1.0.0")).json()
+    assert old["lifecycle"] == "deprecated"
+    assert [(e["from_state"], e["to_state"]) for e in old["history"]] == [
+        ("draft", "proposed"),
+        ("proposed", "current"),
+        ("current", "deprecated"),
+    ]
+
+
+async def test_illegal_transition_is_409(client) -> None:
+    await _import(client)
+    resp = await _transition(client, "1.0.0", "current")
+    assert resp.status_code == 409
+    assert "not allowed" in resp.json()["detail"]
+
+
+async def test_blocked_promotion_is_422_with_issues(client) -> None:
+    await _import(client)
+    await _transition(client, "1.0.0", "proposed")
+    resp = await _transition(client, "1.0.0", "current")
+    assert resp.status_code == 422
+    codes = {i["code"] for i in resp.json()["detail"]["issues"]}
+    assert codes == {"R1.unresolved_principle", "R3.unresolved_relation"}
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"to": "proposed", "confirmation_id": "c"},
+        {"to": "proposed", "reason": "", "confirmation_id": "c"},
+        {"to": "proposed", "reason": "ok"},
+        {"to": "proposed", "reason": "ok", "confirmation_id": "   "},
+        {"to": "proposed", "reason": "x" * 501, "confirmation_id": "c"},
+    ],
+)
+async def test_reason_and_confirmation_are_required(client, body) -> None:
+    await _import(client)
+    resp = await client.post(f"{API}/{KEY}/versions/1.0.0/lifecycle", json=body)
+    assert resp.status_code == 422
+    detail = (await client.get(f"{API}/{KEY}/versions/1.0.0")).json()
+    assert detail["lifecycle"] == "draft"
+
+
+@pytest.mark.parametrize(
+    "role",
+    [PersonaRole.REVIEWER, PersonaRole.SOLUTION_ARCHITECT, PersonaRole.TECHNICAL_ARCHITECT],
+)
+async def test_lifecycle_forbidden_for_non_ea(app_and_client, role) -> None:
+    app, client = app_and_client
+    await _import(client)
+    _as_role(app, role)
+    assert (await _transition(client, "1.0.0", "proposed")).status_code == 403
+
+
+async def test_lifecycle_unknown_version_is_404(client) -> None:
+    await _import(client)
+    assert (await _transition(client, "9.9.9", "proposed")).status_code == 404
