@@ -55,8 +55,10 @@ from adp.compliance import router as compliance_router_module
 from adp.diagrams import router as diagrams_router
 from adp.export import agentic as agentic_export
 from adp.export import application_arch, business_arch
+from adp.export import patterns as patterns_export
 from adp.export import strategy as strategy_export
 from adp.patterns import router as patterns_router_module
+from adp.patterns import store as patterns_store
 from adp.strategy import router as strategy_router
 from adp.strategy import store as sstore
 from adp.telemetry.context import TraceIdFilter, generate_trace_id, set_trace_id
@@ -129,6 +131,21 @@ async def stop_agentic_export(task: asyncio.Task[None] | None) -> None:
     await agentic_export.stop_background_sync(task)
 
 
+def start_pattern_export() -> asyncio.Task[None] | None:
+    """935-pattern-registry: start the continuous export of current pattern versions as YAML,
+    sharing ADP_BUSINESS_ARCH_EXPORT_ROOT/_INTERVAL_SECONDS. No-op unless that root is set."""
+    export_root = os.environ.get("ADP_BUSINESS_ARCH_EXPORT_ROOT")
+    interval = float(os.environ.get("ADP_BUSINESS_ARCH_EXPORT_INTERVAL_SECONDS", "60"))
+    return patterns_export.start_background_sync(
+        export_root, interval, patterns_store._get_session_factory()
+    )
+
+
+async def stop_pattern_export(task: asyncio.Task[None] | None) -> None:
+    """935-pattern-registry: stop the continuous pattern export sync."""
+    await patterns_export.stop_background_sync(task)
+
+
 def _install_trace_id_logging() -> None:
     """Install TraceIdFilter on the root logger (QG-10 / FR-001).
 
@@ -186,6 +203,8 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     _strategy_export_task = start_strategy_export()
     # 933-agent-registry: opt-in continuous export of the agent registry, same env vars/root.
     _agentic_export_task = start_agentic_export()
+    # 935-pattern-registry: opt-in continuous export of current pattern versions, same root.
+    _pattern_export_task = start_pattern_export()
 
     yield
 
@@ -195,6 +214,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await stop_application_arch_export(_app_export_task)
     await stop_strategy_export(_strategy_export_task)
     await stop_agentic_export(_agentic_export_task)
+    await stop_pattern_export(_pattern_export_task)
 
 
 def create_app() -> FastAPI:
