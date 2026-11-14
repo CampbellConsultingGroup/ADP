@@ -1,0 +1,26 @@
+pattern: ea.data.one-sor-per-capability
+version: 1.0.0
+kind: portfolio-rule
+name: One System of Record per Capability
+summary: Each business capability is served by exactly one system of record.
+owner_role: enterprise
+motivation:
+  context: Several applications often claim the same business data.
+  problem: Duplicate systems of record cause reconciliation cost and conflicting truths.
+  principles: [P-SINGLE-SOURCE]
+roles:
+  capability:
+    element_type: business_capability
+    cardinality: "1..*"
+    selector: "it.level == 1"
+  system_of_record:
+    element_type: application
+    cardinality: "1 per capability"
+    selector: "it.lifecycle_status == 'active'"
+relationships:
+  - { id: R1, source: system_of_record, target: capability, type: serves }
+constraints:
+  - id: C1
+    rule: Retired applications must not be a system of record.
+    for_each: system_of_record
+    expr: "it.lifecycle_status != 'retired'"

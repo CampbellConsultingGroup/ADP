@@ -1,0 +1,12 @@
+# expect: P2.alias 
+base: &b {context: c, problem: p}
+pattern: ea.test.invalid
+version: 1.0.0
+kind: portfolio-rule
+name: Invalid fixture
+summary: Exercises one validation rule.
+owner_role: enterprise
+motivation: *b
+roles:
+  app: {element_type: application, cardinality: "1..*"}
+  cap: {element_type: business_capability, cardinality: "0..*"}

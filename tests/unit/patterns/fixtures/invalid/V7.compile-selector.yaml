@@ -1,0 +1,10 @@
+# expect: V7.compile roles.app.selector
+pattern: ea.test.invalid
+version: 1.0.0
+kind: portfolio-rule
+name: Invalid fixture
+summary: Exercises one validation rule.
+owner_role: enterprise
+motivation: {context: c, problem: p}
+roles:
+  app: {element_type: application, cardinality: "1", selector: "nope == 1"}

@@ -1,0 +1,49 @@
+# Same content as the reference fixture, written with mapping keys in a different
+# order and longhand cardinality. Must digest identically (US2-2).
+version: 1.0.0
+pattern: ea.integration.domain-event-backbone
+owner_role: enterprise
+kind: reference-architecture
+summary: Cross-domain data sharing goes through a governed event backbone; no direct cross-domain integration.
+name: Domain Event Backbone
+tags: [integration, event-driven]
+motivation:
+  problem: Point-to-point integrations create coupling and untraceable data lineage.
+  context: Business domains need each other's data changes.
+  forces: [Domain autonomy, Data consistency, Auditability]
+  benefits: [Decoupled release cycles, Single lineage point]
+  liabilities: [Eventual consistency, Backbone becomes critical platform]
+  principles: [P-API-FIRST, P-NO-P2P]
+roles:
+  backbone:
+    selector: "it.application_type in ['custom', 'saas', 'cots']"
+    cardinality: { min: 1, max: 1 }
+    element_type: application
+    stereotype: platform
+  domain_app:
+    cardinality: { min: 2 }
+    element_type: application
+    selector: "it.time_classification in ['Invest', 'Tolerate']"
+  cross_domain_integration:
+    element_type: integration
+    cardinality: { min: 0, max: null }
+    selector: "it.source.domain_ids.all(d, !(d in it.target.domain_ids))"
+relationships:
+  - { type: publishes, id: R1, source: domain_app, target: backbone }
+  - { target: domain_app, id: R2, source: backbone, type: delivers, required: true }
+constraints:
+  - id: C1
+    for_each: cross_domain_integration
+    rule: Cross-domain integrations must be mediated by the backbone.
+    expr: "it.target.id in role('backbone') || it.source.id in role('backbone')"
+    render_hint: { label: "no direct cross-domain", kind: prohibited_edge, source: domain_app, target: domain_app }
+  - id: C2
+    rule: Applications marked Eliminate must not gain backbone subscriptions.
+    for_each: domain_app
+    polarity: require
+    expr: "it.time_classification != 'Eliminate'"
+    severity: warning
+relations:
+  - { type: replaces, target: ea.integration.point-to-point-mesh }
+  - { type: requires, target: ea.data.one-sor-per-capability }
+views: [structure, conformance, catalog]

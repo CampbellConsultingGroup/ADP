@@ -1,0 +1,13 @@
+# expect: V4.transition_required transition
+pattern: ea.test.invalid
+version: 1.0.0
+kind: transition
+name: Invalid fixture
+summary: Exercises one validation rule.
+owner_role: enterprise
+motivation: {context: c, problem: p}
+roles:
+  app: {element_type: application, cardinality: "1..*"}
+  cap: {element_type: business_capability, cardinality: "0..*"}
+constraints:
+  - {id: C1, rule: r, expr: "true"}

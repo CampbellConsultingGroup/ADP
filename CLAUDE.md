@@ -1,6 +1,6 @@
 # ADP Development Guidelines
 
-Auto-generated from all feature plans. Last updated: 2026-11-13 (926-framework-versioning-correction COMPLY-01a implemented)
+Auto-generated from all feature plans. Last updated: 2026-11-14 (934-pattern-metamodel planned)
 
 ## Active Technologies
 - Python 3.11+ + SQLAlchemy 2.x (async ORM), asyncpg (PostgreSQL async driver), Alembic (migrations), testcontainers-python (PostgreSQL container for integration tests), pydantic-settings (database URL config) (002-design-store)
@@ -113,6 +113,7 @@ Auto-generated from all feature plans. Last updated: 2026-11-13 (926-framework-v
 - PostgreSQL 16 — one new migration (`041`, `down_revision="040"`): new table (932-regulatory-framework-tags)
 - Python 3.12 (backend); TypeScript 5.x + React 18 (frontend). Both are existing stacks. + FastAPI ≥ 0.111, SQLAlchemy 2 async (Core), asyncpg, Alembic, Pydantic v2; React 18, TanStack Query v5. All are existing, with **zero new packages**. (933-agent-registry)
 - PostgreSQL 16. Migration `043` (`down_revision="042"`) adds two new tables and re-creates one CHECK constraint on `applications`. (933-agent-registry)
+- Python 3.12 runtime, 3.11+ compatible. + Pydantic v2 and `pyyaml>=6.0` (both existing). **One new runtime dependency:** `cel-expr-python==0.1.4`, pinned exactly (research D1). It ships cp311/cp312 manylinux_2_28 wheels and has no transitive dependencies. (934-pattern-metamodel)
 
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
@@ -157,6 +158,23 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 934-pattern-metamodel: Implemented (ADP-mmm.1, spec 1 of 4 in epic ADP-mmm "EA Patterns-as-Code", source
+  `docs/PATTERN-01-metamodel-and-yaml.md` + the review addendum in `docs/PATTERN-00-bundle-overview.md`).
+  New pure-library package `adp.patterns` (no DB/API/UI -- spec 935 adds the registry and first UI):
+  frozen Pydantic `PatternDefinition` (roles/relationships/CEL constraints/motivation/transition plateaus),
+  hardened YAML parser (`parse_pattern_yaml` never raises; rejects >256 KB, anchors/aliases, multi-doc;
+  every problem is a `PatternIssue{path, code, message}` with codes P0-P5, schema.*, V1-V9), canonical
+  JSON/YAML + SHA-256 digest (roles encoded as ordered pairs so key-sorting can't erase role order), and
+  `generated/pattern.schema.json` via `adp-generate` (accepts cardinality shorthand). Corrections vs the
+  source doc: no `technology_standard` element type (no such entity), `agent` added, relationship `owns`
+  dropped (no evidence source), no `lifecycle` in authored YAML (registry state). NEW DEPENDENCY
+  `cel-expr-python==0.1.4` (Google cel-cpp), chosen by a 3-library spike (research.md D1): the only one with a
+  real compile-time checker and a built-in iteration budget (fixed, ~5-10k comprehension iterations per
+  evaluation, not configurable from Python) -- wrapped behind `adp.patterns.cel.CelEngine` so it can be swapped
+  (fallback `common-expression-language`). Gotcha: a `bound(map, string)` function must be declared with a
+  `map<string,dyn>` first parameter -- a `dyn` parameter did not match map arguments at runtime. 116 new tests
+  (2001 backend total), patterns coverage 88-100% per file, ruff/mypy/bandit/adp-generate clean.
+  See `specs/934-pattern-metamodel/`.
 - 933-agent-registry: Implemented (ADP-hii, P1 of the agentic-solutions plan `docs/agentic-solutions-plan.md`,
   planning bead ADP-wma) -- full `/speckit.specify` → clarify → plan → tasks → implement cycle. An agentic
   solution is an ordinary Application with new `application_type="agentic"`; its AI agents live in a new
