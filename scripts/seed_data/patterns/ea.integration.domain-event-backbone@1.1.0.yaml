@@ -1,0 +1,53 @@
+# Seed pattern (935-pattern-registry FR-023), derived from the 934 fixture of the same key.
+# Cites real seeded principles (scripts/seed_knowledge.py PRIN-*) so it can be promoted.
+# 1.1.0 (936): cross-domain integrations are selected with the snapshot's strict `cross_domain`
+# attribute. 1.0.0's all()-over-domain_ids selector also matched every integration touching an
+# application with no business domain (all() over an empty list is true), e.g. the event hub.
+pattern: ea.integration.domain-event-backbone
+version: 1.1.0
+kind: reference-architecture
+name: Domain Event Backbone
+summary: Cross-domain data sharing goes through a governed event backbone; no direct cross-domain integration.
+owner_role: enterprise
+tags: [integration, event-driven]
+motivation:
+  context: Business domains need each other's data changes.
+  problem: Point-to-point integrations create coupling and untraceable data lineage.
+  forces: [Domain autonomy, Data consistency, Auditability]
+  benefits: [Decoupled release cycles, Single lineage point]
+  liabilities: [Eventual consistency, Backbone becomes critical platform]
+  principles: [PRIN-003, PRIN-004]
+  controls: []
+roles:
+  backbone:
+    element_type: application
+    cardinality: "1"
+    stereotype: platform
+    selector: "it.application_type in ['custom', 'saas', 'cots']"
+  domain_app:
+    element_type: application
+    cardinality: "2..*"
+    selector: "it.time_classification in ['Invest', 'Tolerate']"
+  cross_domain_integration:
+    element_type: integration
+    cardinality: "0..*"
+    selector: "it.cross_domain == true"
+relationships:
+  - { id: R1, source: domain_app, target: backbone, type: publishes }
+  - { id: R2, source: backbone, target: domain_app, type: delivers }
+constraints:
+  - id: C1
+    rule: Cross-domain integrations must be mediated by the backbone.
+    for_each: cross_domain_integration
+    expr: "it.target.id in role('backbone') || it.source.id in role('backbone')"
+    severity: error
+    render_hint: { kind: prohibited_edge, source: domain_app, target: domain_app, label: "no direct cross-domain" }
+  - id: C2
+    rule: Applications marked Eliminate must not gain backbone subscriptions.
+    for_each: domain_app
+    expr: "it.time_classification != 'Eliminate'"
+    severity: warning
+relations:
+  - { type: replaces, target: ea.integration.point-to-point-mesh }
+  - { type: requires, target: ea.data.one-sor-per-capability }
+views: [structure, conformance, catalog]

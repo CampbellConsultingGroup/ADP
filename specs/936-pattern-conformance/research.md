@@ -160,7 +160,7 @@ The router extracts the caller's permissions (`is_permitted(user.role, READ_APPL
 
 | Class | Style |
 |---|---|
-| `pass` | fill `#FFFFFF`, stroke `#1168BD` |
+| `ok` | fill `#FFFFFF`, stroke `#1168BD` (*implementation note*: named `ok`, not `pass`, because bandit B105 reads a `"pass"` dict key as a password) |
 | `warn` | dashed stroke `#707070` |
 | `fail` | stroke-width 3px, stroke `#08427B`, dasharray `1 0` |
 | `unknown` | as 935 |
@@ -203,6 +203,10 @@ There are no backend changes and no new permission: saving requires `WRITE_DIAGR
 - **Mesh-to-backbone** on E-commerce & Digital, pinning the hub: PL1 reached, PL2 blocked by `C2`.
 
 It is idempotent, matching adoptions by name. The order is `seed_retail.py` → `seed_knowledge.py` → `seed_patterns.py`.
+
+**Implementation note (found in live verification).** Under the 1.0.0 seed patterns' fixture selector (`it.source.domain_ids.all(d, !(d in it.target.domain_ids))`), every hub integration counts as cross-domain: the hub has no domain, and `all()` over an empty list is true. Mesh discovery reported 16 "occurrences", 10 of them hub-routed.
+
+The seed therefore ships **1.1.0** of the backbone, mesh and transition patterns, selecting with the strict `it.cross_domain == true`. Promoting 1.1.0 supersedes 1.0.0, and adoptions follow current. Discovery then reports exactly the 5 real direct cross-domain integrations. The 934 unit fixtures are unchanged.
 
 ## D12 — Test strategy
 

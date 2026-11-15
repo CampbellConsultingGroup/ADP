@@ -162,7 +162,28 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
-- 936-pattern-conformance: Planned (ADP-mmm.3) -- see `specs/936-pattern-conformance/`.
+- 936-pattern-conformance: Implemented (ADP-mmm.3, spec 3 of 4 in epic ADP-mmm). Pattern adoptions (a pattern
+  applied to a business domain / application set / portfolio, optional version pin, role pins; migration `045`:
+  ea_pattern_adoption + _member + _pin, partial-unique per domain/portfolio) evaluated by a PURE engine
+  (`adp.patterns.engine` over `adp.patterns.snapshot`): pins are AUTHORITATIVE for their role (B2 warning if a pin
+  fails the selector, B3 dangling), implicit K:<role>(/per) cardinality and E:<rel> registry evidence
+  (integrations / capability links / tech-cap 'provides'), declared CEL constraints with the polarity matrix,
+  derived status (not_applicable > non_conformant > indeterminate > with_warnings > conformant) and transition
+  plateau -- computed per request and per caller, NEVER stored (guard test). Snapshot (`snapshot_store`, ~13 fixed
+  queries via mirrors on the patterns metadata) derives application domain_ids by walking capabilities up to the
+  L1 (domains attach only to L1), integration `cross_domain` (null if either side has no domain), and includes
+  gated risk/cost(tco via list_all_costs)/governance attributes only for callers holding READ_APPLICATION_*
+  (else field_unavailable -> indeterminate). Separate `adoptions_router` registered BEFORE the registry router so
+  /adoptions and /evaluate are not taken as {key}; anti-pattern discovery; dry-run POST /evaluate (WRITE_PATTERN);
+  conformance/transition flowchart views; UI Patterns|Adoptions toggle, adoption page, pins editor, Discovery tab,
+  Evaluate panel, Save as diagram (seed hand-off to the Diagrams editor). Fixed `scripts/seed_retail.py` (was
+  broken: health_score passed to ApplicationCreate; now via upsert_health_assessment), added Enterprise Event Hub
+  + hub-routed integrations; `seed_patterns.py` creates demo adoptions (M&L conformant, E-commerce non_conformant,
+  mesh migration PL1->PL2). Gotchas: the 934 fixture selector `all(d, !(d in target.domain_ids))` is vacuously true
+  for domainless apps (seed ships 1.1.0 patterns using `it.cross_domain == true`); Vite HMR can serve a stale module
+  after many edits (restart it); `pkill -f <pattern>` can match its own shell. 2282+ backend, 661 frontend; verified
+  live after a full reseed. Follow-ons: Governance rollup, conformance history, ADP-n4e renderer legibility.
+  See `specs/936-pattern-conformance/`.
 - 935-pattern-registry: Implemented (ADP-mmm.2, spec 2 of 4 in epic ADP-mmm). Governed EA pattern registry on
   top of 934's `adp.patterns`: migration `044` (ea_pattern, ea_pattern_version with partial-unique one-current,
   ea_pattern_relation with NO target FK so drafts may reference unwritten families, ea_pattern_lifecycle_event).

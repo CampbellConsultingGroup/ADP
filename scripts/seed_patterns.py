@@ -111,7 +111,7 @@ async def seed(db_url: str) -> int:
                     print(f"      {issue.code} {issue.path}: {issue.message}")
                 failures += 1
                 continue
-            state = "already current" if not path else "promoted to current"
+            state = "promoted to current" if path else f"left {detail.lifecycle.value}"
             print(f"  {state:20} {key}@{version}")
 
         failures += await seed_adoptions(session)

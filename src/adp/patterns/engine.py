@@ -51,6 +51,18 @@ _INTEGRATION_RELS = {
 }
 
 
+# Readable verb phrases for relationship-evidence findings ("Each 'X' must publish to 'Y'").
+_VERBS: dict[RelationshipType, str] = {
+    RelationshipType.PUBLISHES: "publish to",
+    RelationshipType.CONSUMES: "consume from",
+    RelationshipType.DELIVERS: "deliver to",
+    RelationshipType.SERVES: "serve",
+    RelationshipType.REALIZES: "realize",
+    RelationshipType.DEPENDS_ON: "depend on",
+    RelationshipType.INTEGRATES_WITH: "integrate with",
+}
+
+
 class Budget:
     """Element-evaluation budget for one report (FR-015)."""
 
@@ -375,7 +387,7 @@ def _implicit(ctx: _Context, limits: EvalLimits) -> list[Finding]:
                     f"E:{rel.id}",
                     FindingKind.VIOLATION,
                     Severity.ERROR,
-                    f"Each '{_label(defn, rel.source)}' must {rel.type.value} to "
+                    f"Each '{_label(defn, rel.source)}' must {_VERBS[rel.type]} "
                     f"'{_label(defn, rel.target)}'{via}",
                     offenders,
                     limits,

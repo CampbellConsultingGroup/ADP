@@ -301,3 +301,9 @@ def test_element_refs_are_capped_and_flagged() -> None:
 
 def test_empty_for_each_role_evaluates_nothing() -> None:
     assert "C1" not in _codes(_report(_with_constraint("false"), SnapshotBuilder().build()))
+
+
+def test_evidence_rule_reads_naturally() -> None:
+    snap = _apps("a", "b").build()
+    e = _codes(_report(_pub_pattern("publishes"), snap, _pinned(src=["a"], dst=["b"])))["E:R1"]
+    assert e.rule == "Each 'Src' must publish to 'Dst'"

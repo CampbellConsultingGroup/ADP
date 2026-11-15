@@ -24,8 +24,10 @@ SEEDED_PRINCIPLES = frozenset(
 FILES = sorted(SEED_DIR.glob("*.yaml"))
 
 
-def test_four_seed_patterns() -> None:
-    assert len(FILES) == 4
+def test_seed_pattern_files() -> None:
+    # 4 families; backbone, mesh and transition also have a stricter 1.1.0 (936)
+    assert len(FILES) == 7
+    assert len({p.name.split("@")[0] for p in FILES}) == 4
     assert len(SEEDED_PRINCIPLES) >= 6
 
 
