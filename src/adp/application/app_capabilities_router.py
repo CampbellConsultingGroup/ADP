@@ -9,11 +9,13 @@ before ``/{ac_id}`` so they are never captured as an id.
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.application import app_capabilities as acstore
+from adp.application import cap_analysis as analysis
 from adp.application.app_capability_models import (
     AppCapDepthError,
     AppCapError,
@@ -33,7 +35,18 @@ from adp.application.app_capability_models import (
     RealizationCreate,
     TechCapabilityLinkCreate,
 )
+from adp.application.cap_analysis_models import (
+    CapabilityFindings,
+    CapabilityRollupResponse,
+    ImpactResult,
+    TechnologyDependenciesResponse,
+)
+from adp.application.cap_analysis_store import build_snapshot
 from adp.application.router import _get_actor, _get_session
+from adp.auth.deps import get_current_user
+from adp.auth.models import AuthenticatedUser
+from adp.authz.permissions import is_permitted
+from adp.authz.roles import ActionType
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +130,56 @@ async def list_by_application(
     app_id: str, session: AsyncSession = Depends(_get_session)
 ) -> list[AppCapSummary]:
     return await acstore.list_by_application(app_id, session)
+
+
+# ── Analysis (938-capability-model-analysis, ADP-6et.2) ────────────────────────
+# All derived on read, never stored. GETs are open reads; cost and risk content is gated inline
+# (research R3) and never even queried for a caller without READ_APPLICATION_COST/_RISK.
+
+
+@router.get("/analysis/business-rollup", response_model=CapabilityRollupResponse)
+async def business_rollup(
+    session: AsyncSession = Depends(_get_session),
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> CapabilityRollupResponse:
+    snapshot = await build_snapshot(
+        session,
+        risk_visible=is_permitted(user.role, ActionType.READ_APPLICATION_RISK),
+        cost_visible=is_permitted(user.role, ActionType.READ_APPLICATION_COST),
+    )
+    return analysis.business_rollup(snapshot, date.today())
+
+
+@router.get("/analysis/technical-capabilities/{tc_id}/impact", response_model=ImpactResult)
+async def technical_capability_impact(
+    tc_id: str, session: AsyncSession = Depends(_get_session)
+) -> ImpactResult:
+    snapshot = await build_snapshot(session, risk_visible=False, cost_visible=False)
+    result = analysis.impact(snapshot, tc_id)
+    if result is None:
+        raise HTTPException(status_code=404, detail=f"Technical capability {tc_id!r} not found")
+    return result
+
+
+@router.get(
+    "/analysis/business-capabilities/{cap_id}/technology",
+    response_model=TechnologyDependenciesResponse,
+)
+async def business_capability_technology(
+    cap_id: str, session: AsyncSession = Depends(_get_session)
+) -> TechnologyDependenciesResponse:
+    snapshot = await build_snapshot(session, risk_visible=False, cost_visible=False)
+    today = date.today()
+    items = analysis.technology_dependencies(snapshot, cap_id, today)
+    if items is None:
+        raise HTTPException(status_code=404, detail=f"Business capability {cap_id!r} not found")
+    return TechnologyDependenciesResponse(as_of=today, items=items)
+
+
+@router.get("/analysis/findings", response_model=CapabilityFindings)
+async def capability_findings(session: AsyncSession = Depends(_get_session)) -> CapabilityFindings:
+    snapshot = await build_snapshot(session, risk_visible=False, cost_visible=False)
+    return analysis.findings(snapshot)
 
 
 @router.get("/{ac_id}", response_model=ApplicationCapabilityDetail)

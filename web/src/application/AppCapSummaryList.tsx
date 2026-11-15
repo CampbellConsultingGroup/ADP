@@ -12,6 +12,8 @@ import {
   useAppCapsByTechnicalCapability,
 } from "../api/appCapabilities";
 import { useOpenAppCapability } from "./appCapNav";
+import { useBusinessTechnology } from "../api/capAnalysis";
+import { BandChip, CapLink, CapWithPath } from "./capAnalysisUi";
 
 export function AppCapSummaryItems({
   items,
@@ -100,6 +102,35 @@ function ByTechnical({ tcId }: { tcId: string }) {
 /** Business capability L3 row: the application capabilities supporting it, and who realizes them. */
 export function BusinessCapAppCaps({ capId }: { capId: string }): React.ReactElement {
   return <Expander label="Application capabilities">{() => <ByBusiness capId={capId} />}</Expander>;
+}
+
+function TechnologyDeps({ capId }: { capId: string }) {
+  const { data, isLoading, error } = useBusinessTechnology(capId);
+  if (isLoading) return <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Loading…</div>;
+  if (error || !data) return <div role="alert" style={{ fontSize: 12, color: "var(--crit)" }}>Failed to load technology dependencies.</div>;
+  if (data.items.length === 0) {
+    return <div style={{ fontSize: 12, color: "var(--ink-3)" }}>No technical capability is reached through the application layer.</div>;
+  }
+  return (
+    <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+      {data.items.map((d) => (
+        <li key={`${d.via_business_capability.id}:${d.via_app_capability.id}:${d.technical.id}`} style={{ fontSize: 12, padding: "1px 0" }}>
+          <BandChip band={d.effective_band} /> <CapWithPath kind="technical" cap={d.technical} />
+          <span style={{ fontSize: 11, color: "var(--ink-3)" }}>
+            {" "}via <CapLink kind="app-capability" id={d.via_app_capability.id}>{d.via_app_capability.name}</CapLink>
+            {d.end_of_life_date ? ` · EOL ${d.end_of_life_date}` : ""}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** 938-capability-model-analysis US4: business L3 row -- the technical capabilities it depends on
+ *  through the application layer (derived, never stored; there is no direct business -> technical
+ *  link). */
+export function BusinessCapTechnology({ capId }: { capId: string }): React.ReactElement {
+  return <Expander label="Technology dependencies">{() => <TechnologyDeps capId={capId} />}</Expander>;
 }
 
 /** Technical capability row: the application capabilities that depend on it. */

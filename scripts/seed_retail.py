@@ -26,7 +26,7 @@ import argparse
 import asyncio
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -41,6 +41,7 @@ from adp.application.models import (
     ApplicationDomainIntegrationCreate,
     ApplicationIntegrationCreate,
     ApplicationStageLinkCreate,
+    ApplicationRiskUpdate,
     ApplicationTechCapLinkCreate,
     HealthAssessmentSubmit,
     TechnicalCapabilityCreate,
@@ -256,6 +257,16 @@ CAPABILITY_CHAINS = [
     ("Process Returns", "Return Authorization", ["API Gateway Services"]),
     ("Issue Receipts", "Receipt Generation", ["Notification Messaging"]),
     (None, "Loyalty Points Accrual", []),
+]
+# 938-capability-model-analysis (ADP-6et.2): demo data for the analysis views.
+# Impact / exposure: offline sync is being retired, so Process Checkout is exposed.
+TECH_CAP_LIFECYCLE = {
+    "Local Data Store with Offline Sync": ("retiring", date(2027, 6, 30)),
+}
+# Overlap: e-commerce has its own promotions capability, so two applications realize
+# "Apply Promotions" -- a rationalization candidate. (L2 parent, L3 name, business L3, tech, app key)
+OVERLAP_APP_CAPS = [
+    ("Pricing", "Online Promotion Evaluation", "Apply Promotions", "API Gateway Services", "commerce"),
 ]
 
 # ── Application portfolio ─────────────────────────────────────────────────────
@@ -821,16 +832,21 @@ async def seed(db_url: str) -> None:
                 TechnicalCapabilityCreate(name=t2_name, parent_id=t1.id), session)
             tech_ids[t2_name] = t2.id
             for t3_name in t3_names:
+                status, eol = TECH_CAP_LIFECYCLE.get(t3_name, ("current", None))
                 t3 = await astore.create_technical_capability(
-                    TechnicalCapabilityCreate(name=t3_name, parent_id=t2.id), session)
+                    TechnicalCapabilityCreate(name=t3_name, parent_id=t2.id,
+                                              lifecycle_status=status, end_of_life_date=eol),
+                    session)
                 tech_ids[t3_name] = t3.id
 
         app_cap_ids: dict[str, str] = {}
+        a2_ids: dict[str, str] = {}
         a1_name, a2_list = APP_CAPS
         a1 = await acstore.create_app_capability(ApplicationCapabilityCreate(name=a1_name), session)
         for a2_name, a3_names in a2_list:
             a2 = await acstore.create_app_capability(
                 ApplicationCapabilityCreate(name=a2_name, parent_id=a1.id), session)
+            a2_ids[a2_name] = a2.id
             for a3_name in a3_names:
                 a3 = await acstore.create_app_capability(
                     ApplicationCapabilityCreate(name=a3_name, parent_id=a2.id), session)
@@ -843,9 +859,20 @@ async def seed(db_url: str) -> None:
             for tech_name in tech_names:
                 await acstore.add_tech_link(ac_id, tech_ids[tech_name], session)
             await acstore.add_realization(ac_id, app_ids["pos"], session)
+        for a2_name, a3_name, biz_name, tech_name, app_key in OVERLAP_APP_CAPS:
+            a3 = await acstore.create_app_capability(
+                ApplicationCapabilityCreate(name=a3_name, parent_id=a2_ids[a2_name]), session)
+            app_cap_ids[a3_name] = a3.id
+            await acstore.add_business_link(a3.id, cap_ids[biz_name], session)
+            await acstore.add_tech_link(a3.id, tech_ids[tech_name], session)
+            await acstore.add_realization(a3.id, app_ids[app_key], session)
+        # Risk roll-up demo: the aging POS has a weak security posture.
+        await astore.upsert_application_risk(
+            app_ids["pos"], ApplicationRiskUpdate(security_posture="weak"), session)
         await session.commit()
         print(f"  {len(app_cap_ids)} application capability L3s, "
-              f"{len(CAPABILITY_CHAINS) - 1} business -> application -> technical chains")
+              f"{len(CAPABILITY_CHAINS) - 1} business -> application -> technical chains, "
+              f"{len(OVERLAP_APP_CAPS)} overlap")
 
     # ── Phase D: agentic solution + agents (933-agent-registry) ───────────────
     print("Seeding agent registry...")

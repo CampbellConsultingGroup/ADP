@@ -15,6 +15,8 @@ function techCap(partial: Partial<TechnicalCapability> & { id: string; name: str
     description: null,
     created_at: "2024-01-01T00:00:00Z",
     strategic_relevance: null,
+    lifecycle_status: "current",
+    end_of_life_date: null,
     ...partial,
   };
 }

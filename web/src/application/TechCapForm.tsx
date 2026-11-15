@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import type { TechnicalCapability, TechnicalCapabilityCreate } from "../api/application";
+import type { TechCapLifecycle, TechnicalCapability, TechnicalCapabilityCreate } from "../api/application";
+import { TECH_CAP_LIFECYCLES, TECH_CAP_LIFECYCLE_LABEL } from "../api/application";
 
 interface Props {
   parent?: TechnicalCapability | null;
@@ -11,6 +12,8 @@ interface Props {
 export default function TechCapForm({ parent, onSave, onCancel, saving }: Props) {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [lifecycle, setLifecycle] = useState<TechCapLifecycle>("current");
+  const [endOfLife, setEndOfLife] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -18,7 +21,13 @@ export default function TechCapForm({ parent, onSave, onCancel, saving }: Props)
     if (!name.trim()) { setError("Name is required"); return; }
     setError(null);
     try {
-      await onSave({ name: name.trim(), description: description || null, parent_id: parent?.id ?? null });
+      await onSave({
+        name: name.trim(),
+        description: description || null,
+        parent_id: parent?.id ?? null,
+        lifecycle_status: lifecycle,
+        end_of_life_date: endOfLife || null,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     }
@@ -32,6 +41,18 @@ export default function TechCapForm({ parent, onSave, onCancel, saving }: Props)
       {error && <div style={{ fontSize: 11, color: "var(--crit)" }}>{error}</div>}
       <input style={field} value={name} onChange={e => setName(e.target.value)} placeholder="Capability name *" autoFocus />
       <input style={field} value={description} onChange={e => setDescription(e.target.value)} placeholder="Description (optional)" />
+      <div style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 11, color: "var(--ink-3)" }}>
+        <label style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          Lifecycle
+          <select style={{ ...field, width: "auto" }} value={lifecycle} onChange={e => setLifecycle(e.target.value as TechCapLifecycle)}>
+            {TECH_CAP_LIFECYCLES.map(s => <option key={s} value={s}>{TECH_CAP_LIFECYCLE_LABEL[s]}</option>)}
+          </select>
+        </label>
+        <label style={{ display: "flex", gap: 4, alignItems: "center" }}>
+          End of life
+          <input type="date" style={{ ...field, width: "auto" }} value={endOfLife} onChange={e => setEndOfLife(e.target.value)} />
+        </label>
+      </div>
       <div style={{ display: "flex", gap: 6 }}>
         <button type="submit" disabled={saving} style={{ fontSize: 11, padding: "4px 12px", background: "var(--accent)", color: "var(--surface)", border: "none", borderRadius: 4, cursor: "pointer" }}>
           {saving ? "…" : "Save"}

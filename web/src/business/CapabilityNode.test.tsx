@@ -12,10 +12,15 @@ import type { ReactElement } from "react";
 import CapabilityNode from "./CapabilityNode";
 import * as businessApi from "../api/business";
 import * as complianceApi from "../api/compliance";
+import * as capAnalysisApi from "../api/capAnalysis";
 import type { CapabilityTreeNode } from "./CapabilityTree";
 
 vi.mock("../api/business");
 vi.mock("../api/compliance");
+vi.mock("../api/capAnalysis", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../api/capAnalysis")>()),
+  useBusinessTechnology: vi.fn(),
+}));
 
 const mockedBusinessApi = vi.mocked(businessApi);
 const mockedComplianceApi = vi.mocked(complianceApi);
@@ -142,5 +147,54 @@ describe("CapabilityNode (COMPLY-02 US3 — mapped compliance controls)", () => 
     await userEvent.click(screen.getByRole("button", { name: "Compliance" }));
 
     screen.getByText("No controls mapped yet.");
+  });
+});
+
+describe("CapabilityNode technology dependencies (938-capability-model-analysis US4)", () => {
+  const L3: CapabilityTreeNode = { ...CAPABILITY, id: "cap-3", name: "Process Checkout", level: 3, parent_id: "cap-2" };
+  const mockedCapAnalysis = vi.mocked(capAnalysisApi);
+
+  function mockDeps(items: capAnalysisApi.TechnologyDependency[]) {
+    mockedCapAnalysis.useBusinessTechnology.mockReturnValue({
+      data: { as_of: "2026-11-15", items },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof capAnalysisApi.useBusinessTechnology>);
+  }
+
+  it("is only on Level 3 rows, collapsed until opened", async () => {
+    mockDeps([]);
+    renderWithQueryClient(<CapabilityNode capability={CAPABILITY} selected={false} onToggleSelect={vi.fn()}>{null}</CapabilityNode>);
+    expect(screen.queryByRole("button", { name: /Technology dependencies/ })).toBeNull();
+  });
+
+  it("lists each technical capability with its band and the application capability that links it", async () => {
+    mockDeps([
+      {
+        technical: { id: "tc", name: "Local Data Store with Offline Sync", level: 3, path: [{ id: "t2", name: "Data Storage", level: 2 }] },
+        lifecycle_status: "retiring",
+        end_of_life_date: "2027-06-30",
+        effective_band: "retiring",
+        via_app_capability: { id: "ac", name: "Basket Calculation", level: 3 },
+        via_business_capability: { id: "cap-3", name: "Process Checkout", level: 3 },
+      },
+    ]);
+    const user = userEvent.setup();
+    renderWithQueryClient(<CapabilityNode capability={L3} selected={false} onToggleSelect={vi.fn()}>{null}</CapabilityNode>);
+    expect(mockedCapAnalysis.useBusinessTechnology).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: /Technology dependencies/ }));
+    expect(mockedCapAnalysis.useBusinessTechnology).toHaveBeenCalledWith("cap-3");
+    expect(screen.getByText("Local Data Store with Offline Sync")).toBeTruthy();
+    expect(screen.getByText("Retiring")).toBeTruthy();
+    expect(screen.getByText("Basket Calculation")).toBeTruthy();
+    expect(screen.getByText(/EOL 2027-06-30/)).toBeTruthy();
+  });
+
+  it("says when nothing is reached", async () => {
+    mockDeps([]);
+    const user = userEvent.setup();
+    renderWithQueryClient(<CapabilityNode capability={L3} selected={false} onToggleSelect={vi.fn()}>{null}</CapabilityNode>);
+    await user.click(screen.getByRole("button", { name: /Technology dependencies/ }));
+    expect(screen.getByText(/No technical capability is reached/)).toBeTruthy();
   });
 });

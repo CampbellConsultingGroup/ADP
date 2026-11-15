@@ -8,7 +8,8 @@ import type { ApplicationCapability } from "../api/appCapabilities";
 import { MISSING_TECHNICAL_CAPABILITY, useAppCapabilities } from "../api/appCapabilities";
 import AppCapDetail from "./AppCapDetail";
 import AppCapTree from "./AppCapTree";
-import { useCanWriteApplications } from "./appCapNav";
+import CapFindingsViews, { type FindingsMode } from "./CapFindingsViews";
+import { AppCapNavContext, useCanWriteApplications } from "./appCapNav";
 
 /** Gaps list: every L3 with no technical capability, labelled with its L1/L2 path. */
 export function missingTechGaps(items: ApplicationCapability[]): { id: string; name: string; path: string }[] {
@@ -57,7 +58,7 @@ export default function AppCapabilitiesView({ initialId = null }: { initialId?: 
   const { data, isLoading, error } = useAppCapabilities();
   const canWrite = useCanWriteApplications();
   const [selectedId, setSelectedId] = useState<string | null>(initialId);
-  const [mode, setMode] = useState<"tree" | "gaps">("tree");
+  const [mode, setMode] = useState<"tree" | "missing" | FindingsMode>("tree");
 
   if (isLoading) return <div style={{ padding: 20, color: "var(--ink-3)", fontSize: 14 }}>Loading application capabilities…</div>;
   if (error) return <div role="alert" style={{ padding: 14, color: "var(--crit)", fontSize: 13 }}>Failed to load application capabilities.</div>;
@@ -70,16 +71,22 @@ export default function AppCapabilitiesView({ initialId = null }: { initialId?: 
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       <div style={{ width: 420, borderRight: "1px solid var(--border)", overflow: "auto", padding: 14, flexShrink: 0 }}>
         <Guidance />
-        <div role="tablist" aria-label="Application capability views" style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+        <div role="tablist" aria-label="Application capability views" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
           <button role="tab" aria-selected={mode === "tree"} style={tab(mode === "tree")} onClick={() => setMode("tree")}>
             Catalog
           </button>
-          <button role="tab" aria-selected={mode === "gaps"} style={tab(mode === "gaps")} onClick={() => setMode("gaps")}>
+          <button role="tab" aria-selected={mode === "missing"} style={tab(mode === "missing")} onClick={() => setMode("missing")}>
             Missing technical capability ({gaps.length})
           </button>
+          {/* 938-capability-model-analysis US5 */}
+          {([["overlaps", "Overlaps"], ["gaps", "Gaps"], ["shared", "Shared"]] as [FindingsMode, string][]).map(([m, label]) => (
+            <button key={m} role="tab" aria-selected={mode === m} style={tab(mode === m)} onClick={() => setMode(m)}>
+              {label}
+            </button>
+          ))}
         </div>
         {mode === "tree" && <AppCapTree items={items} selectedId={selected} onSelect={setSelectedId} canWrite={canWrite} />}
-        {mode === "gaps" && (
+        {mode === "missing" && (
           <div aria-label="Missing technical capability">
             {gaps.length === 0 ? (
               <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Every Level 3 application capability has a technical capability.</div>
@@ -99,6 +106,12 @@ export default function AppCapabilitiesView({ initialId = null }: { initialId?: 
               </ul>
             )}
           </div>
+        )}
+        {(mode === "overlaps" || mode === "gaps" || mode === "shared") && (
+          // Application capabilities picked from a finding open here, in the detail pane.
+          <AppCapNavContext.Provider value={setSelectedId}>
+            <CapFindingsViews mode={mode} />
+          </AppCapNavContext.Provider>
         )}
       </div>
       <div style={{ flex: 1, overflow: "auto", padding: 18 }}>

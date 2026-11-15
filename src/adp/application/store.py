@@ -145,6 +145,10 @@ _tech_caps = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     # ADP-33v: strategic classification (migration 020)
     sa.Column("strategic_relevance", sa.SmallInteger(), nullable=True),
+    # 938-capability-model-analysis: lifecycle (migration 047). The Python-side default covers raw
+    # inserts that bypass create_technical_capability (some fixtures do).
+    sa.Column("lifecycle_status", sa.Text(), nullable=False, default="current"),
+    sa.Column("end_of_life_date", sa.Date(), nullable=True),
 )
 
 _app_cap_links = sa.Table(
@@ -515,6 +519,8 @@ def _row_to_tech_cap(row: Any) -> TechnicalCapability:
         level=row.level,
         created_at=row.created_at,
         strategic_relevance=getattr(row, "strategic_relevance", None),
+        lifecycle_status=getattr(row, "lifecycle_status", None) or "current",
+        end_of_life_date=getattr(row, "end_of_life_date", None),
     )
 
 
@@ -1615,6 +1621,8 @@ async def create_technical_capability(
             level=level,
             created_at=now,
             strategic_relevance=body.strategic_relevance,
+            lifecycle_status=body.lifecycle_status,
+            end_of_life_date=body.end_of_life_date,
         )
     )
     tc = TechnicalCapability(
@@ -1625,6 +1633,8 @@ async def create_technical_capability(
         level=level,
         created_at=now,
         strategic_relevance=body.strategic_relevance,
+        lifecycle_status=body.lifecycle_status,
+        end_of_life_date=body.end_of_life_date,
     )
     await index_entity(
         ENTITY_TECHNICAL_CAPABILITY, tc_id, build_text(body.name, body.description), session
@@ -1648,6 +1658,10 @@ async def update_technical_capability(
         updates["description"] = body.description
     if "strategic_relevance" in body.model_fields_set:
         updates["strategic_relevance"] = body.strategic_relevance
+    if body.lifecycle_status is not None:
+        updates["lifecycle_status"] = body.lifecycle_status
+    if "end_of_life_date" in body.model_fields_set:
+        updates["end_of_life_date"] = body.end_of_life_date
 
     if updates:
         await session.execute(

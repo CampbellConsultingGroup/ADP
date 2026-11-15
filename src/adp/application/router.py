@@ -980,12 +980,21 @@ async def update_tech_cap(
     request: Request,
     session: AsyncSession = Depends(_get_session),
 ):
+    before = await astore.get_technical_capability(tc_id, session)
     tc = await astore.update_technical_capability(tc_id, body, session)
-    if tc is None:
+    if tc is None or before is None:
         raise HTTPException(status_code=404, detail=f"Technical capability {tc_id!r} not found")
     await session.commit()
     actor = _get_actor(request)
     logger.info("technical_capability.update id=%s actor=%s", tc_id, actor)
+    # 938 FR-003: lifecycle changes are logged with the old and new values.
+    old_lifecycle = (before.lifecycle_status, before.end_of_life_date)
+    if old_lifecycle != (tc.lifecycle_status, tc.end_of_life_date):
+        logger.info(
+            "technical_capability.lifecycle id=%s actor=%s from=%s to=%s eol_from=%s eol_to=%s",
+            tc_id, actor, before.lifecycle_status, tc.lifecycle_status,
+            before.end_of_life_date, tc.end_of_life_date,
+        )
     return tc
 
 
