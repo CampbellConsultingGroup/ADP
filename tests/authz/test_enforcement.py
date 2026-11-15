@@ -515,3 +515,35 @@ def test_agentic_read_routes_are_ungated() -> None:
 def test_reviewer_denied_agent_write(app: FastAPI) -> None:
     resp = _client_as(app, PersonaRole.REVIEWER).post("/api/v1/agentic/agents", json={})
     assert resp.status_code == 403
+
+
+# ── 935-pattern-registry ─────────────────────────────────────────────────────────
+
+def test_pattern_routes_map_to_actions() -> None:
+    from adp.authz.roles import ActionType
+
+    assert (
+        required_action_for("POST", "/api/v1/patterns/{key}/versions/{version}/lifecycle")
+        == ActionType.GOVERN_PATTERN
+    )
+    for method, path in (
+        ("POST", "/api/v1/patterns/import"),
+        ("POST", "/api/v1/patterns/validate"),
+        ("POST", "/api/v1/patterns/render"),
+        ("PUT", "/api/v1/patterns/{key}/versions/{version}"),
+        ("DELETE", "/api/v1/patterns/{key}/versions/{version}"),
+    ):
+        assert required_action_for(method, path) == ActionType.WRITE_PATTERN, (method, path)
+    assert required_action_for("GET", "/api/v1/patterns") is None
+
+
+@pytest.mark.parametrize(
+    "role",
+    [PersonaRole.REVIEWER, PersonaRole.SOLUTION_ARCHITECT, PersonaRole.TECHNICAL_ARCHITECT],
+)
+def test_non_ea_denied_pattern_governance(app: FastAPI, role: PersonaRole) -> None:
+    resp = _client_as(app, role).post(
+        "/api/v1/patterns/ea.x.y/versions/1.0.0/lifecycle",
+        json={"to": "proposed", "reason": "r", "confirmation_id": "c"},
+    )
+    assert resp.status_code == 403

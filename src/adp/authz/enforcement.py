@@ -38,6 +38,11 @@ SAFE_METHODS: frozenset[str] = frozenset({"GET", "HEAD", "OPTIONS"})
 # Keyed by (HTTP method, full path template as registered on the app). Covers
 # the design-scoped routers where mutations map to several distinct actions.
 _EXPLICIT_ROUTE_ACTIONS: dict[tuple[str, str], ActionType] = {
+    # 935-pattern-registry: governed lifecycle transitions (ART-VIII confirmation id), and the
+    # dry-run authoring tools listed explicitly so their intent is visible (spec GT-2).
+    ("POST", "/api/v1/patterns/{key}/versions/{version}/lifecycle"): ActionType.GOVERN_PATTERN,
+    ("POST", "/api/v1/patterns/validate"): ActionType.WRITE_PATTERN,
+    ("POST", "/api/v1/patterns/render"): ActionType.WRITE_PATTERN,
     # Design authoring (canonical-model writes)
     ("POST", "/api/v1/designs"): ActionType.WRITE_DESIGN,
     ("POST", "/api/v1/designs/import"): ActionType.WRITE_DESIGN,
@@ -171,6 +176,9 @@ _PREFIX_ROUTE_ACTIONS: tuple[tuple[str, ActionType], ...] = (
     ("/api/v1/compliance/", ActionType.WRITE_COMPLIANCE),
     # 933-agent-registry: agent registry writes reuse application-write (no new ActionType).
     ("/api/v1/agentic/", ActionType.WRITE_APPLICATION),
+    # 935-pattern-registry: import / draft edit / draft delete / dry-run validate+render.
+    # Lifecycle transitions are mapped to GOVERN_PATTERN in the explicit map above.
+    ("/api/v1/patterns/", ActionType.WRITE_PATTERN),
 )
 
 

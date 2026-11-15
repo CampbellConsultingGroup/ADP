@@ -1,0 +1,13 @@
+%% adp-pattern ea.integration.point-to-point-mesh@1.0.0 view=catalog digest=aacbece19380
+flowchart LR
+    pt_9696faf3{{Point-to-Point Mesh · 1.0.0}}
+    pt_e90c05e0[Domain Event Backbone · 1.0.0]
+    pt_b750c266[One System of Record per Capability · 1.0.0]
+    pt_fdb8e363[Mesh to Event Backbone · 1.0.0]
+    pt_e90c05e0 -- replaces --> pt_9696faf3
+    pt_e90c05e0 -- requires --> pt_b750c266
+    pt_fdb8e363 -- realizes --> pt_e90c05e0
+    classDef focus fill:#85BBE0,stroke:#08427B,stroke-width:3px
+    classDef pattern fill:#FFFFFF,stroke:#2874A6
+    class pt_9696faf3 focus
+    class pt_e90c05e0,pt_b750c266,pt_fdb8e363 pattern

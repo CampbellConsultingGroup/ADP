@@ -1,0 +1,25 @@
+%% adp-pattern ea.integration.domain-event-backbone@1.0.0 view=traceability digest=f69fdbeb4014
+flowchart LR
+    subgraph col_motivation [Motivation]
+        direction TB
+        pr_0[API First Design]
+        pr_1[P-NO-P2P · not found]
+        ct_0[GDPR Art. 32 Security of processing]
+    end
+    pt_e90c05e0[Domain Event Backbone · 1.0.0]
+    subgraph col_impl [Known implementations]
+        direction TB
+        ap_0[Enterprise Event Hub]
+    end
+    pr_0 --> pt_e90c05e0
+    pr_1 --> pt_e90c05e0
+    ct_0 --> pt_e90c05e0
+    pt_e90c05e0 --> ap_0
+    classDef role fill:#85BBE0,stroke:#78A8CC
+    classDef focus fill:#85BBE0,stroke:#08427B,stroke-width:3px
+    classDef motivation fill:#FFFFFF,stroke:#08427B
+    classDef unknown fill:#FFFFFF,stroke:#707070,stroke-dasharray:2 2
+    class ap_0 role
+    class pt_e90c05e0 focus
+    class pr_0,ct_0 motivation
+    class pr_1 unknown

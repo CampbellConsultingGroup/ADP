@@ -39,27 +39,18 @@ async def _get_compliance_session():
     async with factory() as session:
         yield session
 
-# ── Lazy embedder singleton ───────────────────────────────────────────────────
-
-_embedder: Any = None
-
-
-def _get_embedder() -> Any:
-    global _embedder
-    if _embedder is None:
-        from adp.knowledge.embedder import EmbeddingProvider
-        _embedder = EmbeddingProvider("all-MiniLM-L6-v2")
-    return _embedder
+# ── Embedding ────────────────────────────────────────────────────────────────
 
 
 def _embed(title: str, full_text: str) -> list[float]:
-    """Generate a 384-dim embedding; fall back to zero vector on failure."""
-    try:
-        text = f"{title}\n{full_text}"
-        return _get_embedder().embed(text)
-    except Exception as exc:
-        logger.warning("Embedding generation failed, using zero vector: %s", exc)
-        return [0.0] * 384
+    """Generate a 384-dim embedding; fall back to zero vector on failure.
+
+    Delegates to the shared knowledge write-path helper (935 research D6); kept as a module
+    function so tests can patch it.
+    """
+    from adp.knowledge.embedder import embed_or_zero
+
+    return embed_or_zero(title, full_text)
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
@@ -156,6 +147,45 @@ def _row_to_detail(row: Any) -> KnowledgeItemDetail:
     )
 
 
+# ── Registry-owned items (935-pattern-registry FR-015, research.md D8) ─────────
+
+_PATTERN_PREFIX = "adp-pattern:"
+_PATTERN_MANAGER = "pattern-registry"
+
+
+def _metadata_dict(raw: Any) -> dict[str, Any]:
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, str):
+        import json
+
+        try:
+            parsed = json.loads(raw)
+        except ValueError:
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return {}
+
+
+def _is_registry_managed(item_id: str, metadata: Any) -> bool:
+    return item_id.startswith(_PATTERN_PREFIX) or (
+        _metadata_dict(metadata).get("managed_by") == _PATTERN_MANAGER
+    )
+
+
+def _reject_if_registry_managed(row: Any) -> None:
+    """A pattern projection is derived from the governed current version; change the pattern."""
+    if _is_registry_managed(row.id, row.metadata):
+        key = _metadata_dict(row.metadata).get("pattern_key") or row.id[len(_PATTERN_PREFIX):]
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Knowledge item {row.id!r} is managed by the Patterns registry; change the "
+                f"pattern '{key}' (and promote a new version) instead"
+            ),
+        )
+
+
 async def _fetch_active_row(item_id: str, session: AsyncSession) -> Any:
     row = (await session.execute(
         sa.select(knowledge_items).where(
@@ -219,6 +249,11 @@ async def create_knowledge_item(
 ) -> KnowledgeItemSummary:
     """FR-003: Create a new knowledge item with a freshly generated embedding."""
     item_id = request.id or str(uuid.uuid4())
+    if _is_registry_managed(item_id, request.metadata):
+        raise HTTPException(
+            status_code=422,
+            detail="Pattern projections are created only by the Patterns registry",
+        )
     embedding = _embed(request.title, request.full_text)
 
     item = KnowledgeItem(
@@ -246,6 +281,11 @@ async def update_knowledge_item(
 ) -> KnowledgeItemSummary:
     """FR-004: Update a knowledge item; re-embed if title or full_text changed."""
     row = await _fetch_active_row(item_id, session)
+    _reject_if_registry_managed(row)
+    if request.metadata is not None and _is_registry_managed("", request.metadata):
+        raise HTTPException(
+            status_code=422, detail="managed_by is reserved for the Patterns registry"
+        )
 
     new_title = request.title if request.title is not None else row.title
     new_full_text = request.full_text if request.full_text is not None else row.full_text
@@ -279,7 +319,8 @@ async def delete_knowledge_item(
     session: AsyncSession = Depends(get_kb_session),
 ) -> None:
     """FR-005: Soft-delete a knowledge item (sets active=false)."""
-    await _fetch_active_row(item_id, session)  # raises 404 if not found
+    row = await _fetch_active_row(item_id, session)  # raises 404 if not found
+    _reject_if_registry_managed(row)
     idx = KnowledgeIndex(session_factory=None)
     await idx.mark_inactive([item_id], session)
     await session.commit()

@@ -15,6 +15,7 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from adp.compliance.models import (
+    PATTERN_TARGET_KINDS,
     AmendmentNotFoundError,
     ApplicationPhaseNotFoundError,
     ComplianceStatus,
@@ -791,7 +792,7 @@ async def upsert_pattern_mapping(
     kind = await get_knowledge_item_kind(pattern_id, session)
     if kind is None:
         raise MappingTargetNotFoundError("pattern", pattern_id)
-    if kind != "pattern":
+    if kind not in PATTERN_TARGET_KINDS:
         raise InvalidPatternTargetError(pattern_id, kind)
     return await _upsert_entity_mapping(
         _control_pattern_mapping, "pattern_id", MappingTargetType.PATTERN,

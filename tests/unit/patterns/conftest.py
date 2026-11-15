@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
+
+import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
 VALID = FIXTURES / "valid"
@@ -36,3 +39,23 @@ def expected_from_header(text: str) -> tuple[str, str]:
     code = parts[0]
     path = parts[1] if len(parts) > 1 else ""
     return code, path
+
+
+GOLDENS = Path(__file__).parent / "goldens"
+
+
+@pytest.fixture()
+def golden(request: pytest.FixtureRequest) -> Callable[[str, str], None]:
+    """Compare text against goldens/<name>; rewrite it under --update-goldens (935 D10)."""
+    update = bool(request.config.getoption("--update-goldens", default=False))
+
+    def _check(name: str, text: str) -> None:
+        path = GOLDENS / name
+        if update:
+            GOLDENS.mkdir(exist_ok=True)
+            path.write_text(text, encoding="utf-8", newline="\n")
+            return
+        assert path.exists(), f"missing golden {name}; run pytest --update-goldens"
+        assert text == path.read_text(encoding="utf-8"), f"golden mismatch: {name}"
+
+    return _check

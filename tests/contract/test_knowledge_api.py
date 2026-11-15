@@ -230,3 +230,85 @@ async def test_delete_already_deleted_returns_404(client):
     await client.delete("/api/v1/knowledge/PRIN-001")
     resp = await client.delete("/api/v1/knowledge/PRIN-001")
     assert resp.status_code == 404
+
+
+# ── 935-pattern-registry: registry-owned items are read-only here (FR-015) ─────────
+
+@pytest.fixture()
+async def client_and_factory(tmp_path):
+    from adp.api.app import create_app
+    from adp.api.deps import get_kb_session
+    from adp.api.routers import knowledge as kb_module
+
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/kb_managed.db", echo=False)
+    await _create_tables(engine)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+
+    async def _fake_session():
+        async with factory() as session:
+            yield session
+
+    with patch.object(kb_module, "_embed", return_value=[0.0] * 384):
+        app = create_app()
+        app.dependency_overrides[get_kb_session] = _fake_session
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+            yield c, factory
+    await engine.dispose()
+
+
+_MANAGED_ID = "adp-pattern:ea.integration.domain-event-backbone"
+
+
+async def _insert_managed(factory) -> None:
+    async with factory() as session:
+        await session.execute(
+            sa.text(
+                "INSERT INTO knowledge_items (id, version, kind, title, full_text, metadata,"
+                " source_ref, active, embedding, indexed_at) VALUES (:id, '1.0.0',"
+                " 'reference_architecture', 'Domain Event Backbone', 'text',"
+                ' \'{"managed_by": "pattern-registry", "pattern_key":'
+                ' "ea.integration.domain-event-backbone"}\', :id, 1, \'[0.0]\','
+                " '2026-11-14 00:00:00.000000')"
+            ),
+            {"id": _MANAGED_ID},
+        )
+        await session.commit()
+
+
+async def test_managed_item_cannot_be_updated_or_deleted(client_and_factory) -> None:
+    client, factory = client_and_factory
+    await _insert_managed(factory)
+    assert (await client.get(f"/api/v1/knowledge/{_MANAGED_ID}")).status_code == 200
+    put = await client.put(f"/api/v1/knowledge/{_MANAGED_ID}", json={"title": "Hijacked"})
+    assert put.status_code == 409
+    assert "Patterns registry" in put.json()["detail"]
+    delete = await client.delete(f"/api/v1/knowledge/{_MANAGED_ID}")
+    assert delete.status_code == 409
+    after = (await client.get(f"/api/v1/knowledge/{_MANAGED_ID}")).json()
+    assert after["title"] == "Domain Event Backbone"
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"id": "adp-pattern:ea.fake.one"},
+        {"metadata": {"managed_by": "pattern-registry"}},
+    ],
+)
+async def test_cannot_create_an_item_posing_as_a_registry_projection(client, body) -> None:
+    resp = await client.post(
+        "/api/v1/knowledge",
+        json={
+            "kind": "pattern", "title": "Fake", "full_text": "x", "source_ref": "x", **body,
+        },
+    )
+    assert resp.status_code == 422
+
+
+async def test_other_items_are_unaffected(client) -> None:
+    await _seed_item(client, "TEST-OK")
+    assert (
+        await client.put("/api/v1/knowledge/TEST-OK", json={"title": "Renamed"})
+    ).status_code == 200
+    assert (await client.delete("/api/v1/knowledge/TEST-OK")).status_code == 204

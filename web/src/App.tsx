@@ -14,6 +14,7 @@ import { DiagramsPage } from "./diagrams/DiagramsPage";
 import type { DiagramSeed } from "./diagrams/generators";
 import StrategyPage from "./strategy/StrategyPage";
 import CompliancePage from "./compliance/CompliancePage";
+import { PatternsPage } from "./patterns";
 import AgentsPage from "./agentic/AgentsPage";
 import AdminPage from "./admin/AdminPage";
 import ScoringRubricsPage from "./admin/ScoringRubricsPage";
@@ -127,6 +128,8 @@ export default function App(): React.ReactElement {
         return <StrategyPage />;
       case "compliance":
         return <CompliancePage />;
+      case "patterns":
+        return <PatternsPage />;
       case "admin":
         return <AdminPage />;
       case "scoring-rubrics":

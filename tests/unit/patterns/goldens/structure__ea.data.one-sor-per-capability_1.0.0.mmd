@@ -1,0 +1,7 @@
+%% adp-pattern ea.data.one-sor-per-capability@1.0.0 view=structure digest=838d7eb80385
+flowchart LR
+    r_capability[Capability · 1..*]
+    r_system_of_record[System Of Record · 1 per capability]
+    r_system_of_record -- serves --> r_capability
+    classDef role fill:#85BBE0,stroke:#78A8CC
+    class r_capability,r_system_of_record role

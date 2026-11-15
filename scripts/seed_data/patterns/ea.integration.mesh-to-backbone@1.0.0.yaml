@@ -1,0 +1,37 @@
+# Seed pattern (935-pattern-registry FR-023), derived from the 934 fixture of the same key.
+# Cites real seeded principles (scripts/seed_knowledge.py PRIN-*) so it can be promoted.
+pattern: ea.integration.mesh-to-backbone
+version: 1.0.0
+kind: transition
+name: Mesh to Event Backbone
+summary: Strangle direct cross-domain integrations by routing them through the event backbone, domain by domain.
+owner_role: enterprise
+motivation:
+  context: The estate has a point-to-point mesh.
+  problem: A big-bang replacement is too risky.
+roles:
+  backbone:
+    element_type: application
+    cardinality: "1"
+    stereotype: platform
+  cross_domain_integration:
+    element_type: integration
+    cardinality: "0..*"
+    selector: "it.source.domain_ids.all(d, !(d in it.target.domain_ids))"
+constraints:
+  - id: C1
+    rule: The backbone platform is in place.
+    expr: "size(bindings['backbone']) == 1"
+  - id: C2
+    rule: Every cross-domain integration touches the backbone.
+    for_each: cross_domain_integration
+    expr: "it.target.id in role('backbone') || it.source.id in role('backbone')"
+transition:
+  from_pattern: ea.integration.point-to-point-mesh
+  strategy: strangler
+  plateaus:
+    - { id: PL1, name: Backbone live, exit_criteria: [C1] }
+    - { id: PL2, name: Mesh retired, exit_criteria: [C1, C2] }
+relations:
+  - { type: realizes, target: ea.integration.domain-event-backbone }
+views: [transition]

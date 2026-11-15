@@ -27,6 +27,11 @@ class IndexerResult:
     connector_errors: dict[str, str] = field(default_factory=dict)
 
 
+# Knowledge items written by other subsystems, not by any connector this indexer runs. The
+# pattern registry owns ``adp-pattern:`` items (935-pattern-registry, research.md D7).
+_EXTERNALLY_MANAGED_PREFIXES: tuple[str, ...] = ("adp-pattern:",)
+
+
 class Indexer:
     """Orchestrates nightly re-indexing from all canonical knowledge sources."""
 
@@ -58,7 +63,10 @@ class Indexer:
         # Get previously active ids for deactivation tracking.
         async with session_factory() as session:
             async with session.begin():
-                prev_active_ids = await index.get_all_active_ids(session)
+                # Registry-owned items (935 FR-014) come from no connector; never sweep them.
+                prev_active_ids = await index.get_all_active_ids(
+                    session, exclude_source_prefixes=_EXTERNALLY_MANAGED_PREFIXES
+                )
 
         # --- Git connectors ---
         for repo_url in self._git_repo_urls:

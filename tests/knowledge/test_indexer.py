@@ -177,3 +177,68 @@ async def test_indexer_connector_failure_does_not_block_others(tmp_path: Path) -
     # Run completes without raising; error is recorded in connector_errors
     assert "https://broken-repo.example.org" in result.connector_errors
     assert "repo unreachable" in result.connector_errors["https://broken-repo.example.org"]
+
+
+# ── 935-pattern-registry: registry-owned items are not deactivation candidates ──────
+
+@pytest.mark.asyncio
+async def test_indexer_excludes_pattern_registry_items_from_sweep(tmp_path: Path) -> None:
+    """The indexer asks for active ids EXCLUDING adp-pattern: items (935 FR-014, GT-6)."""
+    mock_index = AsyncMock()
+    mock_index.get_all_active_ids = AsyncMock(return_value=set())
+    mock_index.mark_inactive = AsyncMock(return_value=0)
+    factory, _ = _make_session_factory(mock_index)
+    indexer = Indexer(
+        database_url="postgresql+asyncpg://test/test", embedding_model="mock", embedding_dim=4,
+    )
+    mock_engine = MagicMock()
+    mock_engine.dispose = AsyncMock()
+    with patch("adp.knowledge.indexer.create_async_engine", return_value=mock_engine), \
+         patch("adp.knowledge.indexer.async_sessionmaker", return_value=factory), \
+         patch("adp.knowledge.indexer.KnowledgeIndex", return_value=mock_index):
+        await indexer.run()
+    kwargs = mock_index.get_all_active_ids.call_args.kwargs
+    assert kwargs["exclude_source_prefixes"] == ("adp-pattern:",)
+
+
+@pytest.mark.asyncio
+async def test_get_all_active_ids_honours_excluded_prefixes(tmp_path: Path) -> None:
+    """Real query on SQLite: excluded source prefixes are never returned (935 research D7)."""
+    from datetime import datetime, timezone
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from adp.knowledge.index import KnowledgeIndex
+    from adp.patterns import store as pstore
+
+    # knowledge_items' own metadata uses JSONB/Vector (Postgres-only); the pattern registry's
+    # full-column mirror of the same table carries SQLite variants, so create it from there.
+    knowledge_items = pstore._knowledge_items
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/kb.db")
+    async with engine.begin() as conn:
+        await conn.run_sync(
+            lambda c: pstore._metadata.create_all(c, tables=[knowledge_items])
+        )
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    now = datetime.now(timezone.utc)
+    async with factory() as session:
+        for item_id, ref, active in (
+            ("PAT-001", "git:x", True),
+            ("adp-pattern:ea.a.b", "adp-pattern:ea.a.b", True),
+            ("PAT-002", "git:y", False),
+        ):
+            await session.execute(
+                knowledge_items.insert().values(
+                    id=item_id, version="1.0.0", kind="pattern", title=item_id, full_text="t",
+                    metadata={}, source_ref=ref, schema_version="1.0.0", active=active,
+                    embedding=[0.0] * 384, indexed_at=now,
+                )
+            )
+        await session.commit()
+        index = KnowledgeIndex(factory)
+        assert await index.get_all_active_ids(session) == {"PAT-001", "adp-pattern:ea.a.b"}
+        assert await index.get_all_active_ids(
+            session, exclude_source_prefixes=("adp-pattern:",)
+        ) == {"PAT-001"}
+    await engine.dispose()
+

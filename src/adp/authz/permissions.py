@@ -67,7 +67,12 @@ _logger = logging.getLogger("adp.authz")
 #           Architect's wildcard is narrowed to exclude this action too --
 #           no architect role gains admin-screen access solely by virtue of
 #           that role, this being another such screen.
-PERMISSIONS_VERSION = "1.10.0"
+#   1.11.0 — added ActionType.WRITE_PATTERN and ActionType.GOVERN_PATTERN
+#           (935-pattern-registry). Granted only to Enterprise Architect and
+#           Platform Admin, both via their existing wildcard grants -- no change
+#           to any role entry (Clarification Q1: SA/TA authoring deferred).
+#           GOVERN_PATTERN joins REQUIRES_CONFIRMATION (Clarification Q3).
+PERMISSIONS_VERSION = "1.11.0"
 
 # ── Permission table ─────────────────────────────────────────────────────────
 # Maps each PersonaRole to the frozenset of ActionTypes it may perform.
@@ -142,6 +147,7 @@ REQUIRES_CONFIRMATION: frozenset[ActionType] = frozenset({
     ActionType.CONFIRM_AGENT_SUGGESTION,
     ActionType.MANAGE_AGENT_PROMPTS,
     ActionType.MANAGE_SCORING_RUBRICS,
+    ActionType.GOVERN_PATTERN,
 })
 
 

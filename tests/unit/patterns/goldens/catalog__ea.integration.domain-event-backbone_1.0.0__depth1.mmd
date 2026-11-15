@@ -1,0 +1,15 @@
+%% adp-pattern ea.integration.domain-event-backbone@1.0.0 view=catalog digest=f69fdbeb4014
+flowchart LR
+    pt_e90c05e0[Domain Event Backbone · 1.0.0]
+    pt_b750c266[One System of Record per Capability · 1.0.0]
+    pt_fdb8e363[Mesh to Event Backbone · 1.0.0]
+    pt_9696faf3{{Point-to-Point Mesh · 1.0.0}}
+    pt_e90c05e0 -- replaces --> pt_9696faf3
+    pt_e90c05e0 -- requires --> pt_b750c266
+    pt_fdb8e363 -- realizes --> pt_e90c05e0
+    classDef focus fill:#85BBE0,stroke:#08427B,stroke-width:3px
+    classDef pattern fill:#FFFFFF,stroke:#2874A6
+    classDef antipattern fill:#FFFFFF,stroke:#707070,stroke-dasharray:4 2
+    class pt_e90c05e0 focus
+    class pt_b750c266,pt_fdb8e363 pattern
+    class pt_9696faf3 antipattern
