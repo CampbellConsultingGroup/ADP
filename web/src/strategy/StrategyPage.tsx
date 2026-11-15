@@ -119,6 +119,8 @@ export default function StrategyPage(): React.ReactElement {
                 onSelect={setSelectedObjectiveId}
                 filterThemeId={filterThemeId}
                 onClearThemeFilter={() => setFilterThemeId(null)}
+                onThemeFilterChange={setFilterThemeId}
+                onNavigateToTheme={goToTheme}
               />
             )
         )}

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useObjectives, useCreateObjective, useThemes } from "../api/strategy";
+import NavLinkButton from "./NavLinkButton";
 import ObjectiveForm from "./ObjectiveForm";
 
 interface ObjectiveListProps {
@@ -10,9 +11,20 @@ interface ObjectiveListProps {
    *  highlight here since a theme commonly has several objectives. */
   filterThemeId?: string | null;
   onClearThemeFilter?: () => void;
+  /** ADP-3fg: the "Filter by theme" dropdown sets the same filter the Themes
+   *  tab's cross-navigation does (null = all themes). */
+  onThemeFilterChange?: (themeId: string | null) => void;
+  /** ADP-3fg: each row's theme name jumps to that theme (Themes tab). */
+  onNavigateToTheme?: (themeId: string) => void;
 }
 
-export default function ObjectiveList({ onSelect, filterThemeId, onClearThemeFilter }: ObjectiveListProps): React.ReactElement {
+export default function ObjectiveList({
+  onSelect,
+  filterThemeId,
+  onClearThemeFilter,
+  onThemeFilterChange,
+  onNavigateToTheme,
+}: ObjectiveListProps): React.ReactElement {
   const { data, isLoading, error } = useObjectives();
   const { data: themesData } = useThemes();
   const createMutation = useCreateObjective();
@@ -23,9 +35,9 @@ export default function ObjectiveList({ onSelect, filterThemeId, onClearThemeFil
 
   const allItems = data?.items ?? [];
   const items = filterThemeId ? allItems.filter((o) => o.theme_id === filterThemeId) : allItems;
-  const filterThemeName = filterThemeId
-    ? themesData?.items.find((t) => t.id === filterThemeId)?.name ?? filterThemeId
-    : null;
+  const themes = themesData?.items ?? [];
+  const themeName = (themeId: string) => themes.find((t) => t.id === themeId)?.name ?? themeId;
+  const filterThemeName = filterThemeId ? themeName(filterThemeId) : null;
 
   return (
     <div>
@@ -42,6 +54,17 @@ export default function ObjectiveList({ onSelect, filterThemeId, onClearThemeFil
           {filterThemeName && <> in theme &ldquo;{filterThemeName}&rdquo;</>}
         </span>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {onThemeFilterChange && (
+            <select
+              aria-label="Filter by theme"
+              value={filterThemeId ?? ""}
+              onChange={(e) => onThemeFilterChange(e.target.value || null)}
+              style={{ fontSize: 12.5 }}
+            >
+              <option value="">All themes</option>
+              {themes.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          )}
           {filterThemeId && onClearThemeFilter && (
             <button
               onClick={onClearThemeFilter}
@@ -85,6 +108,7 @@ export default function ObjectiveList({ onSelect, filterThemeId, onClearThemeFil
       {items.map((obj) => (
         <div
           key={obj.id}
+          data-objective-row
           onClick={() => onSelect(obj.id)}
           style={{
             padding: "12px 16px",
@@ -102,6 +126,19 @@ export default function ObjectiveList({ onSelect, filterThemeId, onClearThemeFil
             <div style={{ fontSize: 14, fontWeight: 600, color: "var(--ink)", marginBottom: 2 }}>{obj.statement}</div>
             <div style={{ fontSize: 12, color: "var(--ink-3)" }}>
               {obj.owner} · {obj.period} {obj.fiscal_year}
+            </div>
+            {/* ADP-3fg: the objective's theme, visible without opening or editing it. */}
+            <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>
+              Theme:{" "}
+              {onNavigateToTheme ? (
+                <span onClick={(e) => e.stopPropagation()}>
+                  <NavLinkButton onClick={() => onNavigateToTheme(obj.theme_id)} title="Jump to this theme">
+                    {themeName(obj.theme_id)}
+                  </NavLinkButton>
+                </span>
+              ) : (
+                <span style={{ color: "var(--ink-2)", fontWeight: 600 }}>{themeName(obj.theme_id)}</span>
+              )}
             </div>
           </div>
           <span style={{ fontSize: 12, color: "var(--ink-3)" }}>›</span>
