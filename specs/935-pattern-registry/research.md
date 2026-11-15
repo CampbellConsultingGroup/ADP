@@ -122,7 +122,7 @@ Precedent: the insert-then-catch handling of duplicates in `adp.agentic.store`.
 ## D7 — Indexer exemption (GT-6)
 
 **Decision**:
-- `KnowledgeIndex.get_active_ids` (`src/adp/knowledge/index.py:118-123`) gains an `exclude_source_prefixes` parameter.
+- `KnowledgeIndex.get_all_active_ids` (`src/adp/knowledge/index.py:118-123`) gains an `exclude_source_prefixes` parameter.
 - `Indexer.run` passes `("adp-pattern:",)`, so registry items are never deactivation candidates (`indexer.py:132`).
 
 **Finding, out of scope**: the same sweep would also deactivate API-created and CALM-imported knowledge items, which are not in any connector's output either. Filed as a follow-on bead rather than widened here.
@@ -131,7 +131,8 @@ Precedent: the insert-then-catch handling of duplicates in `adp.agentic.store`.
 
 **Decision**: in `adp/api/routers/knowledge.py`:
 - `PUT /{id}` and `DELETE /{id}` return **409** with `"managed by the Patterns registry — change it at /patterns/<key>"` when the item's `metadata.managed_by == "pattern-registry"` or the id starts with `adp-pattern:`.
-- `POST` (create) rejects ids with that prefix (422), so nobody can pre-plant a projection.
+- `POST` (create) rejects ids with that prefix, and any `metadata.managed_by = "pattern-registry"` on create or update (422), so nobody can pre-plant or fake a projection.
+- *Implementation note*: `KnowledgeItemRow` also now renders `source_ref` as a link only when it is http(s) (`isHttpUrl`). A projection's `adp-pattern:` ref would otherwise be a dead link, and the existing code linked any scheme.
 
 **UI**:
 - `KnowledgeItemRow` shows a "Managed by Patterns" badge with a link and hides Edit/Delete for those items.
@@ -155,7 +156,7 @@ Precedent: the insert-then-catch handling of duplicates in `adp.agentic.store`.
 | Labels | Captured raw by `(.+)`; quotes are kept literally (lines 17-31) | **Unquoted** labels. `sanitize_label()` replaces `[]{}()<>"\|` and `#`/`;` with spaces, collapses whitespace, removes connector-like runs (`--`, `==`, `-.`, `.-`, `~~`), truncates at 60 characters with `…`, and falls back to `?` when empty |
 | Line breaks | No `<br/>` support | Parts joined with ` · ` (for example `«platform» Backbone · 1`) |
 | Shapes | `[ ]`, `([ ])`, `{{ }}`, `[/ /]` supported | Role `id[...]`; mediator/platform role `id([...])`; anti-pattern `id{{...}}`; plateau (936) `id[/.../]` |
-| Edges | `-- label -->`, `-. label .->`, `== label ==>`, `-.-`, `-->` supported; no `x`/`o` arrowheads | Relationship `A -- type: label --> B`; `via` = `A -- type --> V` + `V --> B`; prohibited hint `A -. ✕ label .-> B`; required hint `A == label ==> B`; symmetric relations (`conflicts_with`, `alternative_to`) `A -.- B` with no label (the dialect has no labelled undirected dotted form), carried in the legend |
+| Edges | `-- label -->`, `-. label .->`, `== label ==>`, `-.-`, `-->` supported; no `x`/`o` arrowheads | Relationship `A -- type: label --> B`; `via` = `A -- type --> V` + `V --> B`; prohibited hint `A -. ✕ label .-> B`; required hint `A == label ==> B`; symmetric relations (`conflicts_with`, `alternative_to`) as a labelled dotted arrow `A -. conflicts with .-> B` (*implementation note*: chosen over the planned unlabelled `-.-`, which lost the relation type) |
 | Subgraphs | Only `subgraph id [Title]`; `direction` only inside | Traceability columns: `subgraph col_motivation [Motivation]` + `direction TB` |
 | Styles | `classDef` props limited to fill, stroke, stroke-width, stroke-dasharray (lines 131-141); text colour ignored | Light fills only, so the renderer's default dark text stays legible |
 | Ids | `[A-Za-z0-9_]+` | Generated: roles `r_<key with - → _>`; patterns `pt_<sha1(key)[:8]>`; principles `pr_<n>`; controls `ct_<n>`; implementations `ap_<n>` (n = declared position). Role keys are `[a-z][a-z0-9_]*` (934), so roles cannot collide |
@@ -170,7 +171,7 @@ Precedent: the insert-then-catch handling of duplicates in `adp.agentic.store`.
 | `pattern` | `#FFFFFF` | `#2874A6` | |
 | `antipattern` | `#FFFFFF` | `#707070` | stroke-dasharray 4 2 (the hexagon shape carries the meaning, not the colour) |
 | `motivation` | `#FFFFFF` | `#08427B` | |
-| `unknown` | `#FFFFFF` | `#707070` | stroke-dasharray 2 2, label suffix ` (unknown)` |
+| `unknown` | `#FFFFFF` | `#707070` | stroke-dasharray 2 2, label suffix ` · not in registry` (catalog) / ` · not found` (traceability) |
 
 **Legend**: a `subgraph legend [Legend]` with one node per class used (optional, `include_legend`).
 
@@ -178,7 +179,7 @@ Precedent: the insert-then-catch handling of duplicates in `adp.agentic.store`.
 - breadth-first search over relations in both directions, depth 1–3;
 - node cap 40, after which `truncated` notes are added;
 - the representative version is current → latest proposed → latest draft, by semantic version (Python `tuple(int)` ordering, never text order);
-- deprecated versions get a ` (deprecated)` suffix;
+- deprecated versions get a ` · deprecated` suffix (*implementation note*: parentheses are dialect metacharacters and are stripped by `sanitize_label`, so the planned `(deprecated)`/`(unknown)` suffixes could not survive);
 - unresolved targets use the `unknown` class.
 
 **Goldens**:
@@ -195,7 +196,7 @@ Precedent: the insert-then-catch handling of duplicates in `adp.agentic.store`.
 
 **Decision**:
 - A new `web/src/patterns/FlowchartView.tsx` runs `getDslFamily("flowchart").parse(text)`, then `autoLayout(model, direction)` (`web/src/diagrams/core/model/auto-layout.ts:52`), then `renderToSvg(model)` (`core/render/svg-renderer.ts:446`).
-- The SVG string is mounted in a container. The renderer escapes text nodes; implementation adds a test that a `<script>` label renders as text.
+- The SVG string is mounted as an `<img>` data URL (*implementation note*: stronger than injecting markup, since nothing in an image can execute). The renderer also escapes text nodes, which a test checks.
 - Below it sits a collapsible "Flowchart source" `<pre>` with a Copy button.
 - There is no interactive canvas.
 
