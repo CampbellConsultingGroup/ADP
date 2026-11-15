@@ -57,6 +57,7 @@ from adp.export import agentic as agentic_export
 from adp.export import application_arch, business_arch
 from adp.export import patterns as patterns_export
 from adp.export import strategy as strategy_export
+from adp.patterns import adoptions_router as pattern_adoptions_router_module
 from adp.patterns import router as patterns_router_module
 from adp.patterns import store as patterns_store
 from adp.strategy import router as strategy_router
@@ -329,6 +330,8 @@ def create_app() -> FastAPI:
     app.include_router(strategy_router.router)
     app.include_router(compliance_router_module.router)
     app.include_router(agentic_router_module.router)
+    # 936: adoption routes first, so /adoptions and /evaluate are never taken as a {key}.
+    app.include_router(pattern_adoptions_router_module.router)
     app.include_router(patterns_router_module.router)
 
     # Serve Vite-built frontend static files when running in Docker (ADP-SPEC-025)

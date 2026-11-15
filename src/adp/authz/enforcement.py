@@ -43,6 +43,8 @@ _EXPLICIT_ROUTE_ACTIONS: dict[tuple[str, str], ActionType] = {
     ("POST", "/api/v1/patterns/{key}/versions/{version}/lifecycle"): ActionType.GOVERN_PATTERN,
     ("POST", "/api/v1/patterns/validate"): ActionType.WRITE_PATTERN,
     ("POST", "/api/v1/patterns/render"): ActionType.WRITE_PATTERN,
+    # 936: dry-run evaluation of a draft/version against a scope (stores nothing).
+    ("POST", "/api/v1/patterns/evaluate"): ActionType.WRITE_PATTERN,
     # Design authoring (canonical-model writes)
     ("POST", "/api/v1/designs"): ActionType.WRITE_DESIGN,
     ("POST", "/api/v1/designs/import"): ActionType.WRITE_DESIGN,

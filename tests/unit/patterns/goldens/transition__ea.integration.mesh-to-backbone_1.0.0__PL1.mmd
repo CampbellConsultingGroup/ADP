@@ -1,0 +1,17 @@
+%% adp-pattern ea.integration.mesh-to-backbone@1.0.0 view=transition digest=9b09679ce33b
+flowchart LR
+    pt_9696faf3{{ea.integration.point-to-point-mesh}}
+    p_PL1[/PL1 Backbone live · C1/]
+    p_PL2[/PL2 Mesh retired · C1, C2/]
+    pt_e90c05e0[ea.integration.domain-event-backbone]
+    pt_9696faf3 --> p_PL1
+    p_PL1 -- blocked: C2 --> p_PL2
+    p_PL2 --> pt_e90c05e0
+    classDef pattern fill:#FFFFFF,stroke:#2874A6
+    classDef antipattern fill:#FFFFFF,stroke:#707070,stroke-dasharray:4 2
+    classDef reached fill:#85BBE0,stroke:#08427B
+    classDef pending fill:#FFFFFF,stroke:#707070,stroke-dasharray:4 2
+    class pt_e90c05e0 pattern
+    class pt_9696faf3 antipattern
+    class p_PL1 reached
+    class p_PL2 pending
