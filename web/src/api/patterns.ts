@@ -131,7 +131,7 @@ export interface PatternValidateResult {
 }
 
 export interface PatternViewResponse {
-  view: PatternViewKind;
+  view: PatternViewKind | "conformance" | "transition";
   flowchart: string;
   digest: string;
   generated_at: string;
@@ -353,4 +353,207 @@ export function usePatternYaml(key: string | null, version: string | null) {
     },
     enabled: !!key && !!version,
   });
+}
+
+// ── 936: adoptions, conformance, discovery ──────────────────────────────────────────
+
+export type ScopeType = "business_domain" | "application_set" | "portfolio";
+export type ConformanceStatus = "conformant" | "conformant_with_warnings" | "non_conformant" | "indeterminate" | "not_applicable";
+export type FindingKind = "violation" | "match" | "binding" | "evaluation_error" | "field_unavailable" | "unverifiable" | "limit";
+export type ElementType = "business_capability" | "value_stream" | "business_domain" | "application" | "integration" | "technical_capability" | "agent";
+
+export interface ElementRef { type: ElementType; id: string; name: string }
+export interface Finding {
+  code: string;
+  kind: FindingKind;
+  severity: IssueSeverity;
+  rule: string;
+  element_refs: ElementRef[];
+  element_count: number;
+  truncated: boolean;
+}
+export interface RoleBinding { role_key: string; element_type: ElementType; label: string; elements: ElementRef[]; count: number }
+export interface PlateauState { reached: string | null; next: string | null; blocking: string[] }
+export interface AdoptionScope { scope_type: ScopeType; scope_ref: string | null; member_ids: string[] }
+export interface ConformanceReport {
+  adoption_id: string | null;
+  pattern_key: string;
+  version: string | null;
+  digest: string | null;
+  evaluated_at: string;
+  scope: AdoptionScope;
+  bindings: RoleBinding[];
+  findings: Finding[];
+  status: ConformanceStatus;
+  plateau: PlateauState | null;
+}
+export interface DiscoveryReport { pattern_key: string; version: string; digest: string; evaluated_at: string; matches: Finding[]; match_count: number }
+export interface Pin { role_key: string; element_type: ElementType; element_id: string }
+export interface Adoption {
+  id: string;
+  pattern_key: string;
+  pattern_name: string | null;
+  kind: PatternKind;
+  name: string;
+  scope_type: ScopeType;
+  scope_ref: string | null;
+  scope_name: string | null;
+  member_ids: string[];
+  pinned_version: string | null;
+  resolved_version: string | null;
+  pins: Pin[];
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+  status: ConformanceStatus | null;
+}
+export interface AdoptionCreate {
+  pattern_key: string;
+  name: string;
+  scope_type: ScopeType;
+  scope_ref?: string | null;
+  member_ids?: string[];
+  pinned_version?: string | null;
+  pins?: Pin[];
+}
+export interface EvaluateRequest {
+  yaml?: string;
+  pattern_key?: string;
+  version?: string;
+  scope: AdoptionScope;
+  pins?: Pin[];
+}
+export type AdoptionViewKind = "conformance" | "transition";
+
+const adoptionKeys = {
+  all: ["patterns", "adoptions"] as const,
+  list: (withStatus: boolean) => ["patterns", "adoptions", "list", withStatus] as const,
+  one: (id: string) => ["patterns", "adoptions", "one", id] as const,
+  conformance: (id: string) => ["patterns", "adoptions", "conformance", id] as const,
+  view: (id: string, view: AdoptionViewKind) => ["patterns", "adoptions", "view", id, view] as const,
+  candidates: (id: string, role: string) => ["patterns", "adoptions", "candidates", id, role] as const,
+};
+
+function useInvalidateAdoptions() {
+  const qc = useQueryClient();
+  return () => void qc.invalidateQueries({ queryKey: adoptionKeys.all });
+}
+
+export function useAdoptions(withStatus = true) {
+  return useQuery<ListResponse<Adoption>>({
+    queryKey: adoptionKeys.list(withStatus),
+    queryFn: () => apiGet(`${API}/adoptions${withStatus ? "?with_status=true" : ""}`),
+  });
+}
+
+export function useAdoption(id: string | null) {
+  return useQuery<Adoption>({
+    queryKey: adoptionKeys.one(id ?? ""),
+    queryFn: () => apiGet(`${API}/adoptions/${encodeURIComponent(id ?? "")}`),
+    enabled: !!id,
+  });
+}
+
+export function useConformance(id: string | null) {
+  return useQuery<ConformanceReport>({
+    queryKey: adoptionKeys.conformance(id ?? ""),
+    queryFn: () => apiGet(`${API}/adoptions/${encodeURIComponent(id ?? "")}/conformance`),
+    enabled: !!id,
+  });
+}
+
+export function useAdoptionView(id: string, view: AdoptionViewKind, enabled = true) {
+  return useQuery<PatternViewResponse>({
+    queryKey: adoptionKeys.view(id, view),
+    queryFn: () => apiGet(`${API}/adoptions/${encodeURIComponent(id)}/views/${view}`),
+    enabled,
+  });
+}
+
+export function useCandidates(id: string, roleKey: string | null) {
+  return useQuery<ElementRef[]>({
+    queryKey: adoptionKeys.candidates(id, roleKey ?? ""),
+    queryFn: () => apiGet(`${API}/adoptions/${encodeURIComponent(id)}/candidates/${encodeURIComponent(roleKey ?? "")}`),
+    enabled: !!roleKey,
+  });
+}
+
+export function useCreateAdoption() {
+  const invalidate = useInvalidateAdoptions();
+  return useMutation<Adoption, Error, AdoptionCreate>({
+    mutationFn: (body) => apiMutation<Adoption>("POST", `${API}/adoptions`, body),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useUpdateAdoption(id: string) {
+  const invalidate = useInvalidateAdoptions();
+  return useMutation<Adoption, Error, { name?: string; pinned_version?: string | null }>({
+    mutationFn: (body) => apiMutation<Adoption>("PATCH", `${API}/adoptions/${encodeURIComponent(id)}`, body),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useSetMembers(id: string) {
+  const invalidate = useInvalidateAdoptions();
+  return useMutation<Adoption, Error, string[]>({
+    mutationFn: (memberIds) => apiMutation<Adoption>("PUT", `${API}/adoptions/${encodeURIComponent(id)}/members`, { member_ids: memberIds }),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useSetPins(id: string) {
+  const invalidate = useInvalidateAdoptions();
+  return useMutation<Adoption, Error, Pin[]>({
+    mutationFn: (pins) => apiMutation<Adoption>("PUT", `${API}/adoptions/${encodeURIComponent(id)}/pins`, { pins }),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDeleteAdoption(id: string) {
+  const invalidate = useInvalidateAdoptions();
+  return useMutation<void, Error, void>({
+    mutationFn: () => apiMutation<void>("DELETE", `${API}/adoptions/${encodeURIComponent(id)}`),
+    onSuccess: () => invalidate(),
+  });
+}
+
+export function useDiscovery(key: string, version: string, enabled = true) {
+  return useQuery<DiscoveryReport>({
+    queryKey: ["patterns", "discovery", key, version],
+    queryFn: () => apiGet(`${versionPath(key, version)}/discover`),
+    enabled,
+  });
+}
+
+export function useEvaluate() {
+  return useMutation<ConformanceReport, Error, EvaluateRequest>({
+    mutationFn: (body) => apiMutation<ConformanceReport>("POST", `${API}/evaluate`, body),
+  });
+}
+
+/** Applications for the application-set member picker (plain query, no Suspense). */
+export function useApplicationChoices() {
+  return useQuery<ElementRef[]>({
+    queryKey: ["patterns", "application-choices"],
+    queryFn: async () => {
+      const res = await apiGet<{ items: { id: string; name: string }[] }>("/api/v1/applications");
+      return res.items
+        .map((a) => ({ type: "application" as const, id: a.id, name: a.name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    },
+  });
+}
+
+/** Unique pattern families with a selectable version, for the adoption form. */
+export function usePatternFamilies() {
+  const list = usePatterns({});
+  const families = new Map<string, { key: string; name: string; kind: PatternKind; versions: string[] }>();
+  for (const v of list.data?.items ?? []) {
+    const f = families.get(v.pattern_key) ?? { key: v.pattern_key, name: v.name, kind: v.kind, versions: [] };
+    if (v.lifecycle !== "draft") f.versions.push(v.version);
+    if (v.lifecycle === "current") f.name = v.name;
+    families.set(v.pattern_key, f);
+  }
+  return { ...list, families: [...families.values()].sort((a, b) => a.name.localeCompare(b.name)) };
 }

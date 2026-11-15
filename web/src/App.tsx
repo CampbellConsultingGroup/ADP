@@ -129,7 +129,7 @@ export default function App(): React.ReactElement {
       case "compliance":
         return <CompliancePage />;
       case "patterns":
-        return <PatternsPage />;
+        return <PatternsPage onGenerateDiagram={onGenerateDiagram} />;
       case "admin":
         return <AdminPage />;
       case "scoring-rubrics":

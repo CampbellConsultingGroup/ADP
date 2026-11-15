@@ -5,16 +5,43 @@ import React, { useState } from "react";
 import { PATTERN_KINDS, PATTERN_LIFECYCLES, usePatterns } from "../api/patterns";
 import type { PatternFilters, PatternKind, PatternLifecycle } from "../api/patterns";
 import { StatusBadge } from "../ui";
+import AdoptionsList from "./AdoptionsList";
 import ImportPanel from "./ImportPanel";
 import { KIND_LABELS, LIFECYCLE_LABELS, LIFECYCLE_TONES } from "./labels";
 import PatternVersion from "./PatternVersion";
 import { useCanManagePatterns } from "./permissions";
+import type { DiagramSeed } from "../diagrams/generators";
 
 const cell: React.CSSProperties = { padding: "7px 10px", borderBottom: "1px solid var(--border)", fontSize: 12.5, textAlign: "left" };
 
 type Mode = { kind: "list" } | { kind: "import"; yaml: string } | { kind: "version"; key: string; version: string };
 
-export default function PatternsPage() {
+export default function PatternsPage({ onGenerateDiagram }: { onGenerateDiagram?: (seed: DiagramSeed) => void } = {}) {
+  const [section, setSection] = useState<"patterns" | "adoptions">("patterns");
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div role="tablist" aria-label="Patterns sections" style={{ display: "flex", gap: 4, padding: "10px 20px 0" }}>
+        {(["patterns", "adoptions"] as const).map((sct) => (
+          <button
+            key={sct}
+            type="button"
+            role="tab"
+            aria-selected={section === sct}
+            className={`ui-btn ui-btn-sm${section === sct ? " ui-btn-primary" : " ui-btn-ghost"}`}
+            onClick={() => setSection(sct)}
+          >
+            {sct === "patterns" ? "Patterns" : "Adoptions"}
+          </button>
+        ))}
+      </div>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        {section === "patterns" ? <PatternCatalog /> : <AdoptionsList onGenerateDiagram={onGenerateDiagram} />}
+      </div>
+    </div>
+  );
+}
+
+function PatternCatalog() {
   const [filters, setFilters] = useState<PatternFilters>({});
   const [mode, setMode] = useState<Mode>({ kind: "list" });
   const canManage = useCanManagePatterns();

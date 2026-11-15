@@ -6,6 +6,7 @@ import { useState } from "react";
 import { errorDetail, errorIssues, useRenderPattern, useUpdateDraft, useValidatePattern } from "../api/patterns";
 import type { PatternIssue, PatternViewResponse } from "../api/patterns";
 import FlowchartView from "./FlowchartView";
+import EvaluatePanel from "./EvaluatePanel";
 import IssueList from "./IssueList";
 
 export default function YamlEditor({ patternKey, version, initialYaml }: { patternKey: string; version: string; initialYaml: string }) {
@@ -88,6 +89,7 @@ export default function YamlEditor({ patternKey, version, initialYaml }: { patte
       {error && <div className="ui-alert crit" role="alert">{error}</div>}
       <IssueList issues={issues} title="Validation" />
       {preview && <FlowchartView flowchart={preview.flowchart} title="Structure preview" />}
+      <EvaluatePanel yaml={text} />
     </div>
   );
 }
