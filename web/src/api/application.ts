@@ -347,6 +347,27 @@ export interface TechnicalCapability {
   level: number;
   created_at: string;
   strategic_relevance: StrategicRelevance | null;
+  /** 938-capability-model-analysis: set by architects; drives impact and exposure. */
+  lifecycle_status: TechCapLifecycle;
+  end_of_life_date: string | null;
+}
+
+export type TechCapLifecycle = "emerging" | "current" | "contained" | "retiring" | "retired";
+
+export const TECH_CAP_LIFECYCLES: TechCapLifecycle[] = ["emerging", "current", "contained", "retiring", "retired"];
+
+export const TECH_CAP_LIFECYCLE_LABEL: Record<TechCapLifecycle, string> = {
+  emerging: "Emerging",
+  current: "Current",
+  contained: "Contained",
+  retiring: "Retiring",
+  retired: "Retired",
+};
+
+/** Display-only: the server derives the authoritative "past end of life" band. */
+export function isPastEndOfLife(tc: Pick<TechnicalCapability, "lifecycle_status" | "end_of_life_date">, today = new Date()): boolean {
+  if (tc.lifecycle_status === "retired" || !tc.end_of_life_date) return false;
+  return tc.end_of_life_date <= today.toISOString().slice(0, 10);
 }
 
 export interface TechnicalCapabilityCreate {
@@ -354,12 +375,16 @@ export interface TechnicalCapabilityCreate {
   description?: string | null;
   parent_id?: string | null;
   strategic_relevance?: StrategicRelevance | null;
+  lifecycle_status?: TechCapLifecycle;
+  end_of_life_date?: string | null;
 }
 
 export interface TechnicalCapabilityUpdate {
   name?: string;
   description?: string | null;
   strategic_relevance?: StrategicRelevance | null;
+  lifecycle_status?: TechCapLifecycle;
+  end_of_life_date?: string | null;
 }
 
 export interface TechCapListResponse {
@@ -676,7 +701,10 @@ export function useCreateTechCap() {
   return useMutation({
     mutationFn: (body: TechnicalCapabilityCreate) =>
       apiFetch<TechnicalCapability>(`${API}/technical-capabilities`, { method: "POST", body: JSON.stringify(body) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tech-caps"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["tech-caps"] });
+      void qc.invalidateQueries({ queryKey: ["cap-analysis"] });
+    },
   });
 }
 
@@ -688,7 +716,10 @@ export function useUpdateTechCap() {
         method: "PATCH",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tech-caps"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["tech-caps"] });
+      void qc.invalidateQueries({ queryKey: ["cap-analysis"] });
+    },
   });
 }
 
@@ -697,7 +728,10 @@ export function useDeleteTechCap() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<void>(`${API}/technical-capabilities/${id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tech-caps"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["tech-caps"] });
+      void qc.invalidateQueries({ queryKey: ["cap-analysis"] });
+    },
   });
 }
 

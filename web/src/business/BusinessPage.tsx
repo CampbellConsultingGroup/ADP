@@ -17,16 +17,19 @@ interface BusinessPageProps {
    *  (from a value stream's stages or a capability's subtree). Threaded down
    *  to ValueStreamDetail (US1) and CapabilityTree (US2). */
   onGenerateDiagram?: (seed: DiagramSeed) => void;
+  /** 938-capability-model-analysis: opened from an analysis list elsewhere -- start on the
+   *  Capabilities tab, scrolled to and highlighting this capability. */
+  initialFocusCapabilityId?: string | null;
 }
 
-export default function BusinessPage({ onGenerateDiagram }: BusinessPageProps): React.ReactElement {
-  const [tab, setTab] = useState<BusinessTab>("domains");
+export default function BusinessPage({ onGenerateDiagram, initialFocusCapabilityId = null }: BusinessPageProps): React.ReactElement {
+  const [tab, setTab] = useState<BusinessTab>(initialFocusCapabilityId ? "capabilities" : "domains");
   const [selectedVsId, setSelectedVsId] = useState<string | null>(null);
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   // 043-capability-heat-map US3: set when a heat-map cell is clicked; cleared
   // on any manual tab click so a later, unrelated visit to the Capabilities
   // tab doesn't carry a stale highlight forward.
-  const [focusCapabilityId, setFocusCapabilityId] = useState<string | null>(null);
+  const [focusCapabilityId, setFocusCapabilityId] = useState<string | null>(initialFocusCapabilityId);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>

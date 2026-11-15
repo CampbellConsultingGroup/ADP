@@ -203,7 +203,21 @@ def test_serialize_technical_capability() -> None:
     assert out == {
         "id": "tc-1", "name": "Rules Engine", "description": None,
         "parent_id": None, "level": 1, "strategic_relevance": None,
+        "lifecycle_status": "current", "end_of_life_date": None,
     }
+
+
+def test_serialize_technical_capability_lifecycle() -> None:
+    """938-capability-model-analysis FR-004: the lifecycle is exported."""
+    tc = TechnicalCapability(
+        id="tc-2", name="Offline Sync", description=None, parent_id=None,
+        level=3, created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        lifecycle_status="retiring", end_of_life_date=date(2027, 6, 30),
+    )
+    out = _serialize_technical_capability(tc)
+    assert out["lifecycle_status"] == "retiring"
+    assert out["end_of_life_date"] == "2027-06-30"
+    json.dumps(out)
 
 
 def test_serialize_initiative_includes_members() -> None:

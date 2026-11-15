@@ -115,6 +115,9 @@ Auto-generated from all feature plans. Last updated: 2026-11-14 (934-pattern-met
 - PostgreSQL 16. Migration `043` (`down_revision="042"`) adds two new tables and re-creates one CHECK constraint on `applications`. (933-agent-registry)
 - Python 3.12 runtime, 3.11+ compatible. + Pydantic v2 and `pyyaml>=6.0` (both existing). **One new runtime dependency:** `cel-expr-python==0.1.4`, pinned exactly (research D1). It ships cp311/cp312 manylinux_2_28 wheels and has no transitive dependencies. (934-pattern-metamodel)
 
+- Python 3.12 (3.11+) and TypeScript 5.x + React 18 (existing). + FastAPI, SQLAlchemy 2 async Core, Alembic, Pydantic v2, TanStack Query v5. All existing; **zero new packages**. (938-capability-model-analysis)
+- PostgreSQL 16. Migration `047` (`down_revision="046"`) adds 2 columns plus a CHECK on `technical_capabilities`. All analysis is derived. (938-capability-model-analysis)
+
 - Python 3.12 (3.11+ compatible) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; extends `adp.patterns` with registry/lifecycle/projection/render modules, writes managed rows into the existing `knowledge_items` (pgvector embedding via `adp.knowledge.embedder`), migration `044` (4 tables: ea_pattern, ea_pattern_version, ea_pattern_relation, ea_pattern_lifecycle_event) (935-pattern-registry)
 
 - Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; pure conformance engine in `adp.patterns` (snapshot/engine) over 934's CEL adapter, per-caller portfolio snapshot from registry mirrors, migration `045` (ea_pattern_adoption, _member, _pin; status derived, never stored) (936-pattern-conformance)
@@ -164,6 +167,30 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 938-capability-model-analysis: Implemented (ADP-6et.2, spec B of epic ADP-6et). Analysis over 937's three-layer
+  capability model, all DERIVED ON READ and never stored (guard test `test_cap_analysis_not_stored.py`). Pure engine
+  `adp.application.cap_analysis` (no I/O, `as_of` injected) over a frozen `CapabilitySnapshot` built by
+  `cap_analysis_store.build_snapshot` in a fixed 6-8 queries; risk/cost are NOT EVEN QUERIED for a caller without
+  READ_APPLICATION_RISK/_COST (inline `is_permitted`, response `*_available` flags, null metrics). Roll-ups per business
+  capability: health (worst app `health_score`), risk (fixed FR-006 band: high/medium/low/unknown from posture,
+  vulnerability, end-of-support; unknown never sets worst), cost (full TCO of DISTINCT apps, not allocated), technology
+  exposure (worst effective lifecycle band of technical caps reached via app caps; a linked technical L2 expands to its
+  children). L3 = worst over its apps; L2/L1 = worst over leaf L3s with the spread counted over LEAVES. Retired apps are
+  excluded (listed as excluded), sunset counted. Also impact (technical cap + descendants -> app caps -> apps -> business
+  caps with paths and routes), per-L3 technology dependencies, findings (overlaps = business L3 realized by >=2
+  non-retired apps; three gap lists; shared >= 3). Four GETs under `/api/v1/application-capabilities/analysis/` (before
+  `/{ac_id}`). Migration `047`: `technical_capabilities.lifecycle_status` (emerging/current/contained/retiring/retired,
+  CHECK, default current, Python-side default too) + `end_of_life_date`; PATCH logs old->new; exported. UI: Business heat
+  map +4 metrics from ONE lazily-enabled roll-up query (cell detail on hover/focus, cost/risk options disabled "not
+  available to you"); tech cap rows get lifecycle select/date, past-EOL flag, Impact expander; business L3 rows get a
+  "Technology dependencies" expander; Applications -> Capabilities gets Overlaps/Gaps/Shared tabs. New
+  `CapabilityNavContext` (appCapNav.tsx, provided by App.tsx) navigates to business caps/apps/tech caps. Seed: offline
+  sync Retiring 2027-06-30, Online Promotion Evaluation (Commerce Cloud) -> Apply Promotions overlap, POS posture weak.
+  Gotchas: the seed HARD-WIPES and adp_user cannot CREATE DATABASE, so it was verified by applying the same changes via
+  the API rather than a reseed; vitest automock of `../api/application` empties exported arrays/objects (use a partial
+  mock with importOriginal when a test needs real constants); app INFO logs don't show in local uvicorn output. Engine
+  96% / snapshot+models 100% covered. Follow-ons: ADP-n2t (Governance roll-up), ADP-6ky (editable mapping/horizon/
+  threshold), ADP-v2l (history), ADP-3uy (seed cost records). See `specs/938-capability-model-analysis/`.
 - 937-application-capabilities: Implemented (ADP-6et.1, spec A of 2 in epic ADP-6et "three-layer capability
   model"). A NEW application capability entity (shared L1-L3 catalog: level derived from the parent, max 3,
   parent/level immutable, delete blocked while children exist, sibling names unique case-insensitive incl. NULL-

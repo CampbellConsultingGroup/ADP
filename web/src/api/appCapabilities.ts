@@ -134,7 +134,14 @@ export function useAppCapsByApplication(appId: string | null) {
  * the detail and the reverse lookups on other screens update together. */
 function useInvalidating<V, R>(fn: (v: V) => Promise<R>) {
   const qc = useQueryClient();
-  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: KEY }) });
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: KEY });
+      // 938-capability-model-analysis: roll-ups, impact and findings derive from these links.
+      void qc.invalidateQueries({ queryKey: ["cap-analysis"] });
+    },
+  });
 }
 
 export function useCreateAppCapability() {

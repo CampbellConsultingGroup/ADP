@@ -10,7 +10,7 @@ import GovernancePage from "./governance/GovernancePage";
 import BusinessPage from "./business/BusinessPage";
 import ApplicationPage from "./application/ApplicationPage";
 import TechCapPage from "./application/TechCapPage";
-import { AppCapNavContext } from "./application/appCapNav";
+import { AppCapNavContext, CapabilityNavContext, type CapabilityNav } from "./application/appCapNav";
 import { DiagramsPage } from "./diagrams/DiagramsPage";
 import type { DiagramSeed } from "./diagrams/generators";
 import StrategyPage from "./strategy/StrategyPage";
@@ -64,6 +64,25 @@ export default function App(): React.ReactElement {
     setPendingAppCapId(id);
     setView("applications");
   };
+  // 938-capability-model-analysis: the analysis lists navigate to business capabilities,
+  // applications and technical capabilities on their own screens.
+  const [pendingBusinessCapId, setPendingBusinessCapId] = useState<string | null>(null);
+  const [pendingTechCapId, setPendingTechCapId] = useState<string | null>(null);
+  const capabilityNav: CapabilityNav = {
+    openBusinessCapability: (id) => {
+      setPendingBusinessCapId(id);
+      setView("business");
+    },
+    openApplication: (id) => {
+      setPendingAppCapId(null);
+      setPendingAppId(id);
+      setView("applications");
+    },
+    openTechnicalCapability: (id) => {
+      setPendingTechCapId(id);
+      setView("technical");
+    },
+  };
 
   const onNavigate = (nextView: AppView) => {
     if (!currentDesignId && DESIGN_ONLY_VIEWS.includes(nextView)) {
@@ -73,6 +92,8 @@ export default function App(): React.ReactElement {
     }
     setPendingAppId(null);
     setPendingAppCapId(null);
+    setPendingBusinessCapId(null);
+    setPendingTechCapId(null);
     setView(nextView);
   };
 
@@ -113,7 +134,15 @@ export default function App(): React.ReactElement {
       case "governance":
         return <GovernancePage onNavigate={onNavigate} onSelectDesign={onSelectDesign} />;
       case "business":
-        return <BusinessPage onNavigate={onNavigate} designId={currentDesignId} onGenerateDiagram={onGenerateDiagram} />;
+        return (
+          <BusinessPage
+            key={pendingBusinessCapId ?? "business"}
+            onNavigate={onNavigate}
+            designId={currentDesignId}
+            onGenerateDiagram={onGenerateDiagram}
+            initialFocusCapabilityId={pendingBusinessCapId}
+          />
+        );
       case "applications":
         return (
           <ApplicationPage
@@ -133,7 +162,7 @@ export default function App(): React.ReactElement {
           />
         );
       case "technical":
-        return <TechCapPage />;
+        return <TechCapPage key={pendingTechCapId ?? "technical"} focusTechCapId={pendingTechCapId} />;
       case "diagrams":
         return (
           <DiagramsPage
@@ -188,9 +217,11 @@ export default function App(): React.ReactElement {
 
   return (
     <AppCapNavContext.Provider value={openAppCapability}>
-      <AppShell currentView={view} onNavigate={onNavigate} designId={currentDesignId} onStartNewDesign={onStartNewDesign}>
-        {renderPage()}
-      </AppShell>
+      <CapabilityNavContext.Provider value={capabilityNav}>
+        <AppShell currentView={view} onNavigate={onNavigate} designId={currentDesignId} onStartNewDesign={onStartNewDesign}>
+          {renderPage()}
+        </AppShell>
+      </CapabilityNavContext.Provider>
     </AppCapNavContext.Provider>
   );
 }

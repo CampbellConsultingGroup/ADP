@@ -1,9 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type React from "react";
-import type { StrategicRelevance, TechnicalCapability } from "../api/application";
-import { STRATEGIC_RELEVANCE_LABEL, useCreateTechCap, useDeleteTechCap, useTechCaps, useUpdateTechCap } from "../api/application";
+import type { StrategicRelevance, TechCapLifecycle, TechnicalCapability } from "../api/application";
+import {
+  STRATEGIC_RELEVANCE_LABEL,
+  TECH_CAP_LIFECYCLES,
+  TECH_CAP_LIFECYCLE_LABEL,
+  isPastEndOfLife,
+  useCreateTechCap,
+  useDeleteTechCap,
+  useTechCaps,
+  useUpdateTechCap,
+} from "../api/application";
 import TechCapForm from "./TechCapForm";
+import TechCapImpactPanel from "./TechCapImpactPanel";
 import { TechCapUsedBy } from "./AppCapSummaryList";
+import { useCanWriteApplications } from "./appCapNav";
 
 export interface TechCapTreeNode extends TechnicalCapability {
   children: TechCapTreeNode[];
@@ -56,9 +67,63 @@ const actionBtn: React.CSSProperties = {
 interface NodeProps {
   node: TechCapTreeNode;
   depth: number;
+  focusId?: string | null;
 }
 
-function TechCapNode({ node, depth }: NodeProps) {
+/** 938-capability-model-analysis US2: lifecycle status and end-of-life date on the row. Writers
+ *  edit them in place (saved immediately, like strategic relevance); readers see a chip. */
+function LifecycleControls({ node }: { node: TechCapTreeNode }): React.ReactElement {
+  const canWrite = useCanWriteApplications();
+  const updateCap = useUpdateTechCap();
+  const past = isPastEndOfLife(node);
+  const flag = past ? (
+    <span
+      title={`End-of-life date ${node.end_of_life_date} has passed`}
+      style={{ fontSize: 10, color: "var(--crit)", whiteSpace: "nowrap" }}
+    >
+      ⚠ past end of life
+    </span>
+  ) : null;
+  if (!canWrite) {
+    return (
+      <>
+        <span aria-label="Lifecycle" style={{ fontSize: 10, color: "var(--ink-2)", border: "1px solid var(--border)", borderRadius: 3, padding: "0 4px" }}>
+          {TECH_CAP_LIFECYCLE_LABEL[node.lifecycle_status]}
+          {node.end_of_life_date ? ` · EOL ${node.end_of_life_date}` : ""}
+        </span>
+        {flag}
+      </>
+    );
+  }
+  const control: React.CSSProperties = {
+    fontSize: 10, color: "var(--ink-2)", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 3, padding: "1px 3px",
+  };
+  return (
+    <>
+      <select
+        aria-label={`Lifecycle of ${node.name}`}
+        value={node.lifecycle_status}
+        onChange={(e) => updateCap.mutate({ id: node.id, body: { lifecycle_status: e.target.value as TechCapLifecycle } })}
+        style={control}
+      >
+        {TECH_CAP_LIFECYCLES.map((s) => (
+          <option key={s} value={s}>{TECH_CAP_LIFECYCLE_LABEL[s]}</option>
+        ))}
+      </select>
+      <input
+        type="date"
+        aria-label={`End-of-life date of ${node.name}`}
+        title="End-of-life date (optional)"
+        value={node.end_of_life_date ?? ""}
+        onChange={(e) => updateCap.mutate({ id: node.id, body: { end_of_life_date: e.target.value || null } })}
+        style={{ ...control, width: 112 }}
+      />
+      {flag}
+    </>
+  );
+}
+
+function TechCapNode({ node, depth, focusId }: NodeProps) {
   const [expanded, setExpanded] = useState(true);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -92,9 +157,15 @@ function TechCapNode({ node, depth }: NodeProps) {
     setEditDescription(node.description ?? "");
   };
 
+  const focused = focusId === node.id;
   return (
-    <div style={{ marginLeft: depth * 14 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 0" }}>
+    <div style={{ marginLeft: depth * 14 }} data-tech-cap-row={node.id}>
+      <div
+        style={{
+          display: "flex", alignItems: "center", gap: 6, padding: "3px 0", borderRadius: 4,
+          background: focused ? "var(--accent-wash, #e8f1f8)" : undefined,
+        }}
+      >
         {node.children.length > 0 && (
           <button onClick={() => setExpanded(e => !e)} style={{ fontSize: 10, background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: 0, minWidth: 12 }}>
             {expanded ? "▾" : "▸"}
@@ -135,6 +206,7 @@ function TechCapNode({ node, depth }: NodeProps) {
                 <option key={v} value={v}>{STRATEGIC_RELEVANCE_LABEL[v]}</option>
               ))}
             </select>
+            <LifecycleControls node={node} />
             <span style={{ fontSize: 10, color: "var(--ink-3)" }}>L{node.level}</span>
             <button onClick={() => setEditing(true)} title="Edit" style={actionBtn}>✎</button>
             {node.level < 3 && (
@@ -146,6 +218,8 @@ function TechCapNode({ node, depth }: NodeProps) {
       </div>
       {/* 937-application-capabilities: application capabilities map to technical L2/L3 only. */}
       {node.level >= 2 && <TechCapUsedBy tcId={node.id} />}
+      {/* 938-capability-model-analysis US3: what this capability's end of life affects. */}
+      <TechCapImpactPanel tcId={node.id} />
       {adding && (
         <div style={{ marginLeft: 14 }}>
           <TechCapForm
@@ -157,16 +231,23 @@ function TechCapNode({ node, depth }: NodeProps) {
         </div>
       )}
       {expanded && node.children.map(child => (
-        <TechCapNode key={child.id} node={child} depth={depth + 1} />
+        <TechCapNode key={child.id} node={child} depth={depth + 1} focusId={focusId} />
       ))}
     </div>
   );
 }
 
-export default function TechCapTree() {
+export default function TechCapTree({ focusId = null }: { focusId?: string | null } = {}) {
   const { data, isLoading, error } = useTechCaps();
   const [addingRoot, setAddingRoot] = useState(false);
   const createCap = useCreateTechCap();
+  const loaded = !!data;
+
+  // 938-capability-model-analysis: opened from an analysis list -- scroll to the row.
+  useEffect(() => {
+    if (!focusId || !loaded) return;
+    document.querySelector(`[data-tech-cap-row="${focusId}"]`)?.scrollIntoView?.({ block: "center" });
+  }, [focusId, loaded]);
 
   if (isLoading) return <div style={{ padding: 20, color: "var(--ink-3)", fontSize: 14 }}>Loading technical capabilities…</div>;
   if (error) return <div style={{ padding: 14, background: "var(--crit-wash)", borderRadius: 6, fontSize: 13, color: "var(--crit)" }}>Failed to load technical capabilities: {error.message}</div>;
@@ -197,7 +278,7 @@ export default function TechCapTree() {
         </div>
       )}
       {tree.map(root => (
-        <TechCapNode key={root.id} node={root} depth={0} />
+        <TechCapNode key={root.id} node={root} depth={0} focusId={focusId} />
       ))}
     </div>
   );

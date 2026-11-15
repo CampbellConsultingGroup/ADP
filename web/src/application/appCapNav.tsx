@@ -32,3 +32,21 @@ export function useCanWriteApplications(): boolean {
   const { user } = useAuth();
   return canWriteApplications(user?.role ?? null);
 }
+
+// 938-capability-model-analysis (FR-018): every item in the impact, exposure, gap, overlap and
+// shared lists navigates to that item on its own screen. Provided by App.tsx; null in isolation
+// (tests, or a screen rendered outside the shell), where items render as plain text.
+export interface CapabilityNav {
+  /** Business -> Capabilities, scrolled to and highlighting the capability. */
+  openBusinessCapability: (id: string) => void;
+  /** Applications -> Registry with the application open. */
+  openApplication: (id: string) => void;
+  /** Technical Architecture, scrolled to and highlighting the capability. */
+  openTechnicalCapability: (id: string) => void;
+}
+
+export const CapabilityNavContext = createContext<CapabilityNav | null>(null);
+
+export function useCapabilityNav(): CapabilityNav | null {
+  return useContext(CapabilityNavContext);
+}

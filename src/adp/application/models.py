@@ -510,6 +510,11 @@ TechCapStrategicRelevance = Literal[1, 2, 3]
 
 TECH_CAP_STRATEGIC_RELEVANCE_LABELS: dict[int, str] = {1: "Strategic", 2: "Core", 3: "Supporting"}
 
+# 938-capability-model-analysis (ADP-6et.2, FR-001): a technical capability's lifecycle, set by
+# architects. Impact analysis and technology exposure start from it. "Past end of life" is derived
+# from end_of_life_date on read and never written to the status.
+TechCapLifecycle = Literal["emerging", "current", "contained", "retiring", "retired"]
+
 
 class TechnicalCapability(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -520,6 +525,8 @@ class TechnicalCapability(BaseModel):
     level: int
     created_at: datetime
     strategic_relevance: TechCapStrategicRelevance | None = None
+    lifecycle_status: TechCapLifecycle = "current"
+    end_of_life_date: date | None = None
 
 
 class TechnicalCapabilityCreate(BaseModel):
@@ -528,6 +535,8 @@ class TechnicalCapabilityCreate(BaseModel):
     description: str | None = None
     parent_id: str | None = None
     strategic_relevance: TechCapStrategicRelevance | None = None
+    lifecycle_status: TechCapLifecycle = "current"
+    end_of_life_date: date | None = None
 
     @field_validator("name")
     @classmethod
@@ -542,6 +551,9 @@ class TechnicalCapabilityUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     strategic_relevance: TechCapStrategicRelevance | None = None
+    # Omitted = unchanged. The status is not nullable; an explicit null end_of_life_date clears it.
+    lifecycle_status: TechCapLifecycle | None = None
+    end_of_life_date: date | None = None
 
     @field_validator("name")
     @classmethod
@@ -549,6 +561,12 @@ class TechnicalCapabilityUpdate(BaseModel):
         if v is not None and not v.strip():
             raise ValueError("name must not be blank")
         return v
+
+    @model_validator(mode="after")
+    def status_not_null(self) -> "TechnicalCapabilityUpdate":
+        if "lifecycle_status" in self.model_fields_set and self.lifecycle_status is None:
+            raise ValueError("lifecycle_status cannot be null")
+        return self
 
 
 class TechCapListResponse(BaseModel):

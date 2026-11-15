@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { MATURITY_LEVEL_LABEL, STRATEGIC_RELEVANCE_LABEL, useDeleteCapability, useUpdateCapability } from "../api/business";
 import { useCapabilityComplianceMappings } from "../api/compliance";
-import { BusinessCapAppCaps } from "../application/AppCapSummaryList";
+import { BusinessCapAppCaps, BusinessCapTechnology } from "../application/AppCapSummaryList";
 import type { MaturityLevel, StrategicRelevance } from "../api/business";
 import type { CapabilityTreeNode } from "./CapabilityTree";
 import CapabilityForm from "./CapabilityForm";
@@ -258,6 +258,7 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
 
       {/* 937-application-capabilities: only L3s are mapped to application capabilities. */}
       {capability.level === 3 && <BusinessCapAppCaps capId={capability.id} />}
+      {capability.level === 3 && <BusinessCapTechnology capId={capability.id} />}
 
       {showAgentReview && (
         <div

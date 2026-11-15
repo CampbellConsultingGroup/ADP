@@ -9,7 +9,7 @@ import TechCapTree from "./TechCapTree";
  *  domain assignment, no Heat Map/orphan-report/agent-review/chat -- those
  *  are Business Capability-specific enrichments from later work, out of
  *  scope here). */
-export default function TechCapPage(): React.ReactElement {
+export default function TechCapPage({ focusTechCapId = null }: { focusTechCapId?: string | null }): React.ReactElement {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
       <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 900, width: "100%", margin: "0 auto" }}>
@@ -20,7 +20,7 @@ export default function TechCapPage(): React.ReactElement {
           </p>
         </div>
 
-        <TechCapTree />
+        <TechCapTree focusId={focusTechCapId} />
       </div>
     </div>
   );

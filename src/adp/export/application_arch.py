@@ -173,6 +173,9 @@ def _serialize_technical_capability(tc: TechnicalCapability) -> dict[str, Any]:
         "parent_id": tc.parent_id,
         "level": tc.level,
         "strategic_relevance": tc.strategic_relevance,
+        # 938-capability-model-analysis (FR-004)
+        "lifecycle_status": tc.lifecycle_status,
+        "end_of_life_date": tc.end_of_life_date.isoformat() if tc.end_of_life_date else None,
     }
 
 
