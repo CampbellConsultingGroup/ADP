@@ -117,6 +117,8 @@ Auto-generated from all feature plans. Last updated: 2026-11-14 (934-pattern-met
 
 - Python 3.12 (3.11+ compatible) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; extends `adp.patterns` with registry/lifecycle/projection/render modules, writes managed rows into the existing `knowledge_items` (pgvector embedding via `adp.knowledge.embedder`), migration `044` (4 tables: ea_pattern, ea_pattern_version, ea_pattern_relation, ea_pattern_lifecycle_event) (935-pattern-registry)
 
+- Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; pure conformance engine in `adp.patterns` (snapshot/engine) over 934's CEL adapter, per-caller portfolio snapshot from registry mirrors, migration `045` (ea_pattern_adoption, _member, _pin; status derived, never stored) (936-pattern-conformance)
+
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
 ## Project Structure
@@ -160,6 +162,7 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 936-pattern-conformance: Planned (ADP-mmm.3) -- see `specs/936-pattern-conformance/`.
 - 935-pattern-registry: Implemented (ADP-mmm.2, spec 2 of 4 in epic ADP-mmm). Governed EA pattern registry on
   top of 934's `adp.patterns`: migration `044` (ea_pattern, ea_pattern_version with partial-unique one-current,
   ea_pattern_relation with NO target FK so drafts may reference unwritten families, ea_pattern_lifecycle_event).
