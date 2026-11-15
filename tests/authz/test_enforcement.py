@@ -532,6 +532,13 @@ def test_pattern_routes_map_to_actions() -> None:
         ("POST", "/api/v1/patterns/render"),
         ("PUT", "/api/v1/patterns/{key}/versions/{version}"),
         ("DELETE", "/api/v1/patterns/{key}/versions/{version}"),
+        # 936: adoption writes and the dry-run evaluate
+        ("POST", "/api/v1/patterns/evaluate"),
+        ("POST", "/api/v1/patterns/adoptions"),
+        ("PATCH", "/api/v1/patterns/adoptions/{adoption_id}"),
+        ("PUT", "/api/v1/patterns/adoptions/{adoption_id}/members"),
+        ("PUT", "/api/v1/patterns/adoptions/{adoption_id}/pins"),
+        ("DELETE", "/api/v1/patterns/adoptions/{adoption_id}"),
     ):
         assert required_action_for(method, path) == ActionType.WRITE_PATTERN, (method, path)
     assert required_action_for("GET", "/api/v1/patterns") is None

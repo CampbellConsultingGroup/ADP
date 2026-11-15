@@ -39,6 +39,13 @@ class PatternViewKind(StrEnum):
     TRACEABILITY = "traceability"
 
 
+class AdoptionViewKind(StrEnum):
+    """Views of one adoption's evaluation (936 FR-020)."""
+
+    CONFORMANCE = "conformance"
+    TRANSITION = "transition"
+
+
 # ── Read models ────────────────────────────────────────────────────────────────────
 class PatternVersionSummary(BaseModel):
     model_config = _FROZEN
@@ -136,7 +143,7 @@ class PatternValidateResult(BaseModel):
 class PatternViewResponse(BaseModel):
     model_config = _FROZEN
 
-    view: PatternViewKind
+    view: PatternViewKind | AdoptionViewKind
     flowchart: str
     digest: str
     generated_at: datetime

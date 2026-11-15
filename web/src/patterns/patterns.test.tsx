@@ -28,9 +28,11 @@ vi.mock("../api/patterns", async (orig) => {
     useUpdateDraft: vi.fn(),
     useTransition: vi.fn(),
     useDeleteDraft: vi.fn(),
+    useEvaluate: vi.fn(),
   };
 });
 vi.mock("../auth/AuthProvider", () => ({ useAuth: vi.fn() }));
+vi.mock("../api/business", () => ({ useDomains: () => ({ data: { items: [] } }) }));
 
 const api = vi.mocked(patternsApi);
 const useAuth = vi.mocked(auth.useAuth);
@@ -47,7 +49,9 @@ beforeEach(() => {
   api.usePatternFamily.mockReturnValue({ data: undefined } as never);
   api.usePatternVersion.mockReturnValue({ data: detail(), isLoading: false, error: null } as never);
   api.usePatternYaml.mockReturnValue({ data: "pattern: x\n", isLoading: false } as never);
+  api.useEvaluate.mockReturnValue(mutation());
   api.useDeleteDraft.mockReturnValue(mutation());
+  api.useEvaluate.mockReturnValue(mutation());
   api.useTransition.mockReturnValue(mutation());
   api.useValidatePattern.mockReturnValue(mutation());
   api.useRenderPattern.mockReturnValue(mutation());

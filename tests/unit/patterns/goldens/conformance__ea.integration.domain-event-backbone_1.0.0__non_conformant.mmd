@@ -1,0 +1,24 @@
+%% adp-pattern ea.integration.domain-event-backbone@1.0.0 view=conformance digest=f69fdbeb4014
+flowchart LR
+    subgraph r_backbone [Backbone · 1]
+        e_backbone_0([Enterprise Event Hub])
+    end
+    subgraph r_domain_app [Domain App · 2]
+        e_domain_app_0[Claims Core]
+        e_domain_app_1[Claims Portal]
+    end
+    subgraph r_cross_domain_integration [Cross Domain Integration · 5]
+        e_cross_domain_integration_0[Claims Core → Billing · FAIL]
+        e_cross_domain_integration_1[Claims Core → Enterprise Event Hub]
+        e_cross_domain_integration_2[Claims Portal → Enterprise Event Hub]
+        e_cross_domain_integration_3[Enterprise Event Hub → Claims Core]
+        e_cross_domain_integration_4[Enterprise Event Hub → Claims Portal]
+    end
+    e_domain_app_0 -- publishes --> e_backbone_0
+    e_domain_app_1 -- publishes --> e_backbone_0
+    e_backbone_0 -- delivers --> e_domain_app_0
+    e_backbone_0 -- delivers --> e_domain_app_1
+    classDef ok fill:#FFFFFF,stroke:#1168BD
+    classDef fail fill:#FFFFFF,stroke:#08427B,stroke-width:3px
+    class e_backbone_0,e_domain_app_0,e_domain_app_1,e_cross_domain_integration_1,e_cross_domain_integration_2,e_cross_domain_integration_3,e_cross_domain_integration_4 ok
+    class e_cross_domain_integration_0 fail

@@ -6,8 +6,12 @@ Imports every ``scripts/seed_data/patterns/*.yaml`` file and promotes each versi
 projects each one into the knowledge base. Run AFTER ``seed_knowledge.py``: the seed patterns
 cite its ``PRIN-*`` principles, and promotion requires every reference to resolve.
 
-Idempotent: a re-run sees ``unchanged`` imports and skips versions that are already current.
-Unlike ``seed_retail.py`` this never wipes anything; patterns also survive a retail re-seed.
+936-pattern-conformance: then creates the demo adoptions in ``ADOPTIONS`` against the retail
+estate (run AFTER ``seed_retail.py``, which also wipes adoptions) and prints each one's derived
+conformance status. Order: seed_retail.py -> seed_knowledge.py -> seed_patterns.py.
+
+Idempotent: a re-run sees ``unchanged`` imports, skips versions that are already current, and
+skips adoptions whose name already exists. Never wipes anything.
 
 Usage:
     python scripts/seed_patterns.py
@@ -35,6 +39,27 @@ from adp.patterns.registry_models import (
 
 SEED_DIR = Path(__file__).parent / "seed_data" / "patterns"
 ACTOR = "seed"
+
+BACKBONE = "ea.integration.domain-event-backbone"
+TRANSITION = "ea.integration.mesh-to-backbone"
+HUB = "Enterprise Event Hub"
+
+# (pattern key, adoption name, business domain name, [(role key, application name)])
+ADOPTIONS: list[tuple[str, str, str, list[tuple[str, str]]]] = [
+    (BACKBONE, "Marketing & Loyalty — event backbone", "Marketing & Loyalty", [("backbone", HUB)]),
+    (
+        BACKBONE,
+        "E-commerce & Digital — event backbone",
+        "E-commerce & Digital",
+        [("backbone", HUB)],
+    ),
+    (
+        TRANSITION,
+        "E-commerce & Digital — mesh migration",
+        "E-commerce & Digital",
+        [("backbone", HUB)],
+    ),
+]
 
 
 def seed_files() -> list[Path]:
@@ -86,9 +111,67 @@ async def seed(db_url: str) -> int:
                     print(f"      {issue.code} {issue.path}: {issue.message}")
                 failures += 1
                 continue
-            state = "already current" if not path else "promoted to current"
+            state = "promoted to current" if path else f"left {detail.lifecycle.value}"
             print(f"  {state:20} {key}@{version}")
+
+        failures += await seed_adoptions(session)
     await engine.dispose()
+    return failures
+
+
+async def seed_adoptions(session) -> int:  # type: ignore[no-untyped-def]
+    """Create the demo adoptions (skipping existing names) and print their derived status."""
+    import sqlalchemy as sa
+
+    from adp.patterns import adoptions as ad
+    from adp.patterns.conformance_models import AdoptionCreate, PinIn
+    from adp.patterns.engine import evaluate_pattern
+    from adp.patterns.snapshot_store import SnapshotPermissions, _domains, build_snapshot
+    from adp.patterns.store import _applications_mirror
+
+    domains = {r.name: r.id for r in await session.execute(sa.select(_domains))}
+    apps = {r.name: r.id for r in await session.execute(sa.select(_applications_mirror))}
+    existing = {(a.pattern_key, a.name) for a in (await ad.list_adoptions(session)).items}
+    failures = 0
+    print("Adoptions:")
+    for key, name, domain, pins in ADOPTIONS:
+        if (key, name) in existing:
+            print(f"  exists     {name}")
+            continue
+        if domain not in domains or any(app not in apps for _, app in pins):
+            print(f"  SKIPPED    {name}: run seed_retail.py first (domain or application missing)")
+            failures += 1
+            continue
+        body = AdoptionCreate(
+            pattern_key=key,
+            name=name,
+            scope_type="business_domain",
+            scope_ref=domains[domain],
+            pins=[
+                PinIn(role_key=r, element_type="application", element_id=apps[a]) for r, a in pins
+            ],
+        )
+        try:
+            await ad.create_adoption(body, ACTOR, session)
+            await session.commit()
+            print(f"  created    {name}")
+        except Exception as exc:  # noqa: BLE001 - report and continue with the others
+            await session.rollback()
+            print(f"  FAILED     {name}: {exc}")
+            failures += 1
+
+    snapshot = await build_snapshot(session, SnapshotPermissions(True, True, True))
+    for adoption in (await ad.list_adoptions(session)).items:
+        resolved = await ad.resolve_definition(adoption, session)
+        if resolved is None:
+            continue
+        report = evaluate_pattern(resolved[0], snapshot, ad.scope_of(adoption), list(adoption.pins))
+        plateau = (
+            f" (plateau {report.plateau.reached} -> {report.plateau.next})"
+            if report.plateau
+            else ""
+        )
+        print(f"  {report.status.value:25} {adoption.name}{plateau}")
     return failures
 
 

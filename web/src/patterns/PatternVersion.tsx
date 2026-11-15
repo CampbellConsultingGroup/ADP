@@ -9,11 +9,12 @@ import History from "./History";
 import IssueList from "./IssueList";
 import { KIND_LABELS, LIFECYCLE_LABELS, LIFECYCLE_TONES } from "./labels";
 import LifecycleDialog from "./LifecycleDialog";
+import DiscoveryTab from "./DiscoveryTab";
 import PatternViews from "./PatternViews";
 import { useCanManagePatterns } from "./permissions";
 import YamlEditor from "./YamlEditor";
 
-type Tab = "overview" | "yaml" | "views" | "history";
+type Tab = "overview" | "yaml" | "views" | "discovery" | "history";
 
 const h4: React.CSSProperties = { margin: "14px 0 6px", fontSize: 13 };
 const cell: React.CSSProperties = { padding: "5px 8px", borderBottom: "1px solid var(--border)", fontSize: 12, textAlign: "left", verticalAlign: "top" };
@@ -140,6 +141,7 @@ export default function PatternVersion({
     { id: "overview", label: "Overview" },
     { id: "yaml", label: "YAML" },
     { id: "views", label: "Views" },
+    ...(detail.kind === "anti-pattern" ? [{ id: "discovery" as Tab, label: "Discovery" }] : []),
     { id: "history", label: `History (${detail.history.length})` },
   ];
 
@@ -210,6 +212,7 @@ export default function PatternVersion({
       {tab === "overview" && <Overview detail={detail} />}
       {tab === "yaml" && <YamlTab patternKey={patternKey} version={version} editable={canManage && detail.lifecycle === "draft"} />}
       {tab === "views" && <PatternViews patternKey={patternKey} version={version} />}
+      {tab === "discovery" && <DiscoveryTab patternKey={patternKey} version={version} />}
       {tab === "history" && <History events={detail.history} />}
     </div>
   );

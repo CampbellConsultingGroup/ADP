@@ -24,7 +24,9 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 from adp.patterns.cardinality import format_cardinality
-from adp.patterns.models import PatternDefinition, PatternKind, RenderHintKind
+from adp.patterns.conformance_models import ConformanceReport, FindingKind, PlateauState
+from adp.patterns.models import PatternDefinition, PatternKind, RenderHintKind, Severity
+from adp.patterns.snapshot import PortfolioSnapshot
 
 MAX_LABEL = 60
 CATALOG_NODE_CAP = 40
@@ -39,6 +41,12 @@ _PALETTE: dict[str, str] = {
     "antipattern": "fill:#FFFFFF,stroke:#707070,stroke-dasharray:4 2",
     "motivation": "fill:#FFFFFF,stroke:#08427B",
     "unknown": "fill:#FFFFFF,stroke:#707070,stroke-dasharray:2 2",
+    # 936: element outcomes (meaning is also in the label suffix, never colour alone) and plateaus
+    "ok": "fill:#FFFFFF,stroke:#1168BD",
+    "warn": "fill:#FFFFFF,stroke:#707070,stroke-dasharray:4 2",
+    "fail": "fill:#FFFFFF,stroke:#08427B,stroke-width:3px",
+    "reached": "fill:#85BBE0,stroke:#08427B",
+    "pending": "fill:#FFFFFF,stroke:#707070,stroke-dasharray:4 2",
 }
 _LEGEND_LABELS: dict[str, str] = {
     "role": "Role",
@@ -48,6 +56,11 @@ _LEGEND_LABELS: dict[str, str] = {
     "antipattern": "Anti-pattern",
     "motivation": "Principle / control",
     "unknown": "Not in registry",
+    "ok": "Passes",
+    "warn": "Warning",
+    "fail": "Fails",
+    "reached": "Plateau reached",
+    "pending": "Plateau pending",
 }
 
 _SYMMETRIC = {"conflicts_with", "alternative_to"}
@@ -323,5 +336,164 @@ def render_traceability(
     lines += [f"    pr_{i} --> {focus}" for i in range(len(principles))]
     lines += [f"    ct_{i} --> {focus}" for i in range(len(controls))]
     lines += [f"    {focus} --> ap_{i}" for i in range(len(implementations))]
+    lines += _styles(classes, opts)
+    return RenderedView("\n".join(lines) + "\n")
+
+
+# ── Conformance (936 FR-020) ────────────────────────────────────────────────────────────
+_OUTCOME_RANK = {"fail": 0, "unknown": 1, "warn": 2, "ok": 3}
+_OUTCOME_SUFFIX = {"fail": " · FAIL", "unknown": " · unknown", "warn": " · warn", "ok": ""}
+
+
+def _outcomes(report: ConformanceReport) -> dict[tuple[str, str], str]:
+    """Worst outcome per (element type, id) across all findings."""
+    worst: dict[tuple[str, str], str] = {}
+    for f in report.findings:
+        if f.kind in (FindingKind.UNVERIFIABLE,) or f.severity == Severity.INFO:
+            continue
+        if f.kind in (
+            FindingKind.EVALUATION_ERROR,
+            FindingKind.FIELD_UNAVAILABLE,
+            FindingKind.LIMIT,
+        ):
+            outcome = "unknown"
+        elif f.severity == Severity.ERROR:
+            outcome = "fail"
+        else:
+            outcome = "warn"
+        for ref in f.element_refs:
+            key = (ref.type.value, ref.id)
+            if key not in worst or _OUTCOME_RANK[outcome] < _OUTCOME_RANK[worst[key]]:
+                worst[key] = outcome
+    return worst
+
+
+def render_conformance(
+    defn: PatternDefinition,
+    digest: str,
+    report: ConformanceReport,
+    snapshot: PortfolioSnapshot,
+    opts: RenderOptions | None = None,
+    max_per_role: int = 8,
+) -> RenderedView:
+    """The pattern bound to real elements: one group per role, elements worst-first (capped,
+    then '+k more'), evidence edges for declared relationships between shown elements."""
+    opts = opts or RenderOptions()
+    lines = _header(defn.pattern, defn.version, "conformance", digest, opts)
+    classes: dict[str, list[str]] = {c: [] for c in _PALETTE}
+    worst = _outcomes(report)
+    failed_roles = {
+        f.code[2:]
+        for f in report.findings
+        if f.code.startswith("K:") and "/" not in f.code and f.kind == FindingKind.VIOLATION
+    }
+    shown: dict[str, dict[str, str]] = {}  # role -> element id -> node id
+    truncated: list[str] = []
+    for binding in report.bindings:
+        role_key = binding.role_key
+        role = defn.roles.get(role_key)
+        etype = binding.element_type.value
+        ranked = sorted(
+            binding.elements,
+            key=lambda e: (_OUTCOME_RANK[worst.get((etype, e.id), "ok")], e.name, e.id),
+        )
+        title = f"{binding.label} · {binding.count}" + (" ⚠" if role_key in failed_roles else "")
+        lines.append(f"    subgraph r_{role_key} [{sanitize_label(title)}]")
+        if not ranked:
+            lines.append(f"        e_{role_key}_none[{sanitize_label('none bound')}]")
+            classes["unknown"].append(f"e_{role_key}_none")
+        mediator = role is not None and role.stereotype == "platform"
+        shown[role_key] = {}
+        for i, el in enumerate(ranked[:max_per_role]):
+            nid = f"e_{role_key}_{i}"
+            outcome = worst.get((etype, el.id), "ok")
+            label = sanitize_label(el.name, MAX_LABEL - len(_OUTCOME_SUFFIX[outcome]))
+            label += _OUTCOME_SUFFIX[outcome]
+            lines.append(f"        {nid}([{label}])" if mediator else f"        {nid}[{label}]")
+            classes[outcome].append(nid)
+            shown[role_key][el.id] = nid
+        hidden = len(ranked) - max_per_role
+        if hidden > 0:
+            lines.append(f"        e_{role_key}_more[+{hidden} more]")
+            classes["unknown"].append(f"e_{role_key}_more")
+            truncated.append(f"role {role_key}: {hidden} more element(s) not drawn")
+        lines.append("    end")
+
+    seen: set[tuple[str, str, str]] = set()
+    for rel in defn.relationships:
+        target_role = rel.via or rel.target
+        for s_id, s_node in sorted(shown.get(rel.source, {}).items()):
+            for t_id, t_node in sorted(shown.get(target_role, {}).items()):
+                if s_id == t_id or not _has_evidence(snapshot, rel.type.value, s_id, t_id):
+                    continue
+                key = (s_node, t_node, rel.type.value)
+                if key not in seen:
+                    seen.add(key)
+                    lines.append(_edge(s_node, t_node, rel.type.value))
+    lines += _styles(classes, opts)
+    return RenderedView("\n".join(lines) + "\n", truncated)
+
+
+def _has_evidence(snapshot: PortfolioSnapshot, rel: str, s: str, t: str) -> bool:
+    if rel in ("publishes", "delivers"):
+        return bool(snapshot.integrations_between(s, t))
+    if rel == "consumes":
+        return bool(snapshot.integrations_between(t, s))
+    if rel in ("integrates_with", "depends_on"):
+        return bool(snapshot.integrations_between(s, t) or snapshot.integrations_between(t, s))
+    if rel == "serves":
+        return snapshot.serves(s, t)
+    if rel == "realizes":
+        return snapshot.realizes(s, t)
+    return False
+
+
+# ── Transition (936 FR-020) ─────────────────────────────────────────────────────────────
+def render_transition(
+    defn: PatternDefinition,
+    digest: str,
+    state: PlateauState | None,
+    opts: RenderOptions | None = None,
+) -> RenderedView:
+    """from_pattern (anti-pattern) → plateaus in order → target pattern; reached plateaus
+    highlighted, the edge into the next plateau labelled with its blocking constraints."""
+    opts = opts or RenderOptions()
+    lines = _header(defn.pattern, defn.version, "transition", digest, opts)
+    classes: dict[str, list[str]] = {c: [] for c in _PALETTE}
+    transition = defn.transition
+    if transition is None:
+        return RenderedView("\n".join(lines) + "\n")
+    source = _pattern_id(transition.from_pattern)
+    lines.append(f"    {source}{{{{{sanitize_label(transition.from_pattern)}}}}}")
+    classes["antipattern"].append(source)
+    reached_ids: set[str] = set()
+    if state is not None and state.reached:
+        for p in transition.plateaus:
+            reached_ids.add(p.id)
+            if p.id == state.reached:
+                break
+    nodes = []
+    for p in transition.plateaus:
+        nid = f"p_{p.id}"
+        nodes.append((p.id, nid))
+        label = sanitize_label(f"{p.id} {p.name} · {', '.join(p.exit_criteria)}")
+        lines.append(f"    {nid}[/{label}/]")
+        classes["reached" if p.id in reached_ids else "pending"].append(nid)
+    realized = next((r.target for r in defn.relations if r.type.value == "realizes"), None)
+    target_key = realized or defn.pattern
+    target = _pattern_id(target_key)
+    if target == source:
+        target = f"{target}_t"
+    lines.append(f"    {target}[{sanitize_label(realized or defn.name)}]")
+    classes["pattern"].append(target)
+
+    blocked = state.next if state else None
+    blocking = ", ".join(state.blocking) if state and state.blocking else ""
+    chain: list[tuple[str | None, str]] = [(None, source), *nodes, (None, target)]
+    for (_, a), (pid, b) in zip(chain, chain[1:], strict=False):
+        edge_label = (
+            f"blocked: {blocking}" if pid is not None and pid == blocked and blocking else None
+        )
+        lines.append(_edge(a, b, edge_label))
     lines += _styles(classes, opts)
     return RenderedView("\n".join(lines) + "\n")

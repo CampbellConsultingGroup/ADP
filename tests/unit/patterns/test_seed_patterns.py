@@ -24,8 +24,10 @@ SEEDED_PRINCIPLES = frozenset(
 FILES = sorted(SEED_DIR.glob("*.yaml"))
 
 
-def test_four_seed_patterns() -> None:
-    assert len(FILES) == 4
+def test_seed_pattern_files() -> None:
+    # 4 families; backbone, mesh and transition also have a stricter 1.1.0 (936)
+    assert len(FILES) == 7
+    assert len({p.name.split("@")[0] for p in FILES}) == 4
     assert len(SEEDED_PRINCIPLES) >= 6
 
 
@@ -36,7 +38,8 @@ def test_seed_pattern_is_valid_and_cites_seeded_principles(path: Path) -> None:
     assert result.definition is not None
     lookups = ReferenceLookups(principles=SEEDED_PRINCIPLES)
     r1 = [
-        i for i in resolve_references(result.definition, lookups, blocking=True)
+        i
+        for i in resolve_references(result.definition, lookups, blocking=True)
         if i.code == "R1.unresolved_principle"
     ]
     assert r1 == []
@@ -51,9 +54,17 @@ async def test_all_seed_patterns_promote_in_a_fresh_registry(tmp_path) -> None:
         for pid in SEEDED_PRINCIPLES:
             await session.execute(
                 pstore._knowledge_items.insert().values(
-                    id=pid, version="1.0.0", kind="principle", title=pid, full_text=pid,
-                    metadata={}, source_ref="seed", schema_version="1.0.0", active=True,
-                    embedding=[0.0] * 384, indexed_at=pstore._now(),
+                    id=pid,
+                    version="1.0.0",
+                    kind="principle",
+                    title=pid,
+                    full_text=pid,
+                    metadata={},
+                    source_ref="seed",
+                    schema_version="1.0.0",
+                    active=True,
+                    embedding=[0.0] * 384,
+                    indexed_at=pstore._now(),
                 )
             )
         keys = []
@@ -79,3 +90,23 @@ def test_seed_script_is_importable() -> None:
     finally:
         sys.path.pop(0)
     assert [p.name for p in seed_patterns.seed_files()] == [p.name for p in FILES]
+
+
+def test_demo_adoptions_reference_real_seed_roles() -> None:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import seed_patterns  # type: ignore[import-not-found]
+    finally:
+        sys.path.pop(0)
+    defs = {}
+    for path in FILES:
+        d = parse_pattern_yaml(path.read_text(encoding="utf-8")).definition
+        assert d is not None
+        defs[d.pattern] = d
+    retail = (ROOT / "scripts" / "seed_retail.py").read_text(encoding="utf-8")
+    for key, _name, domain, pins in seed_patterns.ADOPTIONS:
+        assert key in defs
+        assert f'"{domain}"' in retail, domain
+        for role, app in pins:
+            assert defs[key].roles[role].element_type.value == "application"
+            assert f'"{app}"' in retail, app

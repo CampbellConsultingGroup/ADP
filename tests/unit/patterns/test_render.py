@@ -244,3 +244,77 @@ def test_legend_lists_only_used_classes() -> None:
     assert "subgraph legend [Legend]" in text
     assert "lg_role[Role]" in text
     assert "lg_mediator" not in text
+
+
+# ── 936: conformance and transition views ──────────────────────────────────────────
+def _conformance_inputs(direct: bool):  # type: ignore[no-untyped-def]
+    from adp.patterns.conformance_models import PinIn, ScopeType
+    from adp.patterns.engine import evaluate_pattern
+    from adp.patterns.models import ElementType
+    from adp.patterns.snapshot import Scope
+
+    from .test_engine_fixtures import _estate
+
+    snap = _estate(direct=direct)
+    defn = _defn(BACKBONE)
+    pins = [PinIn(role_key="backbone", element_type=ElementType.APPLICATION, element_id="hub")]
+    report = evaluate_pattern(
+        defn,
+        snap,
+        Scope(ScopeType.BUSINESS_DOMAIN, scope_ref="claims"),
+        pins,
+        digest=compute_digest(defn),
+    )
+    return defn, snap, report
+
+
+@pytest.mark.parametrize("direct", [True, False], ids=["non_conformant", "conformant"])
+def test_golden_conformance(direct: bool, golden) -> None:  # type: ignore[no-untyped-def]
+    from adp.patterns.render import render_conformance
+
+    defn, snap, report = _conformance_inputs(direct)
+    view = render_conformance(defn, compute_digest(defn), report, snap)
+    name = "non_conformant" if direct else "conformant"
+    golden(f"conformance__{_stem(BACKBONE)}__{name}.mmd", view.text)
+
+
+def test_conformance_marks_offenders_and_collapses_worst_first() -> None:
+    from adp.patterns.render import render_conformance
+
+    defn, snap, report = _conformance_inputs(direct=True)
+    text = render_conformance(defn, compute_digest(defn), report, snap, max_per_role=2).text
+    assert "Claims Core → Billing · FAIL" in text  # the C1 offender is shown first
+    assert re.search(r"e_cross_domain_integration_more\[\+3 more\]", text)
+    assert "subgraph r_backbone [Backbone · 1]" in text
+    assert "class " in text and " fail" in text
+
+
+def test_conformance_view_is_deterministic() -> None:
+    from adp.patterns.render import render_conformance
+
+    defn, snap, report = _conformance_inputs(direct=True)
+    first = render_conformance(defn, compute_digest(defn), report, snap).text
+    shuffled = report.model_copy(update={"findings": list(reversed(report.findings))})
+    assert render_conformance(defn, compute_digest(defn), shuffled, snap).text == first
+
+
+def test_golden_transition(golden) -> None:  # type: ignore[no-untyped-def]
+    from adp.patterns.conformance_models import PlateauState
+    from adp.patterns.render import render_transition
+
+    defn = _defn(TRANSITION)
+    state = PlateauState(reached="PL1", next="PL2", blocking=["C2"])
+    view = render_transition(defn, compute_digest(defn), state)
+    assert "-- blocked: C2 -->" in view.text
+    assert re.search(r"class p_PL1 reached", view.text)
+    assert re.search(r"class p_PL2 pending", view.text)
+    golden(f"transition__{_stem(TRANSITION)}__PL1.mmd", view.text)
+
+
+def test_transition_without_state_is_all_pending() -> None:
+    from adp.patterns.render import render_transition
+
+    defn = _defn(TRANSITION)
+    text = render_transition(defn, compute_digest(defn), None).text
+    assert "reached" not in text.split("classDef")[0]
+    assert "class p_PL1,p_PL2 pending" in text

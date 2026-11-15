@@ -125,11 +125,22 @@ _events = sa.Table(
 )
 
 # ── Narrow read-only mirrors (research.md D1) ──────────────────────────────────────────
+# Also read by adp.patterns.snapshot_store (936): every column the portfolio snapshot exposes.
 _applications_mirror = sa.Table(
     "applications",
     _metadata,
     sa.Column("id", sa.String(36), primary_key=True),
     sa.Column("name", sa.String(255)),
+    sa.Column("lifecycle_status", sa.Text()),
+    sa.Column("application_type", sa.Text()),
+    sa.Column("time_classification", sa.Text()),
+    sa.Column("r_strategy", sa.Text()),
+    sa.Column("pace_layer", sa.Text()),
+    sa.Column("hosting_model", sa.Text()),
+    sa.Column("architecture_pattern", sa.Text()),
+    sa.Column("business_criticality", sa.SmallInteger()),
+    sa.Column("health_score", sa.Integer()),
+    sa.Column("tech_debt_flags", _JSON),
 )
 _controls_mirror = sa.Table(
     "controls",
