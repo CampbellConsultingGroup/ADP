@@ -195,7 +195,7 @@ describe("InitiativeList (mirrors ThemeList.tsx's convention)", () => {
 
     await user.click(screen.getByText("Reduce cycle time"));
 
-    expect(onNavigateToObjective).toHaveBeenCalledWith("obj-1");
+    expect(onNavigateToObjective).toHaveBeenCalledWith("obj-1", "init-1");
   });
 
   it("scrolls the matching row into view and marks it focused when focusInitiativeId is set (mirrors CapabilityTree's focusCapabilityId precedent)", () => {
@@ -234,5 +234,67 @@ describe("InitiativeList (mirrors ThemeList.tsx's convention)", () => {
 
     expect(mutate).toHaveBeenCalledWith("init-1");
     vi.unstubAllGlobals();
+  });
+
+  it("edit mode has a heading and a Back control that returns to the list without saving, focusing Edit again (ADP-q3j)", async () => {
+    mockedApi.useInitiatives.mockReturnValue({
+      data: { items: [INITIATIVE], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useInitiatives>);
+    const mutate = vi.fn();
+    mockedApi.useUpdateInitiative.mockReturnValue({
+      mutate,
+      isPending: false,
+      isError: false,
+    } as unknown as ReturnType<typeof strategyApi.useUpdateInitiative>);
+
+    const user = userEvent.setup();
+    render(<InitiativeList />);
+
+    await user.click(screen.getByText("Edit"));
+    expect(screen.getByRole("heading", { name: /Edit initiative: Claims Automation/ })).toBeTruthy();
+    expect(screen.getByText(/save as soon as you change them/)).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: /Back to initiatives/ }));
+
+    expect(mutate).not.toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: /Edit initiative/ })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Edit" }));
+  });
+
+  it("asks before discarding an edited name (ADP-q3j)", async () => {
+    mockedApi.useInitiatives.mockReturnValue({
+      data: { items: [INITIATIVE], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useInitiatives>);
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    const user = userEvent.setup();
+    render(<InitiativeList />);
+    await user.click(screen.getByText("Edit"));
+    await user.type(screen.getByLabelText(/Name/), " v2");
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(screen.getByRole("heading", { name: /Edit initiative/ })).toBeTruthy();
+    confirmSpy.mockRestore();
+  });
+
+  it("passes the initiative id when jumping to an objective from edit mode, so Back can return (ADP-q3j)", async () => {
+    mockedApi.useInitiatives.mockReturnValue({
+      data: { items: [{ ...INITIATIVE, objective_ids: ["obj-1"] }], total: 1 },
+      isLoading: false,
+      error: null,
+    } as unknown as ReturnType<typeof strategyApi.useInitiatives>);
+    const onNavigateToObjective = vi.fn();
+    const user = userEvent.setup();
+    render(<InitiativeList onNavigateToObjective={onNavigateToObjective} />);
+
+    await user.click(screen.getByText("Edit"));
+    await user.click(screen.getByText("Reduce cycle time"));
+
+    expect(onNavigateToObjective).toHaveBeenCalledWith("obj-1", "init-1");
   });
 });
