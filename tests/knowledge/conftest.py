@@ -34,7 +34,7 @@ def mock_index():
     idx = MagicMock()
     idx.upsert_item = AsyncMock()
     idx.get_item = AsyncMock(return_value=None)
-    idx.get_all_active_ids = AsyncMock(return_value=set())
+    idx.get_active_source_refs = AsyncMock(return_value={})
     idx.mark_inactive = AsyncMock(return_value=0)
     idx.upsert_relationship = AsyncMock()
     return idx

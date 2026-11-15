@@ -27,9 +27,15 @@ class IndexerResult:
     connector_errors: dict[str, str] = field(default_factory=dict)
 
 
-# Knowledge items written by other subsystems, not by any connector this indexer runs. The
-# pattern registry owns ``adp-pattern:`` items (935-pattern-registry, research.md D7).
-_EXTERNALLY_MANAGED_PREFIXES: tuple[str, ...] = ("adp-pattern:",)
+# The ``source_ref`` prefix each connector writes (connectors/git.py, connectors/design_store.py).
+# The deactivation sweep is scoped to items whose source_ref starts with the prefix of a connector
+# that completed successfully in this run (ADP-4zn). Items written by anything else -- the
+# knowledge API, CALM import, seed_knowledge.py, the pattern registry -- are never swept.
+DESIGN_STORE_PREFIX = "adp-store:"
+
+
+def git_prefix(repo_url: str) -> str:
+    return f"git:{repo_url}:"
 
 
 class Indexer:
@@ -59,14 +65,14 @@ class Indexer:
         index = KnowledgeIndex(session_factory)
         result = IndexerResult()
         seen_ids: set[str] = set()
+        # Source prefixes of connectors that read their source completely this run. Only items
+        # under these prefixes are deactivation candidates (ADP-4zn).
+        owned_prefixes: list[str] = []
 
-        # Get previously active ids for deactivation tracking.
+        # Previously active items, with their source_ref, for deactivation tracking.
         async with session_factory() as session:
             async with session.begin():
-                # Registry-owned items (935 FR-014) come from no connector; never sweep them.
-                prev_active_ids = await index.get_all_active_ids(
-                    session, exclude_source_prefixes=_EXTERNALLY_MANAGED_PREFIXES
-                )
+                prev_active = await index.get_active_source_refs(session)
 
         # --- Git connectors ---
         for repo_url in self._git_repo_urls:
@@ -78,6 +84,8 @@ class Indexer:
                 connector.pull_or_clone()
                 items = list(connector.read_items())
                 relationships = list(connector.read_relationships())
+                # Still present in the source -> never swept, even if its upsert fails below.
+                seen_ids.update(item.id for item in items)
 
                 # Batch-embed all items from this connector.
                 if items:
@@ -101,6 +109,7 @@ class Indexer:
                                 except Exception:
                                     pass
 
+                owned_prefixes.append(git_prefix(repo_url))
             except Exception as exc:
                 result.connector_errors[repo_url] = str(exc)
                 _logger.error("Connector failed for %s: %s", repo_url, exc)
@@ -114,6 +123,7 @@ class Indexer:
                 ds_items: list[KnowledgeItem] = []
                 async for ds_item in ds_connector.read_items():
                     ds_items.append(ds_item)
+                seen_ids.update(i.id for i in ds_items)
 
                 if ds_items:
                     ds_texts = [i.full_text for i in ds_items]
@@ -132,12 +142,18 @@ class Indexer:
                                     )
                                     result.failed += 1
 
+                owned_prefixes.append(DESIGN_STORE_PREFIX)
             except Exception as exc:
                 result.connector_errors["design_store"] = str(exc)
                 _logger.error("Design store connector failed: %s", exc)
 
-        # Deactivate items no longer in any canonical source.
-        to_deactivate = list(prev_active_ids - seen_ids)
+        # Deactivate items that a successfully-read source owns but no longer contains.
+        to_deactivate = sorted(
+            item_id
+            for item_id, source_ref in prev_active.items()
+            if item_id not in seen_ids
+            and any(source_ref.startswith(prefix) for prefix in owned_prefixes)
+        )
         if to_deactivate:
             async with session_factory() as session:
                 async with session.begin():

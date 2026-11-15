@@ -121,7 +121,8 @@ class KnowledgeIndex:
         session: "AsyncSession",
         exclude_source_prefixes: tuple[str, ...] = (),
     ) -> set[str]:
-        """Return all ids where active=TRUE; used by Indexer to find deactivation candidates.
+        """Return all ids where active=TRUE. (The Indexer now uses get_active_source_refs so it
+        can scope its sweep to connector-owned items, ADP-4zn.)
 
         ``exclude_source_prefixes`` drops items owned by another writer (e.g. the pattern
         registry's ``adp-pattern:`` projections, 935 FR-014) so the sweep never deactivates them.
@@ -131,6 +132,16 @@ class KnowledgeIndex:
             stmt = stmt.where(~knowledge_items.c.source_ref.startswith(prefix, autoescape=True))
         rows = await session.execute(stmt)
         return {row.id for row in rows}
+
+    async def get_active_source_refs(self, session: "AsyncSession") -> dict[str, str]:
+        """``{id: source_ref}`` for every active item -- lets the Indexer sweep only the items a
+        connector that ran actually owns (ADP-4zn)."""
+        rows = await session.execute(
+            sa.select(knowledge_items.c.id, knowledge_items.c.source_ref).where(
+                knowledge_items.c.active.is_(True)
+            )
+        )
+        return {row.id: row.source_ref for row in rows}
 
     async def mark_inactive(
         self, item_ids: list[str], session: "AsyncSession"
