@@ -13,6 +13,7 @@ import InitiativeControlMappingEditor from "./InitiativeControlMappingEditor";
 import InitiativeObjectiveLinkEditor from "./InitiativeObjectiveLinkEditor";
 import NavLinkButton from "./NavLinkButton";
 import { useScrollHighlight } from "./useScrollHighlight";
+import EditFrame, { useReturnFocus } from "./EditFrame";
 
 const STATUSES: InitiativeStatus[] = ["planned", "in_progress", "blocked", "complete", "cancelled"];
 const STATUS_LABEL: Record<InitiativeStatus, string> = {
@@ -30,13 +31,19 @@ function InitiativeEditForm({
 }: {
   initiative: StrategyInitiative;
   onDone: () => void;
-  onNavigateToObjective?: (objectiveId: string) => void;
+  onNavigateToObjective?: (objectiveId: string, fromInitiativeId?: string) => void;
 }) {
   const updateMutation = useUpdateInitiative(initiative.id);
   const [name, setName] = useState(initiative.name);
   const [description, setDescription] = useState(initiative.description ?? "");
   const [owner, setOwner] = useState(initiative.owner ?? "");
   const [status, setStatus] = useState<InitiativeStatus>(initiative.status);
+
+  const dirty =
+    name !== initiative.name ||
+    description !== (initiative.description ?? "") ||
+    owner !== (initiative.owner ?? "") ||
+    status !== initiative.status;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -53,47 +60,55 @@ function InitiativeEditForm({
   }
 
   return (
-    <div style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 12, marginBottom: 8, background: "var(--surface)" }}>
-      <form onSubmit={handleSubmit}>
-        <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-          Name
-          <input value={name} onChange={(e) => setName(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
-        </label>
-        <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-          Description
-          <input value={description} onChange={(e) => setDescription(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
-        </label>
-        <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-          Owner
-          <input value={owner} onChange={(e) => setOwner(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
-        </label>
-        <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
-          Status
-          <select value={status} onChange={(e) => setStatus(e.target.value as InitiativeStatus)} style={{ display: "block", width: "100%", marginTop: 2 }}>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>{STATUS_LABEL[s]}</option>
-            ))}
-          </select>
-        </label>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button type="submit" disabled={updateMutation.isPending}>
-            {updateMutation.isPending ? "Saving…" : "Save"}
-          </button>
-          <button type="button" onClick={onDone}>Cancel</button>
-        </div>
-        {updateMutation.isError && (
-          <div className="ui-alert crit" style={{ marginTop: 6, fontSize: 12 }}>
-            {updateMutation.error.message}
-          </div>
-        )}
-      </form>
+    <EditFrame
+      title="Edit initiative"
+      subject={initiative.name}
+      backLabel="Back to initiatives"
+      dirty={dirty}
+      saving={updateMutation.isPending}
+      saveDisabled={!name.trim()}
+      onSubmit={handleSubmit}
+      onClose={onDone}
+      error={updateMutation.isError ? updateMutation.error.message : null}
+      after={
+        <>
+          <p style={{ fontSize: 12, color: "var(--ink-3)", margin: "12px 0 0" }}>
+            Linked objectives and compliance gaps below save as soon as you change them.
+          </p>
+          <h4 style={{ fontSize: 13, marginTop: 12, marginBottom: 0, color: "var(--ink)" }}>Linked Objectives</h4>
+          <InitiativeObjectiveLinkEditor
+            initiative={initiative}
+            onNavigateToObjective={
+              onNavigateToObjective ? (oid) => onNavigateToObjective(oid, initiative.id) : undefined
+            }
+          />
 
-      <h4 style={{ fontSize: 13, marginTop: 16, marginBottom: 0, color: "var(--ink)" }}>Linked Objectives</h4>
-      <InitiativeObjectiveLinkEditor initiative={initiative} onNavigateToObjective={onNavigateToObjective} />
-
-      <h4 style={{ fontSize: 13, marginTop: 16, marginBottom: 0, color: "var(--ink)" }}>Linked Compliance Gaps</h4>
-      <InitiativeControlMappingEditor initiative={initiative} />
-    </div>
+          <h4 style={{ fontSize: 13, marginTop: 16, marginBottom: 0, color: "var(--ink)" }}>Linked Compliance Gaps</h4>
+          <InitiativeControlMappingEditor initiative={initiative} />
+        </>
+      }
+    >
+      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+        Name *
+        <input value={name} onChange={(e) => setName(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
+      </label>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+        Description
+        <input value={description} onChange={(e) => setDescription(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
+      </label>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+        Owner
+        <input value={owner} onChange={(e) => setOwner(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
+      </label>
+      <label style={{ fontSize: 13, display: "block" }}>
+        Status
+        <select value={status} onChange={(e) => setStatus(e.target.value as InitiativeStatus)} style={{ display: "block", width: "100%", marginTop: 2 }}>
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>{STATUS_LABEL[s]}</option>
+          ))}
+        </select>
+      </label>
+    </EditFrame>
   );
 }
 
@@ -107,8 +122,10 @@ interface InitiativeListProps {
    *  (Objectives tab, drilled in -- Objective has a real detail page, so
    *  this uses the existing selectedObjectiveId mechanism rather than
    *  scroll-and-highlight). Threaded to both the read-mode "Linked
-   *  objectives" list and the edit-mode InitiativeObjectiveLinkEditor. */
-  onNavigateToObjective?: (objectiveId: string) => void;
+   *  objectives" list and the edit-mode InitiativeObjectiveLinkEditor.
+   *  The second argument names the initiative the jump came from, so the
+   *  objective's Back control can return here (ADP-q3j). */
+  onNavigateToObjective?: (objectiveId: string, fromInitiativeId?: string) => void;
 }
 
 export default function InitiativeList({ focusInitiativeId, onNavigateToObjective }: InitiativeListProps = {}) {
@@ -121,6 +138,7 @@ export default function InitiativeList({ focusInitiativeId, onNavigateToObjectiv
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const { registerRef } = useScrollHighlight(focusInitiativeId);
+  const returnFocus = useReturnFocus();
 
   if (isLoading) return <div style={{ padding: 16, color: "var(--ink-3)" }}>Loading initiatives…</div>;
   if (error) return <div className="ui-alert crit">Failed to load initiatives</div>;
@@ -209,7 +227,10 @@ export default function InitiativeList({ focusInitiativeId, onNavigateToObjectiv
           <InitiativeEditForm
             key={i.id}
             initiative={i}
-            onDone={() => setEditingId(null)}
+            onDone={() => {
+              setEditingId(null);
+              returnFocus(i.id);
+            }}
             onNavigateToObjective={onNavigateToObjective}
           />
         ) : (
@@ -246,7 +267,7 @@ export default function InitiativeList({ focusInitiativeId, onNavigateToObjectiv
                   {i.objective_ids.map((oid) => (
                     <div key={oid} style={{ marginTop: 1 }}>
                       {onNavigateToObjective ? (
-                        <NavLinkButton onClick={() => onNavigateToObjective(oid)} title="Jump to this objective">
+                        <NavLinkButton onClick={() => onNavigateToObjective(oid, i.id)} title="Jump to this objective">
                           {objectiveStatements.get(oid) ?? oid}
                         </NavLinkButton>
                       ) : (
@@ -258,7 +279,7 @@ export default function InitiativeList({ focusInitiativeId, onNavigateToObjectiv
               )}
             </div>
             <div style={{ display: "flex", gap: 6 }}>
-              <Button size="sm" onClick={() => setEditingId(i.id)}>Edit</Button>
+              <Button size="sm" data-edit-for={i.id} onClick={() => setEditingId(i.id)}>Edit</Button>
               <Button size="sm" variant="danger" onClick={() => handleDelete(i)}>Delete</Button>
             </div>
           </div>

@@ -10,12 +10,18 @@ import {
 import { Button } from "../ui";
 import NavLinkButton from "./NavLinkButton";
 import { useScrollHighlight } from "./useScrollHighlight";
+import EditFrame, { useReturnFocus } from "./EditFrame";
 
 function ThemeEditForm({ theme, onDone }: { theme: StrategicTheme; onDone: () => void }) {
   const updateMutation = useUpdateTheme(theme.id);
   const [description, setDescription] = useState(theme.description ?? "");
   const [owner, setOwner] = useState(theme.owner ?? "");
   const [priority, setPriority] = useState(theme.priority != null ? String(theme.priority) : "");
+
+  const dirty =
+    description !== (theme.description ?? "") ||
+    owner !== (theme.owner ?? "") ||
+    priority !== (theme.priority != null ? String(theme.priority) : "");
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,9 +36,15 @@ function ThemeEditForm({ theme, onDone }: { theme: StrategicTheme; onDone: () =>
   }
 
   return (
-    <form
+    <EditFrame
+      title="Edit theme"
+      subject={theme.name}
+      backLabel="Back to themes"
+      dirty={dirty}
+      saving={updateMutation.isPending}
       onSubmit={handleSubmit}
-      style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 12, marginBottom: 8, background: "var(--surface)" }}
+      onClose={onDone}
+      error={updateMutation.isError ? updateMutation.error.message : null}
     >
       <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
         Description
@@ -42,22 +54,11 @@ function ThemeEditForm({ theme, onDone }: { theme: StrategicTheme; onDone: () =>
         Owner
         <input value={owner} onChange={(e) => setOwner(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
       </label>
-      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+      <label style={{ fontSize: 13, display: "block" }}>
         Priority (1–5)
         <input type="number" min={1} max={5} value={priority} onChange={(e) => setPriority(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
       </label>
-      <div style={{ display: "flex", gap: 8 }}>
-        <button type="submit" disabled={updateMutation.isPending}>
-          {updateMutation.isPending ? "Saving…" : "Save"}
-        </button>
-        <button type="button" onClick={onDone}>Cancel</button>
-      </div>
-      {updateMutation.isError && (
-        <div className="ui-alert crit" style={{ marginTop: 6, fontSize: 12 }}>
-          {updateMutation.error.message}
-        </div>
-      )}
-    </form>
+    </EditFrame>
   );
 }
 
@@ -83,6 +84,7 @@ export default function ThemeList({ focusThemeId, onNavigateToObjectives }: Them
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const { registerRef } = useScrollHighlight(focusThemeId);
+  const returnFocus = useReturnFocus();
 
   if (isLoading) return <div style={{ padding: 16, color: "var(--ink-3)" }}>Loading themes…</div>;
   if (error) return <div className="ui-alert crit">Failed to load themes</div>;
@@ -184,7 +186,14 @@ export default function ThemeList({ focusThemeId, onNavigateToObjectives }: Them
 
       {items.map((t) =>
         editingId === t.id ? (
-          <ThemeEditForm key={t.id} theme={t} onDone={() => setEditingId(null)} />
+          <ThemeEditForm
+            key={t.id}
+            theme={t}
+            onDone={() => {
+              setEditingId(null);
+              returnFocus(t.id);
+            }}
+          />
         ) : (
           <div
             key={t.id}
@@ -224,7 +233,7 @@ export default function ThemeList({ focusThemeId, onNavigateToObjectives }: Them
               </div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
-              <Button size="sm" onClick={() => setEditingId(t.id)}>Edit</Button>
+              <Button size="sm" data-edit-for={t.id} onClick={() => setEditingId(t.id)}>Edit</Button>
               <Button size="sm" variant="danger" onClick={() => handleDelete(t)}>Delete</Button>
             </div>
           </div>

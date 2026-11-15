@@ -23,6 +23,9 @@ export default function StrategyPage(): React.ReactElement {
   const [focusThemeId, setFocusThemeId] = useState<string | null>(null);
   const [focusInitiativeId, setFocusInitiativeId] = useState<string | null>(null);
   const [filterThemeId, setFilterThemeId] = useState<string | null>(null);
+  // ADP-q3j: when an objective was opened from an initiative, its Back control
+  // returns to that initiative instead of the objectives list.
+  const [objectiveFromInitiativeId, setObjectiveFromInitiativeId] = useState<string | null>(null);
 
   function goToTab(t: StrategyTab) {
     setTab(t);
@@ -30,9 +33,11 @@ export default function StrategyPage(): React.ReactElement {
     setFocusThemeId(null);
     setFocusInitiativeId(null);
     setFilterThemeId(null);
+    setObjectiveFromInitiativeId(null);
   }
 
   function goToTheme(themeId: string) {
+    setObjectiveFromInitiativeId(null);
     setFocusThemeId(themeId);
     setFocusInitiativeId(null);
     setFilterThemeId(null);
@@ -41,6 +46,7 @@ export default function StrategyPage(): React.ReactElement {
   }
 
   function goToThemeObjectives(themeId: string) {
+    setObjectiveFromInitiativeId(null);
     setFilterThemeId(themeId);
     setFocusThemeId(null);
     setFocusInitiativeId(null);
@@ -48,14 +54,16 @@ export default function StrategyPage(): React.ReactElement {
     setTab("objectives");
   }
 
-  function goToObjective(objectiveId: string) {
+  function goToObjective(objectiveId: string, fromInitiativeId?: string) {
     setSelectedObjectiveId(objectiveId);
+    setObjectiveFromInitiativeId(fromInitiativeId ?? null);
     setFocusThemeId(null);
     setFocusInitiativeId(null);
     setTab("objectives");
   }
 
   function goToInitiative(initiativeId: string) {
+    setObjectiveFromInitiativeId(null);
     setFocusInitiativeId(initiativeId);
     setFocusThemeId(null);
     setFilterThemeId(null);
@@ -109,14 +117,21 @@ export default function StrategyPage(): React.ReactElement {
             ? (
               <ObjectiveDetail
                 objectiveId={selectedObjectiveId}
-                onBack={() => setSelectedObjectiveId(null)}
+                backLabel={objectiveFromInitiativeId ? "Back to initiative" : undefined}
+                onBack={() => {
+                  if (objectiveFromInitiativeId) goToInitiative(objectiveFromInitiativeId);
+                  else setSelectedObjectiveId(null);
+                }}
                 onNavigateToTheme={goToTheme}
                 onNavigateToInitiative={goToInitiative}
               />
             )
             : (
               <ObjectiveList
-                onSelect={setSelectedObjectiveId}
+                onSelect={(id) => {
+                  setObjectiveFromInitiativeId(null);
+                  setSelectedObjectiveId(id);
+                }}
                 filterThemeId={filterThemeId}
                 onClearThemeFilter={() => setFilterThemeId(null)}
                 onThemeFilterChange={setFilterThemeId}

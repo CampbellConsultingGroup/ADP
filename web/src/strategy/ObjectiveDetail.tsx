@@ -21,10 +21,15 @@ import ObjectiveControlLinkEditor from "./ObjectiveControlLinkEditor";
 import { checkMetricFields } from "./objectiveMetric";
 import { Button, StatusBadge, type BadgeTone } from "../ui";
 import NavLinkButton from "./NavLinkButton";
+import EditFrame, { useReturnFocus } from "./EditFrame";
 
 interface ObjectiveDetailProps {
   objectiveId: string;
   onBack: () => void;
+  /** Label for the Back control; "Back to objectives" by default. StrategyPage
+   *  passes "Back to initiative" when the user jumped here from an initiative
+   *  (ADP-q3j), so Back returns where they came from. */
+  backLabel?: string;
   /** Cross-navigation: jump to this objective's own Theme (Themes tab,
    *  scroll-and-highlighted). Undocumented from a required-hierarchy field
    *  (theme_id) that, before this, was never displayed anywhere on this
@@ -60,7 +65,7 @@ const STATUS_LABEL: Record<ObjectiveStatus, string> = {
   abandoned: "Abandoned",
 };
 
-export default function ObjectiveDetail({ objectiveId, onBack, onNavigateToTheme, onNavigateToInitiative }: ObjectiveDetailProps) {
+export default function ObjectiveDetail({ objectiveId, onBack, backLabel = "Back to objectives", onNavigateToTheme, onNavigateToInitiative }: ObjectiveDetailProps) {
   const { data: objective, isLoading, error } = useObjective(objectiveId);
   const { data: themesData } = useThemes();
   const { data: progress } = useObjectiveProgress(objectiveId);
@@ -78,6 +83,12 @@ export default function ObjectiveDetail({ objectiveId, onBack, onNavigateToTheme
   const [fiscalYear, setFiscalYear] = useState("");
   const [period, setPeriod] = useState<ObjectivePeriod>("Q1");
   const [metricError, setMetricError] = useState<string | null>(null);
+  const returnFocus = useReturnFocus();
+
+  function closeEdit() {
+    setEditing(false);
+    returnFocus(objectiveId); // focus Edit again once the read view is back (ADP-a8s)
+  }
 
   function startEdit() {
     if (!objective) return;
@@ -113,7 +124,7 @@ export default function ObjectiveDetail({ objectiveId, onBack, onNavigateToTheme
         fiscal_year: Number(fiscalYear),
         period,
       },
-      { onSuccess: () => setEditing(false) },
+      { onSuccess: closeEdit },
     );
   }
 
@@ -136,15 +147,37 @@ export default function ObjectiveDetail({ objectiveId, onBack, onNavigateToTheme
   if (error || !objective) return <div className="ui-alert crit">Failed to load objective</div>;
 
   const theme = themesData?.items.find((t) => t.id === objective.theme_id);
+  const dirty =
+    editing &&
+    (owner !== objective.owner ||
+      statement !== objective.statement ||
+      metricName !== (objective.metric_name ?? "") ||
+      targetValue !== (objective.target_value != null ? String(objective.target_value) : "") ||
+      targetUnit !== (objective.target_unit ?? "") ||
+      direction !== (objective.direction ?? "") ||
+      fiscalYear !== String(objective.fiscal_year) ||
+      period !== objective.period);
 
   return (
     <div>
-      <button onClick={onBack} style={{ marginBottom: 12, background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)" }}>
-        ← Back to objectives
-      </button>
+      {!editing && (
+        <button onClick={onBack} style={{ marginBottom: 12, background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)" }}>
+          ← {backLabel}
+        </button>
+      )}
 
       {editing ? (
-        <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <EditFrame
+          title="Edit objective"
+          subject={objective.statement}
+          backLabel="Back to objective"
+          dirty={dirty}
+          saving={updateMutation.isPending}
+          onSubmit={handleSave}
+          onClose={closeEdit}
+          error={metricError ?? (updateMutation.isError ? updateMutation.error.message : null)}
+        >
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           <label style={{ fontSize: 13 }}>
             Owner *
             <input value={owner} onChange={(e) => setOwner(e.target.value)} style={{ display: "block", width: "100%", marginTop: 2 }} />
@@ -189,19 +222,8 @@ export default function ObjectiveDetail({ objectiveId, onBack, onNavigateToTheme
               ))}
             </select>
           </label>
-          {metricError && (
-            <div className="ui-alert crit" style={{ fontSize: 12 }}>{metricError}</div>
-          )}
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="submit" disabled={updateMutation.isPending}>
-              {updateMutation.isPending ? "Saving…" : "Save"}
-            </button>
-            <button type="button" onClick={() => setEditing(false)}>Cancel</button>
-          </div>
-          {updateMutation.isError && (
-            <div className="ui-alert crit" style={{ fontSize: 12 }}>{updateMutation.error.message}</div>
-          )}
-        </form>
+        </div>
+        </EditFrame>
       ) : (
         <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
@@ -212,7 +234,7 @@ export default function ObjectiveDetail({ objectiveId, onBack, onNavigateToTheme
               </StatusBadge>
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <Button size="sm" onClick={startEdit}>Edit</Button>
+              <Button size="sm" data-edit-for={objectiveId} onClick={startEdit}>Edit</Button>
               {objective.status !== "abandoned" && (
                 <Button size="sm" variant="danger" onClick={handleAbandon}>Abandon</Button>
               )}

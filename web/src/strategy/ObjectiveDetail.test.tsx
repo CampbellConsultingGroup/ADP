@@ -322,6 +322,38 @@ describe("ObjectiveDetail: edit (T031)", () => {
     expect(mutate).not.toHaveBeenCalled();
     expect(screen.getByText(/must all be filled in together, or all left blank/i)).toBeTruthy();
   });
+
+  it("shows a heading, a visible primary Save and Cancel, and Cancel returns to the read view (ADP-a8s)", async () => {
+    const mutate = vi.fn();
+    mockedStrategyApi.useUpdateObjective.mockReturnValue({
+      mutate,
+      isPending: false,
+      isError: false,
+    } as unknown as ReturnType<typeof strategyApi.useUpdateObjective>);
+    const onBack = vi.fn();
+
+    const user = userEvent.setup();
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={onBack} />);
+    await user.click(screen.getByText("Edit"));
+
+    expect(screen.getByRole("heading", { name: /Edit objective/ })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Save" }).className).toContain("ui-btn-primary");
+    // Only the frame's Back is shown while editing; it leaves edit mode, not the page.
+    expect(screen.queryByRole("button", { name: /Back to objectives/ })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /Back to objective$/ }));
+    expect(onBack).not.toHaveBeenCalled();
+
+    await user.click(screen.getByText("Edit"));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(mutate).not.toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: /Edit objective/ })).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Edit" }));
+  });
+
+  it("uses the backLabel prop for the page-level Back control (ADP-q3j)", () => {
+    render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} backLabel="Back to initiative" />);
+    expect(screen.getByRole("button", { name: /Back to initiative/ })).toBeTruthy();
+  });
 });
 
 describe("ObjectiveDetail: delete (T031)", () => {
