@@ -36,7 +36,8 @@ def test_seed_pattern_is_valid_and_cites_seeded_principles(path: Path) -> None:
     assert result.definition is not None
     lookups = ReferenceLookups(principles=SEEDED_PRINCIPLES)
     r1 = [
-        i for i in resolve_references(result.definition, lookups, blocking=True)
+        i
+        for i in resolve_references(result.definition, lookups, blocking=True)
         if i.code == "R1.unresolved_principle"
     ]
     assert r1 == []
@@ -51,9 +52,17 @@ async def test_all_seed_patterns_promote_in_a_fresh_registry(tmp_path) -> None:
         for pid in SEEDED_PRINCIPLES:
             await session.execute(
                 pstore._knowledge_items.insert().values(
-                    id=pid, version="1.0.0", kind="principle", title=pid, full_text=pid,
-                    metadata={}, source_ref="seed", schema_version="1.0.0", active=True,
-                    embedding=[0.0] * 384, indexed_at=pstore._now(),
+                    id=pid,
+                    version="1.0.0",
+                    kind="principle",
+                    title=pid,
+                    full_text=pid,
+                    metadata={},
+                    source_ref="seed",
+                    schema_version="1.0.0",
+                    active=True,
+                    embedding=[0.0] * 384,
+                    indexed_at=pstore._now(),
                 )
             )
         keys = []
