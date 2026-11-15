@@ -48,7 +48,7 @@ def _make_session_factory(mock_index):
 async def test_indexer_upserts_updated_item(tmp_path: Path) -> None:
     """Indexer calls upsert_item with the latest item version (US2)."""
     mock_index = AsyncMock()
-    mock_index.get_all_active_ids = AsyncMock(return_value=set())
+    mock_index.get_active_source_refs = AsyncMock(return_value={})
     mock_index.upsert_item = AsyncMock()
     mock_index.upsert_relationship = AsyncMock()
     mock_index.mark_inactive = AsyncMock(return_value=0)
@@ -103,8 +103,10 @@ async def test_indexer_upserts_updated_item(tmp_path: Path) -> None:
 async def test_indexer_marks_absent_items_inactive(tmp_path: Path) -> None:
     """Items in prev_active_ids but absent this run are marked inactive (FR-004)."""
     mock_index = AsyncMock()
-    # PAT-001 was previously active
-    mock_index.get_all_active_ids = AsyncMock(return_value={"PAT-001"})
+    # PAT-001 was previously active, indexed from the same git source
+    mock_index.get_active_source_refs = AsyncMock(
+        return_value={"PAT-001": "git:file://test:PAT-001.md"}
+    )
     mock_index.upsert_item = AsyncMock()
     mock_index.upsert_relationship = AsyncMock()
     mock_index.mark_inactive = AsyncMock(return_value=1)
@@ -146,7 +148,7 @@ async def test_indexer_marks_absent_items_inactive(tmp_path: Path) -> None:
 async def test_indexer_connector_failure_does_not_block_others(tmp_path: Path) -> None:
     """A failing connector records an error but doesn't block other connectors (I2)."""
     mock_index = AsyncMock()
-    mock_index.get_all_active_ids = AsyncMock(return_value=set())
+    mock_index.get_active_source_refs = AsyncMock(return_value={})
     mock_index.upsert_item = AsyncMock()
     mock_index.upsert_relationship = AsyncMock()
     mock_index.mark_inactive = AsyncMock(return_value=0)
@@ -181,24 +183,143 @@ async def test_indexer_connector_failure_does_not_block_others(tmp_path: Path) -
 
 # ── 935-pattern-registry: registry-owned items are not deactivation candidates ──────
 
-@pytest.mark.asyncio
-async def test_indexer_excludes_pattern_registry_items_from_sweep(tmp_path: Path) -> None:
-    """The indexer asks for active ids EXCLUDING adp-pattern: items (935 FR-014, GT-6)."""
+async def _run(
+    tmp_path: Path,
+    prev: dict[str, str],
+    *,
+    repo_urls: list[str] | None = None,
+    connector: MagicMock | None = None,
+    upsert_error: bool = False,
+    design_store_items: list[KnowledgeItem] | None = None,
+):  # type: ignore[no-untyped-def]
+    """Run the indexer against mocks; return (result, ids passed to mark_inactive)."""
     mock_index = AsyncMock()
-    mock_index.get_all_active_ids = AsyncMock(return_value=set())
-    mock_index.mark_inactive = AsyncMock(return_value=0)
+    mock_index.get_active_source_refs = AsyncMock(return_value=prev)
+    mock_index.upsert_item = AsyncMock(side_effect=RuntimeError("db") if upsert_error else None)
+    mock_index.upsert_relationship = AsyncMock()
+    mock_index.mark_inactive = AsyncMock(side_effect=lambda ids, session: len(ids))
     factory, _ = _make_session_factory(mock_index)
     indexer = Indexer(
         database_url="postgresql+asyncpg://test/test", embedding_model="mock", embedding_dim=4,
+        git_repo_urls=repo_urls or [], git_local_path=str(tmp_path),
+        design_store=object() if design_store_items is not None else None,
     )
+    indexer._embedder = MagicMock()
+    indexer._embedder.embed_batch.side_effect = lambda texts: [[0.1, 0.2, 0.3, 0.4]] * len(texts)
+
+    ds_connector = MagicMock()
+
+    async def _ds_items():  # type: ignore[no-untyped-def]
+        for item in design_store_items or []:
+            yield item
+
+    ds_connector.read_items = _ds_items
     mock_engine = MagicMock()
     mock_engine.dispose = AsyncMock()
     with patch("adp.knowledge.indexer.create_async_engine", return_value=mock_engine), \
          patch("adp.knowledge.indexer.async_sessionmaker", return_value=factory), \
-         patch("adp.knowledge.indexer.KnowledgeIndex", return_value=mock_index):
-        await indexer.run()
-    kwargs = mock_index.get_all_active_ids.call_args.kwargs
-    assert kwargs["exclude_source_prefixes"] == ("adp-pattern:",)
+         patch("adp.knowledge.indexer.KnowledgeIndex", return_value=mock_index), \
+         patch("adp.knowledge.indexer.GitConnector", return_value=connector or MagicMock()), \
+         patch("adp.knowledge.connectors.design_store.DesignStoreConnector",
+               return_value=ds_connector):
+        result = await indexer.run()
+    calls = mock_index.mark_inactive.call_args_list
+    swept = sorted(calls[0][0][0]) if calls else []
+    return result, swept
+
+
+def _git_connector(items: list[KnowledgeItem]) -> MagicMock:
+    c = MagicMock()
+    c.read_items.return_value = iter(items)
+    c.read_relationships.return_value = iter([])
+    return c
+
+
+# ── ADP-4zn: the sweep only touches items owned by a connector that ran ─────────────
+
+@pytest.mark.asyncio
+async def test_sweep_ignores_items_no_connector_owns(tmp_path: Path) -> None:
+    """API-, CALM-, seed- and pattern-registry items come from no connector: never swept."""
+    prev = {
+        "PAT-001": "git:file://test:PAT-001.md",          # owned by the git source that ran
+        "PRIN-003": "https://example.com/api-first",      # seed_knowledge.py / API create
+        "calm-event-driven": "calm:event-driven",         # CALM import
+        "manual-1": "Architecture board minutes 2026-03",  # free-text API source_ref
+        "adp-pattern:ea.x.y": "adp-pattern:ea.x.y",        # pattern registry (935)
+        "DSN-1": "adp-store:DSN-1",                        # design store did not run
+    }
+    item = _make_item("PAT-002")
+    item = item.model_copy(update={"source_ref": "git:file://test:PAT-002.md"})
+    result, swept = await _run(
+        tmp_path, prev, repo_urls=["file://test"], connector=_git_connector([item])
+    )
+    assert swept == ["PAT-001"]
+    assert result.deactivated == 1
+
+
+@pytest.mark.asyncio
+async def test_failed_connector_sweeps_nothing_of_its_own(tmp_path: Path) -> None:
+    broken = MagicMock()
+    broken.pull_or_clone = MagicMock(side_effect=ConnectionError("repo unreachable"))
+    prev = {"PAT-001": "git:https://broken.example.org:PAT-001.md"}
+    result, swept = await _run(
+        tmp_path, prev, repo_urls=["https://broken.example.org"], connector=broken
+    )
+    assert swept == []
+    assert result.deactivated == 0
+    assert "https://broken.example.org" in result.connector_errors
+
+
+@pytest.mark.asyncio
+async def test_item_still_in_source_is_kept_even_if_its_upsert_failed(tmp_path: Path) -> None:
+    prev = {"PAT-001": "git:file://test:PAT-001.md"}
+    result, swept = await _run(
+        tmp_path, prev, repo_urls=["file://test"],
+        connector=_git_connector([_make_item("PAT-001")]), upsert_error=True,
+    )
+    assert swept == []
+    assert result.failed == 1
+
+
+@pytest.mark.asyncio
+async def test_design_store_items_swept_only_when_that_connector_ran(tmp_path: Path) -> None:
+    prev = {"DSN-1": "adp-store:DSN-1", "DSN-2": "adp-store:DSN-2"}
+    _, without_store = await _run(tmp_path, prev)
+    assert without_store == []
+    kept = _make_item("DSN-2").model_copy(update={"source_ref": "adp-store:DSN-2"})
+    _, with_store = await _run(tmp_path, prev, design_store_items=[kept])
+    assert with_store == ["DSN-1"]
+
+
+@pytest.mark.asyncio
+async def test_get_active_source_refs_on_sqlite(tmp_path: Path) -> None:
+    from datetime import datetime, timezone
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from adp.knowledge.index import KnowledgeIndex
+    from adp.patterns import store as pstore
+
+    knowledge_items = pstore._knowledge_items
+    engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/kb_refs.db")
+    async with engine.begin() as conn:
+        await conn.run_sync(lambda c: pstore._metadata.create_all(c, tables=[knowledge_items]))
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    now = datetime.now(timezone.utc)
+    async with factory() as session:
+        for item_id, ref, active in (("A", "git:r:A.md", True), ("B", "calm:b", True),
+                                     ("C", "git:r:C.md", False)):
+            await session.execute(
+                knowledge_items.insert().values(
+                    id=item_id, version="1.0.0", kind="pattern", title=item_id, full_text="t",
+                    metadata={}, source_ref=ref, schema_version="1.0.0", active=active,
+                    embedding=[0.0] * 384, indexed_at=now,
+                )
+            )
+        await session.commit()
+        refs = await KnowledgeIndex(factory).get_active_source_refs(session)
+        assert refs == {"A": "git:r:A.md", "B": "calm:b"}
+    await engine.dispose()
 
 
 @pytest.mark.asyncio
