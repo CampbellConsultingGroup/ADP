@@ -5,6 +5,7 @@ import { Button, StatusBadge } from "../ui";
 import { TIME_TONE } from "./ApplicationList";
 import ApplicationForm from "./ApplicationForm";
 import CapabilityLinksEditor from "./CapabilityLinksEditor";
+import { ApplicationRealizes } from "./AppCapSummaryList";
 import TechCapLinkEditor from "./TechCapLinkEditor";
 import StageLinkEditor from "./StageLinkEditor";
 import DomainIntegrationEditor from "./DomainIntegrationEditor";
@@ -202,7 +203,14 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
             </div>
           </div>
         )}
-        {section === "capabilities" && <CapabilityLinksEditor appId={appId} />}
+        {section === "capabilities" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <CapabilityLinksEditor appId={appId} />
+            <hr style={{ border: "none", borderTop: "1px solid var(--border)", width: "100%" }} />
+            {/* 937-application-capabilities: read-only; edited on the application capability. */}
+            <ApplicationRealizes appId={appId} />
+          </div>
+        )}
         {section === "tech-caps" && <TechCapLinkEditor appId={appId} />}
         {section === "stages" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>

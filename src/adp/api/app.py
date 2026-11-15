@@ -39,6 +39,7 @@ from adp.api.routers import (
     theme,
     validate,
 )
+from adp.application import app_capabilities_router
 from adp.application import store as astore
 from adp.application.router import (
     applications_router,
@@ -320,6 +321,7 @@ def create_app() -> FastAPI:
     app.include_router(search.router)
     app.include_router(applications_router)
     app.include_router(tech_caps_router)
+    app.include_router(app_capabilities_router.router)
     app.include_router(integrations_router)
     app.include_router(initiatives_router)
     app.include_router(chat_router_module.router)

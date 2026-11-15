@@ -10,6 +10,7 @@ import GovernancePage from "./governance/GovernancePage";
 import BusinessPage from "./business/BusinessPage";
 import ApplicationPage from "./application/ApplicationPage";
 import TechCapPage from "./application/TechCapPage";
+import { AppCapNavContext } from "./application/appCapNav";
 import { DiagramsPage } from "./diagrams/DiagramsPage";
 import type { DiagramSeed } from "./diagrams/generators";
 import StrategyPage from "./strategy/StrategyPage";
@@ -55,6 +56,14 @@ export default function App(): React.ReactElement {
   const [pendingDiagramSeed, setPendingDiagramSeed] = useState<DiagramSeed | null>(null);
   // 933-agent-registry: an application to open when an agent's solution link is followed.
   const [pendingAppId, setPendingAppId] = useState<string | null>(null);
+  // 937-application-capabilities: an application capability to open in Applications ->
+  // Capabilities, when one is followed from a business/technical capability or an application.
+  const [pendingAppCapId, setPendingAppCapId] = useState<string | null>(null);
+  const openAppCapability = (id: string) => {
+    setPendingAppId(null);
+    setPendingAppCapId(id);
+    setView("applications");
+  };
 
   const onNavigate = (nextView: AppView) => {
     if (!currentDesignId && DESIGN_ONLY_VIEWS.includes(nextView)) {
@@ -63,6 +72,7 @@ export default function App(): React.ReactElement {
       return;
     }
     setPendingAppId(null);
+    setPendingAppCapId(null);
     setView(nextView);
   };
 
@@ -105,12 +115,19 @@ export default function App(): React.ReactElement {
       case "business":
         return <BusinessPage onNavigate={onNavigate} designId={currentDesignId} onGenerateDiagram={onGenerateDiagram} />;
       case "applications":
-        return <ApplicationPage key={pendingAppId ?? "registry"} initialAppId={pendingAppId} />;
+        return (
+          <ApplicationPage
+            key={pendingAppCapId ?? pendingAppId ?? "registry"}
+            initialAppId={pendingAppId}
+            initialAppCapId={pendingAppCapId}
+          />
+        );
       case "agents":
         return (
           <AgentsPage
             onOpenSolution={(appId) => {
               setPendingAppId(appId);
+              setPendingAppCapId(null);
               setView("applications");
             }}
           />
@@ -170,8 +187,10 @@ export default function App(): React.ReactElement {
   }
 
   return (
-    <AppShell currentView={view} onNavigate={onNavigate} designId={currentDesignId} onStartNewDesign={onStartNewDesign}>
-      {renderPage()}
-    </AppShell>
+    <AppCapNavContext.Provider value={openAppCapability}>
+      <AppShell currentView={view} onNavigate={onNavigate} designId={currentDesignId} onStartNewDesign={onStartNewDesign}>
+        {renderPage()}
+      </AppShell>
+    </AppCapNavContext.Provider>
   );
 }

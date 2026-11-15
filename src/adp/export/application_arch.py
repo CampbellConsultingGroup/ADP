@@ -176,6 +176,23 @@ def _serialize_technical_capability(tc: TechnicalCapability) -> dict[str, Any]:
     }
 
 
+def _serialize_application_capability(
+    row: dict[str, Any], links: dict[str, list[str]]
+) -> dict[str, Any]:
+    """937-application-capabilities: one application capability with its three link sets.
+    Ids are sorted so an unchanged capability never rewrites its file."""
+    return {
+        "id": row["id"],
+        "name": row["name"],
+        "description": row["description"],
+        "parent_id": row["parent_id"],
+        "level": row["level"],
+        "business_capability_ids": sorted(links.get("business", [])),
+        "technical_capability_ids": sorted(links.get("technical", [])),
+        "realized_by_application_ids": sorted(links.get("application", [])),
+    }
+
+
 def _serialize_initiative(
     initiative: TransformationInitiative, *, members: list[dict[str, Any]]
 ) -> dict[str, Any]:
@@ -223,6 +240,10 @@ class ApplicationArchSnapshot:
     # Reverse view of initiative_links_by_app, keyed by initiative_id instead
     # of app_id -- both directions come from the same query (data-model.md §2.3).
     members_by_initiative: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    # 937-application-capabilities: raw rows plus {ac_id: {"business"|"technical"|"application":
+    # [ids]}} -- four queries in total, whatever the catalog size.
+    application_capabilities: list[dict[str, Any]] = field(default_factory=list)
+    app_capability_links: dict[str, dict[str, list[str]]] = field(default_factory=dict)
 
 
 async def _fetch_all(session: AsyncSession) -> ApplicationArchSnapshot:
@@ -370,6 +391,24 @@ async def _fetch_all(session: AsyncSession) -> ApplicationArchSnapshot:
             "planned_disposition": row["planned_disposition"],
         })
 
+    app_caps = [
+        dict(r)
+        for r in (
+            await session.execute(sa.select(astore._app_caps).order_by(astore._app_caps.c.id))
+        ).mappings().all()
+    ]
+    app_cap_links: dict[str, dict[str, list[str]]] = {}
+    for kind, table, far, far_col in (
+        ("business", astore._biz_app_cap_links, astore._biz_caps, "business_capability_id"),
+        ("technical", astore._app_cap_tech_links, astore._tech_caps, "tech_cap_id"),
+        ("application", astore._app_cap_realizations, astore._applications, "app_id"),
+    ):
+        stmt = sa.select(table.c.app_capability_id, table.c[far_col]).select_from(
+            table.join(far, far.c.id == table.c[far_col])
+        )
+        for ac_id, target in (await session.execute(stmt)).all():
+            app_cap_links.setdefault(ac_id, {}).setdefault(kind, []).append(target)
+
     return ApplicationArchSnapshot(
         applications=apps_resp.items,
         technical_capabilities=tech_caps_resp.items,
@@ -385,6 +424,8 @@ async def _fetch_all(session: AsyncSession) -> ApplicationArchSnapshot:
         domain_integrations_by_app=domain_integrations_by_app,
         initiative_links_by_app=initiative_links_by_app,
         members_by_initiative=members_by_initiative,
+        application_capabilities=app_caps,
+        app_capability_links=app_cap_links,
     )
 
 
@@ -424,6 +465,14 @@ async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSessio
                 _serialize_technical_capability(tc),
                 now,
             )
+        for row in snapshot.application_capabilities:
+            _write_entity_file(
+                root / "application-capabilities" / _safe_filename(row["id"]),
+                _serialize_application_capability(
+                    row, snapshot.app_capability_links.get(row["id"], {})
+                ),
+                now,
+            )
         for ti in snapshot.initiatives:
             _write_entity_file(
                 root / "transformation-initiatives" / _safe_filename(ti.id),
@@ -454,6 +503,10 @@ async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSessio
         )
         _cleanup_orphan_files(
             root / "integrations", {intg.id for intg in snapshot.integrations}
+        )
+        _cleanup_orphan_files(
+            root / "application-capabilities",
+            {row["id"] for row in snapshot.application_capabilities},
         )
     except Exception:
         _logger.warning("application_arch_export.cycle_failed", exc_info=True)

@@ -3,6 +3,7 @@ import type React from "react";
 import type { StrategicRelevance, TechnicalCapability } from "../api/application";
 import { STRATEGIC_RELEVANCE_LABEL, useCreateTechCap, useDeleteTechCap, useTechCaps, useUpdateTechCap } from "../api/application";
 import TechCapForm from "./TechCapForm";
+import { TechCapUsedBy } from "./AppCapSummaryList";
 
 export interface TechCapTreeNode extends TechnicalCapability {
   children: TechCapTreeNode[];
@@ -143,6 +144,8 @@ function TechCapNode({ node, depth }: NodeProps) {
           </>
         )}
       </div>
+      {/* 937-application-capabilities: application capabilities map to technical L2/L3 only. */}
+      {node.level >= 2 && <TechCapUsedBy tcId={node.id} />}
       {adding && (
         <div style={{ marginLeft: 14 }}>
           <TechCapForm
