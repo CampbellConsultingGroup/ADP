@@ -7,6 +7,7 @@ Reciprocal Rank Fusion, over a single polymorphic ``searchable_items`` table.
 from adp.search.index import (
     ENTITY_AGENT,
     ENTITY_APPLICATION,
+    ENTITY_APPLICATION_CAPABILITY,
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
     ENTITY_TECHNICAL_CAPABILITY,
@@ -28,6 +29,7 @@ __all__ = [
     "SearchHit",
     "ENTITY_AGENT",
     "ENTITY_APPLICATION",
+    "ENTITY_APPLICATION_CAPABILITY",
     "ENTITY_BUSINESS_CAPABILITY",
     "ENTITY_BUSINESS_DOMAIN",
     "ENTITY_TECHNICAL_CAPABILITY",

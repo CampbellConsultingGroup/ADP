@@ -119,6 +119,8 @@ Auto-generated from all feature plans. Last updated: 2026-11-14 (934-pattern-met
 
 - Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; pure conformance engine in `adp.patterns` (snapshot/engine) over 934's CEL adapter, per-caller portfolio snapshot from registry mirrors, migration `045` (ea_pattern_adoption, _member, _pin; status derived, never stored) (936-pattern-conformance)
 
+- Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; application capabilities (middle layer between business and technical capabilities) in `adp.application.app_capabilities` + router, migration `046` (application_capabilities + 3 link tables; level rules in the store; missing-technical-capability warning derived, never stored) (937-application-capabilities)
+
 - Python 3.11+ + Pydantic v2 (entity definitions and schema emission), jsonschema 4.x (schema validation in tests) (001-canonical-data-model)
 
 ## Project Structure
@@ -162,6 +164,28 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 937-application-capabilities: Implemented (ADP-6et.1, spec A of 2 in epic ADP-6et "three-layer capability
+  model"). A NEW application capability entity (shared L1-L3 catalog: level derived from the parent, max 3,
+  parent/level immutable, delete blocked while children exist, sibling names unique case-insensitive incl. NULL-
+  parent roots via a COALESCE expression index) sits between business and technical capabilities. Three many-to-
+  many link tables (migration `046`), each with level rules enforced in the store (an FK can't check the far row's
+  level), refused with a 422 naming the rule: business L3 <-> application L3; application L3 -> technical L2/L3;
+  application L3 realized by applications. No direct business -> technical link. The user's mapping guidance
+  (L1 is navigation only, roll-ups come from the leaves, comparable granularity across layers) is in ADP-6et's notes
+  and shown in the UI. An L3 with no technical capability gets a governance WARNING (badge plus gaps list), derived
+  on read and never stored (guard test); it never blocks saving. The existing application <-> business capability
+  (fit score) and application <-> technical capability (provides/consumes) links are UNCHANGED. Links are edited
+  only on the application capability (Applications -> new Capabilities tab). The business L3 rows, technical
+  capability rows and application detail show read-only, expand-to-load lists that navigate there via
+  `AppCapNavContext` (App.tsx). Writes use the `("/api/v1/application-capabilities", WRITE_APPLICATION)` prefix
+  rule (no new permission). Search `ENTITY_APPLICATION_CAPABILITY` (text includes the L1/L2 path; renaming
+  reindexes descendants) plus backfill. Export `applications/application-capabilities/<id>.json`. `seed_retail.py`
+  seeds the user's Store POS example (5 chains plus "Loyalty Points Accrual" with no technical capability).
+  Tables are defined in `adp.application.store` (no circular import); models in `app_capability_models.py`.
+  Reads inner-join the far end, so SQLite's unenforced FKs never surface dangling links; Postgres CASCADE removes
+  them. 2318+ backend, 675 frontend; new modules 95-100% covered; the Docker-gated `test_migration_046.py` runs in
+  CI. Verified live after a reseed (API rules, warning lifecycle, search, Playwright across all four screens).
+  Follow-on: ADP-6et.2 (roll-ups, impact analysis, gap/overlap). See `specs/937-application-capabilities/`.
 - 936-pattern-conformance: Implemented (ADP-mmm.3, spec 3 of 4 in epic ADP-mmm). Pattern adoptions (a pattern
   applied to a business domain / application set / portfolio, optional version pin, role pins; migration `045`:
   ea_pattern_adoption + _member + _pin, partial-unique per domain/portfolio) evaluated by a PURE engine

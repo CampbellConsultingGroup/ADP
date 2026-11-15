@@ -21,7 +21,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from adp.agentic import store as agstore
 from adp.agentic.models import AgentCreate
+from adp.application import app_capabilities as acstore
 from adp.application import store as astore
+from adp.application.app_capability_models import ApplicationCapabilityCreate
 from adp.application.models import ApplicationCreate, TechnicalCapabilityCreate
 from adp.business import store as bstore
 from adp.business import value_chains as vcstore
@@ -37,6 +39,7 @@ from adp.search import backfill as bf
 from adp.search.index import (
     ENTITY_AGENT,
     ENTITY_APPLICATION,
+    ENTITY_APPLICATION_CAPABILITY,
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
     ENTITY_TECHNICAL_CAPABILITY,
@@ -105,8 +108,20 @@ async def test_reindex_all_covers_every_entity_type(session, recording_index) ->
         session,
     )
 
+    l1 = await acstore.create_app_capability(
+        ApplicationCapabilityCreate(name="Transaction Processing"), session
+    )
+    l2 = await acstore.create_app_capability(
+        ApplicationCapabilityCreate(name="Payments", parent_id=l1.id), session
+    )
+
     counts = await bf.reindex_all(session)
 
+    assert (
+        ENTITY_APPLICATION_CAPABILITY,
+        l2.id,
+        "Payments Transaction Processing",
+    ) in recording_index.upserted
     upserted_ids = {(et, eid) for et, eid, _ in recording_index.upserted}
     assert (ENTITY_BUSINESS_CAPABILITY, cap.id) in upserted_ids
     assert (ENTITY_TECHNICAL_CAPABILITY, tc.id) in upserted_ids
@@ -128,6 +143,7 @@ async def test_reindex_all_covers_every_entity_type(session, recording_index) ->
         ENTITY_VALUE_CHAIN: 1,
         ENTITY_VALUE_CHAIN_ACTIVITY: 1,
         ENTITY_AGENT: 1,
+        ENTITY_APPLICATION_CAPABILITY: 2,
     }
 
 
@@ -157,5 +173,6 @@ async def test_reindex_all_empty_database_returns_zero_counts(session, recording
         ENTITY_VALUE_CHAIN: 0,
         ENTITY_VALUE_CHAIN_ACTIVITY: 0,
         ENTITY_AGENT: 0,
+        ENTITY_APPLICATION_CAPABILITY: 0,
     }
     assert recording_index.upserted == []

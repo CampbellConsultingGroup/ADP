@@ -48,6 +48,8 @@ ENTITY_VALUE_CHAIN = "value_chain"
 ENTITY_VALUE_CHAIN_ACTIVITY = "value_chain_activity"
 # 933-agent-registry (ADP-hii): AI agents in the agent registry.
 ENTITY_AGENT = "agent"
+# 937-application-capabilities (ADP-6et.1): the middle layer of the capability model.
+ENTITY_APPLICATION_CAPABILITY = "application_capability"
 
 _metadata = sa.MetaData()
 searchable_items = sa.Table(

@@ -161,6 +161,8 @@ _PREFIX_ROUTE_ACTIONS: tuple[tuple[str, ActionType], ...] = (
     ("/api/v1/business/", ActionType.WRITE_BUSINESS_ARCH),
     ("/api/v1/applications", ActionType.WRITE_APPLICATION),
     ("/api/v1/technical-capabilities", ActionType.WRITE_APPLICATION),
+    # 937-application-capabilities: same permission as technical capabilities (spec clarification).
+    ("/api/v1/application-capabilities", ActionType.WRITE_APPLICATION),
     ("/api/v1/integrations", ActionType.WRITE_APPLICATION),
     ("/api/v1/transformation-initiatives", ActionType.WRITE_APPLICATION),
     # ADP-SPEC-046: one rule covers every mutating method under this prefix

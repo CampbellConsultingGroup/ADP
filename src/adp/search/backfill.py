@@ -16,6 +16,7 @@ import sqlalchemy as sa
 from adp.search import (
     ENTITY_AGENT,
     ENTITY_APPLICATION,
+    ENTITY_APPLICATION_CAPABILITY,
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
     ENTITY_TECHNICAL_CAPABILITY,
@@ -78,6 +79,7 @@ async def reindex_all(session: "AsyncSession") -> dict[str, int]:
         ENTITY_VALUE_CHAIN: 0,
         ENTITY_VALUE_CHAIN_ACTIVITY: 0,
         ENTITY_AGENT: 0,
+        ENTITY_APPLICATION_CAPABILITY: 0,
     }
 
     cap_total = await reindex_capabilities(session)
@@ -139,6 +141,13 @@ async def reindex_all(session: "AsyncSession") -> dict[str, int]:
     for agent in await agstore.list_agents(session):
         await index.upsert(ENTITY_AGENT, agent.id, agstore._search_text(agent), session)
         counts[ENTITY_AGENT] += 1
+
+    # 937-application-capabilities: same text (name, description, L1/L2 path) as the write hooks.
+    from adp.application import app_capabilities as acstore
+
+    for ac_id, text in await acstore.search_entries(session):
+        await index.upsert(ENTITY_APPLICATION_CAPABILITY, ac_id, text, session)
+        counts[ENTITY_APPLICATION_CAPABILITY] += 1
 
     return counts
 

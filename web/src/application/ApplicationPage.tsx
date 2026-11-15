@@ -6,6 +6,7 @@ import ApplicationDetail from "./ApplicationDetail";
 import ApplicationForm from "./ApplicationForm";
 import RationalizationView from "./RationalizationView";
 import RoadmapView from "./RoadmapView";
+import AppCapabilitiesView from "./AppCapabilitiesView";
 
 function ApplicationPageInner({ initialAppId }: { initialAppId: string | null }) {
   const { data } = useApplications();
@@ -80,14 +81,23 @@ function tabStyle(active: boolean): CSSProperties {
 }
 
 // 933-agent-registry: initialAppId lets another screen (an agent's solution list) open a
-// specific application in the registry.
-export default function ApplicationPage({ initialAppId = null }: { initialAppId?: string | null } = {}) {
-  const [view, setView] = useState<"registry" | "rationalization" | "roadmap">("registry");
+// specific application in the registry. 937: initialAppCapId opens the Capabilities tab on one
+// application capability.
+export default function ApplicationPage({
+  initialAppId = null,
+  initialAppCapId = null,
+}: { initialAppId?: string | null; initialAppCapId?: string | null } = {}) {
+  const [view, setView] = useState<"registry" | "capabilities" | "rationalization" | "roadmap">(
+    initialAppCapId ? "capabilities" : "registry",
+  );
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ display: "flex", gap: 8, padding: "10px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
         <button type="button" style={tabStyle(view === "registry")} aria-pressed={view === "registry"} onClick={() => setView("registry")}>
           Registry
+        </button>
+        <button type="button" style={tabStyle(view === "capabilities")} aria-pressed={view === "capabilities"} onClick={() => setView("capabilities")}>
+          Capabilities
         </button>
         <button type="button" style={tabStyle(view === "rationalization")} aria-pressed={view === "rationalization"} onClick={() => setView("rationalization")}>
           Rationalization
@@ -102,6 +112,7 @@ export default function ApplicationPage({ initialAppId = null }: { initialAppId?
             <ApplicationPageInner initialAppId={initialAppId} />
           </Suspense>
         )}
+        {view === "capabilities" && <AppCapabilitiesView initialId={initialAppCapId} />}
         {view === "rationalization" && <RationalizationView />}
         {view === "roadmap" && <RoadmapView />}
       </div>

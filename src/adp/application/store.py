@@ -161,6 +161,11 @@ _biz_caps = sa.Table(
     _metadata,
     sa.Column("id", sa.String(36), primary_key=True),
     sa.Column("name", sa.String(255), nullable=False),
+    # 937-application-capabilities: level/parent for the mapping-level rules and L1/L2 paths.
+    # Nullable here only so fixtures that create just this metadata still work; the real
+    # table has both NOT NULL / indexed.
+    sa.Column("level", sa.Integer(), nullable=True),
+    sa.Column("parent_id", sa.String(36), nullable=True),
 )
 
 _app_tech_cap_links = sa.Table(
@@ -169,6 +174,76 @@ _app_tech_cap_links = sa.Table(
     sa.Column("app_id", sa.String(36), nullable=False),
     sa.Column("tech_cap_id", sa.String(36), nullable=False),
     sa.Column("usage_type", sa.Text(), nullable=False),
+)
+
+# 937-application-capabilities (migration 046): the application capability catalog and its three
+# link tables. Defined here (not in adp.application.app_capabilities) so delete_application and
+# delete_technical_capability can remove their link rows without a circular import, and so every
+# fixture's _metadata.create_all() includes them. The functions live in app_capabilities.py.
+_app_caps = sa.Table(
+    "application_capabilities",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.String(255), nullable=False),
+    sa.Column("description", sa.Text()),
+    sa.Column("parent_id", sa.String(36), sa.ForeignKey("application_capabilities.id")),
+    sa.Column("level", sa.SmallInteger(), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+_biz_app_cap_links = sa.Table(
+    "business_capability_app_capability_links",
+    _metadata,
+    sa.Column(
+        "business_capability_id",
+        sa.String(36),
+        sa.ForeignKey("business_capabilities.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column(
+        "app_capability_id",
+        sa.String(36),
+        sa.ForeignKey("application_capabilities.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+_app_cap_tech_links = sa.Table(
+    "app_capability_tech_cap_links",
+    _metadata,
+    sa.Column(
+        "app_capability_id",
+        sa.String(36),
+        sa.ForeignKey("application_capabilities.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column(
+        "tech_cap_id",
+        sa.String(36),
+        sa.ForeignKey("technical_capabilities.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+_app_cap_realizations = sa.Table(
+    "app_capability_realizations",
+    _metadata,
+    sa.Column(
+        "app_capability_id",
+        sa.String(36),
+        sa.ForeignKey("application_capabilities.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column(
+        "app_id",
+        sa.String(36),
+        sa.ForeignKey("applications.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
 _app_stage_links = sa.Table(
@@ -605,6 +680,10 @@ async def delete_application(app_id: str, session: AsyncSession) -> bool:
     # SQLite fixtures behave like Postgres, where migration 043's CASCADE is the safety net.
     await session.execute(
         _solution_agents.delete().where(_solution_agents.c.solution_app_id == app_id)
+    )
+    # 937: same for application capability realizations (the capabilities themselves stay).
+    await session.execute(
+        _app_cap_realizations.delete().where(_app_cap_realizations.c.app_id == app_id)
     )
     result = await session.execute(
         _applications.delete().where(_applications.c.id == app_id)
@@ -1594,6 +1673,12 @@ async def delete_technical_capability(tc_id: str, session: AsyncSession) -> bool
             "Delete children first."
         )
 
+    # 937: remove application capability -> technical links explicitly (SQLite parity; migration
+    # 046's CASCADE is the safety net). An L3 left with no technical link starts showing the
+    # derived missing-technical-capability warning.
+    await session.execute(
+        _app_cap_tech_links.delete().where(_app_cap_tech_links.c.tech_cap_id == tc_id)
+    )
     result = await session.execute(
         _tech_caps.delete().where(_tech_caps.c.id == tc_id)
     )

@@ -45,6 +45,8 @@ from adp.application.models import (
     HealthAssessmentSubmit,
     TechnicalCapabilityCreate,
 )
+from adp.application import app_capabilities as acstore
+from adp.application.app_capability_models import ApplicationCapabilityCreate
 from adp.business import store as bstore
 from adp.business.models import (
     BusinessCapabilityCreate,
@@ -81,6 +83,11 @@ WIPE_TABLES = [
     # so an applications TRUNCATE ... CASCADE alone would leave them behind).
     "solution_agents",
     "agents",
+    # 937-application-capabilities: the middle capability layer and its links.
+    "app_capability_realizations",
+    "app_capability_tech_cap_links",
+    "business_capability_app_capability_links",
+    "application_capabilities",
     "application_design_links",
     "application_integrations",
     "application_domain_integrations",
@@ -193,6 +200,14 @@ CAPABILITIES = [
         ("Human Capital Management", []),
         ("Enterprise Data & Analytics", []),
     ]),
+    # 937-application-capabilities: the user's worked Store POS example (ADP-6et). Business L3s
+    # are deliberately one function each, so each maps cleanly to one application capability.
+    ("Sales & Customer Transactions", "Store Operations", [
+        ("In-Store Transaction Management", [
+            "Process Checkout", "Apply Promotions", "Accept Payment", "Process Returns",
+            "Issue Receipts",
+        ]),
+    ]),
 ]
 
 # ── Value streams (name, stakeholder, [stage names in order]) ─────────────────
@@ -214,6 +229,33 @@ TECH_CAPS = [
     ("Data & Analytics", ["Data Warehouse", "BI & Reporting", "ML & Recommendations"]),
     ("Commerce Services", ["Product Search", "Cart & Checkout", "Payment Processing"]),
     ("Platform & Infrastructure", ["Identity & Access", "Cloud Hosting", "Observability"]),
+]
+
+# ── Three-layer capability model: the Store POS example (937, ADP-6et) ────────
+# Technical L1 -> L2 -> L3 (TECH_CAPS above stops at L2).
+POS_TECH_CAPS = ("Integration & Data Services", [
+    ("API Services", ["API Gateway Services", "Notification Messaging"]),
+    ("Data Storage", ["Local Data Store with Offline Sync", "Distributed Caching"]),
+    ("Security", ["Payment Tokenization (P2PE)"]),
+])
+# Application capability L1 -> L2 -> L3.
+APP_CAPS = ("Transaction Processing", [
+    ("Checkout", ["Basket Calculation", "Receipt Generation"]),
+    ("Pricing", ["Price Rule Evaluation"]),
+    ("Payments", ["Tender Authorization"]),
+    ("Returns", ["Return Authorization"]),
+    # Deliberately has no technical capability yet: demonstrates the governance warning.
+    ("Loyalty", ["Loyalty Points Accrual"]),
+])
+# Leaf chains: business L3 -> application L3 -> [technical L3s]; Store POS realizes each.
+CAPABILITY_CHAINS = [
+    ("Process Checkout", "Basket Calculation", ["Local Data Store with Offline Sync"]),
+    ("Apply Promotions", "Price Rule Evaluation", ["Distributed Caching"]),
+    ("Accept Payment", "Tender Authorization",
+     ["Payment Tokenization (P2PE)", "API Gateway Services"]),
+    ("Process Returns", "Return Authorization", ["API Gateway Services"]),
+    ("Issue Receipts", "Receipt Generation", ["Notification Messaging"]),
+    (None, "Loyalty Points Accrual", []),
 ]
 
 # ── Application portfolio ─────────────────────────────────────────────────────
@@ -766,6 +808,44 @@ async def seed(db_url: str) -> None:
         print(f"  {n} value-stream-design links")
 
         await session.commit()
+
+    # ── Phase C2: application capabilities, the Store POS example (937) ───────
+    print("Seeding the three-layer capability model (Store POS)...")
+    async with session_factory() as session:
+        t1_name, t2_list = POS_TECH_CAPS
+        t1 = await astore.create_technical_capability(
+            TechnicalCapabilityCreate(name=t1_name), session)
+        tech_ids[t1_name] = t1.id
+        for t2_name, t3_names in t2_list:
+            t2 = await astore.create_technical_capability(
+                TechnicalCapabilityCreate(name=t2_name, parent_id=t1.id), session)
+            tech_ids[t2_name] = t2.id
+            for t3_name in t3_names:
+                t3 = await astore.create_technical_capability(
+                    TechnicalCapabilityCreate(name=t3_name, parent_id=t2.id), session)
+                tech_ids[t3_name] = t3.id
+
+        app_cap_ids: dict[str, str] = {}
+        a1_name, a2_list = APP_CAPS
+        a1 = await acstore.create_app_capability(ApplicationCapabilityCreate(name=a1_name), session)
+        for a2_name, a3_names in a2_list:
+            a2 = await acstore.create_app_capability(
+                ApplicationCapabilityCreate(name=a2_name, parent_id=a1.id), session)
+            for a3_name in a3_names:
+                a3 = await acstore.create_app_capability(
+                    ApplicationCapabilityCreate(name=a3_name, parent_id=a2.id), session)
+                app_cap_ids[a3_name] = a3.id
+
+        for biz_name, app_cap_name, tech_names in CAPABILITY_CHAINS:
+            ac_id = app_cap_ids[app_cap_name]
+            if biz_name is not None:
+                await acstore.add_business_link(ac_id, cap_ids[biz_name], session)
+            for tech_name in tech_names:
+                await acstore.add_tech_link(ac_id, tech_ids[tech_name], session)
+            await acstore.add_realization(ac_id, app_ids["pos"], session)
+        await session.commit()
+        print(f"  {len(app_cap_ids)} application capability L3s, "
+              f"{len(CAPABILITY_CHAINS) - 1} business -> application -> technical chains")
 
     # ── Phase D: agentic solution + agents (933-agent-registry) ───────────────
     print("Seeding agent registry...")

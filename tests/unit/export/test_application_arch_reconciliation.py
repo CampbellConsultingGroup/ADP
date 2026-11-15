@@ -188,3 +188,55 @@ async def test_deleting_technical_capability_initiative_integration_removes_each
     # Applications remain, unaffected.
     assert (root / "applications" / "app-1.json").exists()
     assert (root / "applications" / "app-2.json").exists()
+
+
+async def test_application_capabilities_exported_with_links_and_orphans_removed(
+    tmp_path, seeded_engine
+) -> None:
+    """937-application-capabilities: applications/application-capabilities/<id>.json."""
+    factory = async_sessionmaker(seeded_engine, expire_on_commit=False)
+    async with factory() as session:
+        await session.execute(astore._tech_caps.insert().values(
+            id="tc-2", name="Caching", description=None, parent_id="tc-1",
+            level=2, created_at=_NOW, strategic_relevance=None,
+        ))
+        for ac_id, name, parent, level in (
+            ("ac-1", "Transaction Processing", None, 1),
+            ("ac-2", "Payments", "ac-1", 2),
+            ("ac-3", "Tender Authorization", "ac-2", 3),
+        ):
+            await session.execute(astore._app_caps.insert().values(
+                id=ac_id, name=name, description=None, parent_id=parent, level=level,
+                created_at=_NOW, updated_at=_NOW,
+            ))
+        await session.execute(astore._biz_app_cap_links.insert().values(
+            business_capability_id="cap-1", app_capability_id="ac-3", created_at=_NOW,
+        ))
+        await session.execute(astore._app_cap_tech_links.insert().values(
+            app_capability_id="ac-3", tech_cap_id="tc-2", created_at=_NOW,
+        ))
+        for app_id in ("app-2", "app-1"):
+            await session.execute(astore._app_cap_realizations.insert().values(
+                app_capability_id="ac-3", app_id=app_id, created_at=_NOW,
+            ))
+        await session.commit()
+
+    await _reconcile_once(tmp_path, seeded_engine)
+    folder = tmp_path / "applications" / "application-capabilities"
+    assert sorted(p.stem for p in folder.glob("*.json")) == ["ac-1", "ac-2", "ac-3"]
+    data = json.loads((folder / "ac-3.json").read_text())
+    payload = data
+    assert payload["level"] == 3 and payload["parent_id"] == "ac-2"
+    assert payload["business_capability_ids"] == ["cap-1"]
+    assert payload["technical_capability_ids"] == ["tc-2"]
+    assert payload["realized_by_application_ids"] == ["app-1", "app-2"]
+    l1 = json.loads((folder / "ac-1.json").read_text())
+    assert l1["technical_capability_ids"] == []
+
+    async with factory() as session:
+        for t in (astore._biz_app_cap_links, astore._app_cap_tech_links, astore._app_cap_realizations):
+            await session.execute(t.delete())
+        await session.execute(astore._app_caps.delete().where(astore._app_caps.c.id == "ac-3"))
+        await session.commit()
+    await _reconcile_once(tmp_path, seeded_engine)
+    assert sorted(p.stem for p in folder.glob("*.json")) == ["ac-1", "ac-2"]
