@@ -234,7 +234,12 @@ async def test_application_capabilities_exported_with_links_and_orphans_removed(
     assert l1["technical_capability_ids"] == []
 
     async with factory() as session:
-        for t in (astore._biz_app_cap_links, astore._app_cap_tech_links, astore._app_cap_realizations):
+        links = (
+            astore._biz_app_cap_links,
+            astore._app_cap_tech_links,
+            astore._app_cap_realizations,
+        )
+        for t in links:
             await session.execute(t.delete())
         await session.execute(astore._app_caps.delete().where(astore._app_caps.c.id == "ac-3"))
         await session.commit()
