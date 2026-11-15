@@ -348,7 +348,10 @@ async def evaluate(body: EvaluateRequest, session: Session, user: User) -> Confo
             )
         defn = parsed.definition
     else:
-        assert body.pattern_key is not None and body.version is not None
+        if body.pattern_key is None or body.version is None:  # validator guarantees otherwise
+            raise HTTPException(
+                status_code=422, detail="give either yaml, or pattern_key and version"
+            )
         try:
             defn = await pstore.get_definition(body.pattern_key, body.version, session)
         except _NOT_FOUND_OR_INVALID as exc:

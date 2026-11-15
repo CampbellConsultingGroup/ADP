@@ -332,7 +332,8 @@ async def _assert_unique(
 async def create_adoption(body: AdoptionCreate, actor: str, session: AsyncSession) -> Adoption:
     await _family(body.pattern_key, session)
     if body.scope_type == ScopeType.BUSINESS_DOMAIN:
-        assert body.scope_ref is not None
+        if body.scope_ref is None:  # also enforced by AdoptionCreate's validator
+            raise InvalidScopeError("a business_domain adoption needs scope_ref")
         if await _missing(_domains, [body.scope_ref], session):
             raise ScopeTargetNotFoundError("business domain", body.scope_ref)
     if body.scope_type == ScopeType.APPLICATION_SET:

@@ -42,7 +42,7 @@ _PALETTE: dict[str, str] = {
     "motivation": "fill:#FFFFFF,stroke:#08427B",
     "unknown": "fill:#FFFFFF,stroke:#707070,stroke-dasharray:2 2",
     # 936: element outcomes (meaning is also in the label suffix, never colour alone) and plateaus
-    "pass": "fill:#FFFFFF,stroke:#1168BD",
+    "ok": "fill:#FFFFFF,stroke:#1168BD",
     "warn": "fill:#FFFFFF,stroke:#707070,stroke-dasharray:4 2",
     "fail": "fill:#FFFFFF,stroke:#08427B,stroke-width:3px",
     "reached": "fill:#85BBE0,stroke:#08427B",
@@ -56,7 +56,7 @@ _LEGEND_LABELS: dict[str, str] = {
     "antipattern": "Anti-pattern",
     "motivation": "Principle / control",
     "unknown": "Not in registry",
-    "pass": "Passes",
+    "ok": "Passes",
     "warn": "Warning",
     "fail": "Fails",
     "reached": "Plateau reached",
@@ -341,8 +341,8 @@ def render_traceability(
 
 
 # ── Conformance (936 FR-020) ────────────────────────────────────────────────────────────
-_OUTCOME_RANK = {"fail": 0, "unknown": 1, "warn": 2, "pass": 3}
-_OUTCOME_SUFFIX = {"fail": " · FAIL", "unknown": " · unknown", "warn": " · warn", "pass": ""}
+_OUTCOME_RANK = {"fail": 0, "unknown": 1, "warn": 2, "ok": 3}
+_OUTCOME_SUFFIX = {"fail": " · FAIL", "unknown": " · unknown", "warn": " · warn", "ok": ""}
 
 
 def _outcomes(report: ConformanceReport) -> dict[tuple[str, str], str]:
@@ -395,7 +395,7 @@ def render_conformance(
         etype = binding.element_type.value
         ranked = sorted(
             binding.elements,
-            key=lambda e: (_OUTCOME_RANK[worst.get((etype, e.id), "pass")], e.name, e.id),
+            key=lambda e: (_OUTCOME_RANK[worst.get((etype, e.id), "ok")], e.name, e.id),
         )
         title = f"{binding.label} · {binding.count}" + (" ⚠" if role_key in failed_roles else "")
         lines.append(f"    subgraph r_{role_key} [{sanitize_label(title)}]")
@@ -406,7 +406,7 @@ def render_conformance(
         shown[role_key] = {}
         for i, el in enumerate(ranked[:max_per_role]):
             nid = f"e_{role_key}_{i}"
-            outcome = worst.get((etype, el.id), "pass")
+            outcome = worst.get((etype, el.id), "ok")
             label = sanitize_label(el.name, MAX_LABEL - len(_OUTCOME_SUFFIX[outcome]))
             label += _OUTCOME_SUFFIX[outcome]
             lines.append(f"        {nid}([{label}])" if mediator else f"        {nid}[{label}]")

@@ -88,3 +88,23 @@ def test_seed_script_is_importable() -> None:
     finally:
         sys.path.pop(0)
     assert [p.name for p in seed_patterns.seed_files()] == [p.name for p in FILES]
+
+
+def test_demo_adoptions_reference_real_seed_roles() -> None:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    try:
+        import seed_patterns  # type: ignore[import-not-found]
+    finally:
+        sys.path.pop(0)
+    defs = {}
+    for path in FILES:
+        d = parse_pattern_yaml(path.read_text(encoding="utf-8")).definition
+        assert d is not None
+        defs[d.pattern] = d
+    retail = (ROOT / "scripts" / "seed_retail.py").read_text(encoding="utf-8")
+    for key, _name, domain, pins in seed_patterns.ADOPTIONS:
+        assert key in defs
+        assert f'"{domain}"' in retail, domain
+        for role, app in pins:
+            assert defs[key].roles[role].element_type.value == "application"
+            assert f'"{app}"' in retail, app

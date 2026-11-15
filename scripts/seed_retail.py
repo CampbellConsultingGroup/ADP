@@ -42,6 +42,7 @@ from adp.application.models import (
     ApplicationIntegrationCreate,
     ApplicationStageLinkCreate,
     ApplicationTechCapLinkCreate,
+    HealthAssessmentSubmit,
     TechnicalCapabilityCreate,
 )
 from adp.business import store as bstore
@@ -70,6 +71,12 @@ DEFAULT_DB_URL = "postgresql+asyncpg://adp_user:adp_pass@127.0.0.1:5432/adp"
 # Every application/business table. Order is irrelevant with CASCADE, but listing
 # them all makes the wipe explicit. knowledge_* is deliberately excluded.
 WIPE_TABLES = [
+    # 936-pattern-conformance: adoptions reference domains and applications, so they go too
+    # (re-run scripts/seed_patterns.py afterwards). Pattern families/versions are kept, like
+    # the knowledge base.
+    "ea_pattern_adoption_pin",
+    "ea_pattern_adoption_member",
+    "ea_pattern_adoption",
     # 933-agent-registry: agent memberships + agents (agents are not owned by applications,
     # so an applications TRUNCATE ... CASCADE alone would leave them behind).
     "solution_agents",
@@ -255,6 +262,17 @@ APPS = {
     "legacy_inv": ("Legacy Inventory Mainframe", "In-house", "Store Systems",
                    "Eliminate", "Retire", "Record", 1,
                    "COBOL inventory system — end of life, being decommissioned."),
+    # 936-pattern-conformance: the governed event backbone the EA pattern demos pin as
+    # "backbone" (scripts/seed_patterns.py). Deliberately linked to no business capability.
+    "hub": ("Enterprise Event Hub", "Confluent", "Integration Platform",
+            "Invest", "Retain", "Record", 4,
+            "Governed event backbone: domains publish and subscribe here instead of "
+            "integrating directly."),
+}
+
+# 936: extra application attributes (keys of APPS) the pattern demos select on.
+APP_EXTRA = {
+    "hub": {"application_type": "cots", "architecture_pattern": "event-backbone"},
 }
 
 # ── C4 designs (compact spec, expanded into ArchitectureDescription) ──────────
@@ -417,6 +435,7 @@ APP_TECH_LINKS = {
                  ("Product Search", "consumes")],
     "cdp": [("ML & Recommendations", "consumes"), ("Event Streaming", "provides")],
     "oms": [("API Gateway", "consumes")],
+    "hub": [("Event Streaming", "provides")],
 }
 
 # app_key -> [(value stream name, stage name)]
@@ -458,6 +477,19 @@ APP_INTEGRATIONS = [
     ("pim", "search", "API", "Product catalog index feed"),
     ("commerce", "search", "API", "Search & browse queries"),
     ("legacy_inv", "oms", "file", "Legacy nightly stock file"),
+    # 936: hub-routed event flows. Marketing & Loyalty is fully routed through the hub (it
+    # conforms to the Domain Event Backbone pattern); E-commerce & Digital is only partly routed,
+    # and keeps direct cross-domain integrations above (it does not conform).
+    ("loyalty", "hub", "event", "Loyalty events published to the backbone"),
+    ("hub", "loyalty", "event", "Customer events delivered to loyalty"),
+    ("mktg", "hub", "event", "Campaign responses published to the backbone"),
+    ("hub", "mktg", "event", "Audience events delivered to marketing"),
+    ("cdp", "hub", "event", "Profile updates published to the backbone"),
+    ("hub", "cdp", "event", "Behavioural events delivered to the CDP"),
+    ("commerce", "hub", "event", "Order placed events"),
+    ("hub", "commerce", "event", "Inventory and price change events"),
+    ("oms", "hub", "event", "Fulfilment status events"),
+    ("hub", "oms", "event", "Order placed events delivered to fulfilment"),
 ]
 
 # app_key -> [design id]
@@ -620,8 +652,19 @@ async def seed(db_url: str) -> None:
             app = await astore.create_application(
                 ApplicationCreate(name=name, vendor=vendor, primary_owner=owner,
                                   time_classification=tc, r_strategy=r, pace_layer=pace,
-                                  health_score=health, description=desc),
+                                  description=desc, **APP_EXTRA.get(key, {})),
                 session,
+            )
+            # health_score is not a create field: it is derived (the minimum) from the six-
+            # dimension health assessment, so record every dimension at the seeded score.
+            await astore.upsert_health_assessment(
+                app.id,
+                HealthAssessmentSubmit(
+                    stability_incidents=health, technical_currency_debt=health,
+                    security_posture=health, support_team_capacity=health,
+                    documentation_knowledge=health, business_value_criticality=health,
+                ),
+                "seed", session,
             )
             app_ids[key] = app.id
         print(f"  {len(app_ids)} applications")
