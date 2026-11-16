@@ -47,8 +47,9 @@ from adp.application.models import (
     TechnicalCapabilityCreate,
 )
 from adp.application import app_capabilities as acstore
+from adp.organization import cap_mappings
 from adp.organization import store as ostore
-from adp.organization.models import OrgUnitCreate
+from adp.organization.models import AddMapping, OrgUnitCreate
 from adp.application.app_capability_models import ApplicationCapabilityCreate
 from adp.business import store as bstore
 from adp.business.models import (
@@ -88,6 +89,8 @@ WIPE_TABLES = [
     "agents",
     # 940-org-units-geography: org units and their geography links. NEVER the geographies table
     # itself -- migration 048 seeds it, and nothing here can recreate it.
+    # 941-capability-org-mappings: owner / performer / contributor mappings (before org_units).
+    "capability_org_mappings",
     "org_unit_geographies",
     "org_units",
     # 937-application-capabilities: the middle capability layer and its links.
@@ -294,6 +297,35 @@ APP_BUSINESS_UNITS = {
     "workday": "HR",
     "wms": "Supply Chain",
 }
+# 941-capability-org-mappings: owners (capability -> org unit), performers (L3, org unit,
+# geography or None) and contributors. Chosen so each Business -> Organization -> Findings list
+# has an entry: Merchandising and its L2s have no owner; Accept Payment and Apply Promotions are
+# shared-service candidates (Stores and Digital); Demand Forecasting is owned (via Supply Chain)
+# but has no performer; Category Management and Range Planning are unmapped; Markdown
+# Optimization is performed by Stores in the UK, outside where Stores operates.
+CAPABILITY_OWNERS = {
+    "Sales & Channels": "Digital",
+    "Supply Chain": "Supply Chain",
+    "Corporate Services": "Corporate",
+    "Financial Management": "Finance",
+    "Human Capital Management": "HR",
+    "In-Store Transaction Management": "Stores",
+}
+CAPABILITY_PERFORMERS = [
+    ("Accept Payment", "Stores", "geo-US"),
+    ("Accept Payment", "Stores", "geo-DE"),
+    ("Accept Payment", "Digital", None),
+    ("Apply Promotions", "Stores", None),
+    ("Apply Promotions", "Digital", None),
+    ("Process Checkout", "Stores", None),
+    ("Process Returns", "Stores", None),
+    ("Checkout", "Digital", None),
+    ("Search & Browse", "Digital", None),
+    ("Replenishment", "Supply Chain", None),
+    ("Markdown Optimization", "Stores", "geo-GB"),
+]
+CAPABILITY_CONTRIBUTORS = [("Accept Payment", "Finance"), ("Replenishment", "Stores")]
+
 # Overlap: e-commerce has its own promotions capability, so two applications realize
 # "Apply Promotions" -- a rationalization candidate. (L2 parent, L3 name, business L3, tech, app key)
 OVERLAP_APP_CAPS = [
@@ -927,6 +959,23 @@ async def seed(db_url: str) -> None:
             )
         await session.commit()
         print(f"  {len(org_ids)} org units, {len(APP_BUSINESS_UNITS)} unmatched business-unit values")
+
+    # ── Phase C4: capability <-> org unit mappings (941-capability-org-mappings) ──
+    print("Seeding capability org mappings...")
+    async with session_factory() as session:
+        for cap_name, ou_name in CAPABILITY_OWNERS.items():
+            await cap_mappings.set_owner(cap_ids[cap_name], org_ids[ou_name], session)
+        for cap_name, ou_name, geo_id in CAPABILITY_PERFORMERS:
+            await cap_mappings.add_mapping(
+                AddMapping(capability_id=cap_ids[cap_name], org_unit_id=org_ids[ou_name],
+                           role="performer", geography_id=geo_id), session)
+        for cap_name, ou_name in CAPABILITY_CONTRIBUTORS:
+            await cap_mappings.add_mapping(
+                AddMapping(capability_id=cap_ids[cap_name], org_unit_id=org_ids[ou_name],
+                           role="contributor"), session)
+        await session.commit()
+        print(f"  {len(CAPABILITY_OWNERS)} owners, {len(CAPABILITY_PERFORMERS)} performers, "
+              f"{len(CAPABILITY_CONTRIBUTORS)} contributors")
 
     # ── Phase D: agentic solution + agents (933-agent-registry) ───────────────
     print("Seeding agent registry...")

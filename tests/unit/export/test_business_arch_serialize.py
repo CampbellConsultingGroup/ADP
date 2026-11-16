@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 
 from adp.business.models import BusinessCapability, BusinessDomain, ValueStream, ValueStreamStage
 from adp.export.business_arch import (
+    EMPTY_ORGANIZATION,
     _serialize_capability,
     _serialize_domain,
     _serialize_stage,
@@ -36,6 +37,21 @@ def test_serialize_capability_includes_all_fields() -> None:
         "level": 2, "parent_id": "cap-parent", "position": 0,
         "domain_id": "domain-1", "strategic_relevance": 1, "maturity_level": 3,
         "linked_designs": ["DSN-1"],
+        "organization": EMPTY_ORGANIZATION,
+    }
+
+
+def test_serialize_capability_carries_its_organization_block() -> None:
+    """941 FR-019: owner, effective owner, performers (with geography) and contributors."""
+    block = {
+        "owner": None,
+        "effective_owner": {"id": "ou-1", "name": "Stores", "inherited_from": "cap-parent"},
+        "performers": [{"org_unit": {"id": "ou-1", "name": "Stores"}, "geography": None}],
+        "contributors": [],
+    }
+    assert _serialize_capability(_cap(), [], block)["organization"] == block
+    assert EMPTY_ORGANIZATION == {
+        "owner": None, "effective_owner": None, "performers": [], "contributors": [],
     }
 
 

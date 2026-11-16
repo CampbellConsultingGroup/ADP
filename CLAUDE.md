@@ -117,6 +117,7 @@ Auto-generated from all feature plans. Last updated: 2026-11-14 (934-pattern-met
 
 - Python 3.12 (3.11+) and TypeScript 5.x + React 18 (existing). + FastAPI, SQLAlchemy 2 async Core, Alembic, Pydantic v2, TanStack Query v5. All existing; **zero new packages**. (938-capability-model-analysis)
 - Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; new `adp.organization` package (org units + geography, routes under `/api/v1/business/`), ISO 3166/UN M49 data committed as `src/adp/organization/data/geographies.json`, migration `048` (org_units, geographies seeded, org_unit_geographies, applications.owning_org_unit_id) (940-org-units-geography)
+- Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; capability <-> org unit mappings (owner L1/L2 one per capability, performer L3 + optional geography, contributor L3) in `adp.organization.cap_mappings` + pure `cap_org_analysis` (effective owner, findings, footprint derived on read, never stored), migration `049` (capability_org_mappings) (941-capability-org-mappings)
 - PostgreSQL 16. Migration `047` (`down_revision="046"`) adds 2 columns plus a CHECK on `technical_capabilities`. All analysis is derived. (938-capability-model-analysis)
 
 - Python 3.12 (3.11+ compatible) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; extends `adp.patterns` with registry/lifecycle/projection/render modules, writes managed rows into the existing `knowledge_items` (pgvector embedding via `adp.knowledge.embedder`), migration `044` (4 tables: ea_pattern, ea_pattern_version, ea_pattern_relation, ea_pattern_lifecycle_event) (935-pattern-registry)
@@ -168,6 +169,35 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 941-capability-org-mappings: Implemented (ADP-55k.2, spec 2 of 4 in epic ADP-55k). One table,
+  `capability_org_mappings` (migration `049`), links a business capability to a 940 org unit with a role:
+  owner (L1/L2, at most one per capability: partial unique index plus a replace-only `PUT .../{cap_id}/owner`),
+  performer (L3, optional geography) or contributor (L3, no geography). Uniqueness uses
+  `COALESCE(geography_id,'')` so "everywhere" can't be added twice. Level rules are enforced in
+  `adp.organization.cap_mappings` with rule-named 422s (`LevelRuleError`; unknown body ids raise
+  `UnknownReferenceError`, also 422). Everything else is derived on read by the pure
+  `adp.organization.cap_org_analysis` over a 4-query snapshot, never stored (guard
+  `test_cap_org_analysis_not_stored.py`):
+  - the effective owner: own, else the nearest owned ancestor;
+  - an outside-geography note: the geography is not one of the unit's operating geographies or inside one; never shown for a unit with no operating geographies;
+  - findings: no owner (L1/L2), shared-service candidates (L3s with >= 2 INDEPENDENT performers: a unit and its own descendants fold into one branch), unmapped L3s, owned L3s with no performer;
+  - each org unit's footprint, including its sub-units, attributed.
+
+  Routes: `/api/v1/business/capability-org-mappings` (GET bulk, `/findings`, PUT owner, POST, DELETE) and
+  `/org-units/{id}/footprint`, served by the organization router. Writes use the business prefix rule, so
+  there is no new permission. Deletes: deleting an org unit removes its mappings; deleting a geography first drops performer
+  rows that would collide with an existing "everywhere" row, then clears the rest (FK CASCADE / SET NULL as
+  a safety net). The organization store mirrors `business_capabilities` narrowly (position nullable, since
+  astore's mirror has none). Fixtures that also create the bstore or astore metadata must exclude it from the
+  ostore `create_all`.
+
+  UI:
+  - owner chip (own or "(inherited)") and performer chip on each capability row, plus an Organization expander. The name column needs `minWidth: 0` so the chips truncate instead of pushing the row's controls off-screen;
+  - a Findings sub-tab on Business → Organization, whose entries open the focused capability via BusinessPage's `focusCapabilityId`;
+  - the footprint in the org-unit panel.
+
+  Export: an `organization` block on each capability file. Seed: phase C4. 2493 backend, 775 frontend.
+  Follow-on: ADP-m7x (Governance tiles). See `specs/941-capability-org-mappings/`.
 - 940-org-units-geography: Implemented (ADP-55k.1, spec 1 of 4 in epic ADP-55k "organization & region dimensions on
   the capability model"; decisions D1-D7 in the epic notes). New package `adp.organization` (routes under
   `/api/v1/business/`, so the existing WRITE_BUSINESS_ARCH prefix rule covers writes -- no new permission): governed

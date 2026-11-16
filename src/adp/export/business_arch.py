@@ -61,8 +61,19 @@ _logger = logging.getLogger("adp.export.business_arch")
 # see _write_entity_file, so that field alone never makes an unchanged entity
 # look "changed" to the content-comparison in research.md Decision 2).
 
+# 941-capability-org-mappings FR-019: the block a capability with no org mappings carries.
+EMPTY_ORGANIZATION: dict[str, Any] = {
+    "owner": None,
+    "effective_owner": None,
+    "performers": [],
+    "contributors": [],
+}
+
+
 def _serialize_capability(
-    cap: BusinessCapability, linked_designs: list[str]
+    cap: BusinessCapability,
+    linked_designs: list[str],
+    organization: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": cap.id,
@@ -79,6 +90,8 @@ def _serialize_capability(
         # (not in adp.export.strategy) since a capability's own file is the correct home, the
         # same reasoning _serialize_stage's own linked_capability_ids already established.
         "linked_designs": sorted(linked_designs),
+        # 941: owner, effective owner, performers and contributors (derived from the mappings).
+        "organization": organization if organization is not None else dict(EMPTY_ORGANIZATION),
     }
 
 
@@ -164,6 +177,8 @@ class BusinessArchSnapshot:
     value_chains: list[ValueChain] = field(default_factory=list)
     activities: list[ValueChainActivity] = field(default_factory=list)
     activity_links: dict[str, list[str]] = field(default_factory=dict)
+    # 941-capability-org-mappings: capability_id -> its "organization" block.
+    capability_organization: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 async def _fetch_all(session: AsyncSession) -> BusinessArchSnapshot:
@@ -210,7 +225,20 @@ async def _fetch_all(session: AsyncSession) -> BusinessArchSnapshot:
     for row in activity_link_rows.mappings().all():
         activity_links.setdefault(row.activity_id, []).append(row.capability_id)
 
+    # 941: one org snapshot (4 queries). Best effort -- an export must never fail because of it.
+    capability_organization: dict[str, dict[str, Any]] = {}
+    try:
+        from adp.organization import cap_mappings, cap_org_analysis
+
+        org_snapshot = await cap_mappings.build_snapshot(session)
+        capability_organization = {
+            cap.id: cap_org_analysis.export_block(org_snapshot, cap.id) for cap in capabilities
+        }
+    except Exception:
+        _logger.warning("business_arch_export.capability_organization_failed", exc_info=True)
+
     return BusinessArchSnapshot(
+        capability_organization=capability_organization,
         capabilities=capabilities,
         domains=domains,
         value_streams=value_streams,
@@ -241,7 +269,11 @@ async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSessio
         for cap in snapshot.capabilities:
             _write_entity_file(
                 root / "capabilities" / _safe_filename(cap.id),
-                _serialize_capability(cap, snapshot.capability_design_links.get(cap.id, [])),
+                _serialize_capability(
+                    cap,
+                    snapshot.capability_design_links.get(cap.id, []),
+                    snapshot.capability_organization.get(cap.id),
+                ),
                 now,
             )
         for domain in snapshot.domains:

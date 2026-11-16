@@ -163,3 +163,131 @@ export function useResolveUnmatched() {
     apiMutation<ResolveResult>("POST", `${BASE}/org-units/unmatched/resolve`, body),
   );
 }
+
+// ── 941-capability-org-mappings (ADP-55k.2) ──────────────────────────────────
+// Owner (L1/L2, one per capability), performer (L3, optional geography), contributor (L3).
+// Effective owner, findings and footprints are derived by the server on every read.
+
+export type CapabilityOrgRole = "owner" | "performer" | "contributor";
+
+export interface CapabilityOrgMapping {
+  id: string;
+  capability_id: string;
+  org_unit: Ref;
+  role: CapabilityOrgRole;
+  geography: Ref | null;
+  outside_operating_geographies: boolean;
+}
+
+export interface CapabilityOrgView {
+  capability_id: string;
+  level: number;
+  owner: Ref | null;
+  effective_owner: Ref | null;
+  owner_inherited_from: Ref | null;
+  performers: CapabilityOrgMapping[];
+  contributors: CapabilityOrgMapping[];
+}
+
+export interface FindingCapability {
+  id: string;
+  name: string;
+  level: number;
+  path: Ref[];
+}
+
+export interface SharedServicePerformer {
+  org_unit: Ref;
+  org_unit_path: Ref[];
+  geographies: Ref[];
+  folded_into: Ref | null;
+}
+
+export interface SharedServiceCandidate {
+  capability: FindingCapability;
+  branches: number;
+  performers: SharedServicePerformer[];
+}
+
+export interface CapabilityOrgFindings {
+  no_owner: FindingCapability[];
+  shared_service: SharedServiceCandidate[];
+  unmapped: FindingCapability[];
+  owned_no_performer: FindingCapability[];
+  counts: {
+    no_owner: number;
+    shared_service: number;
+    unmapped: number;
+    owned_no_performer: number;
+    l1_l2_total: number;
+    l3_total: number;
+  };
+}
+
+export interface FootprintPerformer {
+  org_unit: Ref;
+  geographies: Ref[];
+}
+
+export interface OrgUnitFootprint {
+  org_unit: Ref;
+  includes_descendants: boolean;
+  performs: {
+    capability: Ref;
+    l3_count: number;
+    l2s: { capability: Ref; l3_count: number; l3s: { capability: Ref; performed_by: FootprintPerformer[] }[] }[];
+  }[];
+  l3_total: number;
+  owns: { capability: FindingCapability; org_unit: Ref }[];
+  contributes: { capability: FindingCapability; org_unit: Ref }[];
+}
+
+const MAPPINGS = `${BASE}/capability-org-mappings`;
+
+/** One request for the whole Capabilities tab; rows read their own entry via capabilityOrgView. */
+export function useCapabilityOrgMappings() {
+  return useQuery<{ items: CapabilityOrgView[] }>({
+    queryKey: [...ORG_KEY, "capability-org-mappings"],
+    queryFn: () => apiGet(MAPPINGS),
+  });
+}
+
+export function capabilityOrgView(
+  data: { items: CapabilityOrgView[] } | undefined,
+  capabilityId: string,
+): CapabilityOrgView | undefined {
+  return data?.items.find((v) => v.capability_id === capabilityId);
+}
+
+export function useCapabilityOrgFindings(enabled = true) {
+  return useQuery<CapabilityOrgFindings>({
+    queryKey: [...ORG_KEY, "capability-org-findings"],
+    queryFn: () => apiGet(`${MAPPINGS}/findings`),
+    enabled,
+  });
+}
+
+export function useOrgUnitFootprint(id: string | null) {
+  return useQuery<OrgUnitFootprint>({
+    queryKey: [...ORG_KEY, "footprint", id],
+    queryFn: () => apiGet(`${BASE}/org-units/${id}/footprint`),
+    enabled: id !== null,
+  });
+}
+
+export function useSetCapabilityOwner() {
+  return useOrgMutation(({ capabilityId, orgUnitId }: { capabilityId: string; orgUnitId: string | null }) =>
+    apiMutation<CapabilityOrgView>("PUT", `${MAPPINGS}/${capabilityId}/owner`, { org_unit_id: orgUnitId }),
+  );
+}
+
+export function useAddCapabilityMapping() {
+  return useOrgMutation(
+    (body: { capability_id: string; org_unit_id: string; role: "performer" | "contributor"; geography_id?: string | null }) =>
+      apiMutation<CapabilityOrgMapping>("POST", MAPPINGS, body),
+  );
+}
+
+export function useRemoveCapabilityMapping() {
+  return useOrgMutation((mappingId: string) => apiMutation<void>("DELETE", `${MAPPINGS}/${mappingId}`));
+}
