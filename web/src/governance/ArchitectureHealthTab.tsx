@@ -12,7 +12,7 @@ import CapFindingsViews from "../application/CapFindingsViews";
 import { BandChip, CapWithPath, muted } from "../application/capAnalysisUi";
 import { SCOPE_LABELS, STATUS_LABELS, STATUS_TONES } from "../patterns/labels";
 import { StatusBadge } from "../ui";
-import { adoptionsNeedingAttention, exposedCapabilities, gapCount } from "./architectureHealth";
+import { adoptionsNeedingAttention, exposedCapabilities, gapCount, overlapCounts } from "./architectureHealth";
 
 interface Source {
   isLoading: boolean;
@@ -26,7 +26,7 @@ function tileValue(source: Source, value: number): string {
   return String(value);
 }
 
-function Tile({ label, value, tone }: { label: string; value: string; tone: "crit" | "warn" | "info" }): React.ReactElement {
+function Tile({ label, value, tone, note }: { label: string; value: string; tone: "crit" | "warn" | "info"; note?: string }): React.ReactElement {
   const color = value !== "0" && value !== "…" && value !== "—" ? `var(--${tone})` : "var(--ink)";
   return (
     <div
@@ -36,6 +36,7 @@ function Tile({ label, value, tone }: { label: string; value: string; tone: "cri
     >
       <div style={{ fontSize: 24, fontWeight: 700, color }}>{value}</div>
       <div style={{ fontSize: 12, color: "var(--ink-3)" }}>{label}</div>
+      {note && <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{note}</div>}
     </div>
   );
 }
@@ -64,7 +65,12 @@ export default function ArchitectureHealthTab({ onOpenAdoption }: { onOpenAdopti
         <Tile label="Non-conformant adoptions" value={tileValue(adoptions, att.nonConformant)} tone="crit" />
         <Tile label="Indeterminate adoptions" value={tileValue(adoptions, att.indeterminate)} tone="info" />
         <Tile label="Exposed capabilities" value={tileValue(rollup, exposed.length)} tone="warn" />
-        <Tile label="Overlaps" value={tileValue(findings, findings.data?.overlaps.length ?? 0)} tone="warn" />
+        <Tile
+          label="Overlaps"
+          value={tileValue(findings, overlapCounts(findings.data).needsAttention)}
+          tone="warn"
+          note={findings.data ? `${overlapCounts(findings.data).explained} explained` : undefined}
+        />
         <Tile label="Gaps" value={tileValue(findings, gapCount(findings.data))} tone="info" />
       </div>
 

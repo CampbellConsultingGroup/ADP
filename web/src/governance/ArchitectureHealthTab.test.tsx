@@ -51,9 +51,21 @@ const FINDINGS: CapabilityFindings = {
   overlaps: [
     {
       business: { ...ref("b4", "Apply Promotions"), path },
+      status: "needs_attention",
+      reasons: [{ code: "unclassified", application_ids: ["sfcc"] }],
       applications: [
         { id: "pos", name: "Oracle Retail Xstore POS", via: [ref("ac2", "Price Rule Evaluation")] },
         { id: "sfcc", name: "Salesforce Commerce Cloud", via: [ref("ac9", "Online Promotion Evaluation")] },
+      ],
+    },
+    // 943: an explained overlap is not counted on the tile.
+    {
+      business: { ...ref("b7", "Accept Payment"), path },
+      status: "explained",
+      reasons: [],
+      applications: [
+        { id: "pos", name: "Oracle Retail Xstore POS", via: [ref("ac4", "Tender Authorization")] },
+        { id: "pix", name: "Pix Gateway", via: [ref("ac4", "Tender Authorization")] },
       ],
     },
   ],
@@ -64,6 +76,7 @@ const FINDINGS: CapabilityFindings = {
   },
   shared: [],
   shared_threshold: 3,
+  redundant: [],
 };
 
 function ok<T>(data: T) {
@@ -126,6 +139,7 @@ describe("ArchitectureHealthTab tiles (US1)", () => {
     expect(within(tile("Indeterminate adoptions")).getByText("1")).toBeTruthy();
     expect(within(tile("Exposed capabilities")).getByText("2")).toBeTruthy();
     expect(within(tile("Overlaps")).getByText("1")).toBeTruthy();
+    expect(within(tile("Overlaps")).getByText("1 explained")).toBeTruthy();
     expect(within(tile("Gaps")).getByText("3")).toBeTruthy();
   });
 

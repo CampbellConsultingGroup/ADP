@@ -33,6 +33,7 @@ from adp.application.app_capability_models import (
     DuplicateAppCapLinkError,
     DuplicateSiblingNameError,
     RealizationCreate,
+    RealizationUpdate,
     TechCapabilityLinkCreate,
 )
 from adp.application.cap_analysis_models import (
@@ -307,11 +308,56 @@ async def add_realization(
     session: AsyncSession = Depends(_get_session),
 ) -> ApplicationCapabilityDetail:
     try:
-        await acstore.add_realization(ac_id, body.app_id, session)
+        await acstore.add_realization(
+            ac_id,
+            body.app_id,
+            session,
+            rationale=body.rationale,
+            geography_id=body.geography_id,
+        )
     except AppCapError as exc:
         raise _http(exc) from exc
     await session.commit()
     _log_link("create", "application", ac_id, body.app_id, request)
+    if body.rationale is not None or body.geography_id is not None:
+        logger.info(
+            "app_capability.realization.update ac=%s app=%s rationale=None->%s"
+            " geography=None->%s actor=%s",
+            ac_id,
+            body.app_id,
+            body.rationale,
+            body.geography_id,
+            _get_actor(request),
+        )
+    return await _detail_or_404(ac_id, session)
+
+
+@router.patch("/{ac_id}/applications/{app_id}", response_model=ApplicationCapabilityDetail)
+async def update_realization(
+    ac_id: str,
+    app_id: str,
+    body: RealizationUpdate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+) -> ApplicationCapabilityDetail:
+    """943: set or clear a realization's rationale and/or geography. An omitted field is left
+    unchanged; an explicit null clears it."""
+    changes = {f: getattr(body, f) for f in body.model_fields_set}
+    try:
+        old, new = await acstore.update_realization(ac_id, app_id, changes, session)
+    except AppCapError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    logger.info(
+        "app_capability.realization.update ac=%s app=%s rationale=%s->%s geography=%s->%s actor=%s",
+        ac_id,
+        app_id,
+        old[0],
+        new[0],
+        old[1],
+        new[1],
+        _get_actor(request),
+    )
     return await _detail_or_404(ac_id, session)
 
 

@@ -181,10 +181,15 @@ def _serialize_technical_capability(tc: TechnicalCapability) -> dict[str, Any]:
 
 
 def _serialize_application_capability(
-    row: dict[str, Any], links: dict[str, list[str]]
+    row: dict[str, Any],
+    links: dict[str, list[str]],
+    realizations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """937-application-capabilities: one application capability with its three link sets.
-    Ids are sorted so an unchanged capability never rewrites its file."""
+    Ids are sorted so an unchanged capability never rewrites its file.
+
+    943-mapping-rationale: ``realizations`` adds each realizing application's rationale and
+    geography; ``realized_by_application_ids`` stays for existing readers."""
     return {
         "id": row["id"],
         "name": row["name"],
@@ -194,6 +199,7 @@ def _serialize_application_capability(
         "business_capability_ids": sorted(links.get("business", [])),
         "technical_capability_ids": sorted(links.get("technical", [])),
         "realized_by_application_ids": sorted(links.get("application", [])),
+        "realizations": sorted(realizations or [], key=lambda r: r["application_id"]),
     }
 
 
@@ -248,6 +254,8 @@ class ApplicationArchSnapshot:
     # [ids]}} -- four queries in total, whatever the catalog size.
     application_capabilities: list[dict[str, Any]] = field(default_factory=list)
     app_capability_links: dict[str, dict[str, list[str]]] = field(default_factory=dict)
+    # 943: per application capability, [{application_id, rationale, geography}].
+    app_capability_realizations: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
 
 async def _fetch_all(session: AsyncSession) -> ApplicationArchSnapshot:
@@ -413,6 +421,32 @@ async def _fetch_all(session: AsyncSession) -> ApplicationArchSnapshot:
         for ac_id, target in (await session.execute(stmt)).all():
             app_cap_links.setdefault(ac_id, {}).setdefault(kind, []).append(target)
 
+    # 943-mapping-rationale: rationale and geography per realization -- one query, plus the
+    # geography index only when some realization names a geography (no N+1).
+    real = astore._app_cap_realizations
+    real_rows = (
+        await session.execute(
+            sa.select(
+                real.c.app_capability_id, real.c.app_id, real.c.rationale, real.c.geography_id
+            ).select_from(
+                real.join(astore._applications, astore._applications.c.id == real.c.app_id)
+            )
+        )
+    ).all()
+    geo_index: dict[str, Any] = {}
+    if any(r.geography_id for r in real_rows):
+        from adp.organization import store as ostore
+
+        geo_index = await ostore.geography_index(session)
+    app_cap_realizations: dict[str, list[dict[str, Any]]] = {}
+    for r in real_rows:
+        g = geo_index.get(r.geography_id) if r.geography_id else None
+        app_cap_realizations.setdefault(r.app_capability_id, []).append({
+            "application_id": r.app_id,
+            "rationale": r.rationale,
+            "geography": {"id": r.geography_id, "name": g.name, "code": g.code} if g else None,
+        })
+
     return ApplicationArchSnapshot(
         applications=apps_resp.items,
         technical_capabilities=tech_caps_resp.items,
@@ -430,6 +464,7 @@ async def _fetch_all(session: AsyncSession) -> ApplicationArchSnapshot:
         members_by_initiative=members_by_initiative,
         application_capabilities=app_caps,
         app_capability_links=app_cap_links,
+        app_capability_realizations=app_cap_realizations,
     )
 
 
@@ -473,7 +508,9 @@ async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSessio
             _write_entity_file(
                 root / "application-capabilities" / _safe_filename(row["id"]),
                 _serialize_application_capability(
-                    row, snapshot.app_capability_links.get(row["id"], {})
+                    row,
+                    snapshot.app_capability_links.get(row["id"], {}),
+                    snapshot.app_capability_realizations.get(row["id"], []),
                 ),
                 now,
             )

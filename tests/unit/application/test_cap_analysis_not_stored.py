@@ -10,7 +10,11 @@ from pathlib import Path
 
 from adp.application import store as astore
 
-FORBIDDEN = re.compile(r"rollup|worst|spread|band|exposure|impact|overlap|gap|finding", re.I)
+# 943 adds overlap status/reasons and the redundant list -- also derived, never stored.
+FORBIDDEN = re.compile(
+    r"rollup|worst|spread|band|exposure|impact|overlap|gap|finding|status_reason|reasons|needs_attention|explained",
+    re.I,
+)
 MIGRATIONS = (
     Path(__file__).resolve().parents[3] / "src" / "adp" / "store" / "migrations" / "versions"
 )
@@ -27,4 +31,11 @@ def test_migration_047_adds_only_the_lifecycle_columns() -> None:
     text = (MIGRATIONS / "047_tech_cap_lifecycle.py").read_text()
     columns = re.findall(r'sa\.Column\(\s*"([a-z_]+)"', text)
     assert sorted(columns) == ["end_of_life_date", "lifecycle_status"]
+    assert "create_table" not in text
+
+
+def test_migration_051_adds_only_rationale_and_geography() -> None:
+    text = (MIGRATIONS / "051_realization_rationale.py").read_text()
+    columns = re.findall(r'sa\.Column\(\s*"([a-z_]+)"', text)
+    assert sorted(columns) == ["geography_id", "rationale"]
     assert "create_table" not in text

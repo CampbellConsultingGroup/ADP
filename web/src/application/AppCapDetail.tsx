@@ -21,6 +21,7 @@ import {
 } from "../api/appCapabilities";
 import { Button } from "../ui";
 import { MissingTechBadge } from "./AppCapTree";
+import RealizationList from "./RealizationList";
 
 export function pathLabel(path: CapRef[], name?: string): string {
   return [...path.map((p) => p.name), ...(name ? [name] : [])].join(" › ");
@@ -274,14 +275,10 @@ export default function AppCapDetail({
             linked={ac.technical_capabilities.map((c) => ({ id: c.id, label: `${pathLabel(c.path, c.name)} (L${c.level})` }))}
             options={technicalOptions(techCaps?.items ?? [])}
           />
-          <LinkSection
-            title="Realized by applications"
-            hint="The applications that deliver this capability."
-            kind="application"
+          <RealizationList
             acId={ac.id}
             canWrite={canWrite}
-            emptyText="No application realizes this capability yet."
-            linked={ac.realized_by.map((a) => ({ id: a.id, label: a.name }))}
+            linked={ac.realized_by}
             options={(apps?.items ?? []).map((a) => ({ id: a.id, label: a.name })).sort((a, b) => a.label.localeCompare(b.label))}
           />
         </>

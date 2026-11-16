@@ -360,6 +360,23 @@ OVERLAP_APP_CAPS = [
     ("Pricing", "Online Promotion Evaluation", "Apply Promotions", "API Gateway Services", "commerce"),
 ]
 
+# 943-mapping-rationale: why each application realizes an application capability.
+# Extra realizations (application capability L3, app key), then (L3, app key, rationale, geography).
+# Apply Promotions ends up explained (POS target + Commerce Cloud tactical in the Americas);
+# Accept Payment needs attention (Adyen's mapping is unclassified); Process Returns needs
+# attention because the OMS mapping is redundant -- the Redundant view's demo entry.
+EXTRA_REALIZATIONS = [
+    ("Tender Authorization", "pay"),
+    ("Return Authorization", "oms"),
+]
+REALIZATION_RATIONALES = [
+    ("Price Rule Evaluation", "pos", "target", None),
+    ("Online Promotion Evaluation", "commerce", "tactical", "geo-m49-019"),
+    ("Tender Authorization", "pos", "target", None),
+    ("Return Authorization", "pos", "target", None),
+    ("Return Authorization", "oms", "redundant", None),
+]
+
 # ── Application portfolio ─────────────────────────────────────────────────────
 # key: (name, vendor, owner, time, r_strategy, pace_layer, health, description)
 APPS = {
@@ -1019,6 +1036,19 @@ async def seed(db_url: str) -> None:
         await session.commit()
         print(f"  {len(REGIONAL_ASSESSMENTS)} assessments, "
               f"{len(REGION_SPECIFIC)} region-specific capabilities")
+
+    # ── Phase G: mapping rationale (943-mapping-rationale) ─────────────────────
+    print("Seeding mapping rationale...")
+    async with session_factory() as session:
+        for app_cap_name, app_key in EXTRA_REALIZATIONS:
+            await acstore.add_realization(app_cap_ids[app_cap_name], app_ids[app_key], session)
+        for app_cap_name, app_key, rationale, geo_id in REALIZATION_RATIONALES:
+            await acstore.update_realization(
+                app_cap_ids[app_cap_name], app_ids[app_key],
+                {"rationale": rationale, "geography_id": geo_id}, session)
+        await session.commit()
+        print(f"  {len(EXTRA_REALIZATIONS)} extra realizations, "
+              f"{len(REALIZATION_RATIONALES)} classified")
 
     # ── Phase D: agentic solution + agents (933-agent-registry) ───────────────
     print("Seeding agent registry...")

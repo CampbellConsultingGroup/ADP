@@ -79,7 +79,7 @@ export default function AppCapabilitiesView({ initialId = null }: { initialId?: 
             Missing technical capability ({gaps.length})
           </button>
           {/* 938-capability-model-analysis US5 */}
-          {([["overlaps", "Overlaps"], ["gaps", "Gaps"], ["shared", "Shared"]] as [FindingsMode, string][]).map(([m, label]) => (
+          {([["overlaps", "Overlaps"], ["gaps", "Gaps"], ["shared", "Shared"], ["redundant", "Redundant"]] as [FindingsMode, string][]).map(([m, label]) => (
             <button key={m} role="tab" aria-selected={mode === m} style={tab(mode === m)} onClick={() => setMode(m)}>
               {label}
             </button>
@@ -107,7 +107,7 @@ export default function AppCapabilitiesView({ initialId = null }: { initialId?: 
             )}
           </div>
         )}
-        {(mode === "overlaps" || mode === "gaps" || mode === "shared") && (
+        {(mode === "overlaps" || mode === "gaps" || mode === "shared" || mode === "redundant") && (
           // Application capabilities picked from a finding open here, in the detail pane.
           <AppCapNavContext.Provider value={setSelectedId}>
             <CapFindingsViews mode={mode} />

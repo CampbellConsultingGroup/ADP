@@ -251,6 +251,10 @@ _app_cap_realizations = sa.Table(
         primary_key=True,
     ),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    # 943-mapping-rationale: NULL = unclassified / everywhere. geography_id's FK (SET NULL) lives
+    # only in migration 051 -- geographies are on the organization metadata (research R1).
+    sa.Column("rationale", sa.Text(), nullable=True),
+    sa.Column("geography_id", sa.String(36), nullable=True),
 )
 
 _app_stage_links = sa.Table(

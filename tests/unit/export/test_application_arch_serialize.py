@@ -278,3 +278,37 @@ def test_serialize_application_is_deterministic() -> None:
     second = _serialize_application(app, **kwargs)
     assert first == second
     assert json.dumps(first, sort_keys=True) == json.dumps(second, sort_keys=True)
+
+
+# ── 943-mapping-rationale: realizations on application capability files ───────
+
+
+def test_application_capability_realizations_block() -> None:
+    from adp.export.application_arch import _serialize_application_capability
+
+    row = {
+        "id": "ac1",
+        "name": "Promotion Evaluation",
+        "description": None,
+        "parent_id": "ac0",
+        "level": 3,
+    }
+    americas = {"id": "geo-m49-019", "name": "Americas", "code": None}
+    links = {"application": ["pos", "ecom"]}
+    realizations = [
+        {"application_id": "pos", "rationale": "target", "geography": None},
+        {"application_id": "ecom", "rationale": "tactical", "geography": americas},
+    ]
+    out = _serialize_application_capability(row, links, realizations)
+    assert out["realized_by_application_ids"] == ["ecom", "pos"]  # unchanged for current readers
+    assert out["realizations"] == [
+        {"application_id": "ecom", "rationale": "tactical", "geography": americas},
+        {"application_id": "pos", "rationale": "target", "geography": None},
+    ]
+
+
+def test_application_capability_without_realizations_has_empty_list() -> None:
+    from adp.export.application_arch import _serialize_application_capability
+
+    row = {"id": "ac1", "name": "X", "description": None, "parent_id": None, "level": 1}
+    assert _serialize_application_capability(row, {})["realizations"] == []

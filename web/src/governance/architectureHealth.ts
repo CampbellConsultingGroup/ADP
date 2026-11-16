@@ -56,3 +56,11 @@ export function gapCount(findings: CapabilityFindings | undefined): number {
     g.app_capability_without_application.length
   );
 }
+
+/** 943-mapping-rationale: the Overlaps tile counts only overlaps that need attention; explained
+ * ones (one target plus justified variation) are shown as a note. */
+export function overlapCounts(findings: CapabilityFindings | undefined): { needsAttention: number; explained: number } {
+  const overlaps = findings?.overlaps ?? [];
+  const needsAttention = overlaps.filter((o) => o.status === "needs_attention").length;
+  return { needsAttention, explained: overlaps.length - needsAttention };
+}

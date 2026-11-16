@@ -4,7 +4,7 @@
 // is not the same as "no data", which is worst: null).
 
 import { useQuery } from "@tanstack/react-query";
-import type { AppRef, CapRef, LinkedCapRef } from "./appCapabilities";
+import type { AppRef, CapRef, GeoRef, LinkedCapRef, Rationale } from "./appCapabilities";
 import type { LifecycleStatus, TechCapLifecycle } from "./application";
 import { apiGet } from "./client";
 
@@ -32,10 +32,47 @@ export const LIFECYCLE_BAND_LABEL: Record<LifecycleBand, string> = {
   emerging: "Emerging",
 };
 
+/** 943: one realization behind an overlap. */
+export interface RealizationMapping {
+  via: CapRef;
+  rationale: Rationale | null;
+  geography: GeoRef | null;
+  hint: string | null;
+}
+
 export interface AppVia {
   id: string;
   name: string;
   via: CapRef[];
+  /** 943: on overlaps, each realization's rationale and geography. */
+  mappings?: RealizationMapping[];
+}
+
+export type OverlapReasonCode = "unclassified" | "redundant" | "no_target" | "competing_targets";
+export type OverlapStatus = "needs_attention" | "explained";
+
+export interface OverlapReason {
+  code: OverlapReasonCode;
+  application_ids: string[];
+}
+
+export interface OverlapEntry {
+  business: LinkedCapRef;
+  applications: AppVia[];
+  status: OverlapStatus;
+  reasons: OverlapReason[];
+}
+
+export interface RedundantEntry {
+  application: { id: string; name: string; time_classification: string | null; r_strategy: string | null };
+  app_capability: LinkedCapRef;
+  geography: GeoRef | null;
+  hint: string | null;
+}
+
+export interface RedundantGroup {
+  business: LinkedCapRef | null;
+  entries: RedundantEntry[];
 }
 
 export interface Spread<W> {
@@ -86,7 +123,7 @@ export interface TechnologyDependency {
 }
 
 export interface CapabilityFindings {
-  overlaps: { business: LinkedCapRef; applications: AppVia[] }[];
+  overlaps: OverlapEntry[];
   gaps: {
     business_without_app_capability: LinkedCapRef[];
     app_capability_without_business: LinkedCapRef[];
@@ -94,6 +131,8 @@ export interface CapabilityFindings {
   };
   shared: { app_capability: LinkedCapRef; business: CapRef[]; count: number }[];
   shared_threshold: number;
+  /** 943: redundant mappings, by business L3 (null = reaches none). */
+  redundant: RedundantGroup[];
 }
 
 /** One fetch for every roll-up metric, so switching heat-map metrics never refetches (FR-019). */

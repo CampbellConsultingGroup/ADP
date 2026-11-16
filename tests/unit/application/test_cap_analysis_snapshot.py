@@ -142,3 +142,56 @@ async def test_empty_database(env):
     s, _ = env
     snap = await build_snapshot(s, risk_visible=True, cost_visible=True)
     assert snap.business == {} and snap.biz_to_ac == {} and snap.apps == {}
+
+
+# ── 943-mapping-rationale (research R4) ──────────────────────────────────────
+
+
+async def test_rationale_and_time_in_snapshot_without_geography_query(env):
+    s, statements = env
+    ids = await _seed(s)
+    await s.execute(
+        astore._app_cap_realizations.update()
+        .where(astore._app_cap_realizations.c.app_id == ids["app"])
+        .values(rationale="target")
+    )
+    await s.execute(
+        astore._applications.update()
+        .where(astore._applications.c.id == ids["app"])
+        .values(time_classification="Invest", r_strategy="Retain")
+    )
+    statements.clear()
+    snap = await build_snapshot(s, risk_visible=False, cost_visible=False)
+    assert snap.realizations[("a3", ids["app"])].rationale == "target"
+    assert ("a3", "ghost-app") not in snap.realizations  # inner-joined
+    info = snap.apps[ids["app"]]
+    assert (info.time_classification, info.r_strategy) == ("Invest", "Retain")
+    # No realization names a geography: the geography tree is not queried (this fixture
+    # doesn't even have the organization tables).
+    assert snap.geographies == {}
+    assert "geographies" not in "\n".join(statements).lower()
+
+
+async def test_geography_index_loaded_when_a_realization_names_one(env, monkeypatch):
+    from adp.organization import store as ostore
+    from adp.organization.store import GeographyInfo
+
+    s, _ = env
+    ids = await _seed(s)
+    await s.execute(
+        astore._app_cap_realizations.update()
+        .where(astore._app_cap_realizations.c.app_id == ids["app"])
+        .values(rationale="tactical", geography_id="geo-DE")
+    )
+
+    async def _index(session):
+        return {
+            "geo-m49-150": GeographyInfo("geo-001", "Europe", None),
+            "geo-DE": GeographyInfo("geo-m49-150", "Germany", "DE"),
+        }
+
+    monkeypatch.setattr(ostore, "geography_index", _index)
+    snap = await build_snapshot(s, risk_visible=False, cost_visible=False)
+    assert snap.realizations[("a3", ids["app"])].geography_id == "geo-DE"
+    assert snap.geographies["geo-DE"].parent_id == "geo-m49-150"
+    assert snap.geographies["geo-DE"].code == "DE"
