@@ -147,6 +147,21 @@ export function groupByApplicationType(apps: Application[]): GroupedResult {
   );
 }
 
+/** 940-org-units-geography (research R6): the business-unit label Portfolio groups and filters by.
+ *  Applied once to the application list before grouping, so grouping, cross-tab and filtering all
+ *  pick it up unchanged: a linked application uses its org unit's name; an unlinked one keeps its
+ *  free text, marked "(unmatched)"; one with neither stays null (Unclassified). Without a names map
+ *  (no org units loaded) the list is returned as it is. */
+export function withOrgUnitLabels(apps: Application[], orgUnitNames?: Map<string, string>): Application[] {
+  if (!orgUnitNames) return apps;
+  return apps.map((app) => {
+    const linked = app.owning_org_unit_id ? orgUnitNames.get(app.owning_org_unit_id) : undefined;
+    if (linked) return { ...app, owning_business_unit: linked };
+    const text = app.owning_business_unit?.trim();
+    return { ...app, owning_business_unit: text ? `${text} (unmatched)` : null };
+  });
+}
+
 // The one dimension with a dynamic, data-driven bucket set rather than a fixed,
 // known enum -- owning_business_unit is free text on the Application model.
 export function groupByBusinessUnit(apps: Application[]): GroupedResult {

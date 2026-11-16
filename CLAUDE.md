@@ -116,6 +116,7 @@ Auto-generated from all feature plans. Last updated: 2026-11-14 (934-pattern-met
 - Python 3.12 runtime, 3.11+ compatible. + Pydantic v2 and `pyyaml>=6.0` (both existing). **One new runtime dependency:** `cel-expr-python==0.1.4`, pinned exactly (research D1). It ships cp311/cp312 manylinux_2_28 wheels and has no transitive dependencies. (934-pattern-metamodel)
 
 - Python 3.12 (3.11+) and TypeScript 5.x + React 18 (existing). + FastAPI, SQLAlchemy 2 async Core, Alembic, Pydantic v2, TanStack Query v5. All existing; **zero new packages**. (938-capability-model-analysis)
+- Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; new `adp.organization` package (org units + geography, routes under `/api/v1/business/`), ISO 3166/UN M49 data committed as `src/adp/organization/data/geographies.json`, migration `048` (org_units, geographies seeded, org_unit_geographies, applications.owning_org_unit_id) (940-org-units-geography)
 - PostgreSQL 16. Migration `047` (`down_revision="046"`) adds 2 columns plus a CHECK on `technical_capabilities`. All analysis is derived. (938-capability-model-analysis)
 
 - Python 3.12 (3.11+ compatible) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; extends `adp.patterns` with registry/lifecycle/projection/render modules, writes managed rows into the existing `knowledge_items` (pgvector embedding via `adp.knowledge.embedder`), migration `044` (4 tables: ea_pattern, ea_pattern_version, ea_pattern_relation, ea_pattern_lifecycle_event) (935-pattern-registry)
@@ -167,6 +168,23 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 940-org-units-geography: Implemented (ADP-55k.1, spec 1 of 4 in epic ADP-55k "organization & region dimensions on
+  the capability model"; decisions D1-D7 in the epic notes). New package `adp.organization` (routes under
+  `/api/v1/business/`, so the existing WRITE_BUSINESS_ARCH prefix rule covers writes -- no new permission): governed
+  Org Unit tree (enterprise > division > function) and a separate Geography tree (global > region > country) with 937's
+  hierarchy rules; org unit <-> geography many-to-many + optional primary geography; `applications.owning_org_unit_id`
+  (plain column in astore, real FK only in migration `048`; the application router validates through
+  `adp.organization.store.org_unit_exists`). Geography is SEEDED BY THE MIGRATION from the committed
+  `src/adp/organization/data/geographies.json` (UNSD M49 + ISO 3166, 255 rows, stable ids `geo-001` / `geo-m49-NNN` /
+  `geo-XX`; AQ and TW sit directly under Global) via the dependency-free `adp.organization.geodata` loader shared with
+  tests. Review queue (`/org-units/unmatched`, `/unmatched/resolve`) maps each EXACT free-text owning_business_unit value
+  to an org unit (existing or created in the same call); it never writes the free text and never merges near-duplicates.
+  UI: Business -> Organization tab (Org units | Geography | Unmatched), org-unit picker on the application form,
+  Portfolio groups business units via `withOrgUnitLabels()` (org unit name, else "<text> (unmatched)"). Search indexes
+  org units only (geography deliberately not). Export `business-architecture/organization/`. Seed phase C3 adds an org
+  tree, geography links and unmatched values; `geographies` is NEVER in WIPE_TABLES. Gotchas: fixtures creating both
+  astore and ostore metadata must create astore first and exclude ostore's narrow `applications` mirror; tests rendering
+  PortfolioPage must mock `../api/organization`. 2443 backend, 749 frontend. See `specs/940-org-units-geography/`.
 - 939-governance-architecture-health: Implemented (ADP-loz + ADP-n2t). Governance gets a fourth tab, "Architecture
   Health": five tiles (non-conformant / indeterminate adoptions, exposed business L3s = exposure past_end_of_life or
   retiring, overlaps, gaps), a Patterns section (non_conformant -> indeterminate -> conformant_with_warnings, rest

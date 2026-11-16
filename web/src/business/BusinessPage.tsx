@@ -7,8 +7,9 @@ import ValueStreamList from "./ValueStreamList";
 import ValueStreamDetail from "./ValueStreamDetail";
 import DomainList from "./DomainList";
 import DomainDetail from "./DomainDetail";
+import OrganizationTab from "./OrganizationTab";
 
-type BusinessTab = "capabilities" | "heatmap" | "value-streams" | "domains";
+type BusinessTab = "capabilities" | "heatmap" | "value-streams" | "domains" | "organization";
 
 interface BusinessPageProps {
   onNavigate: (view: AppView) => void;
@@ -44,7 +45,7 @@ export default function BusinessPage({ onGenerateDiagram, initialFocusCapability
 
         {/* Tab bar */}
         <div style={{ display: "flex", gap: 0, borderBottom: "2px solid var(--border)", marginBottom: 20 }}>
-          {([["domains", "Domains"], ["capabilities", "Capabilities"], ["value-streams", "Value Streams"], ["heatmap", "Heat Map"]] as [BusinessTab, string][]).map(([t, label]) => (
+          {([["domains", "Domains"], ["capabilities", "Capabilities"], ["value-streams", "Value Streams"], ["heatmap", "Heat Map"], ["organization", "Organization"]] as [BusinessTab, string][]).map(([t, label]) => (
             <button
               key={t}
               onClick={() => { setTab(t); setSelectedVsId(null); setSelectedDomainId(null); setFocusCapabilityId(null); }}
@@ -84,6 +85,9 @@ export default function BusinessPage({ onGenerateDiagram, initialFocusCapability
             ? <ValueStreamDetail vsId={selectedVsId} onBack={() => setSelectedVsId(null)} onGenerateDiagram={onGenerateDiagram} />
             : <ValueStreamList onSelect={setSelectedVsId} />
         )}
+
+        {/* 940-org-units-geography (ADP-55k.1) */}
+        {tab === "organization" && <OrganizationTab />}
 
         {tab === "domains" && (
           selectedDomainId

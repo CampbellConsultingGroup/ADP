@@ -65,6 +65,10 @@ adp-import-calm = "adp.calm.importer:cli"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# 940-org-units-geography: the ISO 3166 / UN M49 data loaded by migration 048.
+[tool.setuptools.package-data]
+"adp.organization" = ["data/*.json"]
+
 # ── Ruff ──────────────────────────────────────────────────────────────────────
 
 [tool.ruff]

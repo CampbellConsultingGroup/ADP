@@ -35,6 +35,8 @@ from adp.business.models import (
     ValueStreamCreate,
     ValueStreamStageCreate,
 )
+from adp.organization import store as ostore
+from adp.organization.models import OrgUnitCreate
 from adp.search import backfill as bf
 from adp.search.index import (
     ENTITY_AGENT,
@@ -42,6 +44,7 @@ from adp.search.index import (
     ENTITY_APPLICATION_CAPABILITY,
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
+    ENTITY_ORG_UNIT,
     ENTITY_TECHNICAL_CAPABILITY,
     ENTITY_VALUE_CHAIN,
     ENTITY_VALUE_CHAIN_ACTIVITY,
@@ -77,6 +80,12 @@ async def session(tmp_path):
             )
         )
         await conn.run_sync(agstore._metadata.create_all)
+        # 940: the organization tables, minus its narrow applications mirror (astore's wins).
+        await conn.run_sync(
+            lambda c: ostore._metadata.create_all(
+                c, tables=[t for t in ostore._metadata.sorted_tables if t.name != "applications"]
+            )
+        )
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as s:
         yield s
@@ -115,8 +124,12 @@ async def test_reindex_all_covers_every_entity_type(session, recording_index) ->
         ApplicationCapabilityCreate(name="Payments", parent_id=l1.id), session
     )
 
+    rc = await ostore.create_org_unit(OrgUnitCreate(name="Retail Co"), session)
+    stores = await ostore.create_org_unit(OrgUnitCreate(name="Stores", parent_id=rc.id), session)
+
     counts = await bf.reindex_all(session)
 
+    assert (ENTITY_ORG_UNIT, stores.id, "Stores Retail Co") in recording_index.upserted
     assert (
         ENTITY_APPLICATION_CAPABILITY,
         l2.id,
@@ -144,6 +157,7 @@ async def test_reindex_all_covers_every_entity_type(session, recording_index) ->
         ENTITY_VALUE_CHAIN_ACTIVITY: 1,
         ENTITY_AGENT: 1,
         ENTITY_APPLICATION_CAPABILITY: 2,
+        ENTITY_ORG_UNIT: 2,
     }
 
 
@@ -173,6 +187,7 @@ async def test_reindex_all_empty_database_returns_zero_counts(session, recording
         ENTITY_VALUE_CHAIN: 0,
         ENTITY_VALUE_CHAIN_ACTIVITY: 0,
         ENTITY_AGENT: 0,
+        ENTITY_ORG_UNIT: 0,
         ENTITY_APPLICATION_CAPABILITY: 0,
     }
     assert recording_index.upserted == []

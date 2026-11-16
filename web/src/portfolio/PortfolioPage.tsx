@@ -37,6 +37,7 @@
  * or the chosen operator isn't "=". */
 import React, { useEffect, useMemo, useState } from "react";
 import { useApplications } from "../api/application";
+import { useOrgUnits } from "../api/organization";
 import { useApplicationCapabilityGroups } from "../api/portfolio";
 import {
   ALL_DIMENSIONS,
@@ -49,6 +50,7 @@ import {
   filterApplications,
   filterFieldBuckets,
   groupApplications,
+  withOrgUnitLabels,
   isNumericFilterField,
   operatorsForField,
   type Dimension,
@@ -70,7 +72,16 @@ export default function PortfolioPage(): React.ReactElement {
   const [filterOperator, setFilterOperator] = useState<FilterOperator>("eq");
   const [filterValue, setFilterValue] = useState<string>("");
 
-  const appItems = apps.data?.items ?? [];
+  // 940-org-units-geography: group/filter business units by org unit where linked (R6).
+  const orgUnits = useOrgUnits();
+  const orgUnitNames = useMemo(
+    () => (orgUnits.data ? new Map(orgUnits.data.items.map((o) => [o.id, o.name])) : undefined),
+    [orgUnits.data],
+  );
+  const appItems = useMemo(
+    () => withOrgUnitLabels(apps.data?.items ?? [], orgUnitNames),
+    [apps.data, orgUnitNames],
+  );
   const links = capabilityGroups.data?.items ?? [];
   const sameDimension = dimensionA === dimensionB;
 

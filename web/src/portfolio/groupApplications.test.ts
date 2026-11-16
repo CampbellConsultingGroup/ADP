@@ -12,6 +12,7 @@ import {
   filterApplications,
   groupByApplicationType,
   groupByBusinessUnit,
+  withOrgUnitLabels,
   groupByCapability,
   groupByCriticality,
   groupByHostingModel,
@@ -490,5 +491,34 @@ describe("filterApplications: comparison/string operators (ADP-6w4)", () => {
     const apps = [app({ id: "1", name: "A", business_value: null, vendor: null })];
     expect(filterApplications("business_value", "5", apps, [], "gt")).toEqual([]);
     expect(filterApplications("vendor", "acme", apps, [], "contains")).toEqual([]);
+  });
+});
+
+describe("withOrgUnitLabels (940-org-units-geography)", () => {
+  const names = new Map([["st", "Stores"]]);
+
+  it("labels linked apps by org unit, unlinked free text as unmatched, and leaves neither null", () => {
+    const apps = [
+      app({ id: "1", name: "A", owning_business_unit: "Store Systems", owning_org_unit_id: "st" }),
+      app({ id: "2", name: "B", owning_business_unit: "Store Systems", owning_org_unit_id: "st" }),
+      app({ id: "3", name: "C", owning_business_unit: "Store Systems" }),
+      app({ id: "4", name: "D", owning_business_unit: null }),
+    ];
+    const result = groupByBusinessUnit(withOrgUnitLabels(apps, names));
+    expect(result.buckets.map((b) => [b.key, b.apps.map((a) => a.id)])).toEqual([
+      ["Store Systems (unmatched)", ["3"]],
+      ["Stores", ["1", "2"]],
+    ]);
+    expect(result.unclassified.map((a) => a.id)).toEqual(["4"]);
+  });
+
+  it("returns the list unchanged without a names map", () => {
+    const apps = [app({ id: "1", name: "A", owning_business_unit: "Claims" })];
+    expect(withOrgUnitLabels(apps)).toBe(apps);
+  });
+
+  it("falls back to the free text when the linked org unit is unknown", () => {
+    const apps = [app({ id: "1", name: "A", owning_business_unit: "Claims", owning_org_unit_id: "gone" })];
+    expect(withOrgUnitLabels(apps, names)[0].owning_business_unit).toBe("Claims (unmatched)");
   });
 });

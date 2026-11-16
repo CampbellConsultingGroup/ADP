@@ -58,6 +58,7 @@ from adp.export import agentic as agentic_export
 from adp.export import application_arch, business_arch
 from adp.export import patterns as patterns_export
 from adp.export import strategy as strategy_export
+from adp.organization import router as organization_router_module
 from adp.patterns import adoptions_router as pattern_adoptions_router_module
 from adp.patterns import router as patterns_router_module
 from adp.patterns import store as patterns_store
@@ -317,6 +318,8 @@ def create_app() -> FastAPI:
     app.include_router(tags.router)
     app.include_router(elements.router)
     app.include_router(config.router)
+    # 940-org-units-geography: before the business router (both under /api/v1/business).
+    app.include_router(organization_router_module.router)
     app.include_router(business_router_module.router)
     app.include_router(search.router)
     app.include_router(applications_router)

@@ -123,6 +123,9 @@ _applications = sa.Table(
     sa.Column("business_value", sa.SmallInteger()),
     sa.Column("business_criticality", sa.SmallInteger()),
     sa.Column("owning_business_unit", sa.String(255)),
+    # 940-org-units-geography: a plain column here; migration 048 adds the real FK to org_units
+    # (ON DELETE SET NULL). adp.application never imports adp.organization at store level.
+    sa.Column("owning_org_unit_id", sa.String(36)),
     sa.Column("business_owner", sa.String(255)),
     sa.Column("technical_owner", sa.String(255)),
     sa.Column("lifecycle_status", sa.Text(), nullable=False, server_default="active"),
@@ -498,6 +501,7 @@ def _row_to_application(row: Any) -> Application:
         business_value=row.business_value,
         business_criticality=row.business_criticality,
         owning_business_unit=row.owning_business_unit,
+        owning_org_unit_id=getattr(row, "owning_org_unit_id", None),
         business_owner=row.business_owner,
         technical_owner=row.technical_owner,
         lifecycle_status=row.lifecycle_status,
@@ -588,6 +592,7 @@ async def create_application(body: ApplicationCreate, session: AsyncSession) -> 
             business_value=None,
             business_criticality=body.business_criticality,
             owning_business_unit=body.owning_business_unit,
+            owning_org_unit_id=body.owning_org_unit_id,
             business_owner=body.business_owner,
             technical_owner=body.technical_owner,
             lifecycle_status=body.lifecycle_status,
@@ -612,6 +617,7 @@ async def create_application(body: ApplicationCreate, session: AsyncSession) -> 
         business_value=None,
         business_criticality=body.business_criticality,
         owning_business_unit=body.owning_business_unit,
+        owning_org_unit_id=body.owning_org_unit_id,
         business_owner=body.business_owner,
         technical_owner=body.technical_owner,
         lifecycle_status=body.lifecycle_status,
@@ -666,6 +672,7 @@ async def update_application(
         "business_criticality",
         "owning_business_unit", "business_owner", "technical_owner", "lifecycle_status",
         "hosting_model", "application_type", "architecture_pattern", "tech_debt_flags",
+        "owning_org_unit_id",
     ):
         if field in body.model_fields_set:
             updates[field] = getattr(body, field)

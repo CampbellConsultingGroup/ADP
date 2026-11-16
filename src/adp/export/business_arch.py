@@ -309,6 +309,15 @@ async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSessio
                 root / "value-chains" / chain_id / "activities",
                 activity_ids_by_chain.get(chain_id, set()),
             )
+
+        # 940-org-units-geography: org units + geography, last and in their own guard so a failure
+        # there never stops the business files above from being written or cleaned up.
+        try:
+            from adp.export.organization import reconcile_organization
+
+            await reconcile_organization(root, session, now)
+        except Exception:
+            _logger.warning("business_arch_export.organization_failed", exc_info=True)
     except Exception:
         _logger.warning("business_arch_export.cycle_failed", exc_info=True)
 

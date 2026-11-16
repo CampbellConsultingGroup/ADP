@@ -162,6 +162,8 @@ class Application(BaseModel):
     business_value: Score15 | None = None
     business_criticality: Score15 | None = None
     owning_business_unit: str | None = None
+    # 940-org-units-geography: governed link, separate from the free text above (kept unchanged).
+    owning_org_unit_id: str | None = None
     business_owner: str | None = None
     technical_owner: str | None = None
     lifecycle_status: LifecycleStatus = "active"
@@ -190,6 +192,7 @@ class ApplicationCreate(BaseModel):
     # application_id, §4 in both specs).
     business_criticality: Score15 | None = None
     owning_business_unit: str | None = None
+    owning_org_unit_id: str | None = None
     business_owner: str | None = None
     technical_owner: str | None = None
     lifecycle_status: LifecycleStatus = "active"
@@ -221,6 +224,7 @@ class ApplicationUpdate(BaseModel):
     # enforcement mechanism for both specs' "reject direct writes" decision.
     business_criticality: Score15 | None = None
     owning_business_unit: str | None = None
+    owning_org_unit_id: str | None = None
     business_owner: str | None = None
     technical_owner: str | None = None
     lifecycle_status: LifecycleStatus | None = None

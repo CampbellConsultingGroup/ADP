@@ -29,6 +29,8 @@ export interface Application {
   business_value: number | null;
   business_criticality: number | null;
   owning_business_unit: string | null;
+  /** 940-org-units-geography: governed link; the free text above is kept. */
+  owning_org_unit_id?: string | null;
   business_owner: string | null;
   technical_owner: string | null;
   lifecycle_status: LifecycleStatus;
@@ -54,6 +56,7 @@ export interface ApplicationCreate {
   // docs/application-business-value-assessment-spec.md §7).
   business_criticality?: number | null;
   owning_business_unit?: string | null;
+  owning_org_unit_id?: string | null;
   business_owner?: string | null;
   technical_owner?: string | null;
   lifecycle_status?: LifecycleStatus;
