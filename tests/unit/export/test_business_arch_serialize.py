@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from adp.business.models import BusinessCapability, BusinessDomain, ValueStream, ValueStreamStage
 from adp.export.business_arch import (
     EMPTY_ORGANIZATION,
+    EMPTY_REGIONAL,
     _serialize_capability,
     _serialize_domain,
     _serialize_stage,
@@ -38,6 +39,7 @@ def test_serialize_capability_includes_all_fields() -> None:
         "domain_id": "domain-1", "strategic_relevance": 1, "maturity_level": 3,
         "linked_designs": ["DSN-1"],
         "organization": EMPTY_ORGANIZATION,
+        "regional": EMPTY_REGIONAL,
     }
 
 
@@ -52,6 +54,26 @@ def test_serialize_capability_carries_its_organization_block() -> None:
     assert _serialize_capability(_cap(), [], block)["organization"] == block
     assert EMPTY_ORGANIZATION == {
         "owner": None, "effective_owner": None, "performers": [], "contributors": [],
+    }
+
+
+def test_serialize_capability_carries_its_regional_block() -> None:
+    """942 FR-016: regional assessments and region-specific scope."""
+    block = {
+        "region_specific": True,
+        "scope": [{"id": "geo-BR", "name": "Brazil"}],
+        "scope_needs_update": False,
+        "assessments": [
+            {
+                "geography": {"id": "geo-BR", "name": "Brazil", "code": "BR"},
+                "maturity_level": 2,
+                "note": None,
+            }
+        ],
+    }
+    assert _serialize_capability(_cap(), [], None, block)["regional"] == block
+    assert EMPTY_REGIONAL == {
+        "region_specific": False, "scope": [], "scope_needs_update": False, "assessments": [],
     }
 
 

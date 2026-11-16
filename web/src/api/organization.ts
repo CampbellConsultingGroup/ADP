@@ -291,3 +291,100 @@ export function useAddCapabilityMapping() {
 export function useRemoveCapabilityMapping() {
   return useOrgMutation((mappingId: string) => apiMutation<void>("DELETE", `${MAPPINGS}/${mappingId}`));
 }
+
+// ── 942-regional-assessments (ADP-55k.3) ─────────────────────────────────────
+// Capability x region/country maturity (1-5) and/or a note; the capability's own maturity_level
+// is the baseline. Applicability and heat map cells are derived by the server on every read.
+
+export interface GeoRef {
+  id: string;
+  name: string;
+  level: number;
+  code: string | null;
+}
+
+export interface RegionalAssessment {
+  id: string;
+  capability_id: string;
+  geography: GeoRef;
+  maturity_level: number | null;
+  note: string | null;
+  updated_at: string;
+}
+
+export interface RegionScope {
+  capability_id: string;
+  region_specific: boolean;
+  geographies: GeoRef[];
+  scope_needs_update: boolean;
+}
+
+export type HeatmapCellState = "assessed" | "not_assessed" | "not_applicable";
+
+export interface HeatmapCell {
+  geography_id: string;
+  state: HeatmapCellState;
+  maturity_level: number | null;
+  note: string | null;
+  delta: number | null;
+}
+
+export interface HeatmapRow {
+  capability: { id: string; name: string; level: number; parent_id: string | null };
+  baseline: number | null;
+  region_specific: boolean;
+  scope_needs_update: boolean;
+  cells: HeatmapCell[];
+}
+
+export interface RegionalHeatmap {
+  columns: GeoRef[];
+  rows: HeatmapRow[];
+  max_columns: number;
+}
+
+export const REGIONAL_NOTE_MAX = 1000;
+
+export function useRegionalAssessments(capabilityId?: string) {
+  return useQuery<{ items: RegionalAssessment[]; total: number }>({
+    queryKey: [...ORG_KEY, "regional-assessments", capabilityId ?? "all"],
+    queryFn: () =>
+      apiGet(`${BASE}/regional-assessments${capabilityId ? `?capability_id=${encodeURIComponent(capabilityId)}` : ""}`),
+  });
+}
+
+/** `geographyIds` null = the server's default columns (the regions). */
+export function useRegionalHeatmap(geographyIds: string[] | null) {
+  const query = geographyIds && geographyIds.length > 0 ? `?geography_ids=${geographyIds.map(encodeURIComponent).join(",")}` : "";
+  return useQuery<RegionalHeatmap>({
+    queryKey: [...ORG_KEY, "regional-heatmap", query],
+    queryFn: () => apiGet(`${BASE}/regional-heatmap${query}`),
+  });
+}
+
+export function useRegionScope(capabilityId: string) {
+  return useQuery<RegionScope>({
+    queryKey: [...ORG_KEY, "region-scope", capabilityId],
+    queryFn: () => apiGet(`${BASE}/capability-region-scope/${capabilityId}`),
+  });
+}
+
+export function useSetRegionalAssessment() {
+  return useOrgMutation(
+    ({ capabilityId, geographyId, maturity_level, note }: { capabilityId: string; geographyId: string; maturity_level: number | null; note: string | null }) =>
+      apiMutation<RegionalAssessment>("PUT", `${BASE}/regional-assessments/${capabilityId}/${geographyId}`, { maturity_level, note }),
+  );
+}
+
+export function useRemoveRegionalAssessment() {
+  return useOrgMutation(({ capabilityId, geographyId }: { capabilityId: string; geographyId: string }) =>
+    apiMutation<void>("DELETE", `${BASE}/regional-assessments/${capabilityId}/${geographyId}`),
+  );
+}
+
+export function useSetRegionScope() {
+  return useOrgMutation(
+    ({ capabilityId, region_specific, geography_ids }: { capabilityId: string; region_specific: boolean; geography_ids: string[] }) =>
+      apiMutation<RegionScope>("PUT", `${BASE}/capability-region-scope/${capabilityId}`, { region_specific, geography_ids }),
+  );
+}

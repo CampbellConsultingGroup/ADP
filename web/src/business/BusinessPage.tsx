@@ -7,7 +7,8 @@ import ValueStreamList from "./ValueStreamList";
 import ValueStreamDetail from "./ValueStreamDetail";
 import DomainList from "./DomainList";
 import DomainDetail from "./DomainDetail";
-import OrganizationTab from "./OrganizationTab";
+import OrganizationTab, { useCanWriteBusiness } from "./OrganizationTab";
+import RegionalHeatMap from "./RegionalHeatMap";
 
 type BusinessTab = "capabilities" | "heatmap" | "value-streams" | "domains" | "organization";
 
@@ -31,6 +32,11 @@ export default function BusinessPage({ onGenerateDiagram, initialFocusCapability
   // on any manual tab click so a later, unrelated visit to the Capabilities
   // tab doesn't carry a stale highlight forward.
   const [focusCapabilityId, setFocusCapabilityId] = useState<string | null>(initialFocusCapabilityId);
+  // 942-regional-assessments: the Heat Map tab's view and the regional columns, kept here so the
+  // choice survives switching tabs for the session (null = the server's default, the regions).
+  const [heatmapView, setHeatmapView] = useState<"capabilities" | "regional">("capabilities");
+  const [regionalColumns, setRegionalColumns] = useState<string[] | null>(null);
+  const canWriteBusiness = useCanWriteBusiness();
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
@@ -72,12 +78,47 @@ export default function BusinessPage({ onGenerateDiagram, initialFocusCapability
         )}
 
         {tab === "heatmap" && (
-          <CapabilityHeatMap
-            onDrillThrough={(id) => {
-              setFocusCapabilityId(id);
-              setTab("capabilities");
-            }}
-          />
+          <>
+            <div role="tablist" aria-label="Heat map view" style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              {([["capabilities", "Capabilities"], ["regional", "Regional"]] as const).map(([v, text]) => (
+                <button
+                  key={v}
+                  role="tab"
+                  aria-selected={heatmapView === v}
+                  onClick={() => setHeatmapView(v)}
+                  style={{
+                    fontSize: 12,
+                    padding: "3px 10px",
+                    border: "1px solid var(--border)",
+                    borderRadius: 4,
+                    background: heatmapView === v ? "var(--accent)" : "var(--surface)",
+                    color: heatmapView === v ? "#fff" : "var(--ink-2)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+            {heatmapView === "capabilities" ? (
+              <CapabilityHeatMap
+                onDrillThrough={(id) => {
+                  setFocusCapabilityId(id);
+                  setTab("capabilities");
+                }}
+              />
+            ) : (
+              <RegionalHeatMap
+                columns={regionalColumns}
+                onColumnsChange={setRegionalColumns}
+                canWrite={canWriteBusiness}
+                onOpenCapability={(id) => {
+                  setFocusCapabilityId(id);
+                  setTab("capabilities");
+                }}
+              />
+            )}
+          </>
         )}
 
         {tab === "value-streams" && (

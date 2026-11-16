@@ -128,6 +128,9 @@ _business_capabilities = sa.Table(
     sa.Column("level", sa.Integer(), nullable=False),
     sa.Column("parent_id", sa.String(36), nullable=True),
     sa.Column("position", sa.Integer(), nullable=True),
+    # 942: the capability's own maturity -- the enterprise baseline regional scores compare to.
+    # Read-only here; nothing in adp.organization ever writes it (SC-004).
+    sa.Column("maturity_level", sa.Integer(), nullable=True),
 )
 
 # 941: owner (L1/L2, one per capability), performer (L3, optional geography), contributor (L3).
@@ -177,6 +180,73 @@ sa.Index(
     _capability_org_mappings.c.role,
     sa.func.coalesce(_capability_org_mappings.c.geography_id, ""),
     unique=True,
+)
+
+# 942-regional-assessments: capability x region/country assessments (maturity and/or a note),
+# and the region-specific flag (1:1, so it survives losing its last geography) plus its scope.
+# Mirror migration 050; the rules (no Global, score or note) are in adp.organization.regional.
+_capability_regional_assessments = sa.Table(
+    "capability_regional_assessments",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column(
+        "capability_id",
+        sa.String(36),
+        sa.ForeignKey("business_capabilities.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column(
+        "geography_id",
+        sa.String(36),
+        sa.ForeignKey("geographies.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column("maturity_level", sa.SmallInteger(), nullable=True),
+    sa.Column("note", sa.Text(), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+    sa.CheckConstraint(
+        "maturity_level IS NULL OR maturity_level BETWEEN 1 AND 5",
+        name="ck_regional_assessment_maturity",
+    ),
+    sa.CheckConstraint(
+        "maturity_level IS NOT NULL OR note IS NOT NULL", name="ck_regional_assessment_content"
+    ),
+    sa.CheckConstraint(
+        "note IS NULL OR length(note) <= 1000", name="ck_regional_assessment_note_length"
+    ),
+    sa.UniqueConstraint("capability_id", "geography_id", name="uq_regional_assessment"),
+)
+
+_region_specific_capabilities = sa.Table(
+    "region_specific_capabilities",
+    _metadata,
+    sa.Column(
+        "capability_id",
+        sa.String(36),
+        sa.ForeignKey("business_capabilities.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+_region_specific_capability_geographies = sa.Table(
+    "region_specific_capability_geographies",
+    _metadata,
+    sa.Column(
+        "capability_id",
+        sa.String(36),
+        sa.ForeignKey("region_specific_capabilities.capability_id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column(
+        "geography_id",
+        sa.String(36),
+        sa.ForeignKey("geographies.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.PrimaryKeyConstraint("capability_id", "geography_id"),
 )
 
 _engine = None
@@ -653,6 +723,19 @@ async def delete_geography(geo_id: str, session: AsyncSession) -> bool:
         return False
     await _refuse_if_children(_geographies, geo_id, "Geography", session)
     await _clear_mapping_geography(geo_id, session)
+    # 942 FR-015: its regional assessments and its place in any region-specific scope go too;
+    # the region-specific flag itself stays (then "scope needs updating"). SQLite parity --
+    # migration 050's CASCADEs are the safety net.
+    await session.execute(
+        _capability_regional_assessments.delete().where(
+            _capability_regional_assessments.c.geography_id == geo_id
+        )
+    )
+    await session.execute(
+        _region_specific_capability_geographies.delete().where(
+            _region_specific_capability_geographies.c.geography_id == geo_id
+        )
+    )
     await session.execute(
         _org_units.update()
         .where(_org_units.c.primary_geography_id == geo_id)

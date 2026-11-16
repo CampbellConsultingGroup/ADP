@@ -11,6 +11,7 @@ import { LEVEL_STYLE } from "./classification";
 import AgentReviewButton from "../agent-review/AgentReviewButton";
 import { renderCapabilitySuggestionDetail } from "./agentReviewDetail";
 import { CapabilityOrgChips, CapabilityOrgEditor } from "./CapabilityOrgPanel";
+import { RegionalAssessmentsPanel } from "./RegionalAssessmentEditor";
 import { useCanWriteApplications } from "../application/appCapNav";
 
 interface CapabilityNodeProps {
@@ -46,6 +47,7 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
   const [showCompliance, setShowCompliance] = useState(false);
   const [showAgentReview, setShowAgentReview] = useState(false);
   const [showOrganization, setShowOrganization] = useState(false);
+  const [showRegions, setShowRegions] = useState(false);
   const canWriteBusiness = useCanWriteApplications();
   const rowRef = useRef<HTMLDivElement>(null);
 
@@ -200,6 +202,13 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
               Organization
             </button>
             <button
+              onClick={() => setShowRegions(!showRegions)}
+              title="Maturity by region and region-specific scope"
+              style={{ ...actionBtn, color: showRegions ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
+            >
+              Regions
+            </button>
+            <button
               onClick={() => setShowCompliance(!showCompliance)}
               title="Mapped compliance controls"
               style={{ ...actionBtn, color: showCompliance ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
@@ -265,6 +274,26 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
           }}
         >
           <CapabilityOrgEditor capabilityId={capability.id} level={capability.level} canWrite={canWriteBusiness} />
+        </div>
+      )}
+
+      {showRegions && (
+        <div
+          style={{
+            marginLeft: 20,
+            marginBottom: 6,
+            padding: "8px 12px",
+            background: "var(--surface-2)",
+            border: "1px solid var(--border)",
+            borderRadius: 4,
+          }}
+        >
+          <RegionalAssessmentsPanel
+            capabilityId={capability.id}
+            capabilityName={capability.name}
+            baseline={capability.maturity_level}
+            canWrite={canWriteBusiness}
+          />
         </div>
       )}
 

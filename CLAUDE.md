@@ -118,6 +118,7 @@ Auto-generated from all feature plans. Last updated: 2026-11-14 (934-pattern-met
 - Python 3.12 (3.11+) and TypeScript 5.x + React 18 (existing). + FastAPI, SQLAlchemy 2 async Core, Alembic, Pydantic v2, TanStack Query v5. All existing; **zero new packages**. (938-capability-model-analysis)
 - Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; new `adp.organization` package (org units + geography, routes under `/api/v1/business/`), ISO 3166/UN M49 data committed as `src/adp/organization/data/geographies.json`, migration `048` (org_units, geographies seeded, org_unit_geographies, applications.owning_org_unit_id) (940-org-units-geography)
 - Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; capability <-> org unit mappings (owner L1/L2 one per capability, performer L3 + optional geography, contributor L3) in `adp.organization.cap_mappings` + pure `cap_org_analysis` (effective owner, findings, footprint derived on read, never stored), migration `049` (capability_org_mappings) (941-capability-org-mappings)
+- Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; regional maturity assessments (capability x region/country, score 1-5 and/or note, global maturity stays the baseline) + region-specific scope in `adp.organization.regional` + pure `regional_analysis` (applicability, heat map cells, derived on read), migration `050` (capability_regional_assessments, region_specific_capabilities, region_specific_capability_geographies) (942-regional-assessments)
 - PostgreSQL 16. Migration `047` (`down_revision="046"`) adds 2 columns plus a CHECK on `technical_capabilities`. All analysis is derived. (938-capability-model-analysis)
 
 - Python 3.12 (3.11+ compatible) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; extends `adp.patterns` with registry/lifecycle/projection/render modules, writes managed rows into the existing `knowledge_items` (pgvector embedding via `adp.knowledge.embedder`), migration `044` (4 tables: ea_pattern, ea_pattern_version, ea_pattern_relation, ea_pattern_lifecycle_event) (935-pattern-registry)
@@ -169,6 +170,37 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 942-regional-assessments: Implemented (ADP-55k.3, spec 3 of 4 in epic ADP-55k; `/speckit-clarify` skipped,
+  the spec's Assumptions stand). A business capability can be assessed per REGION or COUNTRY, never Global:
+  a maturity score on the global 1-5 scale and/or a variant note, at most one per capability and geography
+  (upsert `PUT /api/v1/business/regional-assessments/{cap_id}/{geo_id}`). The capability's own `maturity_level`
+  is the BASELINE and is never written by these routes; the guard `test_regional_not_stored.py` checks that
+  migration `050` alters no existing table.
+
+  Region-specific scope: a 1:1 `region_specific_capabilities` flag table plus its geographies
+  (`PUT /capability-region-scope/{cap_id}`, replace; false clears). It is a separate table so the flag
+  survives losing its last geography, which then shows "scope needs updating".
+
+  The pure `adp.organization.regional_analysis` derives, over a 4-query snapshot:
+  - applicability by containment both ways (a Brazil-only capability is applicable in the Americas column);
+  - cell states: not_applicable > assessed (with delta vs baseline) > not_assessed;
+  - the heat map (`GET /regional-heatmap?geography_ids=`; defaults to the regions, max 12 columns, Global refused).
+
+  There is NO roll-up across capability levels and NO inheritance between regions and countries. Deleting a
+  geography removes its assessments and scope rows but keeps the flag. The organization store's
+  `business_capabilities` mirror gained a nullable `maturity_level` (astore's mirror has none).
+
+  UI:
+  - a Capabilities | Regional switch on the Heat Map tab. `RegionalHeatMap` is a `<table>` in its own
+    `overflow-x: auto` area, with click-to-edit cells, ▲/▼ against the baseline and the note in the cell title;
+  - the column choice and view live in BusinessPage state (session);
+  - a "Regions" expander on each capability row (`RegionalAssessmentsPanel` + `RegionScopeEditor`);
+  - the 5-step maturity swatches moved to `web/src/business/maturityScale.ts`, shared with `CapabilityHeatMap`.
+
+  Export: a `regional` block on capability files. Seed phase C5 adds a new L3 "Statutory eSocial Reporting"
+  under Human Capital Management, Brazil-only. Gotcha found live: don't mix the `border` shorthand with
+  `borderStyle` in a cell style that changes; React warns and can mis-style it. Use longhands. See
+  `specs/942-regional-assessments/`.
 - 941-capability-org-mappings: Implemented (ADP-55k.2, spec 2 of 4 in epic ADP-55k). One table,
   `capability_org_mappings` (migration `049`), links a business capability to a 940 org unit with a role:
   owner (L1/L2, at most one per capability: partial unique index plus a replace-only `PUT .../{cap_id}/owner`),
