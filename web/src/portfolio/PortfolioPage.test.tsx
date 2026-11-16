@@ -13,6 +13,9 @@ import type { ApplicationCapabilityGroupsResponse } from "../api/portfolio";
 
 vi.mock("../api/application");
 vi.mock("../api/portfolio");
+// 940-org-units-geography: PortfolioPage labels business units by org unit. No org units loaded
+// here, so grouping behaves exactly as before.
+vi.mock("../api/organization", () => ({ useOrgUnits: () => ({ data: undefined }) }));
 
 const mockedApplicationApi = vi.mocked(applicationApi);
 const mockedPortfolioApi = vi.mocked(portfolioApi);

@@ -146,6 +146,7 @@ def _serialize_application(
         "business_value": app.business_value,
         "business_criticality": app.business_criticality,
         "owning_business_unit": app.owning_business_unit,
+        "owning_org_unit_id": app.owning_org_unit_id,
         "business_owner": app.business_owner,
         "technical_owner": app.technical_owner,
         "lifecycle_status": app.lifecycle_status,

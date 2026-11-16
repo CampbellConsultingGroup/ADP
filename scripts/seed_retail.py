@@ -47,6 +47,8 @@ from adp.application.models import (
     TechnicalCapabilityCreate,
 )
 from adp.application import app_capabilities as acstore
+from adp.organization import store as ostore
+from adp.organization.models import OrgUnitCreate
 from adp.application.app_capability_models import ApplicationCapabilityCreate
 from adp.business import store as bstore
 from adp.business.models import (
@@ -84,6 +86,10 @@ WIPE_TABLES = [
     # so an applications TRUNCATE ... CASCADE alone would leave them behind).
     "solution_agents",
     "agents",
+    # 940-org-units-geography: org units and their geography links. NEVER the geographies table
+    # itself -- migration 048 seeds it, and nothing here can recreate it.
+    "org_unit_geographies",
+    "org_units",
     # 937-application-capabilities: the middle capability layer and its links.
     "app_capability_realizations",
     "app_capability_tech_cap_links",
@@ -262,6 +268,31 @@ CAPABILITY_CHAINS = [
 # Impact / exposure: offline sync is being retired, so Process Checkout is exposed.
 TECH_CAP_LIFECYCLE = {
     "Local Data Store with Offline Sync": ("retiring", date(2027, 6, 30)),
+}
+# 940-org-units-geography: the org tree (name, parent name), where units operate (seeded
+# geography ids from migration 048), and free-text business units left for the review queue.
+ORG_UNITS = [
+    ("Retail Co", None),
+    ("Stores", "Retail Co"),
+    ("Digital", "Retail Co"),
+    ("Supply Chain", "Retail Co"),
+    ("Corporate", "Retail Co"),
+    ("Finance", "Corporate"),
+    ("HR", "Corporate"),
+]
+ORG_UNIT_GEOGRAPHIES = {
+    "Stores": ["geo-US", "geo-CA", "geo-DE"],
+    "Digital": ["geo-US", "geo-GB"],
+}
+APP_BUSINESS_UNITS = {
+    "pos": "Store Systems",
+    "loyalty": "Store Systems",
+    "pay": "Store systems",  # near-duplicate on purpose: a person decides, nothing is merged
+    "commerce": "Digital",
+    "cms": "Digital",
+    "erp": "Finance",
+    "workday": "HR",
+    "wms": "Supply Chain",
 }
 # Overlap: e-commerce has its own promotions capability, so two applications realize
 # "Apply Promotions" -- a rationalization candidate. (L2 parent, L3 name, business L3, tech, app key)
@@ -873,6 +904,29 @@ async def seed(db_url: str) -> None:
         print(f"  {len(app_cap_ids)} application capability L3s, "
               f"{len(CAPABILITY_CHAINS) - 1} business -> application -> technical chains, "
               f"{len(OVERLAP_APP_CAPS)} overlap")
+
+    # ── Phase C3: org units + operating geographies (940-org-units-geography) ──
+    # Free-text owning_business_unit values are set but NOT linked, so the review queue
+    # (Business -> Organization -> Unmatched) has something to resolve -- including a
+    # near-duplicate ("Store systems") that must be decided by a person, not merged.
+    print("Seeding org units...")
+    async with session_factory() as session:
+        org_ids: dict[str, str] = {}
+        for name, parent in ORG_UNITS:
+            ou = await ostore.create_org_unit(
+                OrgUnitCreate(name=name, parent_id=org_ids[parent] if parent else None), session)
+            org_ids[name] = ou.id
+        for name, geo_ids in ORG_UNIT_GEOGRAPHIES.items():
+            for geo_id in geo_ids:
+                await ostore.link_geography(org_ids[name], geo_id, session)
+        for app_key, bu in APP_BUSINESS_UNITS.items():
+            await session.execute(
+                ostore._applications.update()
+                .where(ostore._applications.c.id == app_ids[app_key])
+                .values(owning_business_unit=bu)
+            )
+        await session.commit()
+        print(f"  {len(org_ids)} org units, {len(APP_BUSINESS_UNITS)} unmatched business-unit values")
 
     # ── Phase D: agentic solution + agents (933-agent-registry) ───────────────
     print("Seeding agent registry...")

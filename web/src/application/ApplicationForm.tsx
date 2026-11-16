@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { Application, ApplicationCreate } from "../api/application";
+import { useOrgUnits } from "../api/organization";
 import HealthAssessmentModal from "./HealthAssessmentModal";
 import BusinessValueAssessmentModal from "./BusinessValueAssessmentModal";
 
@@ -42,6 +43,9 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
   const [showBusinessValueModal, setShowBusinessValueModal] = useState(false);
   const [bizCrit, setBizCrit] = useState<string>(initial?.business_criticality?.toString() ?? "");
   const [bizUnit, setBizUnit] = useState<string>(initial?.owning_business_unit ?? "");
+  // 940-org-units-geography: the governed owning org unit, alongside the free text.
+  const [orgUnitId, setOrgUnitId] = useState<string>(initial?.owning_org_unit_id ?? "");
+  const orgUnits = useOrgUnits();
   const [bizOwner, setBizOwner] = useState<string>(initial?.business_owner ?? "");
   const [techOwner, setTechOwner] = useState<string>(initial?.technical_owner ?? "");
   const [lifecycle, setLifecycle] = useState<string>(initial?.lifecycle_status ?? "active");
@@ -69,6 +73,7 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
         pace_layer: (pace || null) as ApplicationCreate["pace_layer"],
         business_criticality: bcNum,
         owning_business_unit: bizUnit || null,
+        owning_org_unit_id: orgUnitId || null,
         business_owner: bizOwner || null,
         technical_owner: techOwner || null,
         lifecycle_status: (lifecycle || "active") as ApplicationCreate["lifecycle_status"],
@@ -193,7 +198,16 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
         <input style={field} type="number" min={1} max={5} value={bizCrit} onChange={e => setBizCrit(e.target.value)} placeholder="1–5" />
       </label>
 
-      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Owning Business Unit
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Owning Org Unit
+        <select style={field} aria-label="Owning org unit" value={orgUnitId} onChange={e => setOrgUnitId(e.target.value)}>
+          <option value="">None</option>
+          {(orgUnits.data?.items ?? []).map((o) => (
+            <option key={o.id} value={o.id}>{[...o.path.map((p) => p.name), o.name].join(" › ")}</option>
+          ))}
+        </select>
+      </label>
+
+      <label style={{ fontSize: 12, color: "var(--ink-2)" }}>Owning Business Unit (free text)
         <input style={field} value={bizUnit} onChange={e => setBizUnit(e.target.value)} />
       </label>
 

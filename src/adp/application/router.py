@@ -171,12 +171,24 @@ async def list_applications(
     )
 
 
+async def _require_org_unit(org_unit_id: str | None, session: AsyncSession) -> None:
+    """940-org-units-geography (research R2): validate the owning org unit on the same session,
+    through the organization store, rather than a store-level import cycle."""
+    if org_unit_id is None:
+        return
+    from adp.organization import store as ostore
+
+    if not await ostore.org_unit_exists(org_unit_id, session):
+        raise HTTPException(status_code=422, detail=f"Org unit {org_unit_id!r} not found")
+
+
 @applications_router.post("", response_model=Application, status_code=status.HTTP_201_CREATED)
 async def create_application(
     body: ApplicationCreate,
     request: Request,
     session: AsyncSession = Depends(_get_session),
 ):
+    await _require_org_unit(body.owning_org_unit_id, session)
     app = await astore.create_application(body, session)
     await session.commit()
     actor = _get_actor(request)
@@ -256,6 +268,8 @@ async def update_application(
     request: Request,
     session: AsyncSession = Depends(_get_session),
 ):
+    if "owning_org_unit_id" in body.model_fields_set:
+        await _require_org_unit(body.owning_org_unit_id, session)
     try:
         app = await astore.update_application(app_id, body, session)
     except AgenticSolutionHasAgentsError as exc:

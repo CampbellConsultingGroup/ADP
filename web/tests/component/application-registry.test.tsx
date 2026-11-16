@@ -78,6 +78,29 @@ describe("ApplicationForm", () => {
     expect(screen.getByRole("button", { name: "Assess Health" }).hasAttribute("disabled")).toBe(false);
     expect(screen.getByRole("button", { name: "Assess Business Value" }).hasAttribute("disabled")).toBe(false);
   });
+
+  it("picks an owning org unit and sends it, keeping the free text separate (940)", async () => {
+    mockFetch({
+      "GET /api/v1/business/org-units": {
+        items: [
+          { id: "rc", name: "Retail Co", path: [], level: 1, kind: "enterprise" },
+          { id: "st", name: "Stores", path: [{ id: "rc", name: "Retail Co", level: 1 }], level: 2, kind: "division" },
+        ],
+        total: 2,
+      },
+    });
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    renderWithQuery(<ApplicationForm onSave={onSave} onCancel={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText("My Application"), { target: { value: "POS" } });
+    await waitFor(() => expect(screen.getByRole("option", { name: "Retail Co › Stores" })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("Owning org unit"), { target: { value: "st" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledWith(
+        expect.objectContaining({ owning_org_unit_id: "st", owning_business_unit: null }),
+      ),
+    );
+  });
 });
 
 describe("TechCapForm", () => {

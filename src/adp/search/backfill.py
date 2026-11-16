@@ -19,6 +19,7 @@ from adp.search import (
     ENTITY_APPLICATION_CAPABILITY,
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
+    ENTITY_ORG_UNIT,
     ENTITY_TECHNICAL_CAPABILITY,
     ENTITY_VALUE_CHAIN,
     ENTITY_VALUE_CHAIN_ACTIVITY,
@@ -80,6 +81,7 @@ async def reindex_all(session: "AsyncSession") -> dict[str, int]:
         ENTITY_VALUE_CHAIN_ACTIVITY: 0,
         ENTITY_AGENT: 0,
         ENTITY_APPLICATION_CAPABILITY: 0,
+        ENTITY_ORG_UNIT: 0,
     }
 
     cap_total = await reindex_capabilities(session)
@@ -148,6 +150,14 @@ async def reindex_all(session: "AsyncSession") -> dict[str, int]:
     for ac_id, text in await acstore.search_entries(session):
         await index.upsert(ENTITY_APPLICATION_CAPABILITY, ac_id, text, session)
         counts[ENTITY_APPLICATION_CAPABILITY] += 1
+
+    # 940-org-units-geography: same text (name, description, path) as the write hooks.
+    # Geography is deliberately not indexed (plan R7).
+    from adp.organization import store as ostore
+
+    for ou_id, text in await ostore.search_entries(session):
+        await index.upsert(ENTITY_ORG_UNIT, ou_id, text, session)
+        counts[ENTITY_ORG_UNIT] += 1
 
     return counts
 
