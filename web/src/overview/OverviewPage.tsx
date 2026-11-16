@@ -149,8 +149,9 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
       desc: "Strategic themes and objectives, linked to the capabilities and value streams that realize them.",
       icon: "spark", hue: "var(--biz)", wash: "var(--biz-wash)",
       metrics: [
-        { n: num(stratTotalObjectives), l: "Objectives" },
+        // ADP-6vk: follow the strategy hierarchy -- a theme groups objectives, initiatives deliver them.
         { n: num(stratTotalThemes), l: "Themes" },
+        { n: num(stratTotalObjectives), l: "Objectives" },
         { n: num(stratInitiatives), l: "Initiatives" },
       ],
       tiles: [

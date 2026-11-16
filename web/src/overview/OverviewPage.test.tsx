@@ -192,6 +192,13 @@ describe("OverviewPage: Strategy card status breakdown + initiative count (918-s
     return screen.getByText("Strategy").closest(".ovw-dcard") as HTMLElement;
   }
 
+  it("orders the metrics Themes, then Objectives, then Initiatives (ADP-6vk)", () => {
+    render(<OverviewPage onNavigate={vi.fn()} />);
+
+    const labels = Array.from(strategyCard().querySelectorAll(".ovw-metric .m-l")).map((el) => el.textContent);
+    expect(labels).toEqual(["Themes", "Objectives", "Initiatives"]);
+  });
+
   it("renders the initiative count as a metric tile", () => {
     render(<OverviewPage onNavigate={vi.fn()} />);
 
