@@ -114,6 +114,12 @@ describe("AdoptionsList", () => {
     render(<AdoptionsList />);
     expect(screen.getAllByRole("button", { name: "Adopt a pattern" })).toHaveLength(1);
   });
+
+  it("opens straight onto an adoption when given initialSelected (939, from Governance)", () => {
+    render(<AdoptionsList initialSelected="ad-1" />);
+    expect(api.useAdoption).toHaveBeenCalledWith("ad-1");
+    expect(screen.queryByRole("button", { name: "Adopt a pattern" })).toBeNull();
+  });
 });
 
 describe("AdoptionForm", () => {

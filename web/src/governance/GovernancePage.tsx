@@ -4,23 +4,29 @@ import { Button } from "../ui";
 import DesignStatusTab from "./DesignStatusTab";
 import ComplianceTab from "./ComplianceTab";
 import ActivityFeedTab from "./ActivityFeedTab";
+import ArchitectureHealthTab from "./ArchitectureHealthTab";
 
-type TabId = "status" | "compliance" | "activity";
+type TabId = "status" | "compliance" | "activity" | "health";
 
 const TABS: { id: TabId; label: string }[] = [
   { id: "status", label: "Design Status" },
   { id: "compliance", label: "Compliance" },
   { id: "activity", label: "Activity Feed" },
+  // 939-governance-architecture-health: pattern conformance + capability findings.
+  { id: "health", label: "Architecture Health" },
 ];
 
 interface GovernancePageProps {
   onNavigate: (view: AppView) => void;
   onSelectDesign: (id: string) => void;
+  /** 939: opens an adoption on the Patterns screen. */
+  onOpenAdoption?: (id: string) => void;
 }
 
 export default function GovernancePage({
   onNavigate,
   onSelectDesign,
+  onOpenAdoption,
 }: GovernancePageProps): React.ReactElement {
   const [activeTab, setActiveTab] = useState<TabId>("status");
 
@@ -67,6 +73,9 @@ export default function GovernancePage({
           <ComplianceTab onSelectDesign={onSelectDesign} onNavigate={onNavigate} />
         )}
         {activeTab === "activity" && <ActivityFeedTab />}
+        {activeTab === "health" && (
+          <ArchitectureHealthTab onOpenAdoption={onOpenAdoption ?? (() => onNavigate("patterns"))} />
+        )}
       </div>
     </div>
   );

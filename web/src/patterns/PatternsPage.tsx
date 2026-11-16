@@ -16,8 +16,15 @@ const cell: React.CSSProperties = { padding: "7px 10px", borderBottom: "1px soli
 
 type Mode = { kind: "list" } | { kind: "import"; yaml: string } | { kind: "version"; key: string; version: string };
 
-export default function PatternsPage({ onGenerateDiagram }: { onGenerateDiagram?: (seed: DiagramSeed) => void } = {}) {
-  const [section, setSection] = useState<"patterns" | "adoptions">("patterns");
+export default function PatternsPage({
+  onGenerateDiagram,
+  initialAdoptionId = null,
+}: {
+  onGenerateDiagram?: (seed: DiagramSeed) => void;
+  /** 939-governance-architecture-health: open this adoption (in the Adoptions section) on arrival. */
+  initialAdoptionId?: string | null;
+} = {}) {
+  const [section, setSection] = useState<"patterns" | "adoptions">(initialAdoptionId ? "adoptions" : "patterns");
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div role="tablist" aria-label="Patterns sections" style={{ display: "flex", gap: 4, padding: "10px 20px 0" }}>
@@ -35,7 +42,7 @@ export default function PatternsPage({ onGenerateDiagram }: { onGenerateDiagram?
         ))}
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
-        {section === "patterns" ? <PatternCatalog /> : <AdoptionsList onGenerateDiagram={onGenerateDiagram} />}
+        {section === "patterns" ? <PatternCatalog /> : <AdoptionsList onGenerateDiagram={onGenerateDiagram} initialSelected={initialAdoptionId} />}
       </div>
     </div>
   );

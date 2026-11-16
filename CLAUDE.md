@@ -167,6 +167,16 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 939-governance-architecture-health: Implemented (ADP-loz + ADP-n2t). Governance gets a fourth tab, "Architecture
+  Health": five tiles (non-conformant / indeterminate adoptions, exposed business L3s = exposure past_end_of_life or
+  retiring, overlaps, gaps), a Patterns section (non_conformant -> indeterminate -> conformant_with_warnings, rest
+  summarized, each opens the adoption on the Patterns screen) and a Capabilities section (exposed L3s with band + path,
+  then 938's `CapFindingsViews` overlaps/gaps). FRONTEND ONLY -- reads `useAdoptions(true)`, `useCapabilityRollup`,
+  `useCapabilityFindings`, `useCapabilities` (for paths; the roll-up has no parent ids); pure derivations in
+  `web/src/governance/architectureHealth.ts` shared by tiles and lists. New cross-screen entry: App.tsx
+  `pendingAdoptionId` -> `PatternsPage initialAdoptionId` -> `AdoptionsList initialSelected`. Tiles show "…" while
+  loading and "—" on error, never a misleading 0; sections fail independently. 728 frontend tests. See
+  `specs/939-governance-architecture-health/`.
 - 938-capability-model-analysis: Implemented (ADP-6et.2, spec B of epic ADP-6et). Analysis over 937's three-layer
   capability model, all DERIVED ON READ and never stored (guard test `test_cap_analysis_not_stored.py`). Pure engine
   `adp.application.cap_analysis` (no I/O, `as_of` injected) over a frozen `CapabilitySnapshot` built by
