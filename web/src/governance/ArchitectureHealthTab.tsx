@@ -1,14 +1,18 @@
 // 939-governance-architecture-health (ADP-loz, ADP-n2t): Governance -> Architecture Health.
 // Five tiles, then what needs attention: pattern adoptions (936 conformance) and the capability
-// model (938 exposure, overlaps, gaps). Frontend only -- every figure comes from an endpoint that is
+// model (938 exposure, overlaps, gaps), plus 941's ownership / performer findings (ADP-m7x).
+// Frontend only -- every figure comes from an endpoint that is
 // already derived on the server and already applies its own permission rules (conformance is
 // evaluated for the viewer). Each section loads, fails and empties independently (FR-007).
 
 import type React from "react";
 import { useCapabilities, type BusinessCapability } from "../api/business";
 import { useCapabilityFindings, useCapabilityRollup } from "../api/capAnalysis";
+import { useCapabilityOrgFindings } from "../api/organization";
 import { useAdoptions } from "../api/patterns";
 import CapFindingsViews from "../application/CapFindingsViews";
+import { useCapabilityNav } from "../application/appCapNav";
+import OrgFindings from "../business/OrgFindings";
 import { BandChip, CapWithPath, muted } from "../application/capAnalysisUi";
 import { SCOPE_LABELS, STATUS_LABELS, STATUS_TONES } from "../patterns/labels";
 import { StatusBadge } from "../ui";
@@ -50,6 +54,9 @@ export default function ArchitectureHealthTab({ onOpenAdoption }: { onOpenAdopti
   const rollup = useCapabilityRollup(true);
   const findings = useCapabilityFindings();
   const businessCaps = useCapabilities();
+  const orgFindings = useCapabilityOrgFindings();
+  const orgCounts = orgFindings.data?.counts;
+  const nav = useCapabilityNav();
 
   const att = adoptionsNeedingAttention(adoptions.data?.items);
   const exposed = exposedCapabilities(rollup.data);
@@ -72,6 +79,20 @@ export default function ArchitectureHealthTab({ onOpenAdoption }: { onOpenAdopti
           note={findings.data ? `${overlapCounts(findings.data).explained} explained` : undefined}
         />
         <Tile label="Gaps" value={tileValue(findings, gapCount(findings.data))} tone="info" />
+        {/* ADP-m7x: 941 capability <-> org unit findings. */}
+        <Tile
+          label="No accountable owner"
+          value={tileValue(orgFindings, orgCounts?.no_owner ?? 0)}
+          tone="warn"
+          note={orgCounts ? `of ${orgCounts.l1_l2_total} L1/L2` : undefined}
+        />
+        <Tile label="Shared-service candidates" value={tileValue(orgFindings, orgCounts?.shared_service ?? 0)} tone="info" />
+        <Tile
+          label="Unmapped L3s"
+          value={tileValue(orgFindings, orgCounts?.unmapped ?? 0)}
+          tone="warn"
+          note={orgCounts ? `of ${orgCounts.l3_total} L3` : undefined}
+        />
       </div>
 
       <section aria-label="Pattern conformance" style={card}>
@@ -152,6 +173,11 @@ export default function ArchitectureHealthTab({ onOpenAdoption }: { onOpenAdopti
           <CapFindingsViews mode="overlaps" />
         </div>
         <CapFindingsViews mode="gaps" />
+      </section>
+
+      <section aria-label="Organization" style={card}>
+        <h3 style={h3}>Organization</h3>
+        <OrgFindings onOpenCapability={nav?.openBusinessCapability} />
       </section>
     </div>
   );
