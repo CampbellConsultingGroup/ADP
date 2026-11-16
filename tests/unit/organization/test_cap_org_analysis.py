@@ -123,8 +123,11 @@ class TestGeographyNote:
         assert self.note("st", None) is False
 
     def test_views_flag_performers_only(self) -> None:
-        s = snap(m("accept", "st", "performer", "br"), m("accept", "st", "contributor"),
-                 operates_in=self.OPERATES)
+        s = snap(
+            m("accept", "st", "performer", "br"),
+            m("accept", "st", "contributor"),
+            operates_in=self.OPERATES,
+        )
         view = next(v for v in an.views(s) if v.capability_id == "accept")
         assert [p.outside_operating_geographies for p in view.performers] == [True]
         assert view.performers[0].geography is not None
@@ -188,7 +191,9 @@ class TestFindings:
 
     def test_contributors_change_nothing(self) -> None:
         base = an.findings(snap())
-        with_contrib = an.findings(snap(m("accept", "st", "contributor"), m("accept", "ec", "contributor")))
+        with_contrib = an.findings(
+            snap(m("accept", "st", "contributor"), m("accept", "ec", "contributor"))
+        )
         assert with_contrib == base
 
     def test_counts(self) -> None:
@@ -217,9 +222,9 @@ class TestFootprint:
         ]
         accept = sell.l2s[0].l3s[0]
         assert accept.capability.name == "Accept Payment"
-        assert [(p.org_unit.name, [g.name for g in p.geographies]) for p in accept.performed_by] == [
-            ("Stores", ["Germany"])
-        ]
+        assert [
+            (p.org_unit.name, [g.name for g in p.geographies]) for p in accept.performed_by
+        ] == [("Stores", ["Germany"])]
 
     def test_includes_descendant_units_attributed(self) -> None:
         fp = an.footprint(snap(m("payroll", "ops")), "rc")
@@ -229,7 +234,9 @@ class TestFootprint:
         assert [p.org_unit.name for p in l3.performed_by] == ["Store Ops"]
 
     def test_owns_and_contributes(self) -> None:
-        s = snap(m("pay", "st", "owner"), m("hr", "sfin", "owner"), m("accept", "ec", "contributor"))
+        s = snap(
+            m("pay", "st", "owner"), m("hr", "sfin", "owner"), m("accept", "ec", "contributor")
+        )
         fp = an.footprint(s, "rc")
         assert [(e.capability.name, e.org_unit.name) for e in fp.owns] == [
             ("Payments", "Stores"),
@@ -250,12 +257,17 @@ class TestFootprint:
 
 class TestExportBlock:
     def test_block_for_an_l3_with_inherited_owner(self) -> None:
-        s = snap(m("pay", "st", "owner"), m("accept", "ec", geo="de"), m("accept", "rc", "contributor"))
+        s = snap(
+            m("pay", "st", "owner"), m("accept", "ec", geo="de"), m("accept", "rc", "contributor")
+        )
         assert an.export_block(s, "accept") == {
             "owner": None,
             "effective_owner": {"id": "st", "name": "Stores", "inherited_from": "pay"},
             "performers": [
-                {"org_unit": {"id": "ec", "name": "E-commerce"}, "geography": {"id": "de", "name": "Germany"}}
+                {
+                    "org_unit": {"id": "ec", "name": "E-commerce"},
+                    "geography": {"id": "de", "name": "Germany"},
+                }
             ],
             "contributors": [{"org_unit": {"id": "rc", "name": "Retail Co"}}],
         }
@@ -264,8 +276,13 @@ class TestExportBlock:
         s = snap(m("pay", "st", "owner"))
         assert an.export_block(s, "pay")["owner"] == {"id": "st", "name": "Stores"}
         assert an.export_block(s, "pay")["effective_owner"] == {
-            "id": "st", "name": "Stores", "inherited_from": None
+            "id": "st",
+            "name": "Stores",
+            "inherited_from": None,
         }
         assert an.export_block(s, "payroll") == {
-            "owner": None, "effective_owner": None, "performers": [], "contributors": []
+            "owner": None,
+            "effective_owner": None,
+            "performers": [],
+            "contributors": [],
         }
