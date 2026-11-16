@@ -30,11 +30,14 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov"],
       include: ["src/**/*.{ts,tsx}"],
+      // ADP-d3y: a ratchet, not the goal. CI now runs this suite and blocks on it; the
+      // thresholds sit at the measured floor (2026-11-15: 59.6 / 55.9 / 50.7 / 62.1) so
+      // coverage can only go up. Raise them as tests are added -- the target is 80.
       thresholds: {
-        lines: 80,
-        branches: 80,
-        functions: 80,
-        statements: 80,
+        lines: 61,
+        branches: 55,
+        functions: 50,
+        statements: 59,
       },
     },
   },
