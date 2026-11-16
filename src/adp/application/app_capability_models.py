@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 AppCapLevel = Literal[1, 2, 3]
 
@@ -49,10 +49,30 @@ class LinkedCapRef(CapRef):
     path: list[CapRef] = []
 
 
-class AppRef(BaseModel):
+# 943-mapping-rationale: why an application realizes an application capability.
+# NULL = unclassified.
+Rationale = Literal["target", "tactical", "transitional", "redundant"]
+
+
+class GeoRef(BaseModel):
+    """A geography reference for display: id, name and ISO / M49 code."""
+
     model_config = ConfigDict(extra="forbid")
     id: str
     name: str
+    code: str | None = None
+
+
+class AppRef(BaseModel):
+    """An application realizing an application capability. The rationale, geography and hint
+    describe that realization (943); `hint` is the derived TIME-consistency note, or None."""
+
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    name: str
+    rationale: Rationale | None = None
+    geography: GeoRef | None = None
+    hint: str | None = None
 
 
 class ApplicationCapability(BaseModel):
@@ -135,6 +155,22 @@ class TechCapabilityLinkCreate(BaseModel):
 class RealizationCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
     app_id: str
+    rationale: Rationale | None = None
+    geography_id: str | None = None
+
+
+class RealizationUpdate(BaseModel):
+    """PATCH body: an omitted field is left unchanged; an explicit null clears it (943)."""
+
+    model_config = ConfigDict(extra="forbid")
+    rationale: Rationale | None = None
+    geography_id: str | None = None
+
+    @model_validator(mode="after")
+    def _not_empty(self) -> "RealizationUpdate":
+        if not self.model_fields_set:
+            raise ValueError("Send rationale, geography_id or both")
+        return self
 
 
 # ── Errors ────────────────────────────────────────────────────────────────────

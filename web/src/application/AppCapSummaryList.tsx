@@ -4,7 +4,7 @@
 
 import { useState } from "react";
 import type React from "react";
-import type { AppCapSummary } from "../api/appCapabilities";
+import type { AppCapSummary, AppRef } from "../api/appCapabilities";
 import {
   MISSING_TECHNICAL_CAPABILITY,
   useAppCapsByApplication,
@@ -14,13 +14,30 @@ import {
 import { useOpenAppCapability } from "./appCapNav";
 import { useBusinessTechnology } from "../api/capAnalysis";
 import { BandChip, CapLink, CapWithPath } from "./capAnalysisUi";
+import { RationaleChip, geographyLabel } from "./RealizationList";
+import { rationaleLabel } from "./realizationRationale";
+
+/** This application's rationale and geography on one of its realizations (943). */
+function OwnRealization({ realization }: { realization: AppRef | undefined }): React.ReactElement | null {
+  if (!realization) return null;
+  return (
+    <span style={{ marginLeft: 6, display: "inline-flex", gap: 4, alignItems: "center" }}>
+      <RationaleChip rationale={realization.rationale} />
+      <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{geographyLabel(realization.geography)}</span>
+      {realization.hint && <span style={{ fontSize: 11, color: "var(--warn)" }}>⚠ {realization.hint}</span>}
+    </span>
+  );
+}
 
 export function AppCapSummaryItems({
   items,
   showRealizedBy = false,
+  forAppId,
 }: {
   items: AppCapSummary[];
   showRealizedBy?: boolean;
+  /** 943: on an application's own list, show that application's rationale and geography. */
+  forAppId?: string;
 }): React.ReactElement {
   const open = useOpenAppCapability();
   if (items.length === 0) {
@@ -55,9 +72,12 @@ export function AppCapSummaryItems({
             )}
             {showRealizedBy && (
               <span style={{ fontSize: 11, color: "var(--ink-3)", marginLeft: 6 }}>
-                {s.realized_by.length > 0 ? `realized by ${s.realized_by.map((a) => a.name).join(", ")}` : "no application yet"}
+                {s.realized_by.length > 0
+                  ? `realized by ${s.realized_by.map((a) => (a.rationale ? `${a.name} (${rationaleLabel(a.rationale)}${a.geography ? `, ${a.geography.name}` : ""})` : a.name)).join(", ")}`
+                  : "no application yet"}
               </span>
             )}
+            {forAppId && <OwnRealization realization={s.realized_by.find((a) => a.id === forAppId)} />}
           </li>
         );
       })}
@@ -147,7 +167,7 @@ export function ApplicationRealizes({ appId }: { appId: string }): React.ReactEl
       {isLoading ? (
         <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Loading…</div>
       ) : (
-        <AppCapSummaryItems items={data ?? []} />
+        <AppCapSummaryItems items={data ?? []} forAppId={appId} />
       )}
       <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 4 }}>
         Edited on the application capability (Applications → Capabilities).

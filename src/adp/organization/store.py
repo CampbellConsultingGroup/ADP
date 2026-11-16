@@ -16,7 +16,7 @@ import logging
 import uuid
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -455,6 +455,34 @@ async def get_org_unit(ou_id: str, session: AsyncSession) -> OrgUnitDetail | Non
         applications=[Ref(id=a.id, name=a.name, level=0) for a in apps],
         geographies=[Ref(id=g.id, name=g.name, level=g.level) for g in geos],
     )
+
+
+class GeographyInfo(NamedTuple):
+    """One row of the geography index (943-mapping-rationale)."""
+
+    parent_id: str | None
+    name: str
+    code: str | None
+
+
+async def geography_level(geo_id: str, session: AsyncSession) -> int | None:
+    """The geography's level (1 Global, 2 region, 3 country), or None if it doesn't exist.
+
+    Public and read-only: the application store validates a realization's geography with it."""
+    return (
+        await session.execute(sa.select(_geographies.c.level).where(_geographies.c.id == geo_id))
+    ).scalar_one_or_none()
+
+
+async def geography_index(session: AsyncSession) -> dict[str, GeographyInfo]:
+    """Every geography by id, with parent, name and code -- one query. Used for scope
+    containment and display by the application capability analysis (943)."""
+    rows = await session.execute(
+        sa.select(
+            _geographies.c.id, _geographies.c.parent_id, _geographies.c.name, _geographies.c.code
+        )
+    )
+    return {r.id: GeographyInfo(r.parent_id, r.name, r.code) for r in rows}
 
 
 async def _require_geography(geo_id: str | None, session: AsyncSession) -> None:

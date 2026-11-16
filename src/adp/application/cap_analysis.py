@@ -19,11 +19,11 @@ is stored (spec FR-022, guard test).
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 from decimal import Decimal
 
-from adp.application.app_capability_models import AppRef, CapRef, LinkedCapRef
+from adp.application.app_capability_models import AppRef, CapRef, GeoRef, LinkedCapRef
 from adp.application.cap_analysis_models import (
     LIFECYCLE_ORDER,
     RISK_ORDER,
@@ -41,6 +41,11 @@ from adp.application.cap_analysis_models import (
     ImpactResult,
     LifecycleBand,
     OverlapEntry,
+    OverlapReason,
+    RealizationMapping,
+    RedundantApp,
+    RedundantEntry,
+    RedundantGroup,
     RiskBand,
     RiskRollup,
     SharedEntry,
@@ -54,6 +59,24 @@ RETIRED = "retired"
 _HEALTH_KEYS = ("1", "2", "3", "4", "5", "unassessed", "no_data")
 _RISK_KEYS = ("high", "medium", "low", "unknown", "no_data")
 _EXPOSURE_KEYS = (*LIFECYCLE_ORDER, "no_data")
+
+
+# ── Mapping rationale (943) ───────────────────────────────────────────────────
+
+# A target mapping on an application TIME says to eliminate or migrate, or a redundant mapping
+# on one TIME says to invest in, is worth a second look. Advisory only (943 FR-013).
+_HINTS: dict[tuple[str, str], str] = {
+    ("target", "Eliminate"): "TIME says Eliminate",
+    ("target", "Migrate"): "TIME says Migrate",
+    ("redundant", "Invest"): "TIME says Invest",
+}
+
+
+def consistency_hint(rationale: str | None, time_classification: str | None) -> str | None:
+    """The non-blocking hint where a mapping's rationale and its application's TIME disagree."""
+    if rationale is None or time_classification is None:
+        return None
+    return _HINTS.get((rationale, time_classification))
 
 
 # ── Snapshot ──────────────────────────────────────────────────────────────────
@@ -79,6 +102,24 @@ class AppInfo:
     name: str
     lifecycle_status: str
     health_score: int | None
+    time_classification: str | None = None
+    r_strategy: str | None = None
+
+
+@dataclass(frozen=True)
+class Realization:
+    """943: why and where an application realizes an application capability (None = unclassified
+    / everywhere)."""
+
+    rationale: str | None = None
+    geography_id: str | None = None
+
+
+@dataclass(frozen=True)
+class GeoInfo:
+    parent_id: str | None
+    name: str
+    code: str | None
 
 
 @dataclass(frozen=True)
@@ -101,6 +142,10 @@ class CapabilitySnapshot:
     cost: Mapping[str, Decimal]
     risk_visible: bool
     cost_visible: bool
+    # 943: keyed (app_capability_id, app_id); a missing key reads as unclassified, everywhere.
+    realizations: Mapping[tuple[str, str], Realization] = field(default_factory=dict)
+    # 943: only populated when some realization names a geography (research R4).
+    geographies: Mapping[str, GeoInfo] = field(default_factory=dict)
 
 
 # ── Tree helpers ──────────────────────────────────────────────────────────────
@@ -492,8 +537,138 @@ def technology_dependencies(
 # ── Findings (US5) ────────────────────────────────────────────────────────────
 
 
+def _realization(snapshot: CapabilitySnapshot, ac: str, app_id: str) -> Realization:
+    return snapshot.realizations.get((ac, app_id), Realization())
+
+
+def _geo_ref(snapshot: CapabilitySnapshot, geo_id: str | None) -> GeoRef | None:
+    """None for no geography, and for a dangling id (it reads as everywhere, research R3)."""
+    info = snapshot.geographies.get(geo_id) if geo_id else None
+    return GeoRef(id=geo_id, name=info.name, code=info.code) if info and geo_id else None
+
+
+def _ancestors(geo_id: str, snapshot: CapabilitySnapshot) -> set[str]:
+    out: set[str] = set()
+    current: str | None = geo_id
+    while current is not None and current not in out and current in snapshot.geographies:
+        out.add(current)
+        current = snapshot.geographies[current].parent_id
+    return out
+
+
+def _scopes_overlap(a: str | None, b: str | None, snapshot: CapabilitySnapshot) -> bool:
+    """Two scopes overlap when either is everywhere, or one geography equals or contains the
+    other (942's containment, both ways). An unknown geography counts as everywhere."""
+    if a not in snapshot.geographies or b not in snapshot.geographies:
+        return True
+    assert a is not None and b is not None
+    return a in _ancestors(b, snapshot) or b in _ancestors(a, snapshot)
+
+
+def _mapping(snapshot: CapabilitySnapshot, ac: str, app_id: str) -> RealizationMapping:
+    r = _realization(snapshot, ac, app_id)
+    return RealizationMapping(
+        via=_ref(snapshot.app_caps[ac]),
+        rationale=r.rationale,  # type: ignore[arg-type]
+        geography=_geo_ref(snapshot, r.geography_id),
+        hint=consistency_hint(r.rationale, snapshot.apps[app_id].time_classification),
+    )
+
+
+def _overlap_reasons(
+    apps: Mapping[str, set[str]], snapshot: CapabilitySnapshot
+) -> list[OverlapReason]:
+    """943 FR-007/FR-008 over every (application, application capability) mapping."""
+    by_name = sorted(apps, key=lambda a: (snapshot.apps[a].name.lower(), a))
+    rows = [(app, ac, _realization(snapshot, ac, app)) for app in by_name for ac in apps[app]]
+    unclassified = [a for a in by_name if any(r.rationale is None for x, _, r in rows if x == a)]
+    redundant = [
+        a for a in by_name if any(r.rationale == "redundant" for x, _, r in rows if x == a)
+    ]
+    targets = [(app, r.geography_id) for app, _, r in rows if r.rationale == "target"]
+    competing: set[str] = set()
+    for i, (a, ga) in enumerate(targets):
+        for b, gb in targets[i + 1 :]:
+            if a != b and _scopes_overlap(ga, gb, snapshot):
+                competing.update((a, b))
+    reasons: list[OverlapReason] = []
+    if unclassified:
+        reasons.append(OverlapReason(code="unclassified", application_ids=unclassified))
+    if redundant:
+        reasons.append(OverlapReason(code="redundant", application_ids=redundant))
+    if not unclassified and not redundant and not targets:
+        reasons.append(OverlapReason(code="no_target", application_ids=[]))
+    if competing:
+        reasons.append(
+            OverlapReason(
+                code="competing_targets", application_ids=[a for a in by_name if a in competing]
+            )
+        )
+    return reasons
+
+
+def _redundant_groups(snapshot: CapabilitySnapshot) -> list[RedundantGroup]:
+    """943 FR-012: redundant mappings of non-retired applications, by business L3 they reach."""
+    entries_by_ac: dict[str, list[RedundantEntry]] = {}
+    for (ac, app_id), r in snapshot.realizations.items():
+        info = snapshot.apps.get(app_id)
+        if (
+            r.rationale != "redundant"
+            or info is None
+            or info.lifecycle_status == RETIRED
+            or ac not in snapshot.app_caps
+            or app_id not in snapshot.ac_to_apps.get(ac, frozenset())
+        ):
+            continue
+        entries_by_ac.setdefault(ac, []).append(
+            RedundantEntry(
+                application=RedundantApp(
+                    id=app_id,
+                    name=info.name,
+                    time_classification=info.time_classification,  # type: ignore[arg-type]
+                    r_strategy=info.r_strategy,  # type: ignore[arg-type]
+                ),
+                app_capability=_linked(snapshot.app_caps[ac], snapshot.app_caps),
+                geography=_geo_ref(snapshot, r.geography_id),
+                hint=consistency_hint(r.rationale, info.time_classification),
+            )
+        )
+    if not entries_by_ac:
+        return []
+
+    def ordered(entries: list[RedundantEntry]) -> list[RedundantEntry]:
+        return sorted(
+            entries,
+            key=lambda e: (
+                e.application.name.lower(),
+                e.app_capability.name.lower(),
+                e.app_capability.id,
+            ),
+        )
+
+    groups: list[RedundantGroup] = []
+    reached: set[str] = set()
+    for b in _by_name(n for n in snapshot.business.values() if n.level == 3):
+        acs = [a for a in snapshot.biz_to_ac.get(b.id, ()) if a in entries_by_ac]
+        if acs:
+            reached.update(acs)
+            groups.append(
+                RedundantGroup(
+                    business=_linked(b, snapshot.business),
+                    entries=ordered([e for a in acs for e in entries_by_ac[a]]),
+                )
+            )
+    orphans = [e for a, es in entries_by_ac.items() if a not in reached for e in es]
+    if orphans:
+        groups.append(RedundantGroup(business=None, entries=ordered(orphans)))
+    return groups
+
+
 def findings(snapshot: CapabilitySnapshot) -> CapabilityFindings:
-    """FR-015..FR-017. Overlaps ignore Retired applications. No cost or risk content."""
+    """FR-015..FR-017. Overlaps ignore Retired applications. No cost or risk content.
+
+    943: each overlap carries its mappings' rationale and geography, a derived status and the
+    reasons it needs attention (needs-attention first); ``redundant`` lists redundant mappings."""
     biz_l3 = _by_name(n for n in snapshot.business.values() if n.level == 3)
     ac_l3 = _by_name(n for n in snapshot.app_caps.values() if n.level == 3)
 
@@ -508,11 +683,20 @@ def findings(snapshot: CapabilitySnapshot) -> CapabilityFindings:
                 if info is not None and info.lifecycle_status != RETIRED:
                     apps.setdefault(app_id, set()).add(ac)
         if len(apps) >= 2:
+            vias = _app_vias(apps, snapshot)
+            for v in vias:
+                v.mappings = [_mapping(snapshot, a.id, v.id) for a in v.via]
+            reasons = _overlap_reasons(apps, snapshot)
             overlaps.append(
                 OverlapEntry(
-                    business=_linked(b, snapshot.business), applications=_app_vias(apps, snapshot)
+                    business=_linked(b, snapshot.business),
+                    applications=vias,
+                    status="needs_attention" if reasons else "explained",
+                    reasons=reasons,
                 )
             )
+    # Needs attention first; stable within each section (already by business name).
+    overlaps.sort(key=lambda o: o.status != "needs_attention")
 
     business_by_ac: dict[str, set[str]] = {}
     for biz, acs in snapshot.biz_to_ac.items():
@@ -525,6 +709,7 @@ def findings(snapshot: CapabilitySnapshot) -> CapabilityFindings:
         return _linked(n, snapshot.app_caps)
 
     return CapabilityFindings(
+        redundant=_redundant_groups(snapshot),
         overlaps=overlaps,
         gaps=CapabilityGaps(
             business_without_app_capability=[

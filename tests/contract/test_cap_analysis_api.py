@@ -331,3 +331,35 @@ def json_text(body: dict) -> str:
     import json
 
     return json.dumps(body)
+
+
+# ── 943-mapping-rationale: overlap status, reasons and the redundant list ─────
+
+
+async def test_findings_overlap_status_and_redundant(ctx) -> None:
+    _, client, _ = ctx
+    body = (await client.get(f"{AN}/findings")).json()
+    overlap = body["overlaps"][0]
+    assert overlap["status"] == "needs_attention"
+    assert [r["code"] for r in overlap["reasons"]] == ["unclassified"]
+    assert body["redundant"] == []
+    vias = {a["name"]: (a["id"], a["mappings"][0]["via"]["id"]) for a in overlap["applications"]}
+    assert all(a["mappings"][0]["rationale"] is None for a in overlap["applications"])
+
+    async def classify(name: str, rationale: str) -> None:
+        app_id, ac_id = vias[name]
+        resp = await client.patch(
+            f"{AC}/{ac_id}/applications/{app_id}", json={"rationale": rationale}
+        )
+        assert resp.status_code == 200, resp.text
+
+    await classify("Store POS", "target")
+    await classify("Commerce", "tactical")
+    overlap = (await client.get(f"{AN}/findings")).json()["overlaps"][0]
+    assert (overlap["status"], overlap["reasons"]) == ("explained", [])
+
+    await classify("Commerce", "redundant")
+    body = (await client.get(f"{AN}/findings")).json()
+    assert [r["code"] for r in body["overlaps"][0]["reasons"]] == ["redundant"]
+    assert [g["business"]["name"] for g in body["redundant"]] == ["Apply Promotions"]
+    assert body["redundant"][0]["entries"][0]["application"]["name"] == "Commerce"

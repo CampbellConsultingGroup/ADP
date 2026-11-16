@@ -21,9 +21,56 @@ const FINDINGS: CapabilityFindings = {
   overlaps: [
     {
       business: { ...ref("b4", "Apply Promotions"), path },
+      status: "needs_attention",
+      reasons: [{ code: "unclassified", application_ids: ["commerce"] }],
       applications: [
-        { id: "commerce", name: "Commerce Cloud", via: [ref("ac9", "Online Promotion Evaluation")] },
-        { id: "pos", name: "Store POS", via: [ref("ac2", "Price Rule Evaluation")] },
+        {
+          id: "commerce", name: "Commerce Cloud", via: [ref("ac9", "Online Promotion Evaluation")],
+          mappings: [{ via: ref("ac9", "Online Promotion Evaluation"), rationale: null, geography: null, hint: null }],
+        },
+        {
+          id: "pos", name: "Store POS", via: [ref("ac2", "Price Rule Evaluation")],
+          mappings: [{ via: ref("ac2", "Price Rule Evaluation"), rationale: "target", geography: null, hint: "TIME says Migrate" }],
+        },
+      ],
+    },
+    {
+      business: { ...ref("b6", "Accept Payment"), path },
+      status: "explained",
+      reasons: [],
+      applications: [
+        {
+          id: "pos", name: "Store POS", via: [ref("ac4", "Tender Authorization")],
+          mappings: [{ via: ref("ac4", "Tender Authorization"), rationale: "target", geography: null, hint: null }],
+        },
+        {
+          id: "pix", name: "Pix Gateway", via: [ref("ac4", "Tender Authorization")],
+          mappings: [{ via: ref("ac4", "Tender Authorization"), rationale: "tactical", geography: { id: "br", name: "Brazil", code: "BR" }, hint: null }],
+        },
+      ],
+    },
+  ],
+  redundant: [
+    {
+      business: { ...ref("b4", "Apply Promotions"), path },
+      entries: [
+        {
+          application: { id: "old", name: "Old Promo Engine", time_classification: "Invest", r_strategy: "Retain" },
+          app_capability: { ...ref("ac9", "Online Promotion Evaluation"), path: [] },
+          geography: { id: "eu", name: "Europe", code: null },
+          hint: "TIME says Invest",
+        },
+      ],
+    },
+    {
+      business: null,
+      entries: [
+        {
+          application: { id: "x", name: "Orphan Tool", time_classification: null, r_strategy: null },
+          app_capability: { ...ref("ac8", "Loose Capability"), path: [] },
+          geography: null,
+          hint: null,
+        },
       ],
     },
   ],
@@ -53,6 +100,52 @@ describe("CapFindingsViews", () => {
     expect(within(view).getByText("Commerce Cloud")).toBeTruthy();
     expect(within(view).getByText("Online Promotion Evaluation")).toBeTruthy();
     expect(within(view).getByText("Price Rule Evaluation")).toBeTruthy();
+  });
+
+  it("splits overlaps into needs attention (first) and explained, with reasons and each mapping's rationale (943)", () => {
+    render(<CapFindingsViews mode="overlaps" />);
+    const needs = screen.getByRole("region", { name: "Needs attention (1)" });
+    const explained = screen.getByRole("region", { name: "Explained (1)" });
+    expect(needs.compareDocumentPosition(explained) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(needs).getByText("Apply Promotions")).toBeTruthy();
+    expect(within(needs).getByText("Unclassified: Commerce Cloud")).toBeTruthy();
+    expect(within(needs).getByText(/TIME says Migrate/)).toBeTruthy();
+    expect(within(explained).getByText("Accept Payment")).toBeTruthy();
+    expect(within(explained).getByText("Tactical")).toBeTruthy();
+    expect(within(explained).getByText(/Brazil/)).toBeTruthy();
+  });
+
+  it.each([
+    [{ code: "redundant" as const, application_ids: ["commerce"] }, "Redundant: Commerce Cloud"],
+    [{ code: "no_target" as const, application_ids: [] }, "No target"],
+    [{ code: "competing_targets" as const, application_ids: ["commerce", "pos"] }, "Competing targets: Commerce Cloud, Store POS"],
+  ])("labels the %o reason", (reason, text) => {
+    mockFindings({ ...FINDINGS, overlaps: [{ ...FINDINGS.overlaps[0], reasons: [reason] }] });
+    render(<CapFindingsViews mode="overlaps" />);
+    expect(screen.getByText(text)).toBeTruthy();
+  });
+
+  it("lists redundant mappings by business capability, with TIME / 7R and the hint (943)", async () => {
+    const openAppCap = vi.fn();
+    render(
+      <AppCapNavContext.Provider value={openAppCap}>
+        <CapFindingsViews mode="redundant" />
+      </AppCapNavContext.Provider>,
+    );
+    const view = screen.getByLabelText("Redundant");
+    expect(within(view).getByText("Old Promo Engine")).toBeTruthy();
+    expect(within(view).getByText(/TIME Invest · 7R Retain/)).toBeTruthy();
+    expect(within(view).getByText(/TIME says Invest/)).toBeTruthy();
+    expect(within(view).getByText(/Europe/)).toBeTruthy();
+    expect(within(view).getByText("Not linked to a business capability")).toBeTruthy();
+    await userEvent.click(within(view).getByRole("button", { name: "Online Promotion Evaluation" }));
+    expect(openAppCap).toHaveBeenCalledWith("ac9");
+  });
+
+  it("says when nothing is marked redundant", () => {
+    mockFindings({ ...FINDINGS, redundant: [] });
+    render(<CapFindingsViews mode="redundant" />);
+    expect(screen.getByText(/No mapping is marked redundant/)).toBeTruthy();
   });
 
   it("shows the three gap lists with paths and empty states", () => {
@@ -91,7 +184,7 @@ describe("CapFindingsViews", () => {
       </AppCapNavContext.Provider>,
     );
     await user.click(screen.getByRole("button", { name: "Apply Promotions" }));
-    await user.click(screen.getByRole("button", { name: "Store POS" }));
+    await user.click(screen.getAllByRole("button", { name: "Store POS" })[0]);
     await user.click(screen.getByRole("button", { name: "Price Rule Evaluation" }));
     expect(nav.openBusinessCapability).toHaveBeenCalledWith("b4");
     expect(nav.openApplication).toHaveBeenCalledWith("pos");

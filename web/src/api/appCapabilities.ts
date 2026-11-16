@@ -20,9 +20,28 @@ export interface LinkedCapRef extends CapRef {
   path: CapRef[];
 }
 
+/** 943-mapping-rationale: why an application realizes an application capability. null = unclassified. */
+export type Rationale = "target" | "tactical" | "transitional" | "redundant";
+
+export interface GeoRef {
+  id: string;
+  name: string;
+  code: string | null;
+}
+
+/** An application realizing an application capability. On a realization list, `rationale`,
+ * `geography` (null = everywhere) and the derived TIME `hint` describe that realization (943). */
 export interface AppRef {
   id: string;
   name: string;
+  rationale?: Rationale | null;
+  geography?: GeoRef | null;
+  hint?: string | null;
+}
+
+export interface RealizationAttrs {
+  rationale?: Rationale | null;
+  geography_id?: string | null;
 }
 
 export interface ApplicationCapability {
@@ -171,5 +190,20 @@ export function useAddAppCapLink() {
 export function useRemoveAppCapLink() {
   return useInvalidating(({ id, kind, targetId }: { id: string; kind: LinkKind; targetId: string }) =>
     apiMutation<void>("DELETE", `${BASE}/${id}/${LINK_PATH[kind]}/${targetId}`),
+  );
+}
+
+/** 943: add a realization with an optional rationale and geography. */
+export function useAddRealization() {
+  return useInvalidating(({ id, appId, attrs }: { id: string; appId: string; attrs?: RealizationAttrs }) =>
+    apiMutation<ApplicationCapabilityDetail>("POST", `${BASE}/${id}/applications`, { app_id: appId, ...(attrs ?? {}) }),
+  );
+}
+
+/** 943: set or clear a realization's rationale and/or geography. Send only the fields to change;
+ * null clears. Saves at once (the selects save on choose). */
+export function useUpdateRealization() {
+  return useInvalidating(({ id, appId, attrs }: { id: string; appId: string; attrs: RealizationAttrs }) =>
+    apiMutation<ApplicationCapabilityDetail>("PATCH", `${BASE}/${id}/applications/${appId}`, attrs),
   );
 }

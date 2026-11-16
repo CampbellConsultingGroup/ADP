@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import type { Adoption, ConformanceStatus } from "../api/patterns";
 import type { CapabilityFindings, CapabilityRollup, CapabilityRollupResponse, LifecycleBand } from "../api/capAnalysis";
-import { adoptionsNeedingAttention, exposedCapabilities, gapCount } from "./architectureHealth";
+import { adoptionsNeedingAttention, exposedCapabilities, gapCount, overlapCounts } from "./architectureHealth";
 
 function adoption(name: string, status: ConformanceStatus | null): Adoption {
   return {
@@ -85,8 +85,29 @@ describe("gapCount", () => {
       },
       shared: [],
       shared_threshold: 3,
+      redundant: [],
     };
     expect(gapCount(findings)).toBe(6);
     expect(gapCount(undefined)).toBe(0);
+  });
+});
+
+describe("overlapCounts (943)", () => {
+  it("counts overlaps needing attention and explained ones separately", () => {
+    const o = (status: "needs_attention" | "explained") => ({
+      business: { id: status, name: status, level: 3, path: [] },
+      applications: [],
+      status,
+      reasons: [],
+    });
+    const findings = {
+      overlaps: [o("needs_attention"), o("needs_attention"), o("explained")],
+      gaps: { business_without_app_capability: [], app_capability_without_business: [], app_capability_without_application: [] },
+      shared: [],
+      shared_threshold: 3,
+      redundant: [],
+    };
+    expect(overlapCounts(findings)).toEqual({ needsAttention: 2, explained: 1 });
+    expect(overlapCounts(undefined)).toEqual({ needsAttention: 0, explained: 0 });
   });
 });

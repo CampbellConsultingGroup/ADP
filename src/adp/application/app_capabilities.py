@@ -48,8 +48,11 @@ from adp.application.app_capability_models import (
     CapRef,
     DuplicateAppCapLinkError,
     DuplicateSiblingNameError,
+    GeoRef,
     LinkedCapRef,
+    Rationale,
 )
+from adp.application.cap_analysis import consistency_hint
 from adp.application.store import (
     _app_cap_realizations,
     _app_cap_tech_links,
@@ -279,11 +282,27 @@ def _linked(ids: list[str], tree: dict[str, Any]) -> list[LinkedCapRef]:
     return sorted(out, key=lambda c: c.name.lower())
 
 
+async def _geo_refs(geo_ids: set[str], session: AsyncSession) -> dict[str, GeoRef]:
+    """Resolve realization geographies (943). Queries the organization store's geography index
+    only when some realization names one; a dangling id is simply absent (reads as everywhere)."""
+    if not geo_ids:
+        return {}
+    from adp.organization import store as ostore
+
+    index = await ostore.geography_index(session)
+    return {g: GeoRef(id=g, name=index[g].name, code=index[g].code) for g in geo_ids if g in index}
+
+
 async def _apps_by_cap(
     session: AsyncSession, ac_ids: list[str] | None = None
 ) -> dict[str, list[AppRef]]:
     q = sa.select(
-        _app_cap_realizations.c.app_capability_id, _applications.c.id, _applications.c.name
+        _app_cap_realizations.c.app_capability_id,
+        _applications.c.id,
+        _applications.c.name,
+        _applications.c.time_classification,
+        _app_cap_realizations.c.rationale,
+        _app_cap_realizations.c.geography_id,
     ).select_from(
         _app_cap_realizations.join(
             _applications, _app_cap_realizations.c.app_id == _applications.c.id
@@ -291,9 +310,19 @@ async def _apps_by_cap(
     )
     if ac_ids is not None:
         q = q.where(_app_cap_realizations.c.app_capability_id.in_(ac_ids))
+    rows = (await session.execute(q)).all()
+    geos = await _geo_refs({r.geography_id for r in rows if r.geography_id}, session)
     out: dict[str, list[AppRef]] = defaultdict(list)
-    for ac_id, app_id, name in (await session.execute(q)).all():
-        out[ac_id].append(AppRef(id=app_id, name=name))
+    for r in rows:
+        out[r.app_capability_id].append(
+            AppRef(
+                id=r.id,
+                name=r.name,
+                rationale=r.rationale,
+                geography=geos.get(r.geography_id) if r.geography_id else None,
+                hint=consistency_hint(r.rationale, r.time_classification),
+            )
+        )
     for refs in out.values():
         refs.sort(key=lambda a: a.name.lower())
     return out
@@ -400,16 +429,84 @@ async def remove_tech_link(ac_id: str, tc_id: str, session: AsyncSession) -> boo
     )
 
 
-async def add_realization(ac_id: str, app_id: str, session: AsyncSession) -> None:
+RULE_NO_GLOBAL = "No geography already means everywhere; choose a region or country"
+
+
+async def _validate_geography(geo_id: str | None, session: AsyncSession) -> None:
+    """A realization's geography must exist and be a region or country, never Global (943)."""
+    if geo_id is None:
+        return
+    from adp.organization import store as ostore
+
+    level = await ostore.geography_level(geo_id, session)
+    if level is None:
+        raise CapabilityLevelError(f"Geography {geo_id!r} not found")
+    if level == 1:
+        raise CapabilityLevelError(RULE_NO_GLOBAL)
+
+
+async def add_realization(
+    ac_id: str,
+    app_id: str,
+    session: AsyncSession,
+    *,
+    rationale: Rationale | None = None,
+    geography_id: str | None = None,
+) -> None:
     await _require_l3(ac_id, session)
     app = (
         await session.execute(sa.select(_applications.c.id).where(_applications.c.id == app_id))
     ).first()
     if app is None:
         raise AppCapNotFoundError(f"Application {app_id!r} not found")
+    await _validate_geography(geography_id, session)
     await _insert_link(
         _app_cap_realizations, {"app_capability_id": ac_id, "app_id": app_id}, session
     )
+    if rationale is not None or geography_id is not None:
+        await session.execute(
+            _app_cap_realizations.update()
+            .where(_realization(ac_id, app_id))
+            .values(rationale=rationale, geography_id=geography_id)
+        )
+
+
+def _realization(ac_id: str, app_id: str) -> Any:
+    return sa.and_(
+        _app_cap_realizations.c.app_capability_id == ac_id,
+        _app_cap_realizations.c.app_id == app_id,
+    )
+
+
+_Attrs = tuple[str | None, str | None]  # (rationale, geography_id)
+
+
+async def update_realization(
+    ac_id: str, app_id: str, changes: dict[str, Any], session: AsyncSession
+) -> tuple[_Attrs, _Attrs]:
+    """Set or clear a realization's rationale and/or geography (943). ``changes`` holds only the
+    fields the caller sent; an explicit None clears. Returns (old, new) for the audit line."""
+    row = (
+        await session.execute(
+            sa.select(
+                _app_cap_realizations.c.rationale, _app_cap_realizations.c.geography_id
+            ).where(_realization(ac_id, app_id))
+        )
+    ).first()
+    if row is None:
+        raise AppCapNotFoundError("Link not found")
+    if "geography_id" in changes:
+        await _validate_geography(changes["geography_id"], session)
+    values = {k: changes[k] for k in ("rationale", "geography_id") if k in changes}
+    await session.execute(
+        _app_cap_realizations.update().where(_realization(ac_id, app_id)).values(**values)
+    )
+    old: _Attrs = (row.rationale, row.geography_id)
+    new: _Attrs = (
+        values.get("rationale", row.rationale),
+        values.get("geography_id", row.geography_id),
+    )
+    return old, new
 
 
 async def remove_realization(ac_id: str, app_id: str, session: AsyncSession) -> bool:

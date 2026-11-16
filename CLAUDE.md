@@ -115,6 +115,7 @@ Auto-generated from all feature plans. Last updated: 2026-11-14 (934-pattern-met
 - PostgreSQL 16. Migration `043` (`down_revision="042"`) adds two new tables and re-creates one CHECK constraint on `applications`. (933-agent-registry)
 - Python 3.12 runtime, 3.11+ compatible. + Pydantic v2 and `pyyaml>=6.0` (both existing). **One new runtime dependency:** `cel-expr-python==0.1.4`, pinned exactly (research D1). It ships cp311/cp312 manylinux_2_28 wheels and has no transitive dependencies. (934-pattern-metamodel)
 
+- Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; mapping rationale (target/tactical/transitional/redundant) + optional geography on 937's app_capability_realizations, migration `051` (2 nullable columns, CHECK, FK SET NULL in the migration only); 938 overlaps derive needs_attention/explained + reasons on read (943-mapping-rationale)
 - Python 3.12 (3.11+) and TypeScript 5.x + React 18 (existing). + FastAPI, SQLAlchemy 2 async Core, Alembic, Pydantic v2, TanStack Query v5. All existing; **zero new packages**. (938-capability-model-analysis)
 - Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; new `adp.organization` package (org units + geography, routes under `/api/v1/business/`), ISO 3166/UN M49 data committed as `src/adp/organization/data/geographies.json`, migration `048` (org_units, geographies seeded, org_unit_geographies, applications.owning_org_unit_id) (940-org-units-geography)
 - Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; capability <-> org unit mappings (owner L1/L2 one per capability, performer L3 + optional geography, contributor L3) in `adp.organization.cap_mappings` + pure `cap_org_analysis` (effective owner, findings, footprint derived on read, never stored), migration `049` (capability_org_mappings) (941-capability-org-mappings)
@@ -170,6 +171,43 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 943-mapping-rationale: Implemented (ADP-55k.4, spec 4 of 4 in epic ADP-55k; clarify 2026-11-16 confirmed
+  all four defaults). 937's realization link (application capability L3 <-> application) gains an optional
+  `rationale` (target / tactical / transitional / redundant; NULL = unclassified) and an optional `geography_id`
+  (region or country; NULL = everywhere; Global refused with "No geography already means everywhere").
+  - Migration `051`: two nullable columns, a CHECK, and an FK SET NULL that exists ONLY in the migration. The
+    astore metadata declares a plain column, because geographies live on the organization metadata (940
+    precedent). A dangling id reads as everywhere, which gives SQLite parity.
+  - Writes: `POST /{ac_id}/applications` accepts both fields; new `PATCH /{ac_id}/applications/{app_id}`
+    (omitted = unchanged, explicit null clears, an empty body is a 422) logs
+    `app_capability.realization.update` old->new. Writes ride the WRITE_APPLICATION prefix rule.
+  - Validation goes through two new public read-only helpers, `ostore.geography_level` and
+    `ostore.geography_index` (application -> organization direction, lazy import).
+  - 938's pure `findings()` now gives each overlap `status` (needs_attention | explained), `reasons`
+    (unclassified, redundant, no_target, competing_targets) and `applications[].mappings`, ordered
+    needs-attention first.
+    - `no_target` is reported only when nothing is unclassified or redundant.
+    - competing_targets = 2+ targets of DIFFERENT applications whose scopes overlap: either is
+      everywhere, or one geography contains the other.
+  - `findings()` also returns `redundant[]`, grouped by business L3 (null group last), with TIME, 7R and
+    `consistency_hint`: target + Eliminate/Migrate, or redundant + Invest. The hint is advisory only and
+    server-side only; `realized_by` entries carry rationale, geography and hint too.
+  - The snapshot reads the geography index ONLY when some realization names a geography, so 938's query
+    count and its fixtures are unchanged. The guard test forbids status/reason columns.
+  - UI:
+    - `RealizationList.tsx` replaces the generic "Realized by applications" list. Rationale and geography
+      selects save on choose (the ADP-w7z convention); the multi-field add row keeps a Link button.
+    - Overlaps tab: "Needs attention (n)" / "Explained (n)", with reason chips.
+    - A fourth "Redundant" tab.
+    - The application's own capability list shows its rationale chip.
+    - The Governance Overlaps tile counts needs_attention only, with "n explained" beneath.
+  - Export: `realizations[]` on application capability files (`realized_by_application_ids` kept).
+    Seed phase G (not run locally).
+  - Gotchas:
+    - fixtures needing geographies create astore metadata then ostore (`checkfirst` skips the mirrors);
+    - the speckit `update-agent-context.sh` truncated older Recent Changes entries here, so CLAUDE.md
+      entries are added by hand.
+  - Tests: 2596 backend, 816 frontend. See `specs/943-mapping-rationale/`.
 - 942-regional-assessments: Implemented (ADP-55k.3, spec 3 of 4 in epic ADP-55k; `/speckit-clarify` skipped,
   the spec's Assumptions stand). A business capability can be assessed per REGION or COUNTRY, never Global:
   a maturity score on the global 1-5 scale and/or a variant note, at most one per capability and geography

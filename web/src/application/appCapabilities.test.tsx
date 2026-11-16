@@ -150,6 +150,12 @@ describe("AppCapabilitiesView", () => {
     expect(screen.queryByRole("button", { name: "Add child to Tender Authorization" })).toBeNull();
   });
 
+  it("offers a Redundant tab beside Overlaps, Gaps and Shared (943)", () => {
+    wrap(<AppCapabilitiesView />);
+    const tabs = screen.getAllByRole("tab").map((t) => t.textContent);
+    expect(tabs.slice(-4)).toEqual(["Overlaps", "Gaps", "Shared", "Redundant"]);
+  });
+
   it("lists gaps and opens the selected capability", async () => {
     wrap(<AppCapabilitiesView />);
     await userEvent.click(screen.getByRole("tab", { name: "Missing technical capability (1)" }));
@@ -216,5 +222,35 @@ describe("read-only lists on other screens", () => {
     api.useAppCapsByApplication.mockReturnValue({ data: [summary], isLoading: false } as never);
     render(<ApplicationRealizes appId="pos" />);
     expect(screen.getByRole("region", { name: "Realizes application capabilities" }).textContent).toContain("Tender Authorization");
+  });
+
+  it("shows the application's own rationale, geography and hint on its list (943)", () => {
+    const classified: AppCapSummary = {
+      ...summary,
+      realized_by: [
+        { id: "pos", name: "Store POS", rationale: "target", geography: { id: "eu", name: "Europe", code: null }, hint: "TIME says Migrate" },
+        { id: "ecom", name: "Commerce Cloud", rationale: "redundant", geography: null, hint: null },
+      ],
+    };
+    api.useAppCapsByApplication.mockReturnValue({ data: [classified], isLoading: false } as never);
+    render(<ApplicationRealizes appId="pos" />);
+    const region = screen.getByRole("region", { name: "Realizes application capabilities" });
+    expect(region.textContent).toContain("Target");
+    expect(region.textContent).toContain("Europe");
+    expect(region.textContent).toContain("TIME says Migrate");
+    expect(region.textContent).not.toContain("Redundant");
+  });
+
+  it("names each realizing application's rationale on business capability rows (943)", () => {
+    const classified: AppCapSummary = {
+      ...summary,
+      realized_by: [
+        { id: "pos", name: "Store POS", rationale: "target", geography: null },
+        { id: "ecom", name: "Commerce Cloud", rationale: "tactical", geography: { id: "am", name: "Americas", code: null } },
+        { id: "x", name: "Old Till", rationale: null },
+      ],
+    };
+    render(<AppCapSummaryItems items={[classified]} showRealizedBy />);
+    expect(screen.getByText(/realized by Store POS \(Target\), Commerce Cloud \(Tactical, Americas\), Old Till/)).toBeTruthy();
   });
 });

@@ -14,7 +14,15 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.application import store as astore
-from adp.application.cap_analysis import AppInfo, CapabilitySnapshot, Node, RiskInfo, TechNode
+from adp.application.cap_analysis import (
+    AppInfo,
+    CapabilitySnapshot,
+    GeoInfo,
+    Node,
+    Realization,
+    RiskInfo,
+    TechNode,
+)
 from adp.application.store import (
     _app_cap_realizations,
     _app_cap_tech_links,
@@ -88,26 +96,59 @@ async def build_snapshot(
         _tech_caps,
         session,
     )
-    ac_to_apps = await _pairs(
-        _app_cap_realizations,
-        _app_cap_realizations.c.app_capability_id,
-        _app_cap_realizations.c.app_id,
-        _app_caps,
-        _applications,
-        session,
+    # One query gives both the realization pairs and their 943 rationale / geography.
+    real_rows = await session.execute(
+        sa.select(
+            _app_cap_realizations.c.app_capability_id,
+            _app_cap_realizations.c.app_id,
+            _app_cap_realizations.c.rationale,
+            _app_cap_realizations.c.geography_id,
+        ).select_from(
+            _app_cap_realizations.join(
+                _app_caps, _app_cap_realizations.c.app_capability_id == _app_caps.c.id
+            ).join(_applications, _app_cap_realizations.c.app_id == _applications.c.id)
+        )
     )
+    pairs: dict[str, set[str]] = {}
+    realizations: dict[tuple[str, str], Realization] = {}
+    for r in real_rows:
+        pairs.setdefault(r.app_capability_id, set()).add(r.app_id)
+        if r.rationale is not None or r.geography_id is not None:
+            realizations[(r.app_capability_id, r.app_id)] = Realization(r.rationale, r.geography_id)
+    ac_to_apps = {k: frozenset(v) for k, v in pairs.items()}
+
     app_rows = await session.execute(
         sa.select(
             _applications.c.id,
             _applications.c.name,
             _applications.c.lifecycle_status,
             _applications.c.health_score,
+            _applications.c.time_classification,
+            _applications.c.r_strategy,
         )
     )
     apps = {
-        r.id: AppInfo(r.id, r.name, r.lifecycle_status or "active", r.health_score)
+        r.id: AppInfo(
+            r.id,
+            r.name,
+            r.lifecycle_status or "active",
+            r.health_score,
+            r.time_classification,
+            r.r_strategy,
+        )
         for r in app_rows
     }
+
+    # 943 research R4: the geography tree only when some realization names a geography, so the
+    # query count (and every fixture without the organization tables) is unchanged otherwise.
+    geographies: dict[str, GeoInfo] = {}
+    if any(r.geography_id for r in realizations.values()):
+        from adp.organization import store as ostore
+
+        geographies = {
+            gid: GeoInfo(g.parent_id, g.name, g.code)
+            for gid, g in (await ostore.geography_index(session)).items()
+        }
 
     risk: dict[str, RiskInfo] = {}
     if risk_visible:
@@ -137,4 +178,6 @@ async def build_snapshot(
         cost=cost,
         risk_visible=risk_visible,
         cost_visible=cost_visible,
+        realizations=realizations,
+        geographies=geographies,
     )
