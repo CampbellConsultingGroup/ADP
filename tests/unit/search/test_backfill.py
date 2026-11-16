@@ -83,7 +83,12 @@ async def session(tmp_path):
         # 940: the organization tables, minus its narrow applications mirror (astore's wins).
         await conn.run_sync(
             lambda c: ostore._metadata.create_all(
-                c, tables=[t for t in ostore._metadata.sorted_tables if t.name not in ("applications", "business_capabilities")]
+                c,
+                tables=[
+                    t
+                    for t in ostore._metadata.sorted_tables
+                    if t.name not in ("applications", "business_capabilities")
+                ],
             )
         )
     factory = async_sessionmaker(engine, expire_on_commit=False)

@@ -115,7 +115,9 @@ class TestOwner:
         a, b = await _ou(session, "A"), await _ou(session, "B")
         t = ostore._capability_org_mappings
         await session.execute(
-            t.insert().values(id="x1", capability_id="pay", org_unit_id=a, role="owner", created_at=NOW)
+            t.insert().values(
+                id="x1", capability_id="pay", org_unit_id=a, role="owner", created_at=NOW
+            )
         )
         with pytest.raises(IntegrityError):
             await session.execute(

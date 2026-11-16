@@ -92,8 +92,12 @@ async def test_migration_049_constraints_and_cascades(migration_db_url):
     engine = create_async_engine(migration_db_url)
     try:
         async with engine.begin() as conn:
-            await conn.execute(sa.text(_CAP), {"id": "c1", "name": "Sell", "level": 1, "parent": None})
-            await conn.execute(sa.text(_CAP), {"id": "c2", "name": "Pay", "level": 2, "parent": "c1"})
+            await conn.execute(
+                sa.text(_CAP), {"id": "c1", "name": "Sell", "level": 1, "parent": None}
+            )
+            await conn.execute(
+                sa.text(_CAP), {"id": "c2", "name": "Pay", "level": 2, "parent": "c1"}
+            )
             await conn.execute(
                 sa.text(_CAP), {"id": "c3", "name": "Accept Payment", "level": 3, "parent": "c2"}
             )
