@@ -23,6 +23,8 @@ vi.mock("../api/organization", async (orig) => ({
   useCreateGeography: vi.fn(),
   useDeleteGeography: vi.fn(),
   useResolveUnmatched: vi.fn(),
+  useOrgUnitFootprint: vi.fn(),
+  useCapabilityOrgFindings: vi.fn(),
 }));
 vi.mock("../auth/AuthProvider", async (orig) => ({
   ...(await orig<typeof import("../auth/AuthProvider")>()),
@@ -77,6 +79,22 @@ function setup(role = "enterprise_architect", detail: Partial<OrgUnitDetail> = {
   api.useCreateGeography.mockReturnValue(m("createGeo"));
   api.useDeleteGeography.mockReturnValue(m("deleteGeo"));
   api.useResolveUnmatched.mockReturnValue(m("resolve"));
+  api.useOrgUnitFootprint.mockReturnValue({
+    data: { org_unit: UNITS[1], includes_descendants: true, l3_total: 0, performs: [], owns: [], contributes: [] },
+    isLoading: false,
+    error: null,
+  } as never);
+  api.useCapabilityOrgFindings.mockReturnValue({
+    data: {
+      no_owner: [{ id: "c1", name: "Merchandising", level: 1, path: [] }],
+      shared_service: [],
+      unmapped: [],
+      owned_no_performer: [],
+      counts: { no_owner: 1, shared_service: 0, unmapped: 0, owned_no_performer: 0, l1_l2_total: 1, l3_total: 0 },
+    },
+    isLoading: false,
+    error: null,
+  } as never);
 }
 
 beforeEach(() => {
@@ -152,5 +170,22 @@ describe("OrganizationTab — detail panel (US3)", () => {
     mutate.delete.mockRejectedValueOnce(new Error("Org unit 'st' has 1 child(ren). Remove them first."));
     await userEvent.click(screen.getByRole("button", { name: "Delete" }));
     expect(await screen.findByRole("alert")).toBeTruthy();
+  });
+});
+
+describe("OrganizationTab — 941 footprint and findings", () => {
+  it("shows the footprint in the detail panel", async () => {
+    render(<OrganizationTab />);
+    await userEvent.click(screen.getByRole("button", { name: "Stores" }));
+    expect(screen.getByRole("region", { name: "Capability footprint" })).toBeTruthy();
+    expect(api.useOrgUnitFootprint).toHaveBeenCalledWith("st");
+  });
+
+  it("has a Findings sub-tab whose entries open the capability", async () => {
+    const open = vi.fn();
+    render(<OrganizationTab onOpenCapability={open} />);
+    await userEvent.click(screen.getByRole("tab", { name: "Findings" }));
+    await userEvent.click(screen.getByRole("button", { name: "Merchandising" }));
+    expect(open).toHaveBeenCalledWith("c1");
   });
 });

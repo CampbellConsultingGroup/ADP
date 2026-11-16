@@ -10,6 +10,8 @@ import DesignLinkEditor from "./DesignLinkEditor";
 import { LEVEL_STYLE } from "./classification";
 import AgentReviewButton from "../agent-review/AgentReviewButton";
 import { renderCapabilitySuggestionDetail } from "./agentReviewDetail";
+import { CapabilityOrgChips, CapabilityOrgEditor } from "./CapabilityOrgPanel";
+import { useCanWriteApplications } from "../application/appCapNav";
 
 interface CapabilityNodeProps {
   // ADP-914.7: widened from BusinessCapability to CapabilityTreeNode (a
@@ -43,6 +45,8 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
   const [showLinks, setShowLinks] = useState(false);
   const [showCompliance, setShowCompliance] = useState(false);
   const [showAgentReview, setShowAgentReview] = useState(false);
+  const [showOrganization, setShowOrganization] = useState(false);
+  const canWriteBusiness = useCanWriteApplications();
   const rowRef = useRef<HTMLDivElement>(null);
 
   const update = useUpdateCapability(capability.id);
@@ -135,13 +139,17 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
           </>
         ) : (
           <>
-            <span style={{ flex: 1, fontSize: 13, color: "var(--ink)" }}>
+            {/* minWidth 0 lets the name column shrink so its chips truncate instead of pushing the
+                row's controls off the edge (941). */}
+            <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: "var(--ink)" }}>
               {capability.name}
               {capability.level === 1 && capability.domain_name && (
                 <span style={{ marginLeft: 6, fontSize: 10, background: "var(--accent-wash)", color: "var(--accent-2)", padding: "1px 5px", borderRadius: 8, fontWeight: 500 }}>
                   {capability.domain_name}
                 </span>
               )}
+              {/* 941-capability-org-mappings: owner (own or inherited) and L3 performers. */}
+              <CapabilityOrgChips capabilityId={capability.id} level={capability.level} />
               {isOrphan && (
                 <span
                   title="Not referenced by any strategic objective"
@@ -183,6 +191,13 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
               style={{ ...actionBtn, color: showLinks ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
             >
               Links
+            </button>
+            <button
+              onClick={() => setShowOrganization(!showOrganization)}
+              title={capability.level === 3 ? "Owner, performers and contributors" : "Accountable owner"}
+              style={{ ...actionBtn, color: showOrganization ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
+            >
+              Organization
             </button>
             <button
               onClick={() => setShowCompliance(!showCompliance)}
@@ -235,6 +250,21 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
             Supporting Designs
           </p>
           <DesignLinkEditor entityType="capability" entityId={capability.id} />
+        </div>
+      )}
+
+      {showOrganization && (
+        <div
+          style={{
+            marginLeft: 20,
+            marginBottom: 6,
+            padding: "8px 12px",
+            background: "var(--surface-2)",
+            border: "1px solid var(--border)",
+            borderRadius: 4,
+          }}
+        >
+          <CapabilityOrgEditor capabilityId={capability.id} level={capability.level} canWrite={canWriteBusiness} />
         </div>
       )}
 

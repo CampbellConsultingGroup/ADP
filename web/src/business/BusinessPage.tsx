@@ -87,7 +87,14 @@ export default function BusinessPage({ onGenerateDiagram, initialFocusCapability
         )}
 
         {/* 940-org-units-geography (ADP-55k.1) */}
-        {tab === "organization" && <OrganizationTab />}
+        {tab === "organization" && (
+          <OrganizationTab
+            onOpenCapability={(id) => {
+              setTab("capabilities");
+              setFocusCapabilityId(id);
+            }}
+          />
+        )}
 
         {tab === "domains" && (
           selectedDomainId

@@ -22,8 +22,10 @@ import { useCanWriteApplications } from "../application/appCapNav";
 import GeographyTree from "./GeographyTree";
 import OrgUnitTree from "./OrgUnitTree";
 import UnmatchedList from "./UnmatchedList";
+import OrgFindings from "./OrgFindings";
+import OrgUnitFootprint from "./OrgUnitFootprint";
 
-type Section = "org-units" | "geography" | "unmatched";
+type Section = "org-units" | "geography" | "unmatched" | "findings";
 
 /** WRITE_BUSINESS_ARCH and WRITE_APPLICATION are held by the same roles; the server decides. */
 export function useCanWriteBusiness(): boolean {
@@ -38,7 +40,17 @@ function geoLabel(g: Geography): string {
   return g.code ? `${g.name} (${g.code})` : `${g.name} — ${g.kind}`;
 }
 
-function OrgUnitDetailPanel({ id, canWrite, onDeleted }: { id: string; canWrite: boolean; onDeleted: () => void }): React.ReactElement {
+function OrgUnitDetailPanel({
+  id,
+  canWrite,
+  onDeleted,
+  onOpenCapability,
+}: {
+  id: string;
+  canWrite: boolean;
+  onDeleted: () => void;
+  onOpenCapability?: (id: string) => void;
+}): React.ReactElement {
   const { data, isLoading } = useOrgUnit(id);
   const geos = useGeographies();
   const update = useUpdateOrgUnit();
@@ -208,6 +220,9 @@ function OrgUnitDetailPanel({ id, canWrite, onDeleted }: { id: string; canWrite:
           ))}
         </ul>
       )}
+
+      {/* 941-capability-org-mappings US4 */}
+      <OrgUnitFootprint orgUnitId={id} onOpenCapability={onOpenCapability} />
     </div>
   );
 }
@@ -222,7 +237,7 @@ const tab = (active: boolean): React.CSSProperties => ({
   cursor: "pointer",
 });
 
-export default function OrganizationTab(): React.ReactElement {
+export default function OrganizationTab({ onOpenCapability }: { onOpenCapability?: (id: string) => void } = {}): React.ReactElement {
   const canWrite = useCanWriteBusiness();
   const orgUnits = useOrgUnits();
   const unmatched = useUnmatched();
@@ -248,6 +263,9 @@ export default function OrganizationTab(): React.ReactElement {
         <button role="tab" aria-selected={section === "unmatched"} style={tab(section === "unmatched")} onClick={() => setSection("unmatched")}>
           Unmatched{unmatchedCount > 0 ? ` (${unmatchedCount})` : ""}
         </button>
+        <button role="tab" aria-selected={section === "findings"} style={tab(section === "findings")} onClick={() => setSection("findings")}>
+          Findings
+        </button>
       </div>
 
       {section === "org-units" &&
@@ -262,7 +280,13 @@ export default function OrganizationTab(): React.ReactElement {
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               {current ? (
-                <OrgUnitDetailPanel key={current} id={current} canWrite={canWrite} onDeleted={() => setSelected(null)} />
+                <OrgUnitDetailPanel
+                  key={current}
+                  id={current}
+                  canWrite={canWrite}
+                  onDeleted={() => setSelected(null)}
+                  onOpenCapability={onOpenCapability}
+                />
               ) : (
                 <div style={muted}>Select an org unit to see where it operates and what it owns.</div>
               )}
@@ -271,6 +295,7 @@ export default function OrganizationTab(): React.ReactElement {
         ))}
       {section === "geography" && <GeographyTree canWrite={canWrite} />}
       {section === "unmatched" && <UnmatchedList canWrite={canWrite} />}
+      {section === "findings" && <OrgFindings onOpenCapability={onOpenCapability} />}
     </div>
   );
 }

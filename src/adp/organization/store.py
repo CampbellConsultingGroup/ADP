@@ -116,6 +116,69 @@ _applications = sa.Table(
     sa.Column("owning_org_unit_id", sa.String(36)),
 )
 
+# 941-capability-org-mappings: narrow, read-only mirror of the business capability tree (research
+# R1). Fixtures that also create adp.business.store's or adp.application.store's metadata must
+# create those first and exclude this table here. ``position`` is nullable so astore's own
+# narrower mirror (no position) still works when it was created first.
+_business_capabilities = sa.Table(
+    "business_capabilities",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.String(255), nullable=False),
+    sa.Column("level", sa.Integer(), nullable=False),
+    sa.Column("parent_id", sa.String(36), nullable=True),
+    sa.Column("position", sa.Integer(), nullable=True),
+)
+
+# 941: owner (L1/L2, one per capability), performer (L3, optional geography), contributor (L3).
+# Mirrors migration 049; the level rules are enforced in adp.organization.cap_mappings.
+_capability_org_mappings = sa.Table(
+    "capability_org_mappings",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column(
+        "capability_id",
+        sa.String(36),
+        sa.ForeignKey("business_capabilities.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column(
+        "org_unit_id",
+        sa.String(36),
+        sa.ForeignKey("org_units.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column("role", sa.String(16), nullable=False),
+    sa.Column(
+        "geography_id",
+        sa.String(36),
+        sa.ForeignKey("geographies.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.CheckConstraint(
+        "role IN ('owner', 'performer', 'contributor')", name="ck_cap_org_mapping_role"
+    ),
+    sa.CheckConstraint(
+        "role = 'performer' OR geography_id IS NULL", name="ck_cap_org_mapping_geo_performer_only"
+    ),
+)
+sa.Index(
+    "uq_cap_org_mapping_owner",
+    _capability_org_mappings.c.capability_id,
+    unique=True,
+    sqlite_where=_capability_org_mappings.c.role == "owner",
+    postgresql_where=_capability_org_mappings.c.role == "owner",
+)
+sa.Index(
+    "uq_cap_org_mapping",
+    _capability_org_mappings.c.capability_id,
+    _capability_org_mappings.c.org_unit_id,
+    _capability_org_mappings.c.role,
+    sa.func.coalesce(_capability_org_mappings.c.geography_id, ""),
+    unique=True,
+)
+
 _engine = None
 _session_factory: async_sessionmaker | None = None
 
@@ -389,6 +452,11 @@ async def delete_org_unit(ou_id: str, session: AsyncSession) -> bool:
     await session.execute(
         _org_unit_geographies.delete().where(_org_unit_geographies.c.org_unit_id == ou_id)
     )
+    # 941: its capability mappings go too; owned capabilities fall back to their parent's owner
+    # (the effective owner is derived). Migration 049's CASCADE is the safety net.
+    await session.execute(
+        _capability_org_mappings.delete().where(_capability_org_mappings.c.org_unit_id == ou_id)
+    )
     deleted = (
         _rowcount(await session.execute(_org_units.delete().where(_org_units.c.id == ou_id))) > 0
     )
@@ -560,10 +628,31 @@ async def update_geography(
     return (await _geography_models(session, [geo_id]))[0]
 
 
+async def _clear_mapping_geography(geo_id: str, session: AsyncSession) -> None:
+    """941 FR-007 / research R3: performers on this geography lose it. Where the same capability
+    and unit already performs "everywhere", the geography row is dropped instead, so clearing it
+    can't collide with the COALESCE unique index."""
+    m = _capability_org_mappings
+    e = _capability_org_mappings.alias("everywhere")
+    await session.execute(
+        m.delete().where(
+            m.c.geography_id == geo_id,
+            sa.exists().where(
+                e.c.capability_id == m.c.capability_id,
+                e.c.org_unit_id == m.c.org_unit_id,
+                e.c.role == m.c.role,
+                e.c.geography_id.is_(None),
+            ),
+        )
+    )
+    await session.execute(m.update().where(m.c.geography_id == geo_id).values(geography_id=None))
+
+
 async def delete_geography(geo_id: str, session: AsyncSession) -> bool:
     if await _row(_geographies, geo_id, session) is None:
         return False
     await _refuse_if_children(_geographies, geo_id, "Geography", session)
+    await _clear_mapping_geography(geo_id, session)
     await session.execute(
         _org_units.update()
         .where(_org_units.c.primary_geography_id == geo_id)

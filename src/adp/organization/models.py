@@ -62,6 +62,14 @@ class InvalidCodeError(OrganizationError):
     pass
 
 
+class LevelRuleError(OrganizationError):
+    """941: a capability mapping at a level its role doesn't allow (422)."""
+
+
+class UnknownReferenceError(OrganizationError):
+    """941: an org unit or geography id in a request body that doesn't exist (422)."""
+
+
 # ── Shared ────────────────────────────────────────────────────────────────────
 
 
@@ -236,3 +244,127 @@ class ResolveUnmatched(_Model):
 class ResolveResult(_Model):
     org_unit: OrgUnit
     updated_count: int
+
+
+# ── Capability <-> org unit mappings (941-capability-org-mappings, ADP-55k.2) ──
+#
+# owner: L1/L2, at most one per capability, no geography. performer: L3, optional geography.
+# contributor: L3, no geography. Effective owner, findings and footprints are derived on read and
+# never stored (test_cap_org_analysis_not_stored.py).
+
+CapabilityOrgRole = Literal["owner", "performer", "contributor"]
+
+
+class CapabilityOrgMapping(_Model):
+    id: str
+    capability_id: str
+    org_unit: Ref
+    role: CapabilityOrgRole
+    geography: Ref | None = None
+    # FR-006, derived: the geography is neither one of the unit's operating geographies nor
+    # inside one (only ever true for a performer whose unit has operating geographies).
+    outside_operating_geographies: bool = False
+
+
+class SetOwner(_Model):
+    org_unit_id: str | None = None
+
+
+class AddMapping(_Model):
+    capability_id: str
+    org_unit_id: str
+    role: Literal["performer", "contributor"]
+    geography_id: str | None = None
+
+    @model_validator(mode="after")
+    def _geography_only_on_performer(self) -> "AddMapping":
+        if self.geography_id is not None and self.role != "performer":
+            raise ValueError("Only performers can name a geography")
+        return self
+
+
+class CapabilityOrgView(_Model):
+    capability_id: str
+    level: int
+    owner: Ref | None = None
+    effective_owner: Ref | None = None
+    owner_inherited_from: Ref | None = None  # the ancestor capability the owner comes from
+    performers: list[CapabilityOrgMapping] = []
+    contributors: list[CapabilityOrgMapping] = []
+
+
+class CapabilityOrgMappingsResponse(_Model):
+    items: list[CapabilityOrgView]
+
+
+class FindingCapability(_Model):
+    id: str
+    name: str
+    level: int
+    path: list[Ref] = []
+
+
+class SharedServicePerformer(_Model):
+    org_unit: Ref
+    org_unit_path: list[Ref] = []
+    geographies: list[Ref] = []
+    folded_into: Ref | None = None  # an ancestor unit that also performs this capability
+
+
+class SharedServiceCandidate(_Model):
+    capability: FindingCapability
+    branches: int
+    performers: list[SharedServicePerformer]
+
+
+class FindingCounts(_Model):
+    no_owner: int
+    shared_service: int
+    unmapped: int
+    owned_no_performer: int
+    l1_l2_total: int
+    l3_total: int
+
+
+class CapabilityOrgFindings(_Model):
+    no_owner: list[FindingCapability]
+    shared_service: list[SharedServiceCandidate]
+    unmapped: list[FindingCapability]
+    owned_no_performer: list[FindingCapability]
+    counts: FindingCounts
+
+
+class FootprintPerformer(_Model):
+    org_unit: Ref
+    geographies: list[Ref] = []
+
+
+class FootprintL3(_Model):
+    capability: Ref
+    performed_by: list[FootprintPerformer]
+
+
+class FootprintL2(_Model):
+    capability: Ref
+    l3_count: int
+    l3s: list[FootprintL3]
+
+
+class FootprintL1(_Model):
+    capability: Ref
+    l3_count: int
+    l2s: list[FootprintL2]
+
+
+class FootprintEntry(_Model):
+    capability: FindingCapability
+    org_unit: Ref
+
+
+class OrgUnitFootprint(_Model):
+    org_unit: Ref
+    includes_descendants: bool = True
+    performs: list[FootprintL1]
+    l3_total: int
+    owns: list[FootprintEntry]
+    contributes: list[FootprintEntry]

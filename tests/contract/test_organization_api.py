@@ -40,7 +40,7 @@ async def ctx(tmp_path, monkeypatch):
         await conn.run_sync(astore._metadata.create_all)
         await conn.run_sync(
             lambda c: ostore._metadata.create_all(
-                c, tables=[t for t in ostore._metadata.sorted_tables if t.name != "applications"]
+                c, tables=[t for t in ostore._metadata.sorted_tables if t.name not in ("applications", "business_capabilities")]
             )
         )
     factory = async_sessionmaker(engine, expire_on_commit=False)

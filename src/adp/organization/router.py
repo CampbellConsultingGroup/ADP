@@ -14,8 +14,14 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.organization import cap_mappings
 from adp.organization import store as ostore
 from adp.organization.models import (
+    AddMapping,
+    CapabilityOrgFindings,
+    CapabilityOrgMapping,
+    CapabilityOrgMappingsResponse,
+    CapabilityOrgView,
     DepthError,
     DuplicateCodeError,
     DuplicateLinkError,
@@ -27,15 +33,19 @@ from adp.organization.models import (
     GeographyUpdate,
     HasChildrenError,
     InvalidCodeError,
+    LevelRuleError,
     OrganizationError,
     OrgNotFoundError,
     OrgUnit,
     OrgUnitCreate,
     OrgUnitDetail,
+    OrgUnitFootprint,
     OrgUnitListResponse,
     OrgUnitUpdate,
     ResolveResult,
     ResolveUnmatched,
+    SetOwner,
+    UnknownReferenceError,
     UnmatchedListResponse,
 )
 
@@ -47,6 +57,8 @@ _STATUS: list[tuple[type[OrganizationError], int]] = [
     (OrgNotFoundError, status.HTTP_404_NOT_FOUND),
     (DepthError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     (InvalidCodeError, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    (LevelRuleError, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    (UnknownReferenceError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     (HasChildrenError, status.HTTP_409_CONFLICT),
     (DuplicateSiblingError, status.HTTP_409_CONFLICT),
     (DuplicateCodeError, status.HTTP_409_CONFLICT),
@@ -260,3 +272,110 @@ async def geography_org_units(
     if items is None:
         raise HTTPException(status_code=404, detail=f"Geography {geo_id!r} not found")
     return items
+
+
+# ── Capability <-> org unit mappings (941-capability-org-mappings, ADP-55k.2) ──
+#
+# A distinct ``capability-org-mappings`` prefix (research R5) so nothing overlaps the business
+# router's ``/capabilities/{cap_id}``. Findings and footprints are derived per request.
+
+
+@router.get("/capability-org-mappings", response_model=CapabilityOrgMappingsResponse)
+async def list_capability_org_mappings(
+    session: AsyncSession = Depends(_get_session),
+) -> CapabilityOrgMappingsResponse:
+    return await cap_mappings.list_views(session)
+
+
+@router.get("/capability-org-mappings/findings", response_model=CapabilityOrgFindings)
+async def capability_org_findings(
+    session: AsyncSession = Depends(_get_session),
+) -> CapabilityOrgFindings:
+    return await cap_mappings.get_findings(session)
+
+
+@router.put("/capability-org-mappings/{cap_id}/owner", response_model=CapabilityOrgView)
+async def set_capability_owner(
+    cap_id: str,
+    body: SetOwner,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+) -> CapabilityOrgView:
+    try:
+        view, previous = await cap_mappings.set_owner(cap_id, body.org_unit_id, session)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    if body.org_unit_id is None:
+        if previous is not None:
+            _log("capability_mapping.clear_owner", request, capability=cap_id, previous=previous)
+    elif previous != body.org_unit_id:
+        _log(
+            "capability_mapping.set_owner",
+            request,
+            capability=cap_id,
+            org_unit=body.org_unit_id,
+            previous=previous,
+        )
+    return view
+
+
+@router.post(
+    "/capability-org-mappings",
+    response_model=CapabilityOrgMapping,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_capability_mapping(
+    body: AddMapping,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+) -> CapabilityOrgMapping:
+    try:
+        mapping = await cap_mappings.add_mapping(body, session)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    _log(
+        "capability_mapping.add",
+        request,
+        capability=body.capability_id,
+        org_unit=body.org_unit_id,
+        role=body.role,
+        geography=body.geography_id,
+    )
+    return mapping
+
+
+@router.delete(
+    "/capability-org-mappings/{mapping_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def remove_capability_mapping(
+    mapping_id: str,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+) -> Response:
+    try:
+        row = await cap_mappings.remove_mapping(mapping_id, session)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    _log(
+        "capability_mapping.remove",
+        request,
+        mapping=mapping_id,
+        capability=row.capability_id,
+        org_unit=row.org_unit_id,
+        role=row.role,
+        geography=row.geography_id,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/org-units/{ou_id}/footprint", response_model=OrgUnitFootprint)
+async def org_unit_footprint(
+    ou_id: str, session: AsyncSession = Depends(_get_session)
+) -> OrgUnitFootprint:
+    try:
+        return await cap_mappings.get_footprint(ou_id, session)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
