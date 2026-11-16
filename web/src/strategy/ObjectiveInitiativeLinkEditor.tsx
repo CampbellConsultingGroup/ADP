@@ -36,16 +36,18 @@ export default function ObjectiveInitiativeLinkEditor({ objectiveId, onNavigateT
   const linked = linkedInitiatives.data?.items ?? [];
   const available = (allInitiatives.data?.items ?? []).filter((i) => !linkedIds.has(i.id));
 
-  function handleAdd() {
-    if (!selectedId) return;
+  function handleAdd(chosenId: string) {
+    if (!chosenId) return;
+    setSelectedId(chosenId);
     setLinkError(null);
-    const name = available.find((i) => i.id === selectedId)?.name ?? selectedId;
-    link.mutate(selectedId, {
+    const name = available.find((i) => i.id === chosenId)?.name ?? chosenId;
+    link.mutate(chosenId, {
       onSuccess: () => {
         setSelectedId("");
         feedback.showLinked(name);
       },
       onError: (err: Error & { status?: number }) => {
+        setSelectedId("");
         if (err.status === 409) {
           setLinkError("Already linked");
         } else {
@@ -109,10 +111,8 @@ export default function ObjectiveInitiativeLinkEditor({ objectiveId, onNavigateT
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
         <select
           value={selectedId}
-          onChange={(e) => {
-            setSelectedId(e.target.value);
-            setLinkError(null);
-          }}
+          onChange={(e) => handleAdd(e.target.value)}
+          disabled={link.isPending}
           style={{
             flex: 1,
             minWidth: "160px",
@@ -124,29 +124,13 @@ export default function ObjectiveInitiativeLinkEditor({ objectiveId, onNavigateT
             color: "var(--text)",
           }}
         >
-          <option value="">— select initiative —</option>
+          <option value="">Link an initiative…</option>
           {available.map((i) => (
             <option key={i.id} value={i.id}>
               {i.name}
             </option>
           ))}
         </select>
-        <button
-          onClick={handleAdd}
-          disabled={!selectedId || link.isPending}
-          style={{
-            padding: "0.3rem 0.75rem",
-            fontSize: "0.85rem",
-            borderRadius: "4px",
-            border: "none",
-            background: "var(--accent)",
-            color: "#fff",
-            cursor: selectedId ? "pointer" : "not-allowed",
-            opacity: selectedId ? 1 : 0.5,
-          }}
-        >
-          Link
-        </button>
       </div>
       {linkError && (
         <p style={{ color: "var(--error, var(--crit))", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>

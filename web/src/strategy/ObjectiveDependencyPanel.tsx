@@ -42,12 +42,14 @@ export default function ObjectiveDependencyPanel({ objectiveId }: Props): React.
   const excluded = new Set([objectiveId, ...dependsOn]);
   const available = (allObjectives.data?.items ?? []).filter((o) => !excluded.has(o.id));
 
-  function handleAdd() {
-    if (!selectedId) return;
+  function handleAdd(chosenId: string) {
+    if (!chosenId) return;
+    setSelectedId(chosenId);
     setAddError(null);
-    addDependency.mutate(selectedId, {
+    addDependency.mutate(chosenId, {
       onSuccess: () => setSelectedId(""),
       onError: (err: Error & { status?: number }) => {
+        setSelectedId("");
         const cycleDetail = cycleDetailMessage(err);
         if (cycleDetail) {
           // Cycle rejection (direct, chained, or self-dependency) --
@@ -111,10 +113,8 @@ export default function ObjectiveDependencyPanel({ objectiveId }: Props): React.
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
         <select
           value={selectedId}
-          onChange={(e) => {
-            setSelectedId(e.target.value);
-            setAddError(null);
-          }}
+          onChange={(e) => handleAdd(e.target.value)}
+          disabled={addDependency.isPending}
           style={{
             flex: 1,
             minWidth: "160px",
@@ -126,29 +126,13 @@ export default function ObjectiveDependencyPanel({ objectiveId }: Props): React.
             color: "var(--text)",
           }}
         >
-          <option value="">— select objective —</option>
+          <option value="">Add a dependency on…</option>
           {available.map((o) => (
             <option key={o.id} value={o.id}>
               {o.statement}
             </option>
           ))}
         </select>
-        <button
-          onClick={handleAdd}
-          disabled={!selectedId || addDependency.isPending}
-          style={{
-            padding: "0.3rem 0.75rem",
-            fontSize: "0.85rem",
-            borderRadius: "4px",
-            border: "none",
-            background: "var(--accent)",
-            color: "#fff",
-            cursor: selectedId ? "pointer" : "not-allowed",
-            opacity: selectedId ? 1 : 0.5,
-          }}
-        >
-          Add dependency
-        </button>
       </div>
       {addError && (
         <p style={{ color: "var(--error, var(--crit))", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>

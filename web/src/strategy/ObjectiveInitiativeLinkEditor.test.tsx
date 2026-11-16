@@ -76,7 +76,6 @@ describe("ObjectiveInitiativeLinkEditor", () => {
     render(<ObjectiveInitiativeLinkEditor objectiveId="obj-1" />);
 
     await user.selectOptions(screen.getByRole("combobox"), "init-2");
-    await user.click(screen.getByText("Link"));
 
     expect(mutate).toHaveBeenCalledWith("init-2", expect.anything());
   });

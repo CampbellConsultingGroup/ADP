@@ -1,7 +1,7 @@
 /** TypeScript interfaces and TanStack Query hooks for the Compliance Framework & Control Registry
  * API (COMPLY-01) and the Control Mappings (Traceability Links) API (COMPLY-02). */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -100,6 +100,44 @@ export function useFramework(id: string | null) {
     queryFn: () => apiGet(`/api/v1/compliance/frameworks/${id}`),
     enabled: !!id,
   });
+}
+
+/** A control flattened out of its framework's tree, for pickers (ADP-w7z). */
+export interface ControlOption {
+  id: string;
+  framework_id: string;
+  framework_name: string;
+  code: string;
+  title: string;
+  depth: number;
+}
+
+/** Depth-first flattening of a framework's control tree, keeping tree order. */
+export function flattenControls(fw: RegulatoryFrameworkDetail): ControlOption[] {
+  const out: ControlOption[] = [];
+  const walk = (nodes: ControlNode[], depth: number) => {
+    for (const n of nodes) {
+      out.push({ id: n.id, framework_id: fw.id, framework_name: fw.name, code: n.code, title: n.title, depth });
+      walk(n.children, depth + 1);
+    }
+  };
+  walk(fw.controls, 0);
+  return out;
+}
+
+/** Every control across every framework, by id. Shares the per-framework query cache with
+ * `useFramework`; there is no flat "list all controls" endpoint. */
+export function useAllControls(): { byId: Map<string, ControlOption>; isLoading: boolean } {
+  const frameworks = useFrameworks();
+  const details = useQueries({
+    queries: (frameworks.data?.items ?? []).map((f) => ({
+      queryKey: ["compliance-framework", f.id],
+      queryFn: () => apiGet<RegulatoryFrameworkDetail>(`/api/v1/compliance/frameworks/${f.id}`),
+    })),
+  });
+  const byId = new Map<string, ControlOption>();
+  for (const d of details) if (d.data) for (const c of flattenControls(d.data)) byId.set(c.id, c);
+  return { byId, isLoading: frameworks.isLoading || details.some((d) => d.isLoading) };
 }
 
 export function useCreateFramework() {

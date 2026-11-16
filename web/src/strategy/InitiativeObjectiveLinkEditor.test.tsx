@@ -78,7 +78,6 @@ describe("InitiativeObjectiveLinkEditor", () => {
     render(<InitiativeObjectiveLinkEditor initiative={INITIATIVE} />);
 
     await user.selectOptions(screen.getByRole("combobox"), "obj-2");
-    await user.click(screen.getByText("Link"));
 
     expect(mutate).toHaveBeenCalledWith("obj-2", expect.anything());
   });
@@ -109,7 +108,6 @@ describe("InitiativeObjectiveLinkEditor", () => {
     render(<InitiativeObjectiveLinkEditor initiative={INITIATIVE} />);
 
     await user.selectOptions(screen.getByRole("combobox"), "obj-2");
-    await user.click(screen.getByText("Link"));
 
     expect(screen.getByText(/Linked "Improve retention"/)).toBeTruthy();
   });
@@ -159,7 +157,6 @@ describe("InitiativeObjectiveLinkEditor", () => {
     render(<InitiativeObjectiveLinkEditor initiative={INITIATIVE} />);
 
     await user.selectOptions(screen.getByRole("combobox"), "obj-2");
-    await user.click(screen.getByText("Link"));
 
     expect(screen.getByText("Already linked")).toBeTruthy();
   });

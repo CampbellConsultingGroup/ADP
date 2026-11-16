@@ -85,7 +85,6 @@ describe("ObjectiveApplicationLinkEditor", () => {
     render(<ObjectiveApplicationLinkEditor objective={OBJECTIVE} />);
 
     await user.selectOptions(screen.getByRole("combobox"), "app-2");
-    await user.click(screen.getByText("Link"));
 
     expect(mutate).toHaveBeenCalledWith("app-2", expect.anything());
   });
@@ -116,7 +115,6 @@ describe("ObjectiveApplicationLinkEditor", () => {
     render(<ObjectiveApplicationLinkEditor objective={OBJECTIVE} />);
 
     await user.selectOptions(screen.getByRole("combobox"), "app-2");
-    await user.click(screen.getByText("Link"));
 
     expect(screen.getByText(/Linked "Fraud Detection"/)).toBeTruthy();
   });

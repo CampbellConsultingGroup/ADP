@@ -1,7 +1,7 @@
 // ADP-d8u.1 (T024, extended in T031 with edit/delete cases).
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ObjectiveDetail from "./ObjectiveDetail";
 import * as strategyApi from "../api/strategy";
@@ -11,6 +11,13 @@ import { ApiError } from "../api/client";
 
 vi.mock("../api/strategy");
 vi.mock("../api/business");
+// ADP-w7z: the control link editor picks from the compliance registry.
+vi.mock("../api/compliance", async (orig) => ({
+  ...(await orig<typeof import("../api/compliance")>()),
+  useFrameworks: vi.fn(() => ({ data: { items: [], total: 0 }, isLoading: false })),
+  useFramework: vi.fn(() => ({ data: undefined, isLoading: false })),
+  useAllControls: vi.fn(() => ({ byId: new Map(), isLoading: false })),
+}));
 
 const mockedStrategyApi = vi.mocked(strategyApi);
 const mockedBusinessApi = vi.mocked(businessApi);
@@ -471,9 +478,8 @@ describe("ObjectiveDetail: linked initiatives panel (ADP-d8u.6, T018)", () => {
 
     expect(screen.getByText("Claims Automation")).toBeTruthy();
 
-    const select = screen.getByDisplayValue("— select initiative —");
+    const select = screen.getByDisplayValue("Link an initiative…");
     await user.selectOptions(select, "init-2");
-    await user.click(within(select.parentElement as HTMLElement).getByText("Link"));
 
     expect(linkMutate).toHaveBeenCalledWith("init-2", expect.anything());
   });
@@ -533,9 +539,8 @@ describe("ObjectiveDetail: linked initiatives panel (ADP-d8u.6, T018)", () => {
     const user = userEvent.setup();
     render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
 
-    const select = screen.getByDisplayValue("— select initiative —");
+    const select = screen.getByDisplayValue("Link an initiative…");
     await user.selectOptions(select, "init-2");
-    await user.click(within(select.parentElement as HTMLElement).getByText("Link"));
 
     expect(screen.getByText(/Linked "Fraud Detection"/)).toBeTruthy();
   });
@@ -593,8 +598,7 @@ describe("ObjectiveDetail: dependencies panel (ADP-d8u.6, T027)", () => {
     const user = userEvent.setup();
     render(<ObjectiveDetail objectiveId="obj-1" onBack={vi.fn()} />);
 
-    await user.selectOptions(screen.getByDisplayValue("— select objective —"), "obj-2");
-    await user.click(screen.getByText("Add dependency"));
+    await user.selectOptions(screen.getByDisplayValue("Add a dependency on…"), "obj-2");
 
     expect(screen.getByText(/would create a cycle/)).toBeTruthy();
   });
