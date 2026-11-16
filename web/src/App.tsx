@@ -68,6 +68,12 @@ export default function App(): React.ReactElement {
   // applications and technical capabilities on their own screens.
   const [pendingBusinessCapId, setPendingBusinessCapId] = useState<string | null>(null);
   const [pendingTechCapId, setPendingTechCapId] = useState<string | null>(null);
+  // 939-governance-architecture-health: an adoption to open on the Patterns screen.
+  const [pendingAdoptionId, setPendingAdoptionId] = useState<string | null>(null);
+  const openAdoption = (id: string) => {
+    setPendingAdoptionId(id);
+    setView("patterns");
+  };
   const capabilityNav: CapabilityNav = {
     openBusinessCapability: (id) => {
       setPendingBusinessCapId(id);
@@ -94,6 +100,7 @@ export default function App(): React.ReactElement {
     setPendingAppCapId(null);
     setPendingBusinessCapId(null);
     setPendingTechCapId(null);
+    setPendingAdoptionId(null);
     setView(nextView);
   };
 
@@ -132,7 +139,7 @@ export default function App(): React.ReactElement {
       case "portfolio":
         return <PortfolioPage />;
       case "governance":
-        return <GovernancePage onNavigate={onNavigate} onSelectDesign={onSelectDesign} />;
+        return <GovernancePage onNavigate={onNavigate} onSelectDesign={onSelectDesign} onOpenAdoption={openAdoption} />;
       case "business":
         return (
           <BusinessPage
@@ -175,7 +182,13 @@ export default function App(): React.ReactElement {
       case "compliance":
         return <CompliancePage />;
       case "patterns":
-        return <PatternsPage onGenerateDiagram={onGenerateDiagram} />;
+        return (
+          <PatternsPage
+            key={pendingAdoptionId ?? "patterns"}
+            onGenerateDiagram={onGenerateDiagram}
+            initialAdoptionId={pendingAdoptionId}
+          />
+        );
       case "admin":
         return <AdminPage />;
       case "scoring-rubrics":

@@ -11,10 +11,17 @@ import { useCanManagePatterns } from "./permissions";
 
 const cell: React.CSSProperties = { padding: "7px 10px", borderBottom: "1px solid var(--border)", fontSize: 12.5, textAlign: "left" };
 
-export default function AdoptionsList({ onGenerateDiagram }: { onGenerateDiagram?: (seed: DiagramSeed) => void }) {
+export default function AdoptionsList({
+  onGenerateDiagram,
+  initialSelected = null,
+}: {
+  onGenerateDiagram?: (seed: DiagramSeed) => void;
+  /** 939-governance-architecture-health: opened from Governance -> Architecture Health. */
+  initialSelected?: string | null;
+}) {
   const canManage = useCanManagePatterns();
   const { data, isLoading } = useAdoptions(true);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialSelected);
   const [creating, setCreating] = useState(false);
 
   if (selected) {
