@@ -6,6 +6,8 @@ import userEvent from "@testing-library/user-event";
 import * as businessApi from "../api/business";
 import * as patternsApi from "../api/patterns";
 import * as capAnalysisApi from "../api/capAnalysis";
+import * as orgApi from "../api/organization";
+import type { CapabilityOrgFindings } from "../api/organization";
 import type { Adoption, ConformanceStatus } from "../api/patterns";
 import type { CapabilityFindings, CapabilityRollup, LifecycleBand } from "../api/capAnalysis";
 import { CapabilityNavContext } from "../application/appCapNav";
@@ -25,7 +27,13 @@ vi.mock("../api/capAnalysis", async (orig) => ({
   useCapabilityFindings: vi.fn(),
 }));
 
+vi.mock("../api/organization", async (orig) => ({
+  ...(await orig<typeof import("../api/organization")>()),
+  useCapabilityOrgFindings: vi.fn(),
+}));
+
 const pat = vi.mocked(patternsApi);
+const org = vi.mocked(orgApi);
 const biz = vi.mocked(businessApi);
 const cap = vi.mocked(capAnalysisApi);
 
@@ -79,6 +87,25 @@ const FINDINGS: CapabilityFindings = {
   redundant: [],
 };
 
+// ADP-m7x: 941's ownership / performer findings.
+const fcap = (id: string, name: string, level = 3) => ({ id, name, level, path: [ref("b1", "Sales & Customer Transactions", 1)] });
+const ORG_FINDINGS: CapabilityOrgFindings = {
+  no_owner: [fcap("b9", "Finance", 1)],
+  shared_service: [
+    {
+      capability: fcap("b12", "Receive Goods"),
+      branches: 2,
+      performers: [
+        { org_unit: { id: "o1", name: "Store Operations", level: 3 }, org_unit_path: [], geographies: [], folded_into: null },
+        { org_unit: { id: "o2", name: "Digital Commerce", level: 3 }, org_unit_path: [], geographies: [], folded_into: null },
+      ],
+    },
+  ],
+  unmapped: [fcap("b10", "Plan Assortment"), fcap("b11", "Forecast Demand")],
+  owned_no_performer: [],
+  counts: { no_owner: 1, shared_service: 1, unmapped: 2, owned_no_performer: 0, l1_l2_total: 6, l3_total: 20 },
+} as CapabilityOrgFindings;
+
 function ok<T>(data: T) {
   return { data, isLoading: false, error: null } as never;
 }
@@ -108,6 +135,7 @@ function seed() {
     }),
   );
   cap.useCapabilityFindings.mockReturnValue(ok(FINDINGS));
+  org.useCapabilityOrgFindings.mockReturnValue(ok(ORG_FINDINGS));
   const bc = (id: string, name: string, level: 1 | 2 | 3, parent_id: string | null) => ({
     id, name, level, parent_id, description: null, position: 0, created_at: "", updated_at: "",
     domain_id: null, domain_name: null, strategic_relevance: null, maturity_level: null,
@@ -143,6 +171,37 @@ describe("ArchitectureHealthTab tiles (US1)", () => {
     expect(within(tile("Gaps")).getByText("3")).toBeTruthy();
   });
 
+  it("shows the organization findings as tiles (ADP-m7x)", () => {
+    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    expect(within(tile("No accountable owner")).getByText("1")).toBeTruthy();
+    expect(within(tile("No accountable owner")).getByText("of 6 L1/L2")).toBeTruthy();
+    expect(within(tile("Shared-service candidates")).getByText("1")).toBeTruthy();
+    expect(within(tile("Unmapped L3s")).getByText("2")).toBeTruthy();
+    expect(within(tile("Unmapped L3s")).getByText("of 20 L3")).toBeTruthy();
+  });
+
+  it("lists the organization findings and opens a capability on the Business screen (ADP-m7x)", async () => {
+    const nav = { openBusinessCapability: vi.fn(), openApplication: vi.fn(), openTechnicalCapability: vi.fn() };
+    render(
+      <CapabilityNavContext.Provider value={nav}>
+        <ArchitectureHealthTab onOpenAdoption={vi.fn()} />
+      </CapabilityNavContext.Provider>,
+    );
+    const section = screen.getByRole("region", { name: "Organization" });
+    expect(within(section).getByText("Store Operations")).toBeTruthy();
+    expect(within(section).getByText("Forecast Demand")).toBeTruthy();
+    await userEvent.click(within(section).getByRole("button", { name: "Plan Assortment" }));
+    expect(nav.openBusinessCapability).toHaveBeenCalledWith("b10");
+  });
+
+  it("keeps the other sections when the organization findings fail (ADP-m7x)", () => {
+    org.useCapabilityOrgFindings.mockReturnValue({ data: undefined, isLoading: false, error: new Error("x") } as never);
+    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    expect(within(tile("Unmapped L3s")).getByText("—")).toBeTruthy();
+    expect(within(tile("Overlaps")).getByText("1")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Organization" })).getByRole("alert")).toBeTruthy();
+  });
+
   it("asks for adoption statuses and both capability analyses", () => {
     render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
     expect(pat.useAdoptions).toHaveBeenCalledWith(true);
@@ -153,8 +212,9 @@ describe("ArchitectureHealthTab tiles (US1)", () => {
     pat.useAdoptions.mockReturnValue({ data: undefined, isLoading: true, error: null } as never);
     cap.useCapabilityRollup.mockReturnValue({ data: undefined, isLoading: true, error: null } as never);
     cap.useCapabilityFindings.mockReturnValue({ data: undefined, isLoading: true, error: null } as never);
+    org.useCapabilityOrgFindings.mockReturnValue({ data: undefined, isLoading: true, error: null } as never);
     render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
-    for (const label of ["Non-conformant adoptions", "Indeterminate adoptions", "Exposed capabilities", "Overlaps", "Gaps"]) {
+    for (const label of ["Non-conformant adoptions", "Indeterminate adoptions", "Exposed capabilities", "Overlaps", "Gaps", "No accountable owner", "Shared-service candidates", "Unmapped L3s"]) {
       expect(within(tile(label)).getByText("…")).toBeTruthy();
     }
   });
