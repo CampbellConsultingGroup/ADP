@@ -32,16 +32,18 @@ export default function ObjectiveCapabilityLinkEditor({ objective }: Props): Rea
   const linked = (allCapabilities.data?.items ?? []).filter((c) => linkedIds.has(c.id));
   const available = (allCapabilities.data?.items ?? []).filter((c) => !linkedIds.has(c.id));
 
-  function handleAdd() {
-    if (!selectedId) return;
+  function handleAdd(chosenId: string) {
+    if (!chosenId) return;
+    setSelectedId(chosenId);
     setLinkError(null);
-    const name = available.find((c) => c.id === selectedId)?.name ?? selectedId;
-    link.mutate(selectedId, {
+    const name = available.find((c) => c.id === chosenId)?.name ?? chosenId;
+    link.mutate(chosenId, {
       onSuccess: () => {
         setSelectedId("");
         feedback.showLinked(name);
       },
       onError: (err: Error & { status?: number }) => {
+        setSelectedId("");
         if (err.status === 409) {
           setLinkError("Already linked");
         } else {
@@ -97,10 +99,8 @@ export default function ObjectiveCapabilityLinkEditor({ objective }: Props): Rea
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
         <select
           value={selectedId}
-          onChange={(e) => {
-            setSelectedId(e.target.value);
-            setLinkError(null);
-          }}
+          onChange={(e) => handleAdd(e.target.value)}
+          disabled={link.isPending}
           style={{
             flex: 1,
             minWidth: "160px",
@@ -112,29 +112,13 @@ export default function ObjectiveCapabilityLinkEditor({ objective }: Props): Rea
             color: "var(--text)",
           }}
         >
-          <option value="">— select capability —</option>
+          <option value="">Link a capability…</option>
           {available.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
         </select>
-        <button
-          onClick={handleAdd}
-          disabled={!selectedId || link.isPending}
-          style={{
-            padding: "0.3rem 0.75rem",
-            fontSize: "0.85rem",
-            borderRadius: "4px",
-            border: "none",
-            background: "var(--accent)",
-            color: "#fff",
-            cursor: selectedId ? "pointer" : "not-allowed",
-            opacity: selectedId ? 1 : 0.5,
-          }}
-        >
-          Link
-        </button>
       </div>
       {linkError && (
         <p style={{ color: "var(--error, var(--crit))", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>

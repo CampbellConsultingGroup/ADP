@@ -1,17 +1,35 @@
-// 925-strategy-compliance-linkage (COMPLY-05). Mirrors ObjectiveDesignLinkEditor.test.tsx's
-// vi.mock(hooks-module) convention, adapted for the plain control-id text input (no flat
-// "list all Controls" hook exists to populate a dropdown from).
+// 925-strategy-compliance-linkage (COMPLY-05); ADP-w7z: pick a framework, then choosing a
+// control links it at once (like the Capabilities screen's dropdowns).
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import ObjectiveControlLinkEditor from "./ObjectiveControlLinkEditor";
+import * as complianceApi from "../api/compliance";
+import type { RegulatoryFrameworkDetail } from "../api/compliance";
 import * as strategyApi from "../api/strategy";
 import type { StrategicObjective } from "../api/strategy";
 
 vi.mock("../api/strategy");
+vi.mock("../api/compliance", async (orig) => ({
+  ...(await orig<typeof import("../api/compliance")>()),
+  useFrameworks: vi.fn(),
+  useFramework: vi.fn(),
+  useAllControls: vi.fn(),
+}));
 
 const mockedStrategyApi = vi.mocked(strategyApi);
+const mockedCompliance = vi.mocked(complianceApi);
+
+const ctl = (id: string, code: string, title: string, children: RegulatoryFrameworkDetail["controls"] = []) => ({
+  id, framework_id: "fw-1", parent_id: null, code, title, description: null, position: 0,
+  created_at: "", updated_at: "", children,
+});
+const GDPR = {
+  id: "fw-1", name: "GDPR", jurisdiction: "EU", authority: "EU", version: "", effective_date: null,
+  source_url: null, status: "in_force", created_at: "", updated_at: "",
+  controls: [ctl("CTRL-1", "Art. 5", "Principles", [ctl("CTRL-2", "Art. 5(1)(f)", "Integrity and confidentiality")]), ctl("CTRL-3", "Art. 32", "Security of processing")],
+} as RegulatoryFrameworkDetail;
 
 const OBJECTIVE: StrategicObjective = {
   id: "obj-1",
@@ -37,6 +55,14 @@ const OBJECTIVE: StrategicObjective = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockedCompliance.useFrameworks.mockReturnValue({ data: { items: [GDPR], total: 1 }, isLoading: false } as never);
+  mockedCompliance.useFramework.mockImplementation(
+    (id: string | null) => ({ data: id === "fw-1" ? GDPR : undefined, isLoading: false }) as never,
+  );
+  mockedCompliance.useAllControls.mockReturnValue({
+    byId: new Map(complianceApi.flattenControls(GDPR).map((c) => [c.id, c])),
+    isLoading: false,
+  });
   mockedStrategyApi.useLinkObjectiveControl.mockReturnValue({
     mutate: vi.fn(),
     isPending: false,
@@ -51,7 +77,8 @@ describe("ObjectiveControlLinkEditor", () => {
   it("lists currently-linked controls with a Remove action", () => {
     render(<ObjectiveControlLinkEditor objective={OBJECTIVE} />);
 
-    expect(screen.getByText("CTRL-1")).toBeTruthy();
+    expect(screen.getByText("Art. 5 — Principles")).toBeTruthy();
+    expect(screen.getByText("GDPR", { selector: "span" })).toBeTruthy();
     expect(screen.getByText("Remove")).toBeTruthy();
   });
 
@@ -61,7 +88,7 @@ describe("ObjectiveControlLinkEditor", () => {
     expect(screen.getByText("No controls linked yet.")).toBeTruthy();
   });
 
-  it("calls the link hook with the entered control id", async () => {
+  it("links a control as soon as it is chosen, with no separate Link button (ADP-w7z)", async () => {
     const mutate = vi.fn();
     mockedStrategyApi.useLinkObjectiveControl.mockReturnValue({
       mutate,
@@ -69,12 +96,16 @@ describe("ObjectiveControlLinkEditor", () => {
     } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveControl>);
 
     const user = userEvent.setup();
-    render(<ObjectiveControlLinkEditor objective={{ ...OBJECTIVE, control_ids: [] }} />);
+    render(<ObjectiveControlLinkEditor objective={OBJECTIVE} />);
 
-    await user.type(screen.getByPlaceholderText("Control id"), "CTRL-2");
-    await user.click(screen.getByText("Link"));
+    expect(screen.queryByRole("button", { name: "Link" })).toBeNull();
+    expect(screen.queryByLabelText("Control")).toBeNull();
+    await user.selectOptions(screen.getByLabelText("Framework"), "fw-1");
+    const options = Array.from((screen.getByLabelText("Control") as HTMLSelectElement).options).map((o) => o.value);
+    expect(options).toEqual(["", "CTRL-2", "CTRL-3"]); // CTRL-1 is already linked; children follow parents
+    await user.selectOptions(screen.getByLabelText("Control"), "CTRL-3");
 
-    expect(mutate).toHaveBeenCalledWith("CTRL-2", expect.anything());
+    expect(mutate).toHaveBeenCalledWith("CTRL-3", expect.anything());
   });
 
   it("calls the unlink hook when Remove is clicked", async () => {
@@ -102,10 +133,10 @@ describe("ObjectiveControlLinkEditor", () => {
     const user = userEvent.setup();
     render(<ObjectiveControlLinkEditor objective={{ ...OBJECTIVE, control_ids: [] }} />);
 
-    await user.type(screen.getByPlaceholderText("Control id"), "CTRL-2");
-    await user.click(screen.getByText("Link"));
+    await user.selectOptions(screen.getByLabelText("Framework"), "fw-1");
+    await user.selectOptions(screen.getByLabelText("Control"), "CTRL-3");
 
-    expect(screen.getByText(/Linked "CTRL-2"/)).toBeTruthy();
+    expect(screen.getByText(/Linked "Art. 32 — Security of processing"/)).toBeTruthy();
   });
 
   it("shows a confirmation once unlinking succeeds", async () => {
@@ -120,11 +151,14 @@ describe("ObjectiveControlLinkEditor", () => {
 
     await user.click(screen.getByText("Remove"));
 
-    expect(screen.getByText(/Removed "CTRL-1"/)).toBeTruthy();
+    expect(screen.getByText(/Removed "Art. 5 — Principles"/)).toBeTruthy();
   });
 
-  it("surfaces a 409 as 'Already linked'", async () => {
-    const mutate = vi.fn((_id, opts) => opts?.onError?.({ message: "conflict", status: 409 }));
+  it.each([
+    [409, "Already linked"],
+    [404, "No such control"],
+  ])("surfaces a %i as '%s' and resets the dropdown", async (status, text) => {
+    const mutate = vi.fn((_id, opts) => opts?.onError?.({ message: "x", status }));
     mockedStrategyApi.useLinkObjectiveControl.mockReturnValue({
       mutate,
       isPending: false,
@@ -133,25 +167,29 @@ describe("ObjectiveControlLinkEditor", () => {
     const user = userEvent.setup();
     render(<ObjectiveControlLinkEditor objective={{ ...OBJECTIVE, control_ids: [] }} />);
 
-    await user.type(screen.getByPlaceholderText("Control id"), "CTRL-1");
-    await user.click(screen.getByText("Link"));
+    await user.selectOptions(screen.getByLabelText("Framework"), "fw-1");
+    await user.selectOptions(screen.getByLabelText("Control"), "CTRL-3");
 
-    expect(screen.getByText("Already linked")).toBeTruthy();
+    expect(screen.getByText(text)).toBeTruthy();
+    expect((screen.getByLabelText("Control") as HTMLSelectElement).value).toBe("");
   });
 
-  it("surfaces a 404 as 'No such control'", async () => {
-    const mutate = vi.fn((_id, opts) => opts?.onError?.({ message: "not found", status: 404 }));
-    mockedStrategyApi.useLinkObjectiveControl.mockReturnValue({
-      mutate,
-      isPending: false,
-    } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveControl>);
+  it("says when a chosen framework has no controls yet", async () => {
+    const empty = { ...GDPR, id: "fw-2", name: "DORA", controls: [] } as RegulatoryFrameworkDetail;
+    mockedCompliance.useFrameworks.mockReturnValue({ data: { items: [GDPR, empty], total: 2 }, isLoading: false } as never);
+    mockedCompliance.useFramework.mockImplementation(
+      (id: string | null) => ({ data: id === "fw-2" ? empty : GDPR, isLoading: false }) as never,
+    );
 
     const user = userEvent.setup();
-    render(<ObjectiveControlLinkEditor objective={{ ...OBJECTIVE, control_ids: [] }} />);
+    render(<ObjectiveControlLinkEditor objective={OBJECTIVE} />);
+    await user.selectOptions(screen.getByLabelText("Framework"), "fw-2");
 
-    await user.type(screen.getByPlaceholderText("Control id"), "does-not-exist");
-    await user.click(screen.getByText("Link"));
+    expect(screen.getByText("This framework has no controls yet.")).toBeTruthy();
+  });
 
-    expect(screen.getByText("No such control")).toBeTruthy();
+  it("falls back to the raw id for a control it cannot find", () => {
+    render(<ObjectiveControlLinkEditor objective={{ ...OBJECTIVE, control_ids: ["gone"] }} />);
+    expect(screen.getByText("gone")).toBeTruthy();
   });
 });

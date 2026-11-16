@@ -92,9 +92,49 @@ describe("ObjectiveCapabilityLinkEditor", () => {
     render(<ObjectiveCapabilityLinkEditor objective={OBJECTIVE} />);
 
     await user.selectOptions(screen.getByRole("combobox"), "cap-2");
-    await user.click(screen.getByText("Link"));
 
     expect(mutate).toHaveBeenCalledWith("cap-2", expect.anything());
+  });
+
+  it("links as soon as a capability is chosen, with no separate Link button (ADP-w7z)", async () => {
+    const mutate = vi.fn();
+    mockedStrategyApi.useLinkObjectiveCapability.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveCapability>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveCapabilityLinkEditor objective={OBJECTIVE} />);
+
+    expect(screen.queryByRole("button", { name: "Link" })).toBeNull();
+    await user.selectOptions(screen.getByRole("combobox"), "cap-2");
+    expect(mutate).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables the dropdown while a link is saving", () => {
+    mockedStrategyApi.useLinkObjectiveCapability.mockReturnValue({
+      mutate: vi.fn(),
+      isPending: true,
+    } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveCapability>);
+
+    render(<ObjectiveCapabilityLinkEditor objective={OBJECTIVE} />);
+
+    expect((screen.getByRole("combobox") as HTMLSelectElement).disabled).toBe(true);
+  });
+
+  it("shows the error and resets the dropdown when linking fails", async () => {
+    const mutate = vi.fn((_id, opts) => opts?.onError?.(Object.assign(new Error("x"), { status: 409 })));
+    mockedStrategyApi.useLinkObjectiveCapability.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useLinkObjectiveCapability>);
+
+    const user = userEvent.setup();
+    render(<ObjectiveCapabilityLinkEditor objective={OBJECTIVE} />);
+
+    await user.selectOptions(screen.getByRole("combobox"), "cap-2");
+    expect(screen.getByText("Already linked")).toBeTruthy();
+    expect((screen.getByRole("combobox") as HTMLSelectElement).value).toBe("");
   });
 
   it("calls the unlink hook when Remove is clicked", async () => {
@@ -123,7 +163,6 @@ describe("ObjectiveCapabilityLinkEditor", () => {
     render(<ObjectiveCapabilityLinkEditor objective={OBJECTIVE} />);
 
     await user.selectOptions(screen.getByRole("combobox"), "cap-2");
-    await user.click(screen.getByText("Link"));
 
     expect(screen.getByText(/Linked "Underwriting"/)).toBeTruthy();
   });

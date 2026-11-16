@@ -85,7 +85,6 @@ describe("ObjectiveDesignLinkEditor", () => {
     render(<ObjectiveDesignLinkEditor objective={OBJECTIVE} />);
 
     await user.selectOptions(screen.getByRole("combobox"), "DSN-002");
-    await user.click(screen.getByText("Link"));
 
     expect(mutate).toHaveBeenCalledWith("DSN-002", expect.anything());
   });
@@ -116,7 +115,6 @@ describe("ObjectiveDesignLinkEditor", () => {
     render(<ObjectiveDesignLinkEditor objective={OBJECTIVE} />);
 
     await user.selectOptions(screen.getByRole("combobox"), "DSN-002");
-    await user.click(screen.getByText("Link"));
 
     expect(screen.getByText(/Linked "Claims Portal"/)).toBeTruthy();
   });

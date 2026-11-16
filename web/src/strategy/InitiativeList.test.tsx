@@ -172,13 +172,10 @@ describe("InitiativeList (mirrors ThemeList.tsx's convention)", () => {
     // regardless of what other selects render after it.
     const comboboxes = screen.getAllByRole("combobox");
     await user.selectOptions(comboboxes[1], "obj-2");
-    // Two "Link" buttons now render (objective editor, then
-    // 925-strategy-compliance-linkage's control-mapping editor) -- the
-    // objective editor's is first in DOM order.
-    await user.click(screen.getAllByText("Link")[0]);
+    // Choosing the objective links it at once (ADP-w7z), no separate Link button.
 
     expect(linkMutate).toHaveBeenCalledWith("obj-2", expect.anything());
-    // Clicking Link must not have also submitted the name/status form.
+    // Linking must not have also submitted the name/status form.
     expect(updateMutate).not.toHaveBeenCalled();
   });
 
