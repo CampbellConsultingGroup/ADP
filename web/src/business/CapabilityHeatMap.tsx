@@ -32,6 +32,7 @@ import {
 } from "../api/capAnalysis";
 import { LIFECYCLE_BAND_SWATCH } from "../application/capAnalysisUi";
 import { buildTree, type CapabilityTreeNode } from "./CapabilityTree";
+import { FIVE_STEP, type Swatch } from "./maturityScale";
 
 type BaseMetric = "maturity_level" | "strategic_relevance";
 type RollupMetric = "health" | "risk" | "cost" | "exposure";
@@ -49,20 +50,7 @@ const METRIC_LABELS: Record<Metric, string> = {
 const ROLLUP_METRICS: ReadonlySet<Metric> = new Set<Metric>(["health", "risk", "cost", "exposure"]);
 const isRollup = (m: Metric): m is RollupMetric => ROLLUP_METRICS.has(m);
 
-interface Swatch {
-  bg: string;
-  fg: string;
-}
-
-// Same 5-step diverging scale as web/src/insights/ApplicationsHeatMap.tsx
-// (919-insights-dashboard) -- kept visually consistent across both heat maps.
-const FIVE_STEP: Swatch[] = [
-  { bg: "var(--crit)", fg: "#ffffff" },
-  { bg: "var(--warn)", fg: "#1a1400" },
-  { bg: "var(--surface-3)", fg: "var(--ink)" },
-  { bg: "var(--good-wash)", fg: "var(--ink)" },
-  { bg: "var(--good)", fg: "#ffffff" },
-];
+// The 5-step maturity scale is shared with the regional heat map (942): see maturityScale.ts.
 
 // strategic_relevance is a genuine 3-value scale (Strategic/Core/Supporting),
 // not a stretched subset of the 5-step array (research.md Decision 4).

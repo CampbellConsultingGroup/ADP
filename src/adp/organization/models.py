@@ -16,7 +16,7 @@ import re
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 OrgUnitKind = Literal["enterprise", "division", "function"]
 GeographyKind = Literal["global", "region", "country"]
@@ -368,3 +368,106 @@ class OrgUnitFootprint(_Model):
     l3_total: int
     owns: list[FootprintEntry]
     contributes: list[FootprintEntry]
+
+
+# ── Regional assessments (942-regional-assessments, ADP-55k.3) ─────────────────
+#
+# A capability x region/country maturity score (same 1-5 scale as the capability's own
+# maturity_level, which stays the enterprise baseline) and/or a variant note. Applicability,
+# heat map cells and deltas are derived on read (test_regional_not_stored.py).
+
+RegionalMaturity = Literal[1, 2, 3, 4, 5]
+NOTE_MAX = 1000
+
+
+class GeoRef(_Model):
+    id: str
+    name: str
+    level: int
+    code: str | None = None
+
+
+class RegionalAssessment(_Model):
+    id: str
+    capability_id: str
+    geography: GeoRef
+    maturity_level: int | None = None
+    note: str | None = None
+    updated_at: datetime
+
+
+class SetRegionalAssessment(_Model):
+    maturity_level: RegionalMaturity | None = None
+    note: str | None = Field(default=None, max_length=NOTE_MAX)
+
+    @field_validator("note")
+    @classmethod
+    def _blank_note_is_none(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        return v or None
+
+    @model_validator(mode="after")
+    def _score_or_note(self) -> "SetRegionalAssessment":
+        if self.maturity_level is None and self.note is None:
+            raise ValueError("Record a maturity score, a note, or both")
+        return self
+
+
+class RegionalAssessmentListResponse(_Model):
+    items: list[RegionalAssessment]
+    total: int
+
+
+class SetRegionScope(_Model):
+    region_specific: bool
+    geography_ids: list[str] = []
+
+    @model_validator(mode="after")
+    def _scope_matches_flag(self) -> "SetRegionScope":
+        if self.region_specific and not self.geography_ids:
+            raise ValueError("A region-specific capability must name at least one geography")
+        if not self.region_specific and self.geography_ids:
+            raise ValueError("Geographies can only be set on a region-specific capability")
+        self.geography_ids = list(dict.fromkeys(self.geography_ids))
+        return self
+
+
+class RegionScope(_Model):
+    capability_id: str
+    region_specific: bool
+    geographies: list[GeoRef] = []
+    scope_needs_update: bool = False
+
+
+HeatmapCellState = Literal["assessed", "not_assessed", "not_applicable"]
+
+
+class HeatmapCell(_Model):
+    geography_id: str
+    state: HeatmapCellState
+    maturity_level: int | None = None
+    note: str | None = None
+    delta: int | None = None
+
+
+class HeatmapCapability(_Model):
+    id: str
+    name: str
+    level: int
+    parent_id: str | None = None
+
+
+class HeatmapRow(_Model):
+    capability: HeatmapCapability
+    baseline: int | None = None
+    region_specific: bool = False
+    scope_needs_update: bool = False
+    cells: list[HeatmapCell]
+
+
+class RegionalHeatmap(_Model):
+    columns: list[GeoRef]
+    rows: list[HeatmapRow]
+    max_columns: int

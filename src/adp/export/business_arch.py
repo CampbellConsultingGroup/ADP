@@ -70,10 +70,20 @@ EMPTY_ORGANIZATION: dict[str, Any] = {
 }
 
 
+# 942-regional-assessments FR-016: the block a capability with no regional data carries.
+EMPTY_REGIONAL: dict[str, Any] = {
+    "region_specific": False,
+    "scope": [],
+    "scope_needs_update": False,
+    "assessments": [],
+}
+
+
 def _serialize_capability(
     cap: BusinessCapability,
     linked_designs: list[str],
     organization: dict[str, Any] | None = None,
+    regional: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "id": cap.id,
@@ -92,6 +102,8 @@ def _serialize_capability(
         "linked_designs": sorted(linked_designs),
         # 941: owner, effective owner, performers and contributors (derived from the mappings).
         "organization": organization if organization is not None else dict(EMPTY_ORGANIZATION),
+        # 942: regional maturity assessments and region-specific scope.
+        "regional": regional if regional is not None else dict(EMPTY_REGIONAL),
     }
 
 
@@ -179,6 +191,8 @@ class BusinessArchSnapshot:
     activity_links: dict[str, list[str]] = field(default_factory=dict)
     # 941-capability-org-mappings: capability_id -> its "organization" block.
     capability_organization: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # 942-regional-assessments: capability_id -> its "regional" block.
+    capability_regional: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 async def _fetch_all(session: AsyncSession) -> BusinessArchSnapshot:
@@ -237,7 +251,21 @@ async def _fetch_all(session: AsyncSession) -> BusinessArchSnapshot:
     except Exception:
         _logger.warning("business_arch_export.capability_organization_failed", exc_info=True)
 
+    # 942: one regional snapshot (4 queries), best effort like the organization block.
+    capability_regional: dict[str, dict[str, Any]] = {}
+    try:
+        from adp.organization import regional, regional_analysis
+
+        regional_snapshot = await regional.build_snapshot(session)
+        capability_regional = {
+            cap.id: regional_analysis.export_block(regional_snapshot, cap.id)
+            for cap in capabilities
+        }
+    except Exception:
+        _logger.warning("business_arch_export.capability_regional_failed", exc_info=True)
+
     return BusinessArchSnapshot(
+        capability_regional=capability_regional,
         capability_organization=capability_organization,
         capabilities=capabilities,
         domains=domains,
@@ -273,6 +301,7 @@ async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSessio
                     cap,
                     snapshot.capability_design_links.get(cap.id, []),
                     snapshot.capability_organization.get(cap.id),
+                    snapshot.capability_regional.get(cap.id),
                 ),
                 now,
             )

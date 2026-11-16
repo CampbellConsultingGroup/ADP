@@ -14,7 +14,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from adp.organization import cap_mappings
+from adp.organization import cap_mappings, regional
 from adp.organization import store as ostore
 from adp.organization.models import (
     AddMapping,
@@ -42,9 +42,15 @@ from adp.organization.models import (
     OrgUnitFootprint,
     OrgUnitListResponse,
     OrgUnitUpdate,
+    RegionalAssessment,
+    RegionalAssessmentListResponse,
+    RegionalHeatmap,
+    RegionScope,
     ResolveResult,
     ResolveUnmatched,
     SetOwner,
+    SetRegionalAssessment,
+    SetRegionScope,
     UnknownReferenceError,
     UnmatchedListResponse,
 )
@@ -379,3 +385,102 @@ async def org_unit_footprint(
         return await cap_mappings.get_footprint(ou_id, session)
     except OrganizationError as exc:
         raise _http(exc) from exc
+
+
+# ── Regional assessments (942-regional-assessments, ADP-55k.3) ─────────────────
+#
+# Distinct prefixes (research R4): /regional-assessments/{cap_id}/{geo_id}, /regional-heatmap and
+# /capability-region-scope/{cap_id}, so no path can be taken for another. The capability's own
+# maturity_level (the baseline) is never written here.
+
+
+@router.get("/regional-assessments", response_model=RegionalAssessmentListResponse)
+async def list_regional_assessments(
+    capability_id: str | None = None, session: AsyncSession = Depends(_get_session)
+) -> RegionalAssessmentListResponse:
+    return await regional.list_assessments(session, capability_id=capability_id)
+
+
+@router.put("/regional-assessments/{cap_id}/{geo_id}", response_model=RegionalAssessment)
+async def set_regional_assessment(
+    cap_id: str,
+    geo_id: str,
+    body: SetRegionalAssessment,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+) -> RegionalAssessment:
+    try:
+        assessment, created = await regional.set_assessment(cap_id, geo_id, body, session)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    _log(
+        "regional_assessment.set",
+        request,
+        capability=cap_id,
+        geography=geo_id,
+        maturity=body.maturity_level,
+        note_chars=len(body.note or ""),
+        created=created,
+    )
+    return assessment
+
+
+@router.delete(
+    "/regional-assessments/{cap_id}/{geo_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def remove_regional_assessment(
+    cap_id: str, geo_id: str, request: Request, session: AsyncSession = Depends(_get_session)
+) -> Response:
+    try:
+        await regional.remove_assessment(cap_id, geo_id, session)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    _log("regional_assessment.remove", request, capability=cap_id, geography=geo_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/regional-heatmap", response_model=RegionalHeatmap)
+async def regional_heatmap(
+    geography_ids: str | None = None, session: AsyncSession = Depends(_get_session)
+) -> RegionalHeatmap:
+    requested = (
+        [g.strip() for g in geography_ids.split(",") if g.strip()] if geography_ids else None
+    )
+    try:
+        return await regional.get_heatmap(requested, session)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+
+
+@router.get("/capability-region-scope/{cap_id}", response_model=RegionScope)
+async def get_region_scope(
+    cap_id: str, session: AsyncSession = Depends(_get_session)
+) -> RegionScope:
+    try:
+        return await regional.get_scope(cap_id, session)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+
+
+@router.put("/capability-region-scope/{cap_id}", response_model=RegionScope)
+async def set_region_scope(
+    cap_id: str,
+    body: SetRegionScope,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+) -> RegionScope:
+    try:
+        scope = await regional.set_scope(cap_id, body, session)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    _log(
+        "region_scope.set",
+        request,
+        capability=cap_id,
+        region_specific=body.region_specific,
+        geographies=",".join(body.geography_ids) or None,
+    )
+    return scope

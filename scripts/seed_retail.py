@@ -47,9 +47,14 @@ from adp.application.models import (
     TechnicalCapabilityCreate,
 )
 from adp.application import app_capabilities as acstore
-from adp.organization import cap_mappings
+from adp.organization import cap_mappings, regional
 from adp.organization import store as ostore
-from adp.organization.models import AddMapping, OrgUnitCreate
+from adp.organization.models import (
+    AddMapping,
+    OrgUnitCreate,
+    SetRegionalAssessment,
+    SetRegionScope,
+)
 from adp.application.app_capability_models import ApplicationCapabilityCreate
 from adp.business import store as bstore
 from adp.business.models import (
@@ -89,6 +94,10 @@ WIPE_TABLES = [
     "agents",
     # 940-org-units-geography: org units and their geography links. NEVER the geographies table
     # itself -- migration 048 seeds it, and nothing here can recreate it.
+    # 942-regional-assessments: assessments and region-specific scope. NEVER geographies.
+    "region_specific_capability_geographies",
+    "region_specific_capabilities",
+    "capability_regional_assessments",
     # 941-capability-org-mappings: owner / performer / contributor mappings (before org_units).
     "capability_org_mappings",
     "org_unit_geographies",
@@ -207,7 +216,9 @@ CAPABILITIES = [
     ]),
     ("Corporate Services", "Finance & Accounting", [
         ("Financial Management", []),
-        ("Human Capital Management", []),
+        # 942-regional-assessments: a Brazil-only statutory function, modelled once and flagged
+        # region-specific rather than copied per country.
+        ("Human Capital Management", ["Statutory eSocial Reporting"]),
         ("Enterprise Data & Analytics", []),
     ]),
     # 937-application-capabilities: the user's worked Store POS example (ADP-6et). Business L3s
@@ -325,6 +336,23 @@ CAPABILITY_PERFORMERS = [
     ("Markdown Optimization", "Stores", "geo-GB"),
 ]
 CAPABILITY_CONTRIBUTORS = [("Accept Payment", "Finance"), ("Replenishment", "Stores")]
+
+# 942-regional-assessments: per-region maturity (capability, geography, score, note). The
+# capabilities' own maturity_level stays the enterprise baseline. Europe (geo-m49-150) and the
+# Americas (geo-m49-019) plus two countries, so the regional heat map shows real differences.
+REGIONAL_ASSESSMENTS = [
+    ("Accept Payment", "geo-m49-150", 4, None),
+    ("Accept Payment", "geo-m49-019", 3, None),
+    ("Accept Payment", "geo-BR", 2, "Pix and boleto handled by a separate local acquirer"),
+    ("Replenishment", "geo-m49-150", 3, None),
+    ("Replenishment", "geo-m49-019", 4, None),
+    ("Replenishment", "geo-DE", 5, None),
+    ("Financial Management", "geo-m49-150", 4, "IFRS group consolidation runs in Dublin"),
+    ("Financial Management", "geo-m49-019", 2, None),
+    ("Human Capital Management", "geo-BR", 2, None),
+    ("Statutory eSocial Reporting", "geo-BR", 2, "eSocial events are still filed manually"),
+]
+REGION_SPECIFIC = {"Statutory eSocial Reporting": ["geo-BR"]}
 
 # Overlap: e-commerce has its own promotions capability, so two applications realize
 # "Apply Promotions" -- a rationalization candidate. (L2 parent, L3 name, business L3, tech, app key)
@@ -976,6 +1004,21 @@ async def seed(db_url: str) -> None:
         await session.commit()
         print(f"  {len(CAPABILITY_OWNERS)} owners, {len(CAPABILITY_PERFORMERS)} performers, "
               f"{len(CAPABILITY_CONTRIBUTORS)} contributors")
+
+    # ── Phase C5: regional assessments (942-regional-assessments) ──────────────
+    print("Seeding regional assessments...")
+    async with session_factory() as session:
+        for cap_name, geo_id, maturity, note in REGIONAL_ASSESSMENTS:
+            await regional.set_assessment(
+                cap_ids[cap_name], geo_id,
+                SetRegionalAssessment(maturity_level=maturity, note=note), session)
+        for cap_name, geo_ids in REGION_SPECIFIC.items():
+            await regional.set_scope(
+                cap_ids[cap_name], SetRegionScope(region_specific=True, geography_ids=geo_ids),
+                session)
+        await session.commit()
+        print(f"  {len(REGIONAL_ASSESSMENTS)} assessments, "
+              f"{len(REGION_SPECIFIC)} region-specific capabilities")
 
     # ── Phase D: agentic solution + agents (933-agent-registry) ───────────────
     print("Seeding agent registry...")
