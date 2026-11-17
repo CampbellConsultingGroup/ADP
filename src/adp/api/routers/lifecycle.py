@@ -16,6 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from adp.audit.writer import next_audit_id
+from adp.auth.actor import actor_of
 from adp.models import AuditEntry, LifecycleStatus
 
 logger = logging.getLogger(__name__)
@@ -44,11 +45,7 @@ async def _get_design_store():  # type: ignore[return]
 
 
 def _get_actor(request: Request) -> str:
-    from adp.auth.models import UNAUTHENTICATED_USER
-    user = getattr(request.state, "user", UNAUTHENTICATED_USER)
-    if user is not UNAUTHENTICATED_USER:
-        return user.username
-    return request.headers.get("X-Actor", "architect")
+    return actor_of(request)
 
 
 # ── Request / response models ─────────────────────────────────────────────────

@@ -19,6 +19,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from adp.auth.actor import actor_of
 from adp.background import spawn
 from adp.telemetry.context import get_trace_id
 
@@ -290,12 +291,7 @@ class RejectOptionRequest(BaseModel):
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 
 def _get_actor(request: Request) -> str:
-    """Return actor identity: authenticated user if available, else X-Actor header."""
-    from adp.auth.models import UNAUTHENTICATED_USER
-    user = getattr(request.state, "user", UNAUTHENTICATED_USER)
-    if user is not UNAUTHENTICATED_USER:
-        return user.username
-    return request.headers.get("X-Actor", "architect")
+    return actor_of(request)
 
 
 async def _get_design_store_dep():  # type: ignore[return]

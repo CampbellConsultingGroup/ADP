@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
+from adp.auth.actor import actor_of
 from adp.calm.exporter import map_design_to_calm
 from adp.calm.models import CALMImportResult
 
@@ -23,12 +24,7 @@ router = APIRouter(tags=["calm"])
 # ── Shared helpers (reused from recommend router) ─────────────────────────────
 
 def _get_actor(request: Request) -> str:
-    """Return actor identity: authenticated user if available, else X-Actor header."""
-    from adp.auth.models import UNAUTHENTICATED_USER
-    user = getattr(request.state, "user", UNAUTHENTICATED_USER)
-    if user is not UNAUTHENTICATED_USER:
-        return user.username
-    return request.headers.get("X-Actor", "architect")
+    return actor_of(request)
 
 
 async def _get_design_store_dep():  # type: ignore[return]

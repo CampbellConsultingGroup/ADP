@@ -59,6 +59,7 @@ from adp.agentic.models import (
     TargetNotFoundError,
 )
 from adp.agentic.risk import solution_risk
+from adp.auth.actor import actor_of
 from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
 from adp.authz.permissions import is_permitted
@@ -72,12 +73,7 @@ _A = TypeVar("_A", bound=Agent)
 
 
 def _get_actor(request: Request) -> str:
-    from adp.auth.models import UNAUTHENTICATED_USER
-
-    user = getattr(request.state, "user", UNAUTHENTICATED_USER)
-    if user is not UNAUTHENTICATED_USER:
-        return user.username
-    return request.headers.get("X-Actor", "architect")
+    return actor_of(request)
 
 
 async def _get_session():

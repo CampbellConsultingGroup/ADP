@@ -19,6 +19,7 @@ from adp.admin.rubric_models import (
     RubricListResponse,
     RubricRestoreRequest,
 )
+from adp.auth.actor import actor_of
 from adp.authz.enforcement import require_action_dep
 from adp.authz.roles import ActionType
 
@@ -37,12 +38,7 @@ async def _get_session():
 
 
 def _get_actor(request: Request) -> str:
-    """Mirrors admin_prompts_router._get_actor exactly."""
-    from adp.auth.models import UNAUTHENTICATED_USER
-    user = getattr(request.state, "user", UNAUTHENTICATED_USER)
-    if user is not UNAUTHENTICATED_USER:
-        return user.username
-    return request.headers.get("X-Actor", "architect")
+    return actor_of(request)
 
 
 @router.get(

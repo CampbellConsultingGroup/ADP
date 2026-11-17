@@ -17,6 +17,7 @@ from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+from adp.auth.actor import actor_of
 from adp.intake.models import (
     IntakeSubmission,
     RequirementKind,
@@ -180,12 +181,7 @@ class CapabilityGapAnalysisResponse(BaseModel):
 # ── Shared helpers ─────────────────────────────────────────────────────────────
 
 def _get_actor(request: Request) -> str:
-    """Return actor identity: authenticated user if available, else X-Actor header."""
-    from adp.auth.models import UNAUTHENTICATED_USER
-    user = getattr(request.state, "user", UNAUTHENTICATED_USER)
-    if user is not UNAUTHENTICATED_USER:
-        return user.username
-    return request.headers.get("X-Actor", "architect")
+    return actor_of(request)
 
 
 async def _get_design_store():  # type: ignore[return]

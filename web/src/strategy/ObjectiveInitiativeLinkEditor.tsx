@@ -1,147 +1,47 @@
-/** ObjectiveInitiativeLinkEditor — near-verbatim mirror of
- * ObjectiveCapabilityLinkEditor.tsx's structure, adapted to link a
- * StrategicObjective to StrategyInitiative records (ADP-d8u.6). Unlike the
- * capability editor, the "linked" set comes from a dedicated reverse-lookup
- * query (useObjectiveInitiatives) rather than an inline field on the
- * objective, since GET /objectives/{id} doesn't carry initiative_ids. */
+/** Links a strategic objective to initiatives, with the shared LinkEditor (ADP-blp.36). The
+ * "linked" set comes from a dedicated reverse-lookup query (useObjectiveInitiatives) rather than
+ * an inline field on the objective, since GET /objectives/{id} doesn't carry initiative_ids. */
 
-import React, { useState } from "react";
+import React from "react";
 import {
   useInitiatives,
   useObjectiveInitiatives,
   useLinkObjectiveToInitiative,
   useUnlinkObjectiveFromInitiative,
 } from "../api/strategy";
-import { useLinkFeedback } from "./useLinkFeedback";
-import NavLinkButton from "./NavLinkButton";
+import LinkEditor from "./LinkEditor";
 
 interface Props {
   objectiveId: string;
-  /** Cross-navigation: jump to a linked initiative (Initiatives tab,
-   *  scroll-and-highlighted). When omitted, names render as plain text. */
+  /** Opens the initiative within the Strategy screen. Omitted: the name is plain text. */
   onNavigateToInitiative?: (initiativeId: string) => void;
 }
 
 export default function ObjectiveInitiativeLinkEditor({ objectiveId, onNavigateToInitiative }: Props): React.ReactElement {
-  const [selectedId, setSelectedId] = useState<string>("");
-  const [linkError, setLinkError] = useState<string | null>(null);
-  const feedback = useLinkFeedback();
-
-  const allInitiatives = useInitiatives();
-  const linkedInitiatives = useObjectiveInitiatives(objectiveId);
-  const link = useLinkObjectiveToInitiative(objectiveId);
-  const unlink = useUnlinkObjectiveFromInitiative(objectiveId);
-
-  const linkedIds = new Set((linkedInitiatives.data?.items ?? []).map((i) => i.id));
-  const linked = linkedInitiatives.data?.items ?? [];
-  const available = (allInitiatives.data?.items ?? []).filter((i) => !linkedIds.has(i.id));
-
-  function handleAdd(chosenId: string) {
-    if (!chosenId) return;
-    setSelectedId(chosenId);
-    setLinkError(null);
-    const name = available.find((i) => i.id === chosenId)?.name ?? chosenId;
-    link.mutate(chosenId, {
-      onSuccess: () => {
-        setSelectedId("");
-        feedback.showLinked(name);
-      },
-      onError: (err: Error & { status?: number }) => {
-        setSelectedId("");
-        if (err.status === 409) {
-          setLinkError("Already linked");
-        } else {
-          setLinkError(err.message || "Failed to link initiative");
-        }
-      },
-    });
-  }
-
-  if (allInitiatives.isLoading || linkedInitiatives.isLoading) {
-    return <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>Loading initiatives…</p>;
-  }
-
+  const all = useInitiatives();
+  const linked = useObjectiveInitiatives(objectiveId);
+  // The linked initiatives come from their own query, so list them first: a linked initiative
+  // is shown even if the full list has not loaded it.
+  const linkedItems = linked.data?.items ?? [];
+  const linkedIdSet = new Set(linkedItems.map((i) => i.id));
+  const options = [
+    ...linkedItems.map((i) => ({ id: i.id, label: i.name })),
+    ...(all.data?.items ?? [])
+      .filter((i) => !linkedIdSet.has(i.id))
+      .map((i) => ({ id: i.id, label: i.name })),
+  ];
   return (
-    <div style={{ marginTop: "0.75rem" }}>
-      <div style={{ marginBottom: "0.5rem" }}>
-        {linked.length === 0 && (
-          <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", margin: "0 0 0.5rem" }}>
-            No initiatives linked yet.
-          </p>
-        )}
-        {linked.map((i) => (
-          <div
-            key={i.id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              padding: "0.35rem 0",
-              borderBottom: "1px solid var(--border)",
-            }}
-          >
-            <span style={{ flex: 1, fontSize: "0.85rem" }}>
-              {onNavigateToInitiative ? (
-                <NavLinkButton onClick={() => onNavigateToInitiative(i.id)} title="Jump to this initiative">
-                  {i.name}
-                </NavLinkButton>
-              ) : (
-                i.name
-              )}
-            </span>
-            <button
-              onClick={() => unlink.mutate(i.id, { onSuccess: () => feedback.showRemoved(i.name) })}
-              disabled={unlink.isPending}
-              style={{
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: "4px",
-                cursor: "pointer",
-                padding: "2px 8px",
-                fontSize: "0.75rem",
-                color: "var(--text-secondary)",
-              }}
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-        <select
-          value={selectedId}
-          onChange={(e) => handleAdd(e.target.value)}
-          disabled={link.isPending}
-          style={{
-            flex: 1,
-            minWidth: "160px",
-            padding: "0.3rem 0.5rem",
-            fontSize: "0.85rem",
-            border: "1px solid var(--border)",
-            borderRadius: "4px",
-            background: "var(--bg)",
-            color: "var(--text)",
-          }}
-        >
-          <option value="">Link an initiative…</option>
-          {available.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.name}
-            </option>
-          ))}
-        </select>
-      </div>
-      {linkError && (
-        <p style={{ color: "var(--error, var(--crit))", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>
-          {linkError}
-        </p>
-      )}
-      {feedback.message && (
-        <p style={{ color: "var(--good)", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>
-          {feedback.message}
-        </p>
-      )}
-    </div>
+    <LinkEditor
+      noun="initiative"
+      plural="initiatives"
+      prompt="Link an initiative…"
+      isLoading={all.isLoading || linked.isLoading}
+      options={options}
+      linkedIds={linkedItems.map((i) => i.id)}
+      link={useLinkObjectiveToInitiative(objectiveId)}
+      unlink={useUnlinkObjectiveFromInitiative(objectiveId)}
+      onOpen={onNavigateToInitiative}
+      openTitle="Jump to this initiative"
+    />
   );
 }

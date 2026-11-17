@@ -60,6 +60,7 @@ import {
 import BucketCard, { AppChip } from "./BucketCard";
 import CrossTabGrid from "./CrossTabGrid";
 import { PageHeader } from "../ui/primitives";
+import { useHashParam } from "../shell/routing";
 
 export default function PortfolioPage(): React.ReactElement {
   // useSuspenseQuery, consumed directly with no local <Suspense> wrapper --
@@ -67,8 +68,10 @@ export default function PortfolioPage(): React.ReactElement {
   // top-level-nav-view depth.
   const apps = useApplications();
   const capabilityGroups = useApplicationCapabilityGroups();
-  const [dimensionA, setDimensionA] = useState<Dimension>("capability");
-  const [dimensionB, setDimensionB] = useState<Dimension>("capability");
+  // ADP-blp.68: the two grouping choices are in the URL (?group=...&then=...), so a reload or a
+  // shared link shows the same cut of the portfolio. The filter is still page state.
+  const [dimensionA, setDimensionA] = useHashParam<Dimension>("group", ALL_DIMENSIONS, "capability");
+  const [dimensionB, setDimensionB] = useHashParam<Dimension>("then", ALL_DIMENSIONS, "capability");
   const [filterField, setFilterField] = useState<FilterField | "">("");
   const [filterOperator, setFilterOperator] = useState<FilterOperator>("eq");
   const [filterValue, setFilterValue] = useState<string>("");
