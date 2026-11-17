@@ -29,7 +29,9 @@ const AgentsPage = lazy(() => import("./agentic/AgentsPage"));
 const AdminPage = lazy(() => import("./admin/AdminPage"));
 const ScoringRubricsPage = lazy(() => import("./admin/ScoringRubricsPage"));
 import { AppShell } from "./ui";
+import { AskAiLauncher } from "./chat/AskAiLauncher";
 import { PageBoundary } from "./ui/PageBoundary";
+import type { SearchHit } from "./ui/SearchPalette";
 import type { AppView } from "./shell";
 
 // C4 Design has no meaning without a design (it operates on elements that only
@@ -106,7 +108,32 @@ export default function App(): React.ReactElement {
     },
   };
 
-  const onNavigate = (nextView: AppView) => {
+  // ADP-blp.56: a global search result opens on the screen that owns that kind of entity.
+  // Kinds with no single-entity deep link yet open their screen.
+  const onOpenSearchResult = (hit: SearchHit) => {
+    switch (hit.entity_type) {
+      case "business_capability":
+        capabilityNav.openBusinessCapability(hit.entity_id);
+        break;
+      case "application":
+        capabilityNav.openApplication(hit.entity_id);
+        break;
+      case "application_capability":
+        openAppCapability(hit.entity_id);
+        break;
+      case "technical_capability":
+        capabilityNav.openTechnicalCapability(hit.entity_id);
+        break;
+      case "agent":
+        capabilityNav.openAgent?.(hit.entity_id);
+        break;
+      default:
+        // value streams, stages, value chains, domains, org units
+        onNavigate("business");
+    }
+  };
+
+  function onNavigate(nextView: AppView) {
     if (!currentDesignId && DESIGN_ONLY_VIEWS.includes(nextView)) {
       setPendingView(nextView);
       setView("designs");
@@ -119,7 +146,7 @@ export default function App(): React.ReactElement {
     setPendingAdoptionId(null);
     setPendingAgentId(null);
     setView(nextView);
-  };
+  }
 
   const onSelectDesign = (id: string) => {
     setCurrentDesignId(id);
@@ -250,7 +277,14 @@ export default function App(): React.ReactElement {
   return (
     <AppCapNavContext.Provider value={openAppCapability}>
       <CapabilityNavContext.Provider value={capabilityNav}>
-        <AppShell currentView={view} onNavigate={onNavigate} designId={currentDesignId} onStartNewDesign={onStartNewDesign}>
+        <AppShell
+          currentView={view}
+          onNavigate={onNavigate}
+          designId={currentDesignId}
+          onStartNewDesign={onStartNewDesign}
+          onOpenSearchResult={onOpenSearchResult}
+          topActions={<AskAiLauncher />}
+        >
           {/* ADP-blp.30: a page that fails must not take the nav down with it. */}
           <PageBoundary key={view}>{renderPage()}</PageBoundary>
         </AppShell>

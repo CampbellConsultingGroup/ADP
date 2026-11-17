@@ -362,7 +362,7 @@ describe("ApplicationDetail", () => {
     expect(await screen.findByText("CRM")).toBeDefined();
     expect(screen.getByText("Invest")).toBeDefined();
 
-    fireEvent.click(screen.getByRole("button", { name: "Capabilities" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Capabilities" }));
     expect(await screen.findByText("Business Capabilities")).toBeDefined();
   });
 });

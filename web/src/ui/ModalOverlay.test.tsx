@@ -74,3 +74,35 @@ describe("clickableRow (ADP-blp.40)", () => {
     expect(onActivate).toHaveBeenCalledTimes(3);
   });
 });
+
+import { Tabs } from "./Tabs";
+
+describe("Tabs (ADP-blp.45)", () => {
+  const tabs = [
+    { id: "a", label: "Alpha" },
+    { id: "b", label: "Beta" },
+    { id: "c", label: "Gamma" },
+  ] as const;
+
+  it("is a tablist with one selected tab in the Tab order", () => {
+    render(<Tabs label="Sections" tabs={tabs} active="b" onChange={vi.fn()} />);
+    expect(screen.getByRole("tablist", { name: "Sections" })).toBeTruthy();
+    const selected = screen.getByRole("tab", { selected: true });
+    expect(selected.textContent).toBe("Beta");
+    expect(selected.getAttribute("tabindex")).toBe("0");
+    expect(screen.getByRole("tab", { name: "Alpha" }).getAttribute("tabindex")).toBe("-1");
+  });
+
+  it("changes tab on click and with the arrow, Home and End keys", () => {
+    const onChange = vi.fn();
+    render(<Tabs label="Sections" tabs={tabs} active="b" onChange={onChange} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Gamma" }));
+    const beta = screen.getByRole("tab", { name: "Beta" });
+    fireEvent.keyDown(beta, { key: "ArrowRight" });
+    fireEvent.keyDown(beta, { key: "ArrowLeft" });
+    fireEvent.keyDown(beta, { key: "Home" });
+    fireEvent.keyDown(beta, { key: "End" });
+    fireEvent.keyDown(beta, { key: "x" });
+    expect(onChange.mock.calls.map((c) => c[0])).toEqual(["c", "c", "a", "a", "c"]);
+  });
+});

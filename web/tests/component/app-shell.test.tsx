@@ -26,8 +26,8 @@ afterEach(cleanup);
 
 const WORKSPACE = ["Overview", "Insights"];
 const ARCHITECTURE = ["Business", "Applications", "Technical Architecture"];
-const OVERSIGHT = ["APM", "Governance", "Knowledge"];
-const DESIGN_SCOPED = ["Designs", "Intake", "C4 Design"];
+const OVERSIGHT = ["Application Portfolio", "Governance", "Knowledge"];
+const DESIGN_SCOPED = ["Designs", "New Design", "C4 Design"];
 
 function rail(): HTMLElement {
   const el = document.querySelector("nav.shell-rail");
@@ -108,7 +108,7 @@ describe("AppShell", () => {
         <div />
       </AppShell>,
     );
-    expect(navButton("APM").className).toContain("active");
+    expect(navButton("Application Portfolio").className).toContain("active");
     expect(navButton("Governance").className).not.toContain("active");
   });
 
@@ -134,7 +134,7 @@ describe("AppShell", () => {
         <div />
       </AppShell>,
     );
-    fireEvent.click(navButton("Intake"));
+    fireEvent.click(navButton("New Design"));
     expect(onStartNewDesign).toHaveBeenCalledTimes(1);
     expect(onNavigate).not.toHaveBeenCalled();
   });
@@ -146,7 +146,7 @@ describe("AppShell", () => {
         <div />
       </AppShell>,
     );
-    fireEvent.click(navButton("Intake"));
+    fireEvent.click(navButton("New Design"));
     expect(onNavigate).toHaveBeenCalledWith("intake");
   });
 

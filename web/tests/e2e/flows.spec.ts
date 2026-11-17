@@ -191,10 +191,7 @@ test.describe("Portfolio and Governance navigation", () => {
     await page.getByRole("button", { name: "Designs", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Designs" })).toBeVisible({ timeout: 10_000 });
 
-    // exact: true -- bare "APM" also substring-matches OverviewPage's
-    // redesigned dashboard tile ("APM Analysis TIME . 7R"), visible on the
-    // landing view these tests start from without navigating through Designs first.
-    await page.getByRole("button", { name: "APM", exact: true }).click();
+    await page.getByRole("button", { name: "Application Portfolio", exact: true }).click();
 
     // No page-level heading -- assert the actual Group by/Filter by controls
     // (PortfolioPage.tsx) that replaced the old Technologies section instead.
@@ -216,28 +213,15 @@ test.describe("Portfolio and Governance navigation", () => {
     const content = page.locator(".shell-content");
 
     // All three governance tabs must be visible
-    await expect(content.getByRole("button", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
-    await expect(content.getByRole("button", { name: "Compliance" })).toBeVisible();
-    await expect(content.getByRole("button", { name: "Activity Feed" })).toBeVisible();
-  });
-
-  test("← APM back button returns to the Application Portfolio from governance", async ({ page }) => {
-    await page.goto(WEB_URL);
-    await page.getByRole("button", { name: "Governance", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
-
-    // GovernancePage.tsx's back button still reads "← APM" and still
-    // navigates to the "portfolio" view -- only the destination page's own
-    // content (and how you'd have gotten there originally) changed.
-    await page.getByRole("button", { name: "← APM" }).click();
-
-    await expect(page.getByLabel("Group by")).toBeVisible({ timeout: 10_000 });
+    await expect(content.getByRole("tab", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
+    await expect(content.getByRole("tab", { name: "Design Validation" })).toBeVisible();
+    await expect(content.getByRole("tab", { name: "Activity Feed" })).toBeVisible();
   });
 
   test("Governance nav item is highlighted when on the governance page", async ({ page }) => {
     await page.goto(WEB_URL);
     await page.getByRole("button", { name: "Governance", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole("tab", { name: "Design Status" })).toBeVisible({ timeout: 10_000 });
 
     const governanceBtn = page.getByRole("button", { name: "Governance", exact: true });
     await expect(governanceBtn).toBeVisible();
@@ -321,7 +305,7 @@ test.describe("Business Capabilities Agent Review button", () => {
 
     // BusinessPage.tsx's default tab is "Domains", not "Capabilities" -- the
     // capability tree (and this row) only renders once that tab is selected.
-    await page.getByRole("button", { name: "Capabilities", exact: true }).click();
+    await page.getByRole("tab", { name: "Capabilities", exact: true }).click();
 
     // exact: false -- CapabilityNode.tsx's name <span> also renders an
     // adjacent "no strategic linkage" orphan badge with no separating

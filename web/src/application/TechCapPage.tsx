@@ -1,5 +1,6 @@
 import React from "react";
 import TechCapTree from "./TechCapTree";
+import { PageHeader } from "../ui/primitives";
 
 /** Technical Architecture screen (top-level nav item). Captures technical
  *  capabilities and other technical characteristics -- deliberately mirrors
@@ -11,14 +12,9 @@ import TechCapTree from "./TechCapTree";
  *  scope here). */
 export default function TechCapPage({ focusTechCapId = null }: { focusTechCapId?: string | null }): React.ReactElement {
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 900, width: "100%", margin: "0 auto" }}>
-        <div style={{ marginBottom: 20 }}>
-          <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--ink)", margin: "0 0 4px" }}>Technical Architecture</h2>
-          <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
-            Define the technical capabilities that describe the platform's technology foundation.
-          </p>
-        </div>
+        <PageHeader title="Technical Architecture" lede="Define the technical capabilities that describe the platform's technology foundation." />
 
         <TechCapTree focusId={focusTechCapId} />
       </div>

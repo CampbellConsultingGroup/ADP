@@ -59,6 +59,7 @@ import {
 } from "./groupApplications";
 import BucketCard, { AppChip } from "./BucketCard";
 import CrossTabGrid from "./CrossTabGrid";
+import { PageHeader } from "../ui/primitives";
 
 export default function PortfolioPage(): React.ReactElement {
   // useSuspenseQuery, consumed directly with no local <Suspense> wrapper --
@@ -135,6 +136,10 @@ export default function PortfolioPage(): React.ReactElement {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ flex: 1, overflowY: "auto", padding: "20px 24px", maxWidth: 1200, margin: "0 auto", width: "100%" }}>
+        <PageHeader
+          title="Application Portfolio"
+          lede="Group, cross-tabulate and filter the application estate."
+        />
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
           <span style={{ fontSize: 13, color: "var(--ink-3)" }}>
             {filteredApps.length}

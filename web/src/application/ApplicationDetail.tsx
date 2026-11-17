@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import type { Application, ApplicationCreate } from "../api/application";
 import { useApplication, useUpdateApplication, useDeleteApplication } from "../api/application";
 import { Button, StatusBadge } from "../ui";
@@ -23,6 +23,7 @@ import BusinessValueAssessmentModal from "./BusinessValueAssessmentModal";
 import ApplicationComplianceMappings from "./ApplicationComplianceMappings";
 import SolutionAgentsPanel from "../agentic/SolutionAgentsPanel";
 import { errorDetail } from "../api/agentic";
+import { Tabs } from "../ui/Tabs";
 
 interface Props {
   appId: string;
@@ -82,30 +83,18 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
     { id: "stages", label: "Stages" },
     { id: "integrations", label: "Integrations" },
     { id: "designs", label: "Designs" },
-    { id: "risk", label: "Risk & Compliance" },
+    { id: "risk", label: "Risk Profile" },
     { id: "cost", label: "Cost (TCO)" },
     { id: "tech-fit", label: "Technical Fit" },
     { id: "initiatives", label: "Initiatives" },
     { id: "governance", label: "Governance" },
     { id: "quality", label: "Quality" },
     { id: "objectives", label: "Objectives" },
-    // Deliberately NOT called "Compliance" -- the "risk" tab above is already labeled
-    // "Risk & Compliance" (APM's own risk_compliance_contribution field, ADP-SPEC-038 US3),
-    // an unrelated concept. "Regulatory Compliance" disambiguates the two (COMPLY-02).
-    { id: "compliance-mappings", label: "Regulatory Compliance" },
+    // ADP-blp.54: "Risk Profile" above is APM's own risk scores (ADP-SPEC-038 US3); this tab
+    // is the assessed control mappings (COMPLY-02). They were "Risk & Compliance" and
+    // "Regulatory Compliance", two of four things in the app called "Compliance".
+    { id: "compliance-mappings", label: "Regulatory Mappings" },
   ];
-
-  const tabStyle = (id: Section): React.CSSProperties => ({
-    fontSize: 12,
-    padding: "6px 13px",
-    background: section === id ? "var(--accent)" : "var(--surface-2)",
-    color: section === id ? "var(--accent-ink)" : "var(--ink-2)",
-    border: "1px solid " + (section === id ? "var(--accent)" : "var(--border)"),
-    cursor: "pointer",
-    borderRadius: 7,
-    fontFamily: "inherit",
-    fontWeight: section === id ? 600 : 500,
-  });
 
   if (editing) {
     // The parent panel (ApplicationPage.tsx) has overflow:hidden, and
@@ -186,10 +175,14 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
         </div>
       </div>
 
-      {/* Tab bar */}
-      <div style={{ display: "flex", gap: 6, padding: "10px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0, flexWrap: "wrap" }}>
-        {tabs.map((t) => <button key={t.id} style={tabStyle(t.id)} onClick={() => setSection(t.id)}>{t.label}</button>)}
-      </div>
+      <Tabs
+        label="Application sections"
+        variant="pill"
+        tabs={tabs}
+        active={section}
+        onChange={setSection}
+        style={{ padding: "10px 18px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}
+      />
 
       {/* Content */}
       <div style={{ flex: 1, overflow: "auto", padding: "16px 18px" }}>

@@ -6,6 +6,7 @@ import LLMSettings from "./LLMSettings";
 import BusinessContextPanel from "../business/BusinessContextPanel";
 import CapabilityGapPanel from "./CapabilityGapPanel";
 import RecommendationPage from "../recommend/RecommendationPage";
+import { Tabs } from "../ui/Tabs";
 
 interface IntakePageProps {
   // null until a design exists -- Intake is always reachable directly (it's
@@ -36,28 +37,18 @@ export default function IntakePage({ designId, onNavigate, onDesignCreated }: In
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {/* Left: Tabs + form */}
         <div style={{ flex: 2, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ display: "flex", gap: 0, borderBottom: "2px solid var(--border)", flexShrink: 0, background: "var(--surface)" }}>
-            {TABS.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  padding: "10px 20px", background: "none", border: "none", cursor: "pointer",
-                  fontSize: 13, fontWeight: activeTab === tab.id ? 600 : 400,
-                  color: activeTab === tab.id ? "var(--accent)" : "var(--ink-3)",
-                  borderBottom: activeTab === tab.id ? "2px solid var(--accent)" : "2px solid transparent",
-                  marginBottom: -2,
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            label="Design intake"
+            tabs={TABS}
+            active={activeTab}
+            onChange={setActiveTab}
+            style={{ flexShrink: 0, background: "var(--surface)", marginBottom: 0 }}
+          />
 
           <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
             {activeTab === "intake" && (
