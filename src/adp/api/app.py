@@ -47,7 +47,7 @@ from adp.application.router import (
     integrations_router,
     tech_caps_router,
 )
-from adp.auth.middleware import AuthMiddleware
+from adp.auth.middleware import AuthMiddleware, log_auth_mode
 from adp.authz.enforcement import enforce_route_permission
 from adp.business import router as business_router_module
 from adp.business import store as bstore
@@ -194,6 +194,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         # DB may not be configured — log and continue (graceful degradation)
         logging.getLogger(__name__).warning("lifespan startup skipped: %s", exc)
 
+    log_auth_mode()  # ADP-blp.3: say loudly when authentication is off
     # ADP-SPEC-044: opt-in continuous export of business architecture data to
     # versioned files. start_business_arch_export is a no-op (returns None,
     # writes nothing) unless ADP_BUSINESS_ARCH_EXPORT_ROOT is set.
@@ -218,6 +219,10 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await stop_strategy_export(_strategy_export_task)
     await stop_agentic_export(_agentic_export_task)
     await stop_pattern_export(_pattern_export_task)
+    # ADP-blp.15: close the shared connection pool.
+    from adp import db as _db
+
+    await _db.dispose()
 
 
 def create_app() -> FastAPI:

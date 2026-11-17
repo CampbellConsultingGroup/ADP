@@ -172,6 +172,30 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P1 fixes (epic ADP-blp "Fable Recommendations", 63 beads from a 2026-11-17 review; this is
+  .1-.4, .14, .15, .30, .43):
+  - Auth (`adp.auth`): no recognised group now maps to REVIEWER, not TECHNICAL_ARCHITECT; new `Reviewer` group
+    (also in `infra/keycloak/adp-realm.json` and the frontend's `groupsToRole`). A token must belong to this
+    client: `azp == ADP_KEYCLOAK_CLIENT_ID` or the client id in `aud` (jose's `verify_aud` stays off because
+    Keycloak sets aud="account"). `ADP_AUTH_ENABLED` turns auth off ONLY for false/0/no/off; anything else keeps
+    it on, and startup logs the mode (`log_auth_mode`). DEPLOY NOTE: existing realm users with no group lose
+    write access until they are put in a group.
+  - Initiatives: every route returning a `StrategyInitiative` (strategy router and the six compliance reverse
+    lookups) drops APPLICATION-targeted `control_mappings` unless the caller holds READ_APPLICATION_GOVERNANCE
+    (`sinit.without_application_mappings`, `_initiative_redactor` dependency).
+  - One engine: new `adp.db` (`get_session_factory()`, `dispose()` in lifespan shutdown; per event loop and per
+    URL; `ADP_DB_POOL_SIZE`/`_MAX_OVERFLOW`/`_POOL_RECYCLE`, default 10/10/1800, `pool_pre_ping`). Every store's
+    `_get_session_factory()` returns the module's own `_session_factory` if a test set it, else the shared one
+    -- so existing monkeypatch fixtures are unchanged. `get_design_store` keeps one `DesignStore`
+    (`DesignStore.from_session_factory`) instead of a new engine per request. Not yet moved: `KnowledgeRetriever`,
+    the CALM importer and the CLI indexer.
+  - Frontend: `ui/PageBoundary` (error + Suspense boundary inside the shell, keyed by view, "Try again" resets
+    failed queries) so a failed suspense query no longer replaces the whole app; `tokens.css` aliases `--text`,
+    `--text-secondary`, `--error`, `--danger`; guard test `tests/unit/css-tokens-defined.test.ts`.
+  - Gotchas: several of these files are CRLF (`auth/tokens.py`, `auth/middleware.py`, `api/deps.py`,
+    `store/store.py`, `business/store.py`, `ui/tokens.css`, `AuthProvider.tsx`) -- edit with newline-preserving
+    I/O. Never call `asyncio.run()` in a sync test: it clears the thread's event loop and breaks later tests
+    that use `asyncio.get_event_loop()` (use a private `new_event_loop()`).
 - ADP-321 (initiative linkage for agent compliance mappings, follow-on to 944): 925's remediation loop now
   covers all six mapping targets. Migration `053` adds `initiative_control_agent_mapping` in 034's shape (composite
   FK to `control_agent_mapping`, CASCADE on every leg); `adp.strategy` gains a `control_agent_mapping` mirror and

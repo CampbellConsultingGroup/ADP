@@ -482,6 +482,23 @@ async def unlink_initiative_control_mapping(
         )
 
 
+def without_application_mappings(initiative: StrategyInitiative) -> StrategyInitiative:
+    """A copy with APPLICATION-targeted control mappings removed (ADP-blp.4).
+
+    An application's compliance status is governance data, gated by
+    READ_APPLICATION_GOVERNANCE everywhere else it is served. Routers apply this
+    for callers without that permission, mirroring the control-forward lookup
+    in adp.compliance.router, which filters application rows the same way.
+    """
+    kept = [
+        ref for ref in initiative.control_mappings
+        if ref.target_type != MappingTargetType.APPLICATION
+    ]
+    if len(kept) == len(initiative.control_mappings):
+        return initiative
+    return initiative.model_copy(update={"control_mappings": kept})
+
+
 async def _linked_control_mappings(
     initiative_id: str, session: AsyncSession
 ) -> list[ControlMappingRef]:

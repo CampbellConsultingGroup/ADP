@@ -32,6 +32,7 @@ _GROUP_ROLE_PRIORITY: list[tuple[str, PersonaRole]] = [
     ("ADPAdministrator", PersonaRole.PLATFORM_ADMIN),
     ("SolutionArchitect", PersonaRole.SOLUTION_ARCHITECT),
     ("TechnicalArchitect", PersonaRole.TECHNICAL_ARCHITECT),
+    ("Reviewer", PersonaRole.REVIEWER),
 ]
 
 _ROLE_PRIORITY_ORDER = [
@@ -41,14 +42,17 @@ _ROLE_PRIORITY_ORDER = [
     PersonaRole.ENTERPRISE_ARCHITECT,
     PersonaRole.SOLUTION_ARCHITECT,
     PersonaRole.TECHNICAL_ARCHITECT,
+    PersonaRole.REVIEWER,
 ]
 
 
 def _map_groups_to_role(groups: list[str]) -> PersonaRole:
     """Return the highest-privilege role from a list of Keycloak group names.
 
-    Unknown groups are ignored. If no recognised group is found, defaults to
-    TechnicalArchitect (read-only access).
+    Unknown groups are ignored. If no recognised group is found, the user gets
+    REVIEWER, the least-privileged role (ADP-blp.1). It used to be
+    TechnicalArchitect, which can write and read risk, cost and governance data,
+    so any realm account without a group silently got architect access.
     """
     mapped: list[PersonaRole] = []
     for group in groups:
@@ -57,14 +61,26 @@ def _map_groups_to_role(groups: list[str]) -> PersonaRole:
                 mapped.append(role)
                 break
 
-    if not mapped:
-        return PersonaRole.TECHNICAL_ARCHITECT
-
-    # Return highest-privilege role
+    # Return highest-privilege role; no recognised group -> least privilege.
     for role in _ROLE_PRIORITY_ORDER:
         if role in mapped:
             return role
-    return PersonaRole.TECHNICAL_ARCHITECT
+    return PersonaRole.REVIEWER
+
+
+def _token_is_for_client(claims: dict[str, Any], client_id: str) -> bool:
+    """True when the token was issued to, or is addressed to, this client.
+
+    Keycloak access tokens for a public client usually carry aud="account" and
+    name the requesting client in azp, so a plain audience check would reject
+    them. Accept either: azp equal to the client id, or the client id in aud.
+    """
+    if claims.get("azp") == client_id:
+        return True
+    aud = claims.get("aud")
+    if isinstance(aud, str):
+        return aud == client_id
+    return isinstance(aud, list) and client_id in aud
 
 
 # ── JWKS cache ────────────────────────────────────────────────────────────────
@@ -157,7 +173,7 @@ async def decode_token(
     """
     cache = jwks_cache or _get_cache()
     issuer = os.environ.get("ADP_KEYCLOAK_ISSUER", "http://127.0.0.1:8080/realms/ADPRealm")
-    audience = os.environ.get("ADP_KEYCLOAK_CLIENT_ID", "adp-frontend")
+    client_id = os.environ.get("ADP_KEYCLOAK_CLIENT_ID", "adp-frontend")
 
     try:
         jwks = await cache.get_keys()
@@ -166,8 +182,10 @@ async def decode_token(
             jwks,
             algorithms=["RS256"],
             issuer=issuer,
-            audience=audience,
-            options={"verify_aud": False},  # Keycloak may use 'account' as aud; verify iss only
+            # jose's audience check needs aud to contain the client id, but
+            # Keycloak often sets aud="account"; the client is checked below
+            # through azp/aud instead (ADP-blp.2).
+            options={"verify_aud": False},
         )
     except ExpiredSignatureError as exc:
         raise TokenExpiredError("Token has expired") from exc
@@ -181,6 +199,13 @@ async def decode_token(
     if token_issuer != issuer:
         raise TokenValidationError(
             f"Token issuer {token_issuer!r} does not match expected {issuer!r}"
+        )
+
+    # The token must belong to this client: another realm client's token is
+    # validly signed by the same issuer but was not issued for ADP (ADP-blp.2).
+    if not _token_is_for_client(claims, client_id):
+        raise TokenValidationError(
+            f"Token was not issued for client {client_id!r} (azp/aud mismatch)"
         )
 
     # Extract identity

@@ -18,8 +18,9 @@ describe("groupsToRole", () => {
     expect(groupsToRole(["EnterpriseArchitect", "ADPAdministrator"])).toBe("platform_admin");
   });
 
-  it("defaults to technical_architect for no recognized group", () => {
-    expect(groupsToRole([])).toBe("technical_architect");
-    expect(groupsToRole(["UnknownGroup"])).toBe("technical_architect");
+  it("defaults to reviewer (least privilege) for no recognized group", () => {
+    expect(groupsToRole([])).toBe("reviewer");
+    expect(groupsToRole(["UnknownGroup"])).toBe("reviewer");
+    expect(groupsToRole(["/Reviewer"])).toBe("reviewer");
   });
 });

@@ -36,8 +36,39 @@ _PROTECTED_PREFIX = "/api/v1/"
 _EXEMPT_PATHS = {"/health", "/metrics"}
 
 
+_AUTH_DISABLED_VALUES = frozenset({"false", "0", "no", "off"})
+_warned_values: set[str] = set()
+
+
 def _auth_enabled() -> bool:
-    return os.environ.get("ADP_AUTH_ENABLED", _AUTH_ENABLED_DEFAULT).lower() == "true"
+    """Auth is on unless ADP_AUTH_ENABLED is an explicit "off" value (ADP-blp.3).
+
+    It used to be on only for exactly "true", so a typo such as "1", "yes" or
+    "True " silently turned authentication off. Now anything that is not a
+    recognised "off" value keeps auth on, and an unrecognised value is logged.
+    """
+    raw = os.environ.get("ADP_AUTH_ENABLED", _AUTH_ENABLED_DEFAULT)
+    value = raw.strip().lower()
+    if value in _AUTH_DISABLED_VALUES:
+        return False
+    if value not in {"true", "1", "yes", "on"} and raw not in _warned_values:
+        _warned_values.add(raw)
+        _logger.warning(
+            "ADP_AUTH_ENABLED=%r is not a recognised value; authentication stays ON", raw
+        )
+    return True
+
+
+def log_auth_mode() -> None:
+    """Log once at startup whether authentication is enforced."""
+    if _auth_enabled():
+        _logger.info("Authentication is ENABLED for %s*", _PROTECTED_PREFIX)
+    else:
+        _logger.warning(
+            "Authentication is DISABLED (ADP_AUTH_ENABLED=%s): every caller is the "
+            "unauthenticated Enterprise Architect sentinel. Never use this in production.",
+            os.environ.get("ADP_AUTH_ENABLED"),
+        )
 
 
 class AuthMiddleware(BaseHTTPMiddleware):

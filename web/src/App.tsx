@@ -20,6 +20,7 @@ import AgentsPage from "./agentic/AgentsPage";
 import AdminPage from "./admin/AdminPage";
 import ScoringRubricsPage from "./admin/ScoringRubricsPage";
 import { AppShell } from "./ui";
+import { PageBoundary } from "./ui/PageBoundary";
 import type { AppView } from "./shell";
 
 // C4 Design has no meaning without a design (it operates on elements that only
@@ -241,7 +242,8 @@ export default function App(): React.ReactElement {
     <AppCapNavContext.Provider value={openAppCapability}>
       <CapabilityNavContext.Provider value={capabilityNav}>
         <AppShell currentView={view} onNavigate={onNavigate} designId={currentDesignId} onStartNewDesign={onStartNewDesign}>
-          {renderPage()}
+          {/* ADP-blp.30: a page that fails must not take the nav down with it. */}
+          <PageBoundary key={view}>{renderPage()}</PageBoundary>
         </AppShell>
       </CapabilityNavContext.Provider>
     </AppCapNavContext.Provider>

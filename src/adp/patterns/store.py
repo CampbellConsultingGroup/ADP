@@ -25,7 +25,7 @@ import sqlalchemy as sa
 from pgvector.sqlalchemy import Vector
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from adp.patterns.cel import CelEngine
 from adp.patterns.lifecycle import allowed_transitions_ordered, is_allowed
@@ -171,16 +171,13 @@ _session_factory: async_sessionmaker | None = None
 
 
 def _get_session_factory() -> async_sessionmaker:
-    global _engine, _session_factory
-    if _session_factory is None:
-        import os
+    """Every store shares adp.db's single engine (ADP-blp.15). A test may set this module's
+    _session_factory to point it at its own database instead."""
+    if _session_factory is not None:
+        return _session_factory
+    from adp.db import get_session_factory
 
-        db_url = os.environ.get(
-            "ADP_DATABASE_URL", "postgresql+asyncpg://adp_user:adp_pass@127.0.0.1:5432/adp"
-        )
-        _engine = create_async_engine(db_url, echo=False)
-        _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
-    return _session_factory
+    return get_session_factory()
 
 
 def _now() -> datetime:

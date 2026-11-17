@@ -38,11 +38,16 @@ satisfied by structured logger.info(...) calls -- this module's first.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.auth.deps import get_current_user
+from adp.auth.models import AuthenticatedUser
+from adp.authz.permissions import is_permitted
+from adp.authz.roles import ActionType
 from adp.compliance.models import MappingTargetType
 from adp.strategy import initiatives as sinit
 from adp.strategy import store as sstore
@@ -568,6 +573,20 @@ async def unlink_objective_control(
     )
 
 
+# ADP-blp.4: an initiative embeds the live status of its linked control mappings. Rows that
+# target an Application are governance data, so every route returning an initiative passes it
+# through this redactor, which drops them unless the caller holds READ_APPLICATION_GOVERNANCE.
+InitiativeRedactor = Callable[[StrategyInitiative], StrategyInitiative]
+
+
+def _initiative_redactor(
+    user: AuthenticatedUser = Depends(get_current_user),
+) -> InitiativeRedactor:
+    if is_permitted(user.role, ActionType.READ_APPLICATION_GOVERNANCE):
+        return lambda initiative: initiative
+    return sinit.without_application_mappings
+
+
 # ── Strategy Initiatives (ADP-d8u.6) ───────────────────────────────────────────
 
 
@@ -575,24 +594,34 @@ async def unlink_objective_control(
     "/initiatives", response_model=StrategyInitiative, status_code=status.HTTP_201_CREATED
 )
 async def create_initiative(
-    body: StrategyInitiativeCreate, session: AsyncSession = Depends(_get_session)
+    body: StrategyInitiativeCreate,
+    session: AsyncSession = Depends(_get_session),
+    redact: InitiativeRedactor = Depends(_initiative_redactor),
 ):
     initiative = await sinit.create_initiative(body, session)
     await session.commit()
-    return initiative
+    return redact(initiative)
 
 
 @router.get("/initiatives", response_model=StrategyInitiativeListResponse)
-async def list_initiatives(session: AsyncSession = Depends(_get_session)):
-    return await sinit.list_initiatives(session)
+async def list_initiatives(
+    session: AsyncSession = Depends(_get_session),
+    redact: InitiativeRedactor = Depends(_initiative_redactor),
+):
+    listing = await sinit.list_initiatives(session)
+    return listing.model_copy(update={"items": [redact(i) for i in listing.items]})
 
 
 @router.get("/initiatives/{initiative_id}", response_model=StrategyInitiative)
-async def get_initiative(initiative_id: str, session: AsyncSession = Depends(_get_session)):
+async def get_initiative(
+    initiative_id: str,
+    session: AsyncSession = Depends(_get_session),
+    redact: InitiativeRedactor = Depends(_initiative_redactor),
+):
     initiative = await sinit.get_initiative(initiative_id, session)
     if initiative is None:
         raise HTTPException(status_code=404, detail=f"Initiative {initiative_id!r} not found")
-    return initiative
+    return redact(initiative)
 
 
 @router.patch("/initiatives/{initiative_id}", response_model=StrategyInitiative)
@@ -601,6 +630,7 @@ async def update_initiative(
     body: StrategyInitiativeUpdate,
     raw_request: Request,
     session: AsyncSession = Depends(_get_session),
+    redact: InitiativeRedactor = Depends(_initiative_redactor),
 ):
     initiative = await sinit.update_initiative(initiative_id, body, session)
     if initiative is None:
@@ -608,7 +638,7 @@ async def update_initiative(
     await session.commit()
     actor = _get_actor(raw_request)
     logger.info("strategy.initiative.update initiative_id=%s actor=%s", initiative_id, actor)
-    return initiative
+    return redact(initiative)
 
 
 @router.delete("/initiatives/{initiative_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -630,7 +660,10 @@ async def delete_initiative(
     status_code=status.HTTP_201_CREATED,
 )
 async def link_initiative_objective(
-    initiative_id: str, objective_id: str, session: AsyncSession = Depends(_get_session)
+    initiative_id: str,
+    objective_id: str,
+    session: AsyncSession = Depends(_get_session),
+    redact: InitiativeRedactor = Depends(_initiative_redactor),
 ):
     if await sinit.get_initiative(initiative_id, session) is None:
         raise HTTPException(status_code=404, detail=f"Initiative {initiative_id!r} not found")
@@ -643,7 +676,7 @@ async def link_initiative_objective(
     await session.commit()
     initiative = await sinit.get_initiative(initiative_id, session)
     assert initiative is not None
-    return initiative
+    return redact(initiative)
 
 
 @router.delete(
@@ -662,7 +695,9 @@ async def unlink_initiative_objective(
 
 @router.get("/objectives/{objective_id}/initiatives", response_model=StrategyInitiativeListResponse)
 async def list_objective_initiatives(
-    objective_id: str, session: AsyncSession = Depends(_get_session)
+    objective_id: str,
+    session: AsyncSession = Depends(_get_session),
+    redact: InitiativeRedactor = Depends(_initiative_redactor),
 ):
     """Reverse lookup (FR-005)."""
     if await sstore.get_objective(objective_id, session) is None:
@@ -672,7 +707,7 @@ async def list_objective_initiatives(
     for initiative_id in initiative_ids:
         initiative = await sinit.get_initiative(initiative_id, session)
         assert initiative is not None
-        items.append(initiative)
+        items.append(redact(initiative))
     return StrategyInitiativeListResponse(items=items, total=len(items))
 
 
@@ -741,10 +776,11 @@ async def _unlink_initiative_control_mapping(
 async def link_initiative_capability_mapping(
     initiative_id: str, control_id: str, capability_id: str,
     session: AsyncSession = Depends(_get_session),
+    redact: InitiativeRedactor = Depends(_initiative_redactor),
 ):
-    return await _link_initiative_control_mapping(
+    return redact(await _link_initiative_control_mapping(
         initiative_id, control_id, MappingTargetType.CAPABILITY, capability_id, session
-    )
+    ))
 
 
 @router.delete(
@@ -768,10 +804,11 @@ async def unlink_initiative_capability_mapping(
 async def link_initiative_application_mapping(
     initiative_id: str, control_id: str, application_id: str,
     session: AsyncSession = Depends(_get_session),
+    redact: InitiativeRedactor = Depends(_initiative_redactor),
 ):
-    return await _link_initiative_control_mapping(
+    return redact(await _link_initiative_control_mapping(
         initiative_id, control_id, MappingTargetType.APPLICATION, application_id, session
-    )
+    ))
 
 
 @router.delete(
@@ -795,10 +832,11 @@ async def unlink_initiative_application_mapping(
 async def link_initiative_design_mapping(
     initiative_id: str, control_id: str, design_id: str,
     session: AsyncSession = Depends(_get_session),
+    redact: InitiativeRedactor = Depends(_initiative_redactor),
 ):
-    return await _link_initiative_control_mapping(
+    return redact(await _link_initiative_control_mapping(
         initiative_id, control_id, MappingTargetType.DESIGN, design_id, session
-    )
+    ))
 
 
 @router.delete(
@@ -822,10 +860,11 @@ async def unlink_initiative_design_mapping(
 async def link_initiative_pattern_mapping(
     initiative_id: str, control_id: str, pattern_id: str,
     session: AsyncSession = Depends(_get_session),
+    redact: InitiativeRedactor = Depends(_initiative_redactor),
 ):
-    return await _link_initiative_control_mapping(
+    return redact(await _link_initiative_control_mapping(
         initiative_id, control_id, MappingTargetType.PATTERN, pattern_id, session
-    )
+    ))
 
 
 @router.delete(
@@ -847,11 +886,14 @@ async def unlink_initiative_pattern_mapping(
     status_code=status.HTTP_201_CREATED,
 )
 async def link_initiative_organization_mapping(
-    initiative_id: str, control_id: str, session: AsyncSession = Depends(_get_session),
+    initiative_id: str,
+    control_id: str,
+    session: AsyncSession = Depends(_get_session),
+    redact: InitiativeRedactor = Depends(_initiative_redactor),
 ):
-    return await _link_initiative_control_mapping(
+    return redact(await _link_initiative_control_mapping(
         initiative_id, control_id, MappingTargetType.ORGANIZATION, None, session
-    )
+    ))
 
 
 @router.delete(
@@ -874,11 +916,12 @@ async def unlink_initiative_organization_mapping(
 async def link_initiative_agent_mapping(
     initiative_id: str, control_id: str, agent_id: str,
     session: AsyncSession = Depends(_get_session),
+    redact: InitiativeRedactor = Depends(_initiative_redactor),
 ):
     """ADP-321: link an initiative to an agent's control mapping (944's sixth target)."""
-    return await _link_initiative_control_mapping(
+    return redact(await _link_initiative_control_mapping(
         initiative_id, control_id, MappingTargetType.AGENT, agent_id, session
-    )
+    ))
 
 
 @router.delete(

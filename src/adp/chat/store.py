@@ -14,13 +14,12 @@ filter.
 
 from __future__ import annotations
 
-import os
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from adp.chat.models import (
     ChatCitation,
@@ -63,14 +62,13 @@ _session_factory: Any = None
 
 
 def _get_session_factory() -> async_sessionmaker:
-    global _engine, _session_factory
-    if _session_factory is None:
-        db_url = os.environ.get(
-            "ADP_DATABASE_URL", "postgresql+asyncpg://adp_user:adp_pass@127.0.0.1:5432/adp"
-        )
-        _engine = create_async_engine(db_url, echo=False)
-        _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
-    return _session_factory
+    """Every store shares adp.db's single engine (ADP-blp.15). A test may set this module's
+    _session_factory to point it at its own database instead."""
+    if _session_factory is not None:
+        return _session_factory
+    from adp.db import get_session_factory
+
+    return get_session_factory()
 
 
 def _now() -> datetime:

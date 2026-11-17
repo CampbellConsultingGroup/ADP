@@ -26,15 +26,27 @@ def _get_database_url() -> str:
     return url
 
 
+_design_store: Any = None
+
+
 async def get_design_store():  # type: ignore[return]
     """FastAPI dependency: returns a configured DesignStore.
 
     Raises 503 if ADP_DATABASE_URL is not set.
     Override in tests via app.dependency_overrides.
     """
+    from adp.db import get_session_factory
     from adp.store.store import DesignStore  # type: ignore[attr-defined]
 
-    return DesignStore(_get_database_url())
+    _get_database_url()  # 503 when ADP_DATABASE_URL is unset
+    # ADP-blp.14: this used to build a DesignStore -- and with it a whole new connection pool
+    # that was never closed -- on every request. One store is now kept per shared session
+    # factory (adp.db keeps one factory per event loop and database URL).
+    global _design_store
+    factory = get_session_factory()
+    if _design_store is None or _design_store.session_factory is not factory:
+        _design_store = DesignStore.from_session_factory(factory)
+    return _design_store
 
 
 # ── Shared knowledge-base session factory ─────────────────────────────────────
@@ -46,17 +58,12 @@ _kb_session_factory: Any = None
 
 
 def _get_kb_session_factory() -> Any:
-    global _kb_engine, _kb_session_factory
-    if _kb_session_factory is None:
-        from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    """adp.db's shared session factory (ADP-blp.15); a test may set _kb_session_factory."""
+    if _kb_session_factory is not None:
+        return _kb_session_factory
+    from adp.db import get_session_factory
 
-        db_url = os.environ.get(
-            "ADP_DATABASE_URL",
-            "postgresql+asyncpg://adp_user:adp_pass@127.0.0.1:5432/adp",
-        )
-        _kb_engine = create_async_engine(db_url, echo=False)
-        _kb_session_factory = async_sessionmaker(_kb_engine, expire_on_commit=False)
-    return _kb_session_factory
+    return get_session_factory()
 
 
 _op_store_singleton: Any = None

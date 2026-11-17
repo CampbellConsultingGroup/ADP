@@ -791,8 +791,13 @@ async def _list_control_mapping_initiatives(
     target_type: MappingTargetType,
     target_id: str | None,
     strategy_session: AsyncSession,
+    user: AuthenticatedUser,
 ) -> StrategyInitiativeListResponse:
-    """Shared handler body for the six GET routes below (spec.md FR-007 reverse direction)."""
+    """Shared handler body for the six GET routes below (spec.md FR-007 reverse direction).
+
+    ADP-blp.4: each returned initiative embeds all of its linked control mappings, so a caller
+    without READ_APPLICATION_GOVERNANCE gets them with the Application-targeted rows removed.
+    """
     from adp.strategy import store as sstore
 
     if not await sstore.control_exists(control_id, strategy_session):
@@ -800,8 +805,13 @@ async def _list_control_mapping_initiatives(
 
     from adp.strategy import initiatives as sinit
 
-    return await sinit.list_initiatives_for_control_mapping(
+    listing = await sinit.list_initiatives_for_control_mapping(
         control_id, target_type, target_id, strategy_session
+    )
+    if is_permitted(user.role, ActionType.READ_APPLICATION_GOVERNANCE):
+        return listing
+    return listing.model_copy(
+        update={"items": [sinit.without_application_mappings(i) for i in listing.items]}
     )
 
 
@@ -813,9 +823,10 @@ async def list_capability_mapping_initiatives(
     control_id: str,
     capability_id: str,
     strategy_session: AsyncSession = Depends(_get_strategy_session),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await _list_control_mapping_initiatives(
-        control_id, MappingTargetType.CAPABILITY, capability_id, strategy_session
+        control_id, MappingTargetType.CAPABILITY, capability_id, strategy_session, user
     )
 
 
@@ -828,9 +839,10 @@ async def list_application_mapping_initiatives(
     control_id: str,
     application_id: str,
     strategy_session: AsyncSession = Depends(_get_strategy_session),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await _list_control_mapping_initiatives(
-        control_id, MappingTargetType.APPLICATION, application_id, strategy_session
+        control_id, MappingTargetType.APPLICATION, application_id, strategy_session, user
     )
 
 
@@ -842,9 +854,10 @@ async def list_design_mapping_initiatives(
     control_id: str,
     design_id: str,
     strategy_session: AsyncSession = Depends(_get_strategy_session),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await _list_control_mapping_initiatives(
-        control_id, MappingTargetType.DESIGN, design_id, strategy_session
+        control_id, MappingTargetType.DESIGN, design_id, strategy_session, user
     )
 
 
@@ -856,9 +869,10 @@ async def list_pattern_mapping_initiatives(
     control_id: str,
     pattern_id: str,
     strategy_session: AsyncSession = Depends(_get_strategy_session),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await _list_control_mapping_initiatives(
-        control_id, MappingTargetType.PATTERN, pattern_id, strategy_session
+        control_id, MappingTargetType.PATTERN, pattern_id, strategy_session, user
     )
 
 
@@ -870,11 +884,12 @@ async def list_agent_mapping_initiatives(
     control_id: str,
     agent_id: str,
     strategy_session: AsyncSession = Depends(_get_strategy_session),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     """ADP-321: initiatives remediating an agent's mapping. Like the agent mapping itself, never
     filtered by READ_APPLICATION_GOVERNANCE."""
     return await _list_control_mapping_initiatives(
-        control_id, MappingTargetType.AGENT, agent_id, strategy_session
+        control_id, MappingTargetType.AGENT, agent_id, strategy_session, user
     )
 
 
@@ -885,7 +900,8 @@ async def list_agent_mapping_initiatives(
 async def list_organization_mapping_initiatives(
     control_id: str,
     strategy_session: AsyncSession = Depends(_get_strategy_session),
+    user: AuthenticatedUser = Depends(get_current_user),
 ):
     return await _list_control_mapping_initiatives(
-        control_id, MappingTargetType.ORGANIZATION, None, strategy_session
+        control_id, MappingTargetType.ORGANIZATION, None, strategy_session, user
     )
