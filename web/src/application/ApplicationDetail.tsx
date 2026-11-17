@@ -25,6 +25,7 @@ import SolutionAgentsPanel from "../agentic/SolutionAgentsPanel";
 import { errorDetail } from "../api/agentic";
 import { Tabs } from "../ui/Tabs";
 import { confirmAction } from "../ui/confirm";
+import ApplicationSummary from "./ApplicationSummary";
 
 interface Props {
   appId: string;
@@ -189,6 +190,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
       <div style={{ flex: 1, overflow: "auto", padding: "16px 18px" }}>
         {section === "overview" && (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <ApplicationSummary app={app} onOpen={setSection} />
             {app.description && <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)", lineHeight: 1.55 }}>{app.description}</p>}
             {app.pace_layer && <div style={{ fontSize: 12, color: "var(--ink-2)" }}><strong style={{ color: "var(--ink)" }}>PACE layer:</strong> {app.pace_layer}</div>}
             {app.application_type && <div style={{ fontSize: 12, color: "var(--ink-2)" }}><strong style={{ color: "var(--ink)" }}>Application type:</strong> {APPLICATION_TYPE_LABELS[app.application_type] ?? app.application_type}</div>}

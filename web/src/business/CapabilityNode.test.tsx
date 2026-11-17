@@ -16,6 +16,8 @@ import * as capAnalysisApi from "../api/capAnalysis";
 import type { CapabilityTreeNode } from "./CapabilityTree";
 import * as agenticApi from "../api/agentic";
 
+// ADP-blp.59: opening Details shows the Links section first; its editor has its own tests.
+vi.mock("./DesignLinkEditor", () => ({ default: () => <div>design-links-editor</div> }));
 vi.mock("../api/business");
 vi.mock("../api/compliance");
 vi.mock("../api/agentic");
@@ -129,7 +131,8 @@ describe("CapabilityNode (COMPLY-02 US3 — mapped compliance controls)", () => 
       </CapabilityNode>,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Compliance" }));
+    await userEvent.click(screen.getByRole("button", { name: /Details/ }));
+    await userEvent.click(screen.getByRole("tab", { name: "Compliance" }));
 
     screen.getByText("AC-2");
     screen.getByText("compliant");
@@ -146,7 +149,8 @@ describe("CapabilityNode (COMPLY-02 US3 — mapped compliance controls)", () => 
       </CapabilityNode>,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Compliance" }));
+    await userEvent.click(screen.getByRole("button", { name: /Details/ }));
+    await userEvent.click(screen.getByRole("tab", { name: "Compliance" }));
 
     screen.getByText("No controls mapped yet.");
   });
@@ -224,5 +228,28 @@ describe("CapabilityNode automated by agents (944)", () => {
   it("has no automated-by expander on L1/L2 rows", () => {
     renderWithQueryClient(<CapabilityNode capability={CAPABILITY} selected={false} onToggleSelect={vi.fn()}>{null}</CapabilityNode>);
     expect(screen.queryByRole("button", { name: /Automated by agents/ })).toBeNull();
+  });
+});
+
+describe("CapabilityNode details panel (ADP-blp.59)", () => {
+  it("opens one panel with a section per kind of detail, and closes it again", async () => {
+    renderWithQueryClient(
+      <CapabilityNode capability={CAPABILITY} selected={false} onToggleSelect={vi.fn()}>
+        {null}
+      </CapabilityNode>,
+    );
+    expect(screen.queryByRole("tablist")).toBeNull();
+    const details = screen.getByRole("button", { name: /Details/ });
+    expect(details.getAttribute("aria-expanded")).toBe("false");
+
+    await userEvent.click(details);
+    expect(details.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual([
+      "Links", "Organization", "Regions", "Compliance", "Review",
+    ]);
+    expect(screen.getByRole("tab", { name: "Links" }).getAttribute("aria-selected")).toBe("true");
+
+    await userEvent.click(details);
+    expect(screen.queryByRole("tablist")).toBeNull();
   });
 });

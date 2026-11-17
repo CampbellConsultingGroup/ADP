@@ -15,6 +15,7 @@ import { CapabilityOrgChips, CapabilityOrgEditor } from "./CapabilityOrgPanel";
 import { RegionalAssessmentsPanel } from "./RegionalAssessmentEditor";
 import { useCanWriteApplications } from "../application/appCapNav";
 import { confirmAction } from "../ui/confirm";
+import { Tabs } from "../ui/Tabs";
 
 interface CapabilityNodeProps {
   // ADP-914.7: widened from BusinessCapability to CapabilityTreeNode (a
@@ -39,17 +40,29 @@ interface CapabilityNodeProps {
 
 const LEVEL_LABELS: Record<number, string> = { 1: "L1", 2: "L2", 3: "L3" };
 
+type DetailSection = "links" | "organization" | "regions" | "compliance" | "review";
+const DETAIL_SECTIONS: { id: DetailSection; label: string }[] = [
+  { id: "links", label: "Links" },
+  { id: "organization", label: "Organization" },
+  { id: "regions", label: "Regions" },
+  { id: "compliance", label: "Compliance" },
+  { id: "review", label: "Review" },
+];
+
 export default function CapabilityNode({ capability, children, isOrphan, focused, selected, onToggleSelect }: CapabilityNodeProps): React.ReactElement {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(capability.name);
   const [addingChild, setAddingChild] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
-  const [showLinks, setShowLinks] = useState(false);
-  const [showCompliance, setShowCompliance] = useState(false);
-  const [showAgentReview, setShowAgentReview] = useState(false);
-  const [showOrganization, setShowOrganization] = useState(false);
-  const [showRegions, setShowRegions] = useState(false);
+  // ADP-blp.59: one "Details" panel with sections, instead of five separate expander buttons on
+  // every row (Links, Organization, Regions, Compliance, Review) that could all be open at once.
+  const [detail, setDetail] = useState<DetailSection | null>(null);
+  const showLinks = detail === "links";
+  const showCompliance = detail === "compliance";
+  const showAgentReview = detail === "review";
+  const showOrganization = detail === "organization";
+  const showRegions = detail === "regions";
   const canWriteBusiness = useCanWriteApplications();
   const rowRef = useRef<HTMLDivElement>(null);
 
@@ -194,39 +207,12 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
               <button onClick={() => setAddingChild(!addingChild)} title="Add child capability" style={{ ...actionBtn, color: "var(--good)" }}>+</button>
             )}
             <button
-              onClick={() => setShowLinks(!showLinks)}
-              title="Linked designs"
-              style={{ ...actionBtn, color: showLinks ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
+              onClick={() => setDetail(detail === null ? "links" : null)}
+              aria-expanded={detail !== null}
+              title="Linked designs, organization, regions, compliance and AI review"
+              style={{ ...actionBtn, color: detail !== null ? "var(--accent)" : "var(--ink-2)", fontSize: 11 }}
             >
-              Links
-            </button>
-            <button
-              onClick={() => setShowOrganization(!showOrganization)}
-              title={capability.level === 3 ? "Owner, performers and contributors" : "Accountable owner"}
-              style={{ ...actionBtn, color: showOrganization ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
-            >
-              Organization
-            </button>
-            <button
-              onClick={() => setShowRegions(!showRegions)}
-              title="Maturity by region and region-specific scope"
-              style={{ ...actionBtn, color: showRegions ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
-            >
-              Regions
-            </button>
-            <button
-              onClick={() => setShowCompliance(!showCompliance)}
-              title="Mapped compliance controls"
-              style={{ ...actionBtn, color: showCompliance ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
-            >
-              Compliance
-            </button>
-            <button
-              onClick={() => setShowAgentReview(!showAgentReview)}
-              title="Ask the business architecture expert to review this capability"
-              style={{ ...actionBtn, color: showAgentReview ? "var(--accent)" : "var(--ink-3)", fontSize: 11 }}
-            >
-              Review
+              Details {detail !== null ? "▴" : "▾"}
             </button>
             <button onClick={handleDelete} title="Delete" style={{ ...actionBtn, color: "var(--crit)" }}>Delete</button>
           </>
@@ -248,6 +234,17 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
             onCancel={() => setAddingChild(false)}
           />
         </div>
+      )}
+
+      {detail !== null && (
+        <Tabs
+          label={`Details for ${capability.name}`}
+          variant="pill"
+          tabs={DETAIL_SECTIONS}
+          active={detail}
+          onChange={setDetail}
+          style={{ margin: "6px 0 2px", paddingLeft: 28 }}
+        />
       )}
 
       {showLinks && (

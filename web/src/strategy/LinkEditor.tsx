@@ -7,11 +7,16 @@
  */
 import React, { useState } from "react";
 import { useLinkFeedback } from "./useLinkFeedback";
+import { EntityLink } from "../shell/EntityLink";
+import type { EntityKind } from "../shell/routing";
 
 export interface LinkOption {
   id: string;
   label: string;
 }
+
+/** The kinds of linked thing that have a screen of their own to open (ADP-blp.57). */
+type LinkedKind = Extract<EntityKind, "business_capability" | "application">;
 
 type LinkError = Error & { status?: number };
 
@@ -36,12 +41,14 @@ interface LinkEditorProps {
   prompt?: string;
   link: LinkMutation;
   unlink: LinkMutation;
+  /** When set, each linked item's name is a link to that entity on its own screen. */
+  entityKind?: LinkedKind;
 }
 
 const muted: React.CSSProperties = { fontSize: "0.85rem", color: "var(--ink-2)" };
 
 export default function LinkEditor({
-  options, linkedIds, isLoading, noun, plural, prompt, link, unlink,
+  options, linkedIds, isLoading, noun, plural, prompt, link, unlink, entityKind,
 }: LinkEditorProps): React.ReactElement {
   const [selectedId, setSelectedId] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -85,7 +92,9 @@ export default function LinkEditor({
               borderBottom: "1px solid var(--border)",
             }}
           >
-            <span style={{ flex: 1, fontSize: "0.85rem" }}>{o.label}</span>
+            <span style={{ flex: 1, fontSize: "0.85rem" }}>
+              {entityKind ? <EntityLink kind={entityKind} id={o.id}>{o.label}</EntityLink> : o.label}
+            </span>
             <button
               onClick={() => unlink.mutate(o.id, { onSuccess: () => feedback.showRemoved(o.label) })}
               disabled={unlink.isPending}

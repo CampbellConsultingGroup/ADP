@@ -219,6 +219,22 @@ export default function App(): React.ReactElement {
     else window.history.pushState(null, "", hash);
   }, [route]);
 
+  // ADP-blp.57: "Back to <screen>" in the top bar. Following a link to another screen used to
+  // leave no way back except finding the original screen in the nav again. The trail holds the
+  // routes visited in this session; stepping back to the previous one shortens it.
+  const trail = useRef<string[]>([]);
+  const [backView, setBackView] = useState<AppView | null>(null);
+  useEffect(() => {
+    const here = formatRoute(route);
+    const visited = trail.current;
+    if (visited[visited.length - 1] !== here) {
+      if (visited.length >= 2 && visited[visited.length - 2] === here) visited.pop();
+      else visited.push(here);
+    }
+    const previous = visited.length >= 2 ? parseRoute(visited[visited.length - 2]) : null;
+    setBackView(previous && previous.view !== route.view ? previous.view : null);
+  }, [route]);
+
   useEffect(() => {
     function applyLocation() {
       const next = parseRoute(window.location.hash);
@@ -353,6 +369,8 @@ export default function App(): React.ReactElement {
           onStartNewDesign={onStartNewDesign}
           onOpenSearchResult={onOpenSearchResult}
           topActions={<AskAiLauncher />}
+          backView={backView}
+          onBack={() => window.history.back()}
         >
           {/* ADP-blp.30: a page that fails must not take the nav down with it. */}
           <PageBoundary key={view}>{renderPage()}</PageBoundary>
