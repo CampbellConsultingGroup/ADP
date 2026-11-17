@@ -7,6 +7,7 @@ import BusinessContextPanel from "../business/BusinessContextPanel";
 import CapabilityGapPanel from "./CapabilityGapPanel";
 import RecommendationPage from "../recommend/RecommendationPage";
 import { Tabs } from "../ui/Tabs";
+import { useHashParam } from "../shell/routing";
 
 interface IntakePageProps {
   // null until a design exists -- Intake is always reachable directly (it's
@@ -25,7 +26,8 @@ interface IntakePageProps {
 type Tab = "intake" | "recommend" | "settings";
 
 export default function IntakePage({ designId, onNavigate, onDesignCreated }: IntakePageProps): React.ReactElement {
-  const [activeTab, setActiveTab] = useState<Tab>("intake");
+  // ADP-blp.59/.68: the tab is in the URL, so the design-flow steps can link to Recommendations.
+  const [activeTab, setActiveTab] = useHashParam<Tab>("tab", ["intake", "recommend", "settings"], "intake");
   // Set after a successful submit, cleared on the next edit -- IntakeTextForm
   // resets its own fields, so this is just a transient confirmation banner.
   const [justSubmitted, setJustSubmitted] = useState<{ requirementCount: number; capabilityCount: number } | null>(null);

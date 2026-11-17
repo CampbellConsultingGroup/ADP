@@ -110,7 +110,7 @@ describe("App: onStartNewDesign (nav 'Intake' click == New Design)", () => {
     await user.click(screen.getByRole("button", { name: "New Design" }));
 
     expect(screen.getByText(/IntakePage-stub designId=null/)).toBeTruthy();
-    expect(screen.getByText("Design")).toBeTruthy();
+    expect(screen.getAllByText("Design").length).toBeGreaterThan(0); // rail label (and the step)
     expect(screen.queryByText("Design · DSN-1")).toBeNull();
   });
 

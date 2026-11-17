@@ -34,6 +34,7 @@ import { PageBoundary } from "./ui/PageBoundary";
 import type { SearchHit } from "./ui/SearchPalette";
 import type { AppView } from "./shell";
 import { formatRoute, parseRoute, type AppRoute, type EntityKind } from "./shell/routing";
+import DesignFlowSteps from "./designs/DesignFlowSteps";
 
 // C4 Design has no meaning without a design (it operates on elements that only
 // exist once one does) -- clicking it from the always-visible Design nav group
@@ -47,6 +48,8 @@ import { formatRoute, parseRoute, type AppRoute, type EntityKind } from "./shell
 // IntakePage itself (the second step of Intake's own flow), so it needs no
 // entry here either.
 const DESIGN_ONLY_VIEWS: AppView[] = ["canvas-v2"];
+// The screens that show the design-flow steps. (Designs itself is the list, so it has none.)
+const DESIGN_FLOW_VIEWS: AppView[] = ["intake", "canvas-v2"];
 const DESIGN_ONLY_VIEW_LABELS: Record<string, string> = {
   "canvas-v2": "C4 Design",
 };
@@ -373,7 +376,17 @@ export default function App(): React.ReactElement {
           onBack={() => window.history.back()}
         >
           {/* ADP-blp.30: a page that fails must not take the nav down with it. */}
-          <PageBoundary key={view}>{renderPage()}</PageBoundary>
+          <PageBoundary key={view}>
+            {DESIGN_FLOW_VIEWS.includes(view) && (currentDesignId || view === "intake") ? (
+              // ADP-blp.59: the steps of creating a design, above the screens that make it up.
+              <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+                <DesignFlowSteps view={view} designId={currentDesignId} />
+                <div style={{ flex: 1, minHeight: 0 }}>{renderPage()}</div>
+              </div>
+            ) : (
+              renderPage()
+            )}
+          </PageBoundary>
         </AppShell>
       </CapabilityNavContext.Provider>
     </AppCapNavContext.Provider>
