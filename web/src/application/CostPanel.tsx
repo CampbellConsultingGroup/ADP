@@ -3,6 +3,7 @@ import { useApplicationCost, useUpdateApplicationCost } from "../api/application
 import type { ApplicationCostUpdate, CostBucket, TcoBucketKey } from "../api/application";
 import { TCO_BUCKET_KEYS } from "../api/application";
 import { hasStatus } from "../api/client";
+import { Loading, Button } from "../ui/primitives";
 
 /** APM US4 — Total Cost of Ownership (ADP-9x6, sensitive: gated server-side). */
 
@@ -53,7 +54,7 @@ export default function CostPanel({ appId }: Props) {
     );
   }, [cost]);
 
-  if (isLoading) return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading) return <Loading />;
 
   if (error) {
     const forbidden = hasStatus(error, 403);
@@ -152,17 +153,9 @@ export default function CostPanel({ appId }: Props) {
       </div>
 
       <div>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={updateCost.isPending}
-          style={{
-            padding: "6px 14px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 6,
-            background: "var(--accent)", color: "var(--accent-ink)", cursor: "pointer",
-          }}
-        >
+        <Button variant="primary" onClick={handleSave} disabled={updateCost.isPending}>
           {updateCost.isPending ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </div>
     </div>
   );

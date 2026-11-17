@@ -5,12 +5,13 @@
 import type React from "react";
 import { useAgentComplianceMappings, useAllControls } from "../api/compliance";
 import { ComplianceStatusText } from "./ComplianceStatusText";
+import { Loading } from "../ui/primitives";
 
 export default function AgentCompliance({ agentId }: { agentId: string }): React.ReactElement {
   const { data, isLoading } = useAgentComplianceMappings(agentId);
   const controls = useAllControls();
 
-  if (isLoading || !data) return <div style={{ fontSize: 12.5, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading || !data) return <Loading />;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 13 }}>

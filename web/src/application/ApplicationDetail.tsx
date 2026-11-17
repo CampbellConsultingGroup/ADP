@@ -26,6 +26,7 @@ import { errorDetail } from "../api/agentic";
 import { Tabs } from "../ui/Tabs";
 import { confirmAction } from "../ui/confirm";
 import ApplicationSummary from "./ApplicationSummary";
+import { Loading } from "../ui/primitives";
 
 interface Props {
   appId: string;
@@ -54,7 +55,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
   const [showBusinessValueModal, setShowBusinessValueModal] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  if (isLoading) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading) return <Loading pad={24} />;
   if (!app) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Not found</div>;
 
   const tc = app.time_classification;

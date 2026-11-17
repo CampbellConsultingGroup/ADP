@@ -16,6 +16,7 @@ import { useBusinessTechnology } from "../api/capAnalysis";
 import { BandChip, CapLink, CapWithPath } from "./capAnalysisUi";
 import { RationaleChip, geographyLabel } from "./RealizationList";
 import { rationaleLabel } from "./realizationRationale";
+import { Loading } from "../ui/primitives";
 
 /** This application's rationale and geography on one of its realizations (943). */
 function OwnRealization({ realization }: { realization: AppRef | undefined }): React.ReactElement | null {
@@ -109,13 +110,13 @@ function Expander({
 
 function ByBusiness({ capId }: { capId: string }) {
   const { data, isLoading } = useAppCapsByBusinessCapability(capId);
-  if (isLoading) return <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading) return <Loading />;
   return <AppCapSummaryItems items={data ?? []} showRealizedBy />;
 }
 
 function ByTechnical({ tcId }: { tcId: string }) {
   const { data, isLoading } = useAppCapsByTechnicalCapability(tcId);
-  if (isLoading) return <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading) return <Loading />;
   return <AppCapSummaryItems items={data ?? []} showRealizedBy />;
 }
 
@@ -126,7 +127,7 @@ export function BusinessCapAppCaps({ capId }: { capId: string }): React.ReactEle
 
 function TechnologyDeps({ capId }: { capId: string }) {
   const { data, isLoading, error } = useBusinessTechnology(capId);
-  if (isLoading) return <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading) return <Loading />;
   if (error || !data) return <div role="alert" style={{ fontSize: 12, color: "var(--crit)" }}>Failed to load technology dependencies.</div>;
   if (data.items.length === 0) {
     return <div style={{ fontSize: 12, color: "var(--ink-3)" }}>No technical capability is reached through the application layer.</div>;
@@ -165,7 +166,7 @@ export function ApplicationRealizes({ appId }: { appId: string }): React.ReactEl
     <section aria-label="Realizes application capabilities">
       <h4 style={{ fontSize: 13, margin: "0 0 6px", color: "var(--ink-2)" }}>Realizes application capabilities</h4>
       {isLoading ? (
-        <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Loading…</div>
+        <Loading />
       ) : (
         <AppCapSummaryItems items={data ?? []} forAppId={appId} />
       )}

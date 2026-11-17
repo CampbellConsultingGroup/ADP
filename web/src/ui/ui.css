@@ -224,3 +224,10 @@
 .ui-steps li.current .n { background: var(--accent); color: var(--accent-ink); }
 .ui-steps li.done .n { background: var(--good-wash); color: var(--good); }
 .ui-steps li.off .s { opacity: .55; }
+
+/* Loading, Field (ADP-blp.46) */
+.ui-loading { font-size: 13px; color: var(--ink-2); }
+.ui-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.ui-field .req { color: var(--crit); }
+.ui-hint { font-size: 12px; color: var(--ink-2); }
+.ui-field-error { font-size: 12px; color: var(--crit); }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useApplicationQuality, useUpdateApplicationQuality } from "../api/application";
 import type { ApplicationQualityMetricUpdate } from "../api/application";
+import { Loading, Button } from "../ui/primitives";
 
 /** APM US8 — quality & performance signals. Manual/advisory: never overrides health_score. */
 
@@ -31,7 +32,7 @@ export default function QualityPanel({ appId }: Props) {
     setTicketVolume30d(quality.ticket_volume_30d?.toString() ?? "");
   }, [quality]);
 
-  if (isLoading) return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading) return <Loading />;
   if (error) return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Could not load quality data.</div>;
 
   const showToast = (msg: string) => {
@@ -84,17 +85,9 @@ export default function QualityPanel({ appId }: Props) {
       </label>
 
       <div>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={updateQuality.isPending}
-          style={{
-            padding: "6px 14px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 6,
-            background: "var(--accent)", color: "var(--accent-ink)", cursor: "pointer",
-          }}
-        >
+        <Button variant="primary" onClick={handleSave} disabled={updateQuality.isPending}>
           {updateQuality.isPending ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </div>
     </div>
   );

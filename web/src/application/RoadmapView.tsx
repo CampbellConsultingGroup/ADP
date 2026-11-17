@@ -7,6 +7,7 @@ import {
 } from "../api/application";
 import type { RoadmapEntry } from "../api/application";
 import { confirmAction } from "../ui/confirm";
+import { Loading } from "../ui/primitives";
 
 /**
  * APM US6 — lifecycle & roadmap view (ADP-SPEC-038).
@@ -89,7 +90,7 @@ export default function RoadmapView() {
           Decommission Track {roadmap ? `(${roadmap.total})` : ""}
         </div>
         {roadmapLoading ? (
-          <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>
+          <Loading />
         ) : roadmap && roadmap.items.length === 0 ? (
           <div style={{ fontSize: 13, color: "var(--ink-3)" }}>No applications currently on the decommission track.</div>
         ) : (

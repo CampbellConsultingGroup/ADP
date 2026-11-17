@@ -1,5 +1,6 @@
 import { useApplicationComplianceMappings } from "../api/compliance";
 import { hasStatus } from "../api/client";
+import { Loading } from "../ui/primitives";
 
 /** COMPLY-02 US3 — reverse lookup of Controls mapped to this Application. Read-only here;
  *  mapping creation/editing happens on the Control's own side
@@ -11,7 +12,7 @@ interface Props { appId: string; }
 export default function ApplicationComplianceMappings({ appId }: Props) {
   const { data, isLoading, error } = useApplicationComplianceMappings(appId);
 
-  if (isLoading) return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading) return <Loading />;
 
   if (error) {
     const forbidden = hasStatus(error, 403);

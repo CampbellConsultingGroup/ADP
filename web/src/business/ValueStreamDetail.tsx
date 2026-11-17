@@ -5,6 +5,7 @@ import type { DiagramSeed } from "../diagrams/generators";
 import ValueStreamStageEditor from "./ValueStreamStageEditor";
 import ValueStreamForm from "./ValueStreamForm";
 import DesignLinkEditor from "./DesignLinkEditor";
+import { Loading } from "../ui/primitives";
 
 interface ValueStreamDetailProps {
   vsId: string;
@@ -20,7 +21,7 @@ export default function ValueStreamDetail({ vsId, onBack, onGenerateDiagram }: V
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  if (isLoading) return <div style={{ padding: 20, color: "var(--ink-3)", fontSize: 14 }}>Loading…</div>;
+  if (isLoading) return <Loading pad={20} />;
   if (error || !vs) return <div style={{ padding: 14, background: "var(--crit-wash)", borderRadius: 6, fontSize: 13, color: "var(--crit)" }}>Failed to load value stream.</div>;
 
   function handleDelete() {

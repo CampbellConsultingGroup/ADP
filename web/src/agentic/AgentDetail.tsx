@@ -20,6 +20,7 @@ import {
 } from "./autonomy";
 import { confirmAction } from "../ui/confirm";
 import { useCan } from "../auth/permissions";
+import { Loading } from "../ui/primitives";
 
 interface Props {
   agentId: string;
@@ -44,7 +45,7 @@ export default function AgentDetail({ agentId, onBack, onOpenSolution }: Props) 
   const canWrite = useCan("write_application"); // ADP-blp.65
   const [error, setError] = useState<string | null>(null);
 
-  if (isLoading) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading) return <Loading pad={24} />;
   if (!agent) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Agent not found</div>;
 
   const handleSave = async (body: AgentWrite) => {

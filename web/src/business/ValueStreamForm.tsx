@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useCreateValueStream, useUpdateValueStream } from "../api/business";
 import type { ValueStream } from "../api/business";
+import { Alert, Field } from "../ui/primitives";
 
 interface ValueStreamFormProps {
   existing?: ValueStream;
@@ -32,36 +33,44 @@ export default function ValueStreamForm({ existing, onDone, onCancel }: ValueStr
   return (
     <form onSubmit={handleSubmit} style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 6, padding: 16, marginBottom: 12 }}>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{existing ? "Edit Value Stream" : "New Value Stream"}</div>
-      <div style={{ marginBottom: 8 }}>
-        <label htmlFor="vs-form-name" style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 3 }}>Name *</label>
-        <input id="vs-form-name"
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Order to Cash"
-          style={{ width: "100%", padding: "6px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 4, boxSizing: "border-box" }}
-        />
-      </div>
-      <div style={{ marginBottom: 8 }}>
-        <label htmlFor="vs-form-target-stakeholder" style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 3 }}>Target Stakeholder</label>
-        <input id="vs-form-target-stakeholder"
-          value={stakeholder}
-          onChange={(e) => setStakeholder(e.target.value)}
-          placeholder="Customer"
-          style={{ width: "100%", padding: "6px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 4, boxSizing: "border-box" }}
-        />
-      </div>
-      <div style={{ marginBottom: 10 }}>
-        <label htmlFor="vs-form-description" style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 3 }}>Description</label>
-        <textarea id="vs-form-description"
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Optional description"
-          rows={2}
-          style={{ width: "100%", padding: "6px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 4, resize: "vertical", boxSizing: "border-box" }}
-        />
-      </div>
-      {error && <div style={{ fontSize: 12, color: "var(--crit)", marginBottom: 8 }}>{error.message}</div>}
+      {/* ADP-blp.46: Field ties each label to its control; the shared input classes replace
+          three copies of the same inline style. */}
+      <Field label="Name" required>
+        {(control) => (
+          <input
+            {...control}
+            className="ui-input"
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Order to Cash"
+          />
+        )}
+      </Field>
+      <Field label="Target Stakeholder">
+        {(control) => (
+          <input
+            {...control}
+            className="ui-input"
+            value={stakeholder}
+            onChange={(e) => setStakeholder(e.target.value)}
+            placeholder="Customer"
+          />
+        )}
+      </Field>
+      <Field label="Description">
+        {(control) => (
+          <textarea
+            {...control}
+            className="ui-textarea"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Optional description"
+            rows={2}
+          />
+        )}
+      </Field>
+      {error && <Alert tone="crit">{error.message}</Alert>}
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
         <button type="button" onClick={onCancel} style={{ padding: "6px 14px", fontSize: 13, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer" }}>
           Cancel

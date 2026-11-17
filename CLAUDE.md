@@ -173,6 +173,20 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.26 and .46, first increments:
+  - .26: `tests/support/schema.py`. `find_drift()` compares every duplicate table declaration (27 tables
+    are declared in more than one store) with the widest one, on the PostgreSQL dialect;
+    `tests/unit/test_schema_declarations.py` fails on any disagreement (none today) and if the number of
+    duplicated tables grows. `create_schema(sync_conn)` creates every store's tables once, each from its
+    widest declaration -- use it in new multi-store fixtures instead of hand-ordered `create_all` calls
+    with mirrors excluded (`test_initiative_agent_mapping_api.py` is converted). The tables themselves are
+    NOT yet unified into one module: tests insert into the narrow mirrors directly, so that is a larger
+    change.
+  - .46: `Loading`, `Alert` and `Field` in `web/src/ui/primitives.tsx`. `Field` passes `id`,
+    `aria-describedby`, `aria-invalid` and `aria-required` to its control (not native `required`: forms
+    validate themselves). 28 hand-written "Loading…" lines and the four application-panel Save buttons use
+    the primitives; `ValueStreamForm` is the worked example of `Field`. Most forms and tables are not
+    migrated yet.
 - Fable review ADP-blp.59, last part: `designs/DesignFlowSteps.tsx` shows the four steps of creating a
   design (Describe, Recommend, Design, Validate) above the New Design and C4 Design screens. Each step is
   a link to its screen; steps that need a design are inactive until one exists. `IntakePage`'s tab is now

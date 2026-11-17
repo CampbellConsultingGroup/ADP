@@ -1,9 +1,6 @@
 """Contract tests for ADP-321: initiative linkage for agent compliance mappings.
 
-The real app against one SQLite file shared by five stores. Owners create their tables before any
-module that only mirrors them (create_all's checkfirst then skips the narrow mirror): bstore ->
-astore (minus its solution_agents / regulatory_frameworks mirrors) -> agstore -> cstore (owns
-control_agent_mapping) -> sstore (initiatives, plus its mirrors of everything above).
+The real app against one SQLite file shared by every store (tests.support.schema.create_schema).
 """
 
 from __future__ import annotations
@@ -20,6 +17,7 @@ from adp.authz.roles import PersonaRole
 from adp.compliance import store as cstore
 from adp.strategy import initiatives as _sinit  # noqa: F401 -- registers the link tables
 from adp.strategy import store as sstore
+from tests.support.schema import create_schema
 
 AG = "/api/v1/agentic"
 COMP = "/api/v1/compliance"
@@ -42,17 +40,10 @@ async def app_and_client(tmp_path, monkeypatch):
     engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path}/initiative_agent.db")
 
     def _create(sync_conn):
-        bstore._metadata.create_all(sync_conn)
-        astore._metadata.create_all(
-            sync_conn,
-            tables=[
-                t for t in astore._metadata.sorted_tables
-                if t.name not in ("solution_agents", "regulatory_frameworks")
-            ],
-        )
-        agstore._metadata.create_all(sync_conn)
-        cstore._metadata.create_all(sync_conn)
-        sstore._metadata.create_all(sync_conn)
+        # ADP-blp.26: one helper creates every store's tables once, each from its widest
+        # declaration. This replaced a hand-ordered sequence of create_all calls with mirrors
+        # excluded by name (bstore -> astore -> agstore -> cstore -> sstore).
+        create_schema(sync_conn)
         sync_conn.execute(
             sa.text(
                 "CREATE UNIQUE INDEX uq_icagm ON initiative_control_agent_mapping"

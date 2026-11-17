@@ -19,6 +19,7 @@ import {
   useValueStreams,
   type BusinessCapability,
 } from "../api/business";
+import { Loading } from "../ui/primitives";
 
 const SELECT: React.CSSProperties = { fontSize: 12.5, padding: "3px 6px", minWidth: 180 };
 const MUTED: React.CSSProperties = { color: "var(--ink-3)" };
@@ -91,7 +92,7 @@ export default function AgentAutomates({ agentId }: { agentId: string }) {
 
   const paths = useMemo(() => capabilityPaths(caps.data?.items ?? []), [caps.data]);
 
-  if (isLoading || !data) return <div style={{ ...MUTED, fontSize: 12.5 }}>Loading…</div>;
+  if (isLoading || !data) return <Loading />;
 
   const linkedCaps = new Set(data.capabilities.map((c) => c.id));
   const linkedStages = new Set(data.stages.map((s) => s.id));
