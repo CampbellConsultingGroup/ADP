@@ -140,3 +140,38 @@ def test_import_api_rejects_wrong_schema_version(client):
     assert resp.status_code == 422
     body = json.dumps(resp.json())
     assert "99.0.0" in body or "schema" in body.lower()
+
+
+def test_export_works_with_an_async_store(tmp_path, monkeypatch):
+    """ADP-blp.20: the real DesignStore's get() is a coroutine. The route used to call the
+    synchronous orchestrator, which ran run_until_complete() inside the already-running loop
+    and failed with a RuntimeError (surfaced as a 422) for every real export."""
+    from adp.api.app import create_app
+    from adp.api.routers import export_router as export_module
+    from adp.store.store import DesignNotFoundError
+
+    monkeypatch.setenv("ADP_DESIGN_EXPORT_ROOT", str(tmp_path))
+    design = _make_design()
+
+    class AsyncStore:
+        async def get(self, design_id: str):
+            if design_id != design.id:
+                raise DesignNotFoundError(design_id, f"Design {design_id!r} not found")
+            return design
+
+    app = create_app()
+
+    async def _get_store():
+        return AsyncStore()
+
+    app.dependency_overrides[export_module.get_design_store] = _get_store
+    c = TestClient(app, raise_server_exceptions=False)
+
+    resp = c.post("/api/v1/designs/D-001/export", json={"confirmation_id": "CONF-1"})
+    assert resp.status_code == 200, resp.text
+    exported = list(tmp_path.rglob("model.json"))
+    assert len(exported) == 1
+    assert (exported[0].parent / "container" / "diagram.svg").exists()
+
+    missing = c.post("/api/v1/designs/D-404/export", json={"confirmation_id": "CONF-1"})
+    assert missing.status_code == 404

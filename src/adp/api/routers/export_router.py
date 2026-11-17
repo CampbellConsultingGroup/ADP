@@ -99,7 +99,7 @@ async def export_design(
 
     try:
         orchestrator = ExportOrchestrator(design_store=store)
-        result = orchestrator.export(
+        result = await orchestrator.aexport(
             design_id=design_id,
             export_root=export_root,
             confirmation_id=request.confirmation_id,

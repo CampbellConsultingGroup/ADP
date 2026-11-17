@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, Request, Response
 
 from adp.agentic import router as agentic_router_module
 from adp.agentic import store as agstore
+from adp.api.limits import BodySizeLimitMiddleware, enforce_llm_rate_limit
 from adp.api.routers import (
     admin_prompts_router,
     admin_rubrics_router,
@@ -223,6 +224,23 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from adp import db as _db
 
     await _db.dispose()
+    # ADP-blp.22: close the shared LLM HTTP client.
+    from adp.llm.client import aclose_shared_clients
+
+    await aclose_shared_clients()
+
+
+def _metric_route(request: Request) -> str:
+    """The matched route's template, e.g. /api/v1/designs/{design_id} (ADP-blp.9).
+
+    The raw URL path used to be the label, so every distinct id -- and every made-up path an
+    unauthenticated caller cared to request -- created a new time series that was never freed,
+    and put entity ids into the public /metrics output. Anything that matched no route is
+    counted under one "unmatched" label. Read after the request is routed.
+    """
+    route = request.scope.get("route")
+    path = getattr(route, "path", None)
+    return path if isinstance(path, str) and path else "unmatched"
 
 
 def create_app() -> FastAPI:
@@ -235,12 +253,15 @@ def create_app() -> FastAPI:
         redoc_url=None,
         lifespan=_lifespan,
         # Action-based authorization for every mutating route (ADP-SPEC-004).
-        dependencies=[Depends(enforce_route_permission)],
+        # ADP-blp.5: plus a per-user rate limit on the routes that call the model.
+        dependencies=[Depends(enforce_route_permission), Depends(enforce_llm_rate_limit)],
     )
 
     # Auth middleware — validates Bearer tokens for all /api/v1/ routes (ADP-SPEC-026)
     # Must be added before other middleware; no-op when ADP_AUTH_ENABLED=false
     app.add_middleware(AuthMiddleware)
+    # ADP-blp.5: cap request body size for every route (outermost, so it runs first).
+    app.add_middleware(BodySizeLimitMiddleware)
 
     # ── Security headers (ZAP pentest findings — ADP-SPEC-026) ──────────────────
     # Applied to every response to prevent MIME sniffing and cross-origin reads.
@@ -281,16 +302,16 @@ def create_app() -> FastAPI:
         trace_id = request.headers.get("X-Trace-ID") or generate_trace_id()
         set_trace_id(trace_id)
 
-        route = request.url.path
         ACTIVE_REQUESTS.inc()
         t0 = time.monotonic()
         try:
             response = await call_next(request)
         except Exception:
-            ERROR_COUNTER.labels(route=route).inc()
+            ERROR_COUNTER.labels(route=_metric_route(request)).inc()
             ACTIVE_REQUESTS.dec()
             raise
         else:
+            route = _metric_route(request)
             elapsed = time.monotonic() - t0
             status_str = str(response.status_code)
             method = request.method

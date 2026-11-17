@@ -172,6 +172,28 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P2 batch 1 (epic ADP-blp: .5, .6, .9, .19, .20, .22):
+  - Limits (`adp.api.limits`): `BodySizeLimitMiddleware` refuses bodies over `ADP_MAX_REQUEST_BYTES` (default
+    2 MiB, 0 = off) with 413, counting received bytes as well as Content-Length; `enforce_llm_rate_limit`
+    (app-level dependency, limiter on `app.state` so each `create_app()` starts clean) returns 429 +
+    Retry-After after `ADP_LLM_RATE_LIMIT_PER_MINUTE` (default 30, per user, per worker, 0 = off) on the six
+    model-calling POSTs (chat messages, intake, recommend, validate, both agent-review routes). Chat
+    `content` max 20,000 chars, `diagram_context` 200,000; diagram PNG export refuses an SVG declaring more
+    than 10,000 px per side.
+  - Auth proxy: `/auth/*` forwards only `realms/<realm from ADP_KEYCLOAK_ISSUER>/...`, `resources/` and `js/`;
+    admin console, master realm and dot segments get 404. Realm file enables brute-force protection.
+  - Metrics: request metrics are labelled by the matched route template (`_metric_route`), "unmatched" for
+    anything that matched no route.
+  - `DesignStore.list_all` is one joined query and accepts `page_size=None` (all designs); Governance
+    exceptions uses it (it silently covered only the 50 newest designs).
+  - Design export: the route awaits `ExportOrchestrator.aexport()` (loads the design, then runs the sync
+    pipeline in a thread against a prefetched store). The sync `export()` failed against the real async
+    store with "This event loop is already running" -- the old tests only used a sync mock.
+  - LLM client: one shared `httpx.AsyncClient` per event loop (`_shared_client`, closed in lifespan),
+    `httpx.Timeout(read, connect=10)`, and `_post_with_retry` (2 retries with backoff on 429/5xx/529 and
+    connect errors, honours Retry-After, never retries a read timeout). Streaming calls are not retried.
+    Tests patch `adp.llm.client.httpx.AsyncClient` as before (the cache is keyed by the client class).
+  - Follow-up ADP-blp.64 (needs a deployed check): forwarded headers, sslRequired, allowedIpRanges, /metrics.
 - Fable review P1 fixes (epic ADP-blp "Fable Recommendations", 63 beads from a 2026-11-17 review; this is
   .1-.4, .14, .15, .30, .43):
   - Auth (`adp.auth`): no recognised group now maps to REVIEWER, not TECHNICAL_ARCHITECT; new `Reviewer` group

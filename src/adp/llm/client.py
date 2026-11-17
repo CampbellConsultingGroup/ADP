@@ -12,8 +12,11 @@ The API key is NEVER logged, stored, or included in telemetry spans.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import random
+import weakref
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -22,6 +25,92 @@ import httpx
 from adp.admin import prompt_registry
 
 _logger = logging.getLogger("adp.llm")
+
+# ── Shared HTTP client, timeouts and retry (ADP-blp.22) ───────────────────────
+# Every call used to open its own httpx.AsyncClient: a new TLS handshake per request, including
+# each round of the chat tool loop and each critic in the validation fan-out. One client per
+# event loop is now reused. A connection belongs to the loop that opened it, hence the per-loop
+# cache; the client class is part of the key so that a test which swaps in its own client class
+# never receives a cached real one.
+
+_CONNECT_TIMEOUT = 10.0
+_RETRY_STATUSES = frozenset({429, 500, 502, 503, 504, 529})
+_MAX_RETRIES = 2
+_RETRY_BASE_DELAY = 1.0  # seconds; doubled on each retry, plus jitter
+_RETRY_MAX_DELAY = 15.0
+
+_clients: weakref.WeakKeyDictionary[Any, dict[Any, httpx.AsyncClient]] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _shared_client() -> httpx.AsyncClient:
+    bucket = _clients.setdefault(asyncio.get_running_loop(), {})
+    factory = httpx.AsyncClient
+    client = bucket.get(factory)
+    if client is None or client.is_closed:
+        client = factory(
+            limits=httpx.Limits(max_connections=20, max_keepalive_connections=10),
+        )
+        bucket[factory] = client
+    return client
+
+
+def _timeout(read: float) -> httpx.Timeout:
+    """Fail fast when the endpoint is unreachable, but allow a long model response."""
+    return httpx.Timeout(read, connect=_CONNECT_TIMEOUT)
+
+
+async def aclose_shared_clients() -> None:
+    """Close the current loop's client. Called once at application shutdown."""
+    for client in _clients.pop(asyncio.get_running_loop(), {}).values():
+        await client.aclose()
+
+
+def _retry_delay(attempt: int, response: httpx.Response | None) -> float:
+    if response is not None:
+        try:
+            return min(float(response.headers.get("retry-after", "")), _RETRY_MAX_DELAY)
+        except ValueError:
+            pass
+    return min(_RETRY_BASE_DELAY * (2**attempt), _RETRY_MAX_DELAY) + random.uniform(0, 0.25)
+
+
+async def _post_with_retry(
+    url: str, *, headers: dict[str, str], body: dict[str, Any], read_timeout: float
+) -> httpx.Response:
+    """POST a non-streaming request, retrying an overloaded or briefly unreachable endpoint.
+
+    Retries rate limiting (429), overload (529), 5xx and connection failures up to
+    _MAX_RETRIES times with backoff, honouring Retry-After. A read timeout is NOT retried: the
+    request may already be running and repeating it would double the cost. The last response is
+    returned for the caller's raise_for_status().
+    """
+    client = _shared_client()
+    for attempt in range(_MAX_RETRIES + 1):
+        last = attempt == _MAX_RETRIES
+        try:
+            response = await client.post(
+                url, headers=headers, json=body, timeout=_timeout(read_timeout)
+            )
+        except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+            if last:
+                raise
+            delay = _retry_delay(attempt, None)
+            _logger.warning(
+                "llm request could not connect (%s); retry %d/%d in %.1fs",
+                type(exc).__name__, attempt + 1, _MAX_RETRIES, delay,
+            )
+        else:
+            if response.status_code not in _RETRY_STATUSES or last:
+                return response
+            delay = _retry_delay(attempt, response)
+            _logger.warning(
+                "llm request returned %d; retry %d/%d in %.1fs",
+                response.status_code, attempt + 1, _MAX_RETRIES, delay,
+            )
+        await asyncio.sleep(delay)
+    raise AssertionError("unreachable")  # pragma: no cover
 
 _EXTRACTION_SYSTEM_PROMPT = """\
 You are a requirements analyst. Extract all business requirements from the provided text.
@@ -179,9 +268,9 @@ class LLMClient:
         tool_use_blocks: dict[int, dict[str, str]] = {}
         tool_json_fragments: dict[int, str] = {}
 
-        async with httpx.AsyncClient() as client, client.stream(
+        async with _shared_client().stream(
             "POST", f"{self._base_url}/v1/messages",
-            headers=headers, json=body, timeout=180.0,
+            headers=headers, json=body, timeout=_timeout(180.0),
         ) as response:
             response.raise_for_status()
             event_type: str | None = None
@@ -263,9 +352,9 @@ class LLMClient:
         tool_calls: dict[int, dict[str, str]] = {}
         stop_reason = "stop"
 
-        async with httpx.AsyncClient() as client, client.stream(
+        async with _shared_client().stream(
             "POST", f"{self._base_url}/v1/chat/completions",
-            headers=headers, json=body, timeout=180.0,
+            headers=headers, json=body, timeout=_timeout(180.0),
         ) as response:
             response.raise_for_status()
             async for line in response.aiter_lines():
@@ -323,13 +412,12 @@ class LLMClient:
             "system": system,
             "messages": [{"role": "user", "content": user}],
         }
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self._base_url}/v1/messages",
-                headers=headers,
-                json=body,
-                timeout=180.0,
-            )
+        response = await _post_with_retry(
+            f"{self._base_url}/v1/messages",
+            headers=headers,
+            body=body,
+            read_timeout=180.0,
+        )
         response.raise_for_status()
         raw = response.json()
 
@@ -370,13 +458,12 @@ class LLMClient:
             "temperature": 0.1,
             "max_tokens": 4096,
         }
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self._base_url}/v1/chat/completions",
-                headers=headers,
-                json=body,
-                timeout=120.0,
-            )
+        response = await _post_with_retry(
+            f"{self._base_url}/v1/chat/completions",
+            headers=headers,
+            body=body,
+            read_timeout=120.0,
+        )
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]
 
@@ -405,13 +492,12 @@ class LLMClient:
                 },
             ],
         }
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self._base_url}/v1/messages",
-                headers=headers,
-                json=body,
-                timeout=120.0,
-            )
+        response = await _post_with_retry(
+            f"{self._base_url}/v1/messages",
+            headers=headers,
+            body=body,
+            read_timeout=120.0,
+        )
         response.raise_for_status()
         raw = response.json()
 
@@ -457,12 +543,11 @@ class LLMClient:
             "temperature": 0.1,
             "max_tokens": 4096,
         }
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{self._base_url}/v1/chat/completions",
-                headers=headers,
-                json=body,
-                timeout=120.0,
-            )
+        response = await _post_with_retry(
+            f"{self._base_url}/v1/chat/completions",
+            headers=headers,
+            body=body,
+            read_timeout=120.0,
+        )
         response.raise_for_status()
         return response.json()  # type: ignore[no-any-return]

@@ -396,7 +396,7 @@ class DesignStore:
     async def list_all(
         self,
         page: int = 1,
-        page_size: int = 50,
+        page_size: int | None = 50,
         status: str | None = None,
     ) -> list[ArchitectureDescription]:
         """Return a paginated list of the latest version of each design (ADP-SPEC-025/030).
@@ -405,22 +405,31 @@ class DesignStore:
         compute element/requirement counts from the canonical model.
         Sorted by created_at descending (most recent first).
         Optionally filtered by lifecycle_status (ADP-SPEC-030).
-        """
-        offset = (page - 1) * page_size
-        async with self._session_factory() as session:
-            q = sa.select(designs.c.id).order_by(designs.c.created_at.desc())
-            if status is not None:
-                q = q.where(designs.c.lifecycle_status == status)
-            rows = await session.execute(q.limit(page_size).offset(offset))
-            design_ids = [r[0] for r in rows.fetchall()]
 
-        result: list[ArchitectureDescription] = []
-        for did in design_ids:
-            try:
-                result.append(await self.get(did))
-            except DesignNotFoundError:
-                pass  # race: design deleted between list and get
-        return result
+        page_size=None returns every design (ADP-blp.19): callers that aggregate over the
+        whole estate, such as the Governance exceptions report, must not stop at one page.
+
+        One joined query for the current version of each design; this used to be one query
+        for the ids and then a session and query per design.
+        """
+        q = (
+            sa.select(design_versions.c.content)
+            .select_from(
+                designs.join(
+                    design_versions,
+                    (designs.c.id == design_versions.c.design_id)
+                    & (designs.c.current_version == design_versions.c.version_num),
+                )
+            )
+            .order_by(designs.c.created_at.desc())
+        )
+        if status is not None:
+            q = q.where(designs.c.lifecycle_status == status)
+        if page_size is not None:
+            q = q.limit(page_size).offset((page - 1) * page_size)
+        async with self._session_factory() as session:
+            rows = (await session.execute(q)).fetchall()
+        return [ArchitectureDescription.model_validate(r[0]) for r in rows]
 
     async def count_all(self, status: str | None = None) -> int:
         """Return total count of designs (ADP-SPEC-025/030).
