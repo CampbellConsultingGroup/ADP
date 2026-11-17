@@ -39,6 +39,9 @@ param apiImageTag string
 @description('Client IP ranges allowed to reach the API, as objects { cidr, description }. Empty = fully public (deploy.sh refuses this unless explicitly overridden).')
 param allowedIpRanges array
 
+@description('Deploy adp-api with no IP restriction, on purpose (deploy.sh: ADP_ALLOW_PUBLIC=1). Without it an empty allowedIpRanges denies all traffic.')
+param allowPublicIngress bool = false
+
 // Public URL the browser reaches Keycloak through (ADP-cm9) -- adp-api's own
 // external FQDN, plus /auth. Constructed from the environment's default
 // domain (known before apiApp itself deploys) rather than apiApp's fqdn
@@ -72,6 +75,7 @@ module apiApp 'modules/apiapp.bicep' = {
     keycloakFqdn: keycloak.outputs.fqdn
     keycloakPublicBaseUrl: keycloakPublicBaseUrl
     allowedIpRanges: allowedIpRanges
+    allowPublicIngress: allowPublicIngress
   }
 }
 

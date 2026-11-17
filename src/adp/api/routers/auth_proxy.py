@@ -17,6 +17,7 @@ URL substitution; it's a transparent pass-through.
 from __future__ import annotations
 
 import os
+from urllib.parse import urlsplit
 
 import httpx
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -41,6 +42,53 @@ _HOP_BY_HOP = {
 # its login pages load are forwarded. The admin console and REST API (/auth/admin/...) and the
 # master realm (/auth/realms/master/...), whose login is the Keycloak administrator's, are not.
 _STATIC_PREFIXES = ("resources/", "js/")
+
+
+# ADP-blp.64: Keycloak runs with --proxy-headers=xforwarded, so it believes these headers. A
+# client must not be able to choose them: X-Forwarded-For decides which address brute-force
+# protection and the audit log record, and with sslRequired=external it and X-Forwarded-Proto
+# decide whether HTTPS is demanded. Everything the client sent is dropped and the proxy sets
+# its own values.
+_FORWARDING_HEADERS = {
+    "forwarded",
+    "x-forwarded-for",
+    "x-forwarded-host",
+    "x-forwarded-port",
+    "x-forwarded-proto",
+    "x-forwarded-prefix",
+    "x-forwarded-server",
+    "x-real-ip",
+}
+
+
+def _client_address(request: Request) -> str | None:
+    """The address of the caller as the nearest trusted hop saw it.
+
+    The platform ingress appends the peer it accepted the connection from to
+    X-Forwarded-For, so the last entry is the only one the client cannot write.
+    Without the header (no ingress in front, e.g. local use) it is the socket peer.
+    """
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    last = forwarded_for.rsplit(",", 1)[-1].strip()
+    if last:
+        return last
+    return request.client.host if request.client else None
+
+
+def _forwarding_headers(request: Request) -> dict[str, str]:
+    """X-Forwarded-* for Keycloak, from configuration and the real peer only."""
+    headers: dict[str, str] = {}
+    address = _client_address(request)
+    if address:
+        headers["x-forwarded-for"] = address
+    # The public origin is the one in the issuer URL -- the address browsers use.
+    public = urlsplit(os.environ.get("ADP_KEYCLOAK_ISSUER", ""))
+    if public.scheme and public.netloc:
+        headers["x-forwarded-proto"] = public.scheme
+        headers["x-forwarded-host"] = public.netloc
+    else:
+        headers["x-forwarded-proto"] = request.url.scheme
+    return headers
 
 
 def _realm() -> str:
@@ -75,8 +123,11 @@ async def proxy_to_keycloak(path: str, request: Request) -> Response:
     target = f"{internal_url}/auth/{path}"
 
     forward_headers = {
-        k: v for k, v in request.headers.items() if k.lower() not in _HOP_BY_HOP
+        k: v
+        for k, v in request.headers.items()
+        if k.lower() not in _HOP_BY_HOP and k.lower() not in _FORWARDING_HEADERS
     }
+    forward_headers.update(_forwarding_headers(request))
     body = await request.body()
 
     async with httpx.AsyncClient(follow_redirects=False, timeout=30.0) as client:

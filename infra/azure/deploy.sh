@@ -330,6 +330,7 @@ values = {
     "keycloakDatabaseName": "$KEYCLOAK_DB",
     "apiImageTag": "$API_IMAGE_TAG",
     "allowedIpRanges": json.loads('''$ALLOWED_IPS_JSON'''),
+    "allowPublicIngress": "${ADP_ALLOW_PUBLIC:-}" == "1",
 }
 json.dump({
     "\$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",

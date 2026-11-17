@@ -98,3 +98,64 @@ def test_realm_follows_the_configured_issuer(monkeypatch) -> None:
     monkeypatch.setenv("ADP_KEYCLOAK_ISSUER", "https://x.example/auth/realms/Other/")
     assert auth_proxy._is_allowed("realms/Other/account")
     assert not auth_proxy._is_allowed("realms/ADPRealm/account")
+
+
+# ── ADP-blp.64: the client cannot choose the forwarding headers Keycloak trusts ──
+
+
+def _capturing_client(monkeypatch) -> tuple[TestClient, dict[str, str]]:
+    seen: dict[str, str] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.update({k.lower(): v for k, v in request.headers.items()})
+        return httpx.Response(200, content=b"ok")
+
+    real_async_client = httpx.AsyncClient
+
+    def fake_async_client(*args, **kwargs):
+        return real_async_client(transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setenv("ADP_KEYCLOAK_INTERNAL_URL", "http://keycloak.internal")
+    monkeypatch.setenv("ADP_KEYCLOAK_ISSUER", "https://adp.example.com/auth/realms/ADPRealm")
+    monkeypatch.setattr(auth_proxy.httpx, "AsyncClient", fake_async_client)
+    app = FastAPI()
+    app.include_router(auth_proxy.router)
+    return TestClient(app), seen
+
+
+def test_client_supplied_forwarding_headers_are_replaced(monkeypatch) -> None:
+    client, seen = _capturing_client(monkeypatch)
+    client.get(
+        "/auth/realms/ADPRealm/account",
+        headers={
+            # Spoofed by the caller; the last entry is the one the ingress appended.
+            "X-Forwarded-For": "127.0.0.1, 203.0.113.9",
+            "X-Forwarded-Host": "evil.example",
+            "X-Forwarded-Proto": "http",
+            "X-Forwarded-Port": "81",
+            "Forwarded": "for=127.0.0.1;host=evil.example;proto=http",
+            "X-Real-IP": "127.0.0.1",
+        },
+    )
+
+    assert seen["x-forwarded-for"] == "203.0.113.9"
+    assert seen["x-forwarded-host"] == "adp.example.com"
+    assert seen["x-forwarded-proto"] == "https"
+    assert "forwarded" not in seen
+    assert "x-forwarded-port" not in seen
+    assert "x-real-ip" not in seen
+
+
+def test_without_an_ingress_the_socket_peer_is_forwarded(monkeypatch) -> None:
+    client, seen = _capturing_client(monkeypatch)
+    client.get("/auth/realms/ADPRealm/account")
+
+    assert seen["x-forwarded-for"] == "testclient"
+    assert seen["x-forwarded-proto"] == "https"
+
+
+def test_other_request_headers_still_reach_keycloak(monkeypatch) -> None:
+    client, seen = _capturing_client(monkeypatch)
+    client.get("/auth/realms/ADPRealm/account", headers={"Cookie": "AUTH_SESSION_ID=abc"})
+
+    assert seen["cookie"] == "AUTH_SESSION_ID=abc"

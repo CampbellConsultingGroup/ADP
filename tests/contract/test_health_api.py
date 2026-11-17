@@ -64,3 +64,23 @@ def test_x_trace_id_generated_when_absent(client):
     trace_id = resp.headers.get("X-Trace-ID")
     assert trace_id is not None
     assert len(trace_id) > 0
+
+
+# ── ADP-blp.64: /metrics is not public when authentication is on ──────────────
+
+
+def test_metrics_hidden_when_auth_is_on_and_no_token_is_configured(client, monkeypatch):
+    monkeypatch.setenv("ADP_AUTH_ENABLED", "true")
+    monkeypatch.delenv("ADP_METRICS_TOKEN", raising=False)
+    assert client.get("/metrics").status_code == 404
+    assert client.get("/health").status_code == 200
+
+
+def test_metrics_need_the_configured_token_when_auth_is_on(client, monkeypatch):
+    monkeypatch.setenv("ADP_AUTH_ENABLED", "true")
+    monkeypatch.setenv("ADP_METRICS_TOKEN", "scrape-secret")
+    assert client.get("/metrics").status_code == 404
+    assert client.get("/metrics", headers={"Authorization": "Bearer wrong"}).status_code == 404
+    ok = client.get("/metrics", headers={"Authorization": "Bearer scrape-secret"})
+    assert ok.status_code == 200
+    assert "adp_requests_total" in ok.text or "# HELP" in ok.text

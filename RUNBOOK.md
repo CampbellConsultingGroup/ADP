@@ -17,6 +17,12 @@ curl http://localhost:8001/health
 curl http://localhost:8001/metrics | grep adp_
 ```
 
+`/metrics` is open only when authentication is off (local development). With
+`ADP_AUTH_ENABLED` on it answers 404 unless the caller sends
+`Authorization: Bearer <ADP_METRICS_TOKEN>`; with no `ADP_METRICS_TOKEN` set,
+nobody can read it (ADP-blp.64). Set the variable on `adp-api` when a scraper is
+added.
+
 Key metrics to watch:
 
 | Metric | Type | Alert threshold |
