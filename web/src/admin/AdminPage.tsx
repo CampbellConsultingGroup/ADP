@@ -4,6 +4,7 @@ import PromptEditor from "./PromptEditor";
 import PromptHistory from "./PromptHistory";
 import { clickableRow } from "../ui/clickableRow";
 import { Tabs } from "../ui/Tabs";
+import { confirmAction } from "../ui/confirm";
 
 const CARD: React.CSSProperties = {
   border: "1px solid var(--border)",
@@ -41,9 +42,9 @@ export default function AdminPage(): React.ReactElement {
 
   // FR-011: warn before discarding unsaved edits when switching agents
   // in-app (the browser-level beforeunload case is handled in PromptEditor).
-  const trySelect = (agentId: string) => {
+  const trySelect = async (agentId: string) => {
     if (isDirty && agentId !== selectedId) {
-      const proceed = window.confirm(
+      const proceed = await confirmAction(
         "You have unsaved changes to this agent's prompt. Discard them and switch agents?",
       );
       if (!proceed) return;

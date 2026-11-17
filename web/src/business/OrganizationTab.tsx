@@ -24,6 +24,7 @@ import OrgUnitTree from "./OrgUnitTree";
 import UnmatchedList from "./UnmatchedList";
 import OrgFindings from "./OrgFindings";
 import OrgUnitFootprint from "./OrgUnitFootprint";
+import { confirmAction } from "../ui/confirm";
 
 type Section = "org-units" | "geography" | "unmatched" | "findings";
 
@@ -120,8 +121,8 @@ function OrgUnitDetailPanel({
               <button
                 className="ui-btn ui-btn-sm"
                 style={{ color: "var(--crit)" }}
-                onClick={() => {
-                  if (!confirm(`Delete "${data.name}"? Applications it owns keep their free-text business unit and lose the link.`)) return;
+                onClick={async () => {
+                  if (!(await confirmAction(`Delete "${data.name}"? Applications it owns keep their free-text business unit and lose the link.`))) return;
                   void run(async () => {
                     await del.mutateAsync(id);
                     onDeleted();

@@ -14,6 +14,7 @@ import { renderCapabilitySuggestionDetail } from "./agentReviewDetail";
 import { CapabilityOrgChips, CapabilityOrgEditor } from "./CapabilityOrgPanel";
 import { RegionalAssessmentsPanel } from "./RegionalAssessmentEditor";
 import { useCanWriteApplications } from "../application/appCapNav";
+import { confirmAction } from "../ui/confirm";
 
 interface CapabilityNodeProps {
   // ADP-914.7: widened from BusinessCapability to CapabilityTreeNode (a
@@ -70,7 +71,11 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
     update.mutate({ name: editName.trim() }, { onSuccess: () => setEditing(false) });
   }
 
-  function handleDelete() {
+  // ADP-blp.47: deleting a capability removes its links to applications, value stream stages,
+  // objectives and controls with it, and used to happen on a single click with no question.
+  async function handleDelete() {
+    const question = `Delete "${capability.name}"? Its links to applications, value stream stages, objectives and controls are removed too.`;
+    if (!(await confirmAction(question))) return;
     setDeleteError(null);
     deleteCap.mutate(capability.id, {
       onError: (err) => setDeleteError(err.message),

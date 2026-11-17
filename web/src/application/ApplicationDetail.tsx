@@ -24,6 +24,7 @@ import ApplicationComplianceMappings from "./ApplicationComplianceMappings";
 import SolutionAgentsPanel from "../agentic/SolutionAgentsPanel";
 import { errorDetail } from "../api/agentic";
 import { Tabs } from "../ui/Tabs";
+import { confirmAction } from "../ui/confirm";
 
 interface Props {
   appId: string;
@@ -69,7 +70,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
   };
 
   const handleDelete = async () => {
-    if (!confirm(`Delete "${app.name}"?`)) return;
+    if (!(await confirmAction(`Delete "${app.name}"?`))) return;
     await deleteApp.mutateAsync(appId);
     onDeleted();
   };

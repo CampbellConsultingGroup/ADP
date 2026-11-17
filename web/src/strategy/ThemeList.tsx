@@ -12,6 +12,8 @@ import NavLinkButton from "./NavLinkButton";
 import { useScrollHighlight } from "./useScrollHighlight";
 import EditFrame, { useReturnFocus } from "./EditFrame";
 import { useCan } from "../auth/permissions";
+import { confirmAction } from "../ui/confirm";
+import { EmptyState } from "../ui/primitives";
 
 function ThemeEditForm({ theme, onDone }: { theme: StrategicTheme; onDone: () => void }) {
   const updateMutation = useUpdateTheme(theme.id);
@@ -115,8 +117,8 @@ export default function ThemeList({ focusThemeId, onNavigateToObjectives }: Them
     );
   }
 
-  function handleDelete(theme: StrategicTheme) {
-    if (!confirm(`Delete theme "${theme.name}"?`)) return;
+  async function handleDelete(theme: StrategicTheme) {
+    if (!(await confirmAction(`Delete theme "${theme.name}"?`))) return;
     setDeleteError(null);
     deleteMutation.mutate(theme.id, {
       onError: (err: Error & { status?: number }) => {
@@ -190,7 +192,14 @@ export default function ThemeList({ focusThemeId, onNavigateToObjectives }: Them
       )}
 
       {items.length === 0 && !showForm && (
-        <div style={{ color: "var(--ink-3)", fontSize: 13 }}>No themes yet. Create one above.</div>
+        <EmptyState
+          compact
+          icon="layers"
+          title="No themes yet"
+          why="A theme groups related objectives under one strategic direction, such as growth or operational resilience."
+        >
+          No themes yet. Create one above.
+        </EmptyState>
       )}
 
       {items.map((t) =>

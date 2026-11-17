@@ -6,6 +6,7 @@ import {
   useDeleteInitiative,
 } from "../api/application";
 import type { RoadmapEntry } from "../api/application";
+import { confirmAction } from "../ui/confirm";
 
 /**
  * APM US6 — lifecycle & roadmap view (ADP-SPEC-038).
@@ -113,7 +114,9 @@ export default function RoadmapView() {
               <span style={{ flex: 1 }}>{i.name}</span>
               {i.target_date && <span style={{ fontSize: 11, color: "var(--ink-3)" }}>target {i.target_date}</span>}
               <button
-                onClick={() => deleteInitiative.mutate(i.id)}
+                onClick={async () => {
+                  if (await confirmAction(`Delete initiative "${i.name}"?`)) deleteInitiative.mutate(i.id);
+                }}
                 style={{ fontSize: 11, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}
               >
                 ✕

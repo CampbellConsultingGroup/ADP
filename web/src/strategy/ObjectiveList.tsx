@@ -4,6 +4,7 @@ import NavLinkButton from "./NavLinkButton";
 import ObjectiveForm from "./ObjectiveForm";
 import { clickableRow } from "../ui/clickableRow";
 import { useCan } from "../auth/permissions";
+import { EmptyState } from "../ui/primitives";
 
 interface ObjectiveListProps {
   onSelect: (objectiveId: string) => void;
@@ -107,11 +108,16 @@ export default function ObjectiveList({
       )}
 
       {items.length === 0 && !creating && (
-        <div style={{ padding: 40, textAlign: "center", color: "var(--ink-3)", fontSize: 14, border: "2px dashed var(--border)", borderRadius: 8 }}>
+        <EmptyState
+          compact
+          icon="target"
+          title="No objectives here yet"
+          why="An objective is a measurable outcome the business has committed to, linked to the capabilities, value streams and applications that deliver it."
+        >
           {filterThemeId
             ? `No objectives in theme "${filterThemeName}" yet.`
             : 'No strategic objectives yet. Click "New Objective" to add the first one.'}
-        </div>
+        </EmptyState>
       )}
 
       {items.map((obj) => (

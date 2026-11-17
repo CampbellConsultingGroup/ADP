@@ -6,6 +6,7 @@
 
 import { Button } from "../ui";
 import { useDiagrams, useDeleteDiagram } from "./api";
+import { confirmAction } from "../ui/confirm";
 
 export interface DiagramListPageProps {
   onOpen: (diagramId: string) => void;
@@ -57,7 +58,9 @@ export function DiagramListPage({ onOpen }: DiagramListPageProps) {
               variant="danger"
               size="sm"
               aria-label={`Delete ${item.title}`}
-              onClick={() => deleteDiagram.mutate(item.id)}
+              onClick={async () => {
+                if (await confirmAction(`Delete diagram "${item.title}"?`)) deleteDiagram.mutate(item.id);
+              }}
             >
               Delete
             </Button>

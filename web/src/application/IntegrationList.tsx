@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Application, ApplicationIntegrationCreate } from "../api/application";
 import { useIntegrations, useCreateIntegration, useDeleteIntegration } from "../api/application";
 import IntegrationForm from "./IntegrationForm";
+import { confirmAction } from "../ui/confirm";
 
 interface Props {
   apps: Application[];
@@ -28,8 +29,8 @@ export default function IntegrationList({ apps, filterAppId }: Props) {
     setShowForm(false);
   };
 
-  const handleDelete = (id: string) => {
-    if (!confirm("Delete this integration?")) return;
+  const handleDelete = async (id: string) => {
+    if (!(await confirmAction("Delete this integration?"))) return;
     deleteIntegration.mutate(id);
   };
 

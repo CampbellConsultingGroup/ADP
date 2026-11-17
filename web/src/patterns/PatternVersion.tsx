@@ -13,6 +13,7 @@ import DiscoveryTab from "./DiscoveryTab";
 import PatternViews from "./PatternViews";
 import { useCanManagePatterns } from "./permissions";
 import YamlEditor from "./YamlEditor";
+import { confirmAction } from "../ui/confirm";
 
 type Tab = "overview" | "yaml" | "views" | "discovery" | "history";
 
@@ -164,7 +165,7 @@ export default function PatternVersion({
               type="button"
               className="ui-btn ui-btn-danger ui-btn-sm"
               onClick={async () => {
-                if (!window.confirm(`Delete draft ${detail.pattern_key}@${detail.version}?`)) return;
+                if (!(await confirmAction(`Delete draft ${detail.pattern_key}@${detail.version}?`))) return;
                 setDeleteError(null);
                 try {
                   await deleteDraft.mutateAsync();

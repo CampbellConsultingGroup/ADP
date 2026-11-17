@@ -172,6 +172,21 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P3 batch 2 (epic ADP-blp: .47 .61 .69, part of .28):
+  - `ui/confirm.tsx`: `confirmAction(message)` returns a promise; `<ConfirmHost />` (mounted in AppShell)
+    draws a themed dialog, with a fallback to `window.confirm` when no host is mounted -- so component tests
+    that mock `window.confirm` are unchanged. All 19 native `confirm()` calls use it. FIVE record deletes had
+    NO confirmation at all and now ask first: business capability rows (`CapabilityNode`), value stream
+    stages, transformation initiatives (Roadmap), domain integrations and diagrams.
+  - `EmptyState` primitive (title, why, next step, optional action; `compact`) on the Applications,
+    Frameworks, Themes, Objectives and Initiatives lists. Agents and Patterns still show "No ... match".
+  - Docker: CPU-only torch is installed before the editable install (`--index-url
+    https://download.pytorch.org/whl/cpu`). Image 9.89 GB -> 2.42 GB; `torch.cuda.is_available()` is False.
+  - Tests: an autouse root-conftest fixture replaces `adp.knowledge.embedder._load_model` with a fake
+    model for every test outside `tests/integration` (opt out with `@pytest.mark.real_embedding_model`).
+    The per-file `index_entity` stubs are now redundant but left in place.
+  - Gotcha: when checking destructive UI in a browser, NEVER click a Delete button on live data to see
+    whether a dialog appears -- capability rows deleted on one click. Assert on a scratch record.
 - Fable review P3 batch 1 (epic ADP-blp: .8 .10 .11 .21 .23 .24 .39 .51 .52 .55 .58, parts of .13 .49):
   - Docker: three stages (frontend, `python-build` with gcc, runtime without); the venv is at
     `/opt/venv` (editable install pointing at `/app/src`); the image runs as user `adp` (uid 10001).

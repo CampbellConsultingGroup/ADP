@@ -22,6 +22,7 @@ import {
 import { Button } from "../ui";
 import { MissingTechBadge } from "./AppCapTree";
 import RealizationList from "./RealizationList";
+import { confirmAction } from "../ui/confirm";
 
 export function pathLabel(path: CapRef[], name?: string): string {
   return [...path.map((p) => p.name), ...(name ? [name] : [])].join(" › ");
@@ -203,7 +204,7 @@ export default function AppCapDetail({
     }
   };
   const remove = async () => {
-    if (!confirm(`Delete "${ac.name}"? Its links are removed too.`)) return;
+    if (!(await confirmAction(`Delete "${ac.name}"? Its links are removed too.`))) return;
     try {
       await del.mutateAsync(ac.id);
       onDeleted();

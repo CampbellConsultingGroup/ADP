@@ -7,6 +7,7 @@ import {
   useDeleteControl,
 } from "../api/compliance";
 import ControlMappingsEditor from "./ControlMappingsEditor";
+import { confirmAction } from "../ui/confirm";
 
 interface ControlTreeProps {
   frameworkId: string;
@@ -78,13 +79,13 @@ function ControlRow({
     );
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     const descendantCount = countDescendants(node);
     const message =
       descendantCount > 0
         ? `Deleting '${node.code}' will also remove ${descendantCount} descendant control(s). Continue?`
         : `Delete control '${node.code}'?`;
-    if (!window.confirm(message)) return;
+    if (!(await confirmAction(message))) return;
     setDeleteError(null);
     del.mutate(node.id, { onError: (err) => setDeleteError(err.message) });
   }

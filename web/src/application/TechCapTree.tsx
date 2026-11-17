@@ -15,6 +15,7 @@ import TechCapForm from "./TechCapForm";
 import TechCapImpactPanel from "./TechCapImpactPanel";
 import { TechCapUsedBy } from "./AppCapSummaryList";
 import { useCanWriteApplications } from "./appCapNav";
+import { confirmAction } from "../ui/confirm";
 
 export interface TechCapTreeNode extends TechnicalCapability {
   children: TechCapTreeNode[];
@@ -134,7 +135,7 @@ function TechCapNode({ node, depth, focusId }: NodeProps) {
   const updateCap = useUpdateTechCap();
 
   const handleDelete = async () => {
-    if (!confirm(`Delete "${node.name}"? This also removes any child capabilities.`)) return;
+    if (!(await confirmAction(`Delete "${node.name}"? This also removes any child capabilities.`))) return;
     deleteCap.mutate(node.id);
   };
 

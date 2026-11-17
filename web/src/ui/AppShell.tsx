@@ -9,6 +9,7 @@ import { useAuth } from "../auth/AuthProvider";
 import { Icon } from "./Icon";
 import { SearchLauncher, type SearchHit } from "./SearchPalette";
 import { useTheme } from "./theme";
+import { ConfirmHost } from "./confirm";
 import { Toaster } from "./Toaster";
 
 interface NavDef {
@@ -211,6 +212,7 @@ export function AppShell({ currentView, onNavigate, designId, onStartNewDesign, 
         <div className="shell-content">{children}</div>
       </div>
       <Toaster />
+      <ConfirmHost />
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
   useUpsertMapping,
 } from "../api/compliance";
 import { useAgents } from "../api/agentic";
+import { confirmAction } from "../ui/confirm";
 
 interface ControlMappingsEditorProps {
   controlId: string;
@@ -68,8 +69,8 @@ export default function ControlMappingsEditor({ controlId }: ControlMappingsEdit
     return `${m.target_type}:${m.target_id ?? ""}`;
   }
 
-  function handleDelete(m: ControlMapping) {
-    if (!window.confirm(`Remove this ${TARGET_TYPE_LABEL[m.target_type]} mapping?`)) return;
+  async function handleDelete(m: ControlMapping) {
+    if (!(await confirmAction(`Remove this ${TARGET_TYPE_LABEL[m.target_type]} mapping?`))) return;
     setDeleteError(null);
     del.mutate(
       { targetType: m.target_type, targetId: m.target_id },
