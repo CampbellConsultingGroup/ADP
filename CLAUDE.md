@@ -152,6 +152,7 @@ ruff check src/                                  # lint
 mypy src/                                        # type check
 adp-generate                                     # regenerate JSON schemas
 adp-generate --check                             # drift gate (must exit 0 in CI)
+# after changing any API model: adp-generate, then (cd web && npm run gen:api); commit both
 alembic upgrade head                             # run DB migrations (from project root)
 alembic current                                  # check migration state
 
@@ -172,6 +173,17 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P3 batch 5 (epic ADP-blp.37): frontend API types generated from the API.
+  - `adp-generate` now also writes `generated/openapi.json` (the app's OpenAPI document, keys sorted), and
+    `adp-generate --check` fails when it is out of date. The Keycloak proxy route is excluded from the
+    schema (`include_in_schema=False`): one handler for seven methods gave an operation id that changed
+    from run to run.
+  - `cd web && npm run gen:api` (openapi-typescript) writes `web/src/api/generated/schema.d.ts`;
+    `tests/unit/api-types-drift.test.ts` fails if it is stale. So after ANY change to a request or
+    response model: run `adp-generate`, then `npm run gen:api`, and commit both files.
+  - Use `components["schemas"]["Name"]` from `./generated/schema` for new and changed types.
+    `StrategicTheme` is the first one moved over (the hand-written type had no `framework_ids`). The other
+    ~350 hand-written types in `web/src/api/*.ts` are unchanged.
 - Fable review P3 batch 4 (epic ADP-blp: .49, part of .36, part of .13); frontend plus CI:
   - `web/src/ui/tones.ts` holds every status-to-tone map (design and pattern lifecycle, conformance,
     objective status, risk band, TIME, classification, validation verdict) against one stated meaning for
