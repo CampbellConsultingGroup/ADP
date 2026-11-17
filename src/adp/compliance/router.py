@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.auth.deps import get_current_user
@@ -743,6 +744,48 @@ async def list_control_mappings(
 # store/list functions live in adp.strategy (research.md D2), called here via _get_strategy_session
 # rather than duplicated. control_exists() is checked against adp.strategy.store's own mirror of
 # the controls table, not cstore -- these routes never touch adp.compliance.store at all.
+
+
+class _ObjectiveRef(BaseModel):
+    id: str
+    statement: str
+
+
+class _ControlObjectives(BaseModel):
+    control_id: str
+    objectives: list[_ObjectiveRef]
+
+
+class FrameworkControlObjectivesResponse(BaseModel):
+    items: list[_ControlObjectives]
+
+
+@router.get(
+    "/frameworks/{framework_id}/control-objectives",
+    response_model=FrameworkControlObjectivesResponse,
+)
+async def list_framework_control_objectives(
+    framework_id: str,
+    strategy_session: AsyncSession = Depends(_get_strategy_session),
+):
+    """The objectives linked to each control of a framework, in one request (ADP-blp.35).
+
+    The bulk form of GET /controls/{control_id}/objectives below, for the control tree, which
+    otherwise asks once per control. Controls with no linked objective are left out."""
+    from adp.strategy import store as sstore
+
+    if not await sstore.framework_exists(framework_id, strategy_session):
+        raise HTTPException(status_code=404, detail=f"Framework {framework_id!r} not found")
+    by_control = await sstore.list_control_objectives_for_framework(framework_id, strategy_session)
+    return FrameworkControlObjectivesResponse(
+        items=[
+            _ControlObjectives(
+                control_id=control_id,
+                objectives=[_ObjectiveRef(id=oid, statement=text) for oid, text in objectives],
+            )
+            for control_id, objectives in by_control.items()
+        ]
+    )
 
 
 @router.get("/controls/{control_id}/objectives", response_model=StrategicObjectiveListResponse)

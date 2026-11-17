@@ -905,6 +905,32 @@ async def application_exists(application_id: str, session: AsyncSession) -> bool
     return result.first() is not None
 
 
+async def list_control_objectives_for_framework(
+    framework_id: str, session: AsyncSession
+) -> dict[str, list[tuple[str, str]]]:
+    """{control_id: [(objective_id, statement), ...]} for every control of one framework, in ONE
+    query (ADP-blp.35). The control tree shows a "Regulatory driver for" line on each control;
+    asking per control cost one request for every control in the framework."""
+    result = await session.execute(
+        sa.select(
+            _objective_control_links.c.control_id,
+            _objectives.c.id,
+            _objectives.c.statement,
+        )
+        .select_from(
+            _objective_control_links.join(
+                _controls_mirror, _controls_mirror.c.id == _objective_control_links.c.control_id
+            ).join(_objectives, _objectives.c.id == _objective_control_links.c.objective_id)
+        )
+        .where(_controls_mirror.c.framework_id == framework_id)
+        .order_by(_objective_control_links.c.control_id, _objectives.c.statement)
+    )
+    by_control: dict[str, list[tuple[str, str]]] = {}
+    for row in result:
+        by_control.setdefault(row.control_id, []).append((row.id, row.statement))
+    return by_control
+
+
 async def control_exists(control_id: str, session: AsyncSession) -> bool:
     """925-strategy-compliance-linkage (COMPLY-05) -- mirrors design_exists/application_exists."""
     result = await session.execute(

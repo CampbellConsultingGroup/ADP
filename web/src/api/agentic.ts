@@ -3,7 +3,7 @@
  * application_type is "agentic"). */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, apiGet, apiMutation } from "./client";
+import { apiGet, apiMutation, errorDetail } from "./client";
 
 const API = "/api/v1/agentic";
 
@@ -160,14 +160,7 @@ interface ListResponse<T> {
   total: number;
 }
 
-/** FastAPI puts a human-readable reason in `detail`; fall back to the generic message. */
-export function errorDetail(err: unknown): string {
-  if (err instanceof ApiError && err.body && typeof err.body === "object") {
-    const detail = (err.body as { detail?: unknown }).detail;
-    if (typeof detail === "string") return detail;
-  }
-  return err instanceof Error ? err.message : String(err);
-}
+export { errorDetail };
 
 // ── Query keys ────────────────────────────────────────────────────────────────
 

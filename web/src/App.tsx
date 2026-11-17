@@ -1,24 +1,33 @@
-import React, { useState } from "react";
+import React, { lazy, useState } from "react";
 import OverviewPage from "./overview/OverviewPage";
-import InsightsPage from "./insights/InsightsPage";
-import DesignsPage from "./designs/DesignsPage";
-import { C4DesignView } from "./canvas-v2/C4DesignView";
-import IntakePage from "./intake/IntakePage";
-import KnowledgePage from "./knowledge/KnowledgePage";
-import PortfolioPage from "./portfolio/PortfolioPage";
-import GovernancePage from "./governance/GovernancePage";
-import BusinessPage from "./business/BusinessPage";
-import ApplicationPage from "./application/ApplicationPage";
-import TechCapPage from "./application/TechCapPage";
 import { AppCapNavContext, CapabilityNavContext, type CapabilityNav } from "./application/appCapNav";
-import { DiagramsPage } from "./diagrams/DiagramsPage";
 import type { DiagramSeed } from "./diagrams/generators";
-import StrategyPage from "./strategy/StrategyPage";
-import CompliancePage from "./compliance/CompliancePage";
-import { PatternsPage } from "./patterns";
-import AgentsPage from "./agentic/AgentsPage";
-import AdminPage from "./admin/AdminPage";
-import ScoringRubricsPage from "./admin/ScoringRubricsPage";
+
+// ADP-blp.31: every page except the landing page is loaded on first visit. The app used to ship
+// as one 1.78 MB script -- the diagram editor, its icon libraries and every registry screen --
+// before anything could render. PageBoundary's Suspense shows "Loading…" while a page's chunk
+// arrives, and its error boundary covers a chunk that fails to load.
+const InsightsPage = lazy(() => import("./insights/InsightsPage"));
+const DesignsPage = lazy(() => import("./designs/DesignsPage"));
+const C4DesignView = lazy(() =>
+  import("./canvas-v2/C4DesignView").then((m) => ({ default: m.C4DesignView })),
+);
+const IntakePage = lazy(() => import("./intake/IntakePage"));
+const KnowledgePage = lazy(() => import("./knowledge/KnowledgePage"));
+const PortfolioPage = lazy(() => import("./portfolio/PortfolioPage"));
+const GovernancePage = lazy(() => import("./governance/GovernancePage"));
+const BusinessPage = lazy(() => import("./business/BusinessPage"));
+const ApplicationPage = lazy(() => import("./application/ApplicationPage"));
+const TechCapPage = lazy(() => import("./application/TechCapPage"));
+const DiagramsPage = lazy(() =>
+  import("./diagrams/DiagramsPage").then((m) => ({ default: m.DiagramsPage })),
+);
+const StrategyPage = lazy(() => import("./strategy/StrategyPage"));
+const CompliancePage = lazy(() => import("./compliance/CompliancePage"));
+const PatternsPage = lazy(() => import("./patterns/PatternsPage"));
+const AgentsPage = lazy(() => import("./agentic/AgentsPage"));
+const AdminPage = lazy(() => import("./admin/AdminPage"));
+const ScoringRubricsPage = lazy(() => import("./admin/ScoringRubricsPage"));
 import { AppShell } from "./ui";
 import { PageBoundary } from "./ui/PageBoundary";
 import type { AppView } from "./shell";

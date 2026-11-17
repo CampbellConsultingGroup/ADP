@@ -172,6 +172,23 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P2 batch 3, frontend code (epic ADP-blp: .31, .32, .33, .35, .40):
+  - Code splitting: every page except Overview is `React.lazy` in `App.tsx` (PageBoundary's Suspense shows
+    the loading state). First load 195 kB (57 kB gzip), was 1,782 kB; the diagram editor chunk (626 kB) loads
+    only for diagram views. `@xyflow/react` was unused (only a provider in `main.tsx`) and is removed.
+  - ESLint works: `web/eslint.config.js` (flat config: typescript-eslint, react-hooks, jsx-a11y; vendored
+    `src/diagrams/core` and `editor` ignored). `npm run lint` = `eslint src tests --max-warnings 0`, clean,
+    and runs in CI with `vite build`. Run it as `./node_modules/.bin/eslint` if the rtk hook breaks `npx`.
+  - One request helper: `apiRequest` in `api/client.ts`; `apiGet`/`apiMutation`/`application.ts`'s `apiFetch`
+    all use it. An `ApiError`'s message is now the server's reason (`detail` string, field errors joined,
+    or `detail.message`), falling back to "<METHOD> <path> failed: <status>". Use `hasStatus(err, 403)`,
+    never `message.includes("403")`. One `errorDetail` (re-exported by the three modules that had copies).
+  - Control tree: `GET /compliance/frameworks/{id}/control-objectives` +
+    `useFrameworkControlObjectives` replace one request per control (`useControlObjectives` is gone).
+    The per-stage "Automated by" lookups are unchanged (a handful per value stream).
+  - Accessibility: `ui/clickableRow` (role=button, Tab, Enter/Space) on the list rows that open a detail
+    view; `ui/ModalOverlay` (role=dialog, aria-modal, Escape, focus in/restore, Tab trap) replaces eight
+    hand-built `position: fixed` backdrops; sibling labels got `htmlFor`/`id`.
 - Fable review P2 batch 2 (epic ADP-blp: .16, .17, .18):
   - Event loop: embedding and SVG rasterising run in worker threads (`EmbeddingProvider.aembed`,
     `aembed_or_zero`, `asyncio.to_thread` in `SearchIndex.upsert/hybrid_search`, the knowledge and CALM

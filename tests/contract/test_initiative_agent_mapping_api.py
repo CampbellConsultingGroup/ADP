@@ -206,3 +206,46 @@ async def test_application_mappings_hidden_without_governance_read(app_and_clien
     # The application-targeted reverse lookup stays refused outright.
     gated = await client.get(f"{COMP}/controls/{ct}/mappings/applications/{app_id}/initiatives")
     assert gated.status_code == 403
+
+
+async def test_framework_control_objectives_in_one_request(client):
+    """ADP-blp.35: the control tree's "Regulatory driver for" lines, for a whole framework."""
+    fw = await _post(
+        client,
+        f"{COMP}/frameworks",
+        {"name": "GDPR", "jurisdiction": "EU", "authority": "EU", "version": "2016/679"},
+    )
+    controls = [
+        await _post(
+            client,
+            f"{COMP}/frameworks/{fw['id']}/controls",
+            {"code": code, "title": code, "description": "d"},
+        )
+        for code in ("Art. 5", "Art. 33")
+    ]
+    theme = await _post(client, f"{STRAT}/themes", {"name": "Trust"})
+    objective = await _post(
+        client,
+        f"{STRAT}/objectives",
+        {
+            "theme_id": theme["id"], "owner": "CISO", "statement": "Cut breach risk",
+            "fiscal_year": 2027, "period": "FY",
+        },
+    )
+    resp = await client.post(
+        f"{STRAT}/objectives/{objective['id']}/controls", json={"control_id": controls[0]["id"]}
+    )
+    assert resp.status_code == 201, resp.text
+
+    resp = await client.get(f"{COMP}/frameworks/{fw['id']}/control-objectives")
+    assert resp.status_code == 200, resp.text
+    assert resp.json() == {
+        "items": [
+            {
+                "control_id": controls[0]["id"],
+                "objectives": [{"id": objective["id"], "statement": "Cut breach risk"}],
+            }
+        ]
+    }
+    missing = await client.get(f"{COMP}/frameworks/nope/control-objectives")
+    assert missing.status_code == 404

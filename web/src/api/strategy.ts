@@ -468,6 +468,8 @@ export function useLinkObjectiveControl(objectiveId: string) {
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      // The Compliance control tree shows these links too.
+      void qc.invalidateQueries({ queryKey: ["control-objectives"] });
     },
   });
 }
@@ -482,6 +484,8 @@ export function useUnlinkObjectiveControl(objectiveId: string) {
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      // The Compliance control tree shows these links too.
+      void qc.invalidateQueries({ queryKey: ["control-objectives"] });
     },
   });
 }

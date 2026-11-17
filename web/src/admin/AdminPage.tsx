@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAgentPrompts } from "../api/adminPrompts";
 import PromptEditor from "./PromptEditor";
 import PromptHistory from "./PromptHistory";
+import { clickableRow } from "../ui/clickableRow";
 
 const CARD: React.CSSProperties = {
   border: "1px solid var(--border)",
@@ -65,7 +66,7 @@ export default function AdminPage(): React.ReactElement {
           <div
             key={item.agent_id}
             style={{ ...CARD, outline: selectedId === item.agent_id ? "2px solid var(--ent, #2874A6)" : "none" }}
-            onClick={() => trySelect(item.agent_id)}
+            {...clickableRow(() => trySelect(item.agent_id))}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontWeight: 500, fontSize: 13 }}>{item.display_name}</span>

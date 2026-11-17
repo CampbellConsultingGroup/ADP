@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ApiError } from "../api/client";
 import { useConfirmPromptEdit, type AgentPromptView } from "../api/adminPrompts";
+import { ModalOverlay } from "../ui/ModalOverlay";
 
 interface ConflictState {
   currentActiveText: string;
@@ -147,12 +148,7 @@ export default function PromptEditor({ agent, onDirtyChange }: PromptEditorProps
       )}
 
       {showConfirm && (
-        <div
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
-          }}
-        >
+        <ModalOverlay label="Confirm prompt change" onClose={() => setShowConfirm(false)}>
           <div style={{ background: "var(--surface)", borderRadius: 8, padding: 24, maxWidth: 480, width: "90%" }}>
             <h3 style={{ margin: "0 0 8px", fontSize: 17, fontWeight: 700 }}>Confirm prompt change</h3>
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-3)" }}>
@@ -177,7 +173,7 @@ export default function PromptEditor({ agent, onDirtyChange }: PromptEditorProps
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   );

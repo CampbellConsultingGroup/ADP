@@ -69,7 +69,7 @@ export default function GeographyTree({ canWrite }: { canWrite: boolean }): Reac
   const [adding, setAdding] = useState<string | null>(null);
   const [delError, setDelError] = useState<string | null>(null);
 
-  const items = data?.items ?? [];
+  const items = useMemo(() => data?.items ?? [], [data]);
   const children = useMemo(() => {
     const m = new Map<string | null, Geography[]>();
     for (const g of items) {

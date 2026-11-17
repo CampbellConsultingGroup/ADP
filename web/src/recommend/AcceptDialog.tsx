@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { SolutionOption, AcceptOptionRequest } from "../api/recommend";
+import { ModalOverlay } from "../ui/ModalOverlay";
 
 interface AcceptDialogProps {
   option: SolutionOption;
@@ -16,7 +17,7 @@ export default function AcceptDialog({ option, onConfirm, onCancel, isPending }:
   const canConfirm = !isPending && (!option.advisory || advisoryChecked);
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "32px 16px", boxSizing: "border-box" }}>
+    <ModalOverlay label="Accept Recommendation" onClose={onCancel} style={{ padding: "32px 16px", boxSizing: "border-box" }}>
       {/* maxHeight + flex column + overflow hidden on the frame, with only the
           middle section scrolling: options with many proposed elements were
           taller than the viewport and had no scroll container anywhere, so
@@ -109,6 +110,6 @@ export default function AcceptDialog({ option, onConfirm, onCancel, isPending }:
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

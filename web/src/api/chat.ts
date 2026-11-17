@@ -8,7 +8,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useRef } from "react";
-import { apiGet, apiMutation } from "./client";
+import { apiGet, apiMutation, getAuthHeader } from "./client";
 
 export interface ChatCitation {
   entity_type: string;
@@ -36,18 +36,6 @@ export interface ChatConversationSummary {
 
 export interface ChatConversationDetail extends ChatConversationSummary {
   messages: ChatMessage[];
-}
-
-async function getAuthHeader(): Promise<Record<string, string>> {
-  const authEnabled = import.meta.env.VITE_AUTH_ENABLED !== "false";
-  if (!authEnabled) return {};
-  try {
-    const { getValidToken } = await import("../auth/keycloak");
-    const token = await getValidToken(30);
-    return token ? { Authorization: `Bearer ${token}` } : {};
-  } catch {
-    return {};
-  }
 }
 
 export function useCreateConversation(basePath: string) {

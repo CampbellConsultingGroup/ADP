@@ -8,6 +8,7 @@ import {
 import { Button, StatusBadge } from "../ui";
 import { CLASSIFICATION_TONE, CLASSIFICATION_LABEL } from "./classification";
 import DomainForm from "./DomainForm";
+import { clickableRow } from "../ui/clickableRow";
 
 interface DomainListProps {
   onSelect: (domainId: string) => void;
@@ -57,7 +58,7 @@ export default function DomainList({ onSelect }: DomainListProps) {
       {items.map((d) => (
         <div
           key={d.id}
-          onClick={() => onSelect(d.id)}
+          {...clickableRow(() => onSelect(d.id))}
           style={{
             border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", marginBottom: 8,
             cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center", background: "var(--surface)",

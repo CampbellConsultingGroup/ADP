@@ -63,6 +63,7 @@ export default function EditFrame({
 
   return (
     <div
+      role="presentation"
       onKeyDown={(e) => {
         if (e.key === "Escape" && !e.defaultPrevented) {
           e.preventDefault();

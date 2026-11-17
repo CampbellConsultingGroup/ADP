@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useApplicationGovernance, useUpdateApplicationGovernance } from "../api/application";
 import type { ApplicationGovernanceUpdate } from "../api/application";
+import { hasStatus } from "../api/client";
 
 /** APM US7 — application ownership & governance (sensitive: gated server-side). */
 
@@ -36,7 +37,7 @@ export default function GovernancePanel({ appId }: Props) {
   if (isLoading) return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
 
   if (error) {
-    const forbidden = (error as Error).message.includes("403");
+    const forbidden = hasStatus(error, 403);
     return (
       <div style={{ fontSize: 13, color: "var(--ink-3)" }}>
         {forbidden
@@ -64,7 +65,7 @@ export default function GovernancePanel({ appId }: Props) {
       await updateGovernance.mutateAsync(body);
       showToast("Saved");
     } catch (e) {
-      const forbidden = (e as Error).message.includes("403");
+      const forbidden = hasStatus(e, 403);
       showToast(forbidden ? "You don't have permission to edit governance data" : "Save failed");
     }
   };

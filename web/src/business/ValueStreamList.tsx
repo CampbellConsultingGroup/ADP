@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useValueStreams, useOrphanReport } from "../api/business";
 import ValueStreamForm from "./ValueStreamForm";
+import { clickableRow } from "../ui/clickableRow";
 
 interface ValueStreamListProps {
   onSelect: (vsId: string) => void;
@@ -66,7 +67,7 @@ export default function ValueStreamList({ onSelect }: ValueStreamListProps): Rea
       {visibleItems.map((vs) => (
         <div
           key={vs.id}
-          onClick={() => onSelect(vs.id)}
+          {...clickableRow(() => onSelect(vs.id))}
           style={{
             padding: "12px 16px",
             background: "var(--surface)",

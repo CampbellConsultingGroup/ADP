@@ -33,8 +33,8 @@ export default function ValueStreamForm({ existing, onDone, onCancel }: ValueStr
     <form onSubmit={handleSubmit} style={{ background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 6, padding: 16, marginBottom: 12 }}>
       <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>{existing ? "Edit Value Stream" : "New Value Stream"}</div>
       <div style={{ marginBottom: 8 }}>
-        <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 3 }}>Name *</label>
-        <input
+        <label htmlFor="vs-form-name" style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 3 }}>Name *</label>
+        <input id="vs-form-name"
           autoFocus
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -43,8 +43,8 @@ export default function ValueStreamForm({ existing, onDone, onCancel }: ValueStr
         />
       </div>
       <div style={{ marginBottom: 8 }}>
-        <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 3 }}>Target Stakeholder</label>
-        <input
+        <label htmlFor="vs-form-target-stakeholder" style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 3 }}>Target Stakeholder</label>
+        <input id="vs-form-target-stakeholder"
           value={stakeholder}
           onChange={(e) => setStakeholder(e.target.value)}
           placeholder="Customer"
@@ -52,8 +52,8 @@ export default function ValueStreamForm({ existing, onDone, onCancel }: ValueStr
         />
       </div>
       <div style={{ marginBottom: 10 }}>
-        <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 3 }}>Description</label>
-        <textarea
+        <label htmlFor="vs-form-description" style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 3 }}>Description</label>
+        <textarea id="vs-form-description"
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="Optional description"

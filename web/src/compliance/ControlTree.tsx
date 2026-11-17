@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { ControlNode } from "../api/compliance";
 import {
-  useControlObjectives,
+  useFrameworkControlObjectives,
   useCreateControl,
   useUpdateControl,
   useDeleteControl,
@@ -154,7 +154,7 @@ function ControlRow({
         )}
       </div>
 
-      <LinkedObjectives controlId={node.id} />
+      <LinkedObjectives frameworkId={frameworkId} controlId={node.id} />
 
       {showMappings && (
         <div style={{ marginLeft: 20, marginTop: 6 }}>
@@ -254,9 +254,10 @@ function ControlForm({
 
 /** Read-only "Linked Objectives" line per control row (925-strategy-compliance-linkage, COMPLY-05
  *  spec.md FR-003 reverse direction) -- hidden entirely when nothing is linked. */
-function LinkedObjectives({ controlId }: { controlId: string }) {
-  const { data } = useControlObjectives(controlId);
-  const items = data?.items ?? [];
+function LinkedObjectives({ frameworkId, controlId }: { frameworkId: string; controlId: string }) {
+  // One request for the whole framework, shared by every row through the query cache.
+  const { data } = useFrameworkControlObjectives(frameworkId);
+  const items = data?.get(controlId) ?? [];
   if (items.length === 0) return null;
   return (
     <div style={{ marginLeft: 20, fontSize: 11, color: "var(--ink-3)" }}>

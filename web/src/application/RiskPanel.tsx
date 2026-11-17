@@ -8,6 +8,7 @@ import type {
   VulnerabilityStatus,
 } from "../api/application";
 import { useFrameworks } from "../api/compliance";
+import { hasStatus } from "../api/client";
 
 /** APM US3 — application risk & compliance register (sensitive: gated server-side).
  *
@@ -82,7 +83,7 @@ export default function RiskPanel({ appId }: Props) {
   if (isLoading) return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
 
   if (error) {
-    const forbidden = (error as Error).message.includes("403");
+    const forbidden = hasStatus(error, 403);
     return (
       <div style={{ fontSize: 13, color: "var(--ink-3)" }}>
         {forbidden
@@ -111,7 +112,7 @@ export default function RiskPanel({ appId }: Props) {
       await updateRisk.mutateAsync(body);
       showToast("Saved");
     } catch (e) {
-      const forbidden = (e as Error).message.includes("403");
+      const forbidden = hasStatus(e, 403);
       showToast(forbidden ? "You don't have permission to edit risk data" : "Save failed");
     }
   };
