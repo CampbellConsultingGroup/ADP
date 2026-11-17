@@ -36,11 +36,16 @@ export function StatusBadge({ tone = "neutral", children }: { tone?: BadgeTone; 
   return <span className={`ui-badge ${tone}`}><span className="b-dot" />{children}</span>;
 }
 
-export function PageHeader({ eyebrow, eyebrowColor, title, lede }: {
+/**
+ * `compact` is for full-height list/detail screens (the registries), where a large header would
+ * push the working area down: a smaller title on one line (ADP-blp.66).
+ */
+export function PageHeader({ eyebrow, eyebrowColor, title, lede, compact }: {
   eyebrow?: string; eyebrowColor?: string; title: React.ReactNode; lede?: React.ReactNode;
+  compact?: boolean;
 }): React.ReactElement {
   return (
-    <header className="ui-pagehead">
+    <header className={`ui-pagehead${compact ? " compact" : ""}`}>
       {eyebrow && <div className="ui-eyebrow"><span className="sw" style={eyebrowColor ? { background: eyebrowColor } : undefined} />{eyebrow}</div>}
       <h1 className="ui-h1">{title}</h1>
       {lede && <p className="ui-lede">{lede}</p>}

@@ -96,6 +96,7 @@ from adp.application.models import (
     TransformationInitiativeUpdate,
     UnknownFrameworkError,
 )
+from adp.db import is_unique_violation
 from adp.search import (
     ENTITY_APPLICATION,
     ENTITY_TECHNICAL_CAPABILITY,
@@ -533,8 +534,7 @@ def _row_to_tech_cap(row: Any) -> TechnicalCapability:
 
 
 def _is_duplicate_error(exc: Exception) -> bool:
-    msg = str(exc).lower()
-    return "unique" in msg or "duplicate" in msg or "23505" in msg
+    return is_unique_violation(exc)
 
 
 # ── Application CRUD (US1) ────────────────────────────────────────────────────

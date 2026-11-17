@@ -19,6 +19,7 @@ import {
   costLabel,
 } from "./autonomy";
 import { confirmAction } from "../ui/confirm";
+import { useCan } from "../auth/permissions";
 
 interface Props {
   agentId: string;
@@ -40,6 +41,7 @@ export default function AgentDetail({ agentId, onBack, onOpenSolution }: Props) 
   const update = useUpdateAgent(agentId);
   const del = useDeleteAgent();
   const [editing, setEditing] = useState(false);
+  const canWrite = useCan("write_application"); // ADP-blp.65
   const [error, setError] = useState<string | null>(null);
 
   if (isLoading) return <div style={{ padding: 24, fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
@@ -74,8 +76,8 @@ export default function AgentDetail({ agentId, onBack, onOpenSolution }: Props) 
           {LIFECYCLE_LABELS[agent.lifecycle_status]}
         </StatusBadge>
         <div style={{ flex: 1 }} />
-        {!editing && <Button size="sm" onClick={() => setEditing(true)}>Edit</Button>}
-        {!editing && <Button size="sm" variant="danger" onClick={() => void handleDelete()}>Delete</Button>}
+        {!editing && <Button size="sm" disabled={!canWrite.allowed} title={canWrite.reason} onClick={() => setEditing(true)}>Edit</Button>}
+        {!editing && <Button size="sm" variant="danger" disabled={!canWrite.allowed} title={canWrite.reason} onClick={() => void handleDelete()}>Delete</Button>}
       </div>
 
       {editing ? (

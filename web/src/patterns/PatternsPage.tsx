@@ -11,6 +11,7 @@ import { KIND_LABELS, LIFECYCLE_LABELS, LIFECYCLE_TONES } from "./labels";
 import PatternVersion from "./PatternVersion";
 import { useCanManagePatterns } from "./permissions";
 import type { DiagramSeed } from "../diagrams/generators";
+import { PageHeader } from "../ui/primitives";
 
 const cell: React.CSSProperties = { padding: "7px 10px", borderBottom: "1px solid var(--border)", fontSize: 12.5, textAlign: "left" };
 
@@ -81,10 +82,13 @@ function PatternCatalog() {
   return (
     <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12, overflow: "auto", height: "100%" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)", flex: 1 }}>
-          Governed EA patterns: reference architectures, portfolio rules, transitions and anti-patterns.
-          Current versions also appear in the Knowledge base.
-        </p>
+        <div style={{ flex: 1 }}>
+          <PageHeader
+            compact
+            title="Patterns"
+            lede="Governed EA patterns: reference architectures, portfolio rules, transitions and anti-patterns. Current versions also appear in the Knowledge base."
+          />
+        </div>
         {canManage && (
           <button type="button" className="ui-btn ui-btn-primary ui-btn-sm" onClick={() => setMode({ kind: "import", yaml: "" })}>
             Import pattern

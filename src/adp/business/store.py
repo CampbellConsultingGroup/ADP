@@ -46,6 +46,7 @@ from adp.business.models import (
     ValueStreamStageUpdate,
     ValueStreamUpdate,
 )
+from adp.db import is_unique_violation
 from adp.search import (
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
@@ -792,7 +793,7 @@ async def link_design_to_capability(
             )
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateLinkError(
                 f"Link ({capability_id!r}, {design_id!r}) already exists"
             ) from exc
@@ -853,7 +854,7 @@ async def link_design_to_value_stream(
             )
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateLinkError(
                 f"Link ({value_stream_id!r}, {design_id!r}) already exists"
             ) from exc
@@ -1181,7 +1182,7 @@ async def link_cap_to_stage(
             _stage_caps.insert().values(stage_id=stage_id, capability_id=data.capability_id)
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateStageCapError(
                 f"Link ({stage_id!r}, {data.capability_id!r}) already exists"
             ) from exc

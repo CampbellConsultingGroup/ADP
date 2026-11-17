@@ -5,6 +5,7 @@
 
 import { createContext, useContext } from "react";
 import { useAuth } from "../auth/AuthProvider";
+import { useCan } from "../auth/permissions";
 
 /** Opens Applications -> Capabilities with the given capability selected. */
 export const AppCapNavContext = createContext<((id: string) => void) | null>(null);
@@ -28,9 +29,13 @@ export function canWriteApplications(role: string | null | undefined, authEnable
   return APPLICATION_WRITER_ROLES.has(role);
 }
 
+/**
+ * ADP-blp.65: the server's own answer (GET /api/v1/auth/permissions) once it has loaded, so this
+ * cannot drift from the permission table. The role list above is only the guess used until then.
+ */
 export function useCanWriteApplications(): boolean {
   const { user } = useAuth();
-  return canWriteApplications(user?.role ?? null);
+  return useCan("write_application", canWriteApplications(user?.role ?? null)).allowed;
 }
 
 // 938-capability-model-analysis (FR-018): every item in the impact, exposure, gap, overlap and

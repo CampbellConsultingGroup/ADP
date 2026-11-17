@@ -108,3 +108,26 @@ async def test_design_store_is_reused_across_requests(sqlite_url, monkeypatch):
     async with db.get_session_factory()() as session:
         assert session is not None
     await db.dispose()
+
+
+def test_is_unique_violation_recognises_each_driver():
+    """ADP-blp.27: one check for what used to be seventeen copies of a text test."""
+
+    class _PgError(Exception):
+        sqlstate = "23505"
+
+    class _Wrapped(Exception):
+        def __init__(self, orig):
+            super().__init__("(wrapped) something went wrong")
+            self.orig = orig
+
+    assert db.is_unique_violation(_Wrapped(_PgError("duplicate key")))
+    assert db.is_unique_violation(_PgError("x"))
+    assert db.is_unique_violation(Exception("UNIQUE constraint failed: themes.name"))
+    assert db.is_unique_violation(Exception("duplicate key value violates unique constraint"))
+    assert not db.is_unique_violation(Exception("FOREIGN KEY constraint failed"))
+
+    class _FkError(Exception):
+        sqlstate = "23503"
+
+    assert not db.is_unique_violation(_Wrapped(_FkError("fk")))

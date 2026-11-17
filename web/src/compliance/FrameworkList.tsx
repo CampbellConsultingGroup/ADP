@@ -5,6 +5,7 @@ import FrameworkForm from "./FrameworkForm";
 import { clickableRow } from "../ui/clickableRow";
 import { useCan } from "../auth/permissions";
 import { EmptyState } from "../ui/primitives";
+import { PageHeader } from "../ui/primitives";
 
 interface FrameworkListProps {
   onSelectFramework: (frameworkId: string) => void;
@@ -24,7 +25,11 @@ export default function FrameworkList({ onSelectFramework }: FrameworkListProps)
   return (
     <div style={{ padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontSize: 15, color: "var(--ink)" }}>Compliance Frameworks</h3>
+        <PageHeader
+          compact
+          title="Compliance"
+          lede="Regulatory frameworks, their controls, and what each control is mapped to."
+        />
         <Button
           size="sm"
           variant={showForm ? "default" : "primary"}

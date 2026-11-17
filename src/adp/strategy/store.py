@@ -28,6 +28,7 @@ from typing import Any, cast
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from adp.db import is_unique_violation
 from adp.strategy.models import (
     AbandonRequest,
     ObjectiveProgressCreate,
@@ -355,7 +356,7 @@ async def create_theme(body: StrategicThemeCreate, session: AsyncSession) -> Str
             )
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateThemeNameError(
                 f"Theme named {body.name!r} already exists"
             ) from exc
@@ -838,7 +839,7 @@ async def link_objective_capability(
             )
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateLinkError(
                 f"Link ({objective_id!r}, {capability_id!r}) already exists"
             ) from exc
@@ -870,7 +871,7 @@ async def link_objective_value_stream(
             )
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateLinkError(
                 f"Link ({objective_id!r}, {value_stream_id!r}) already exists"
             ) from exc
@@ -974,7 +975,7 @@ async def link_objective_design(objective_id: str, design_id: str, session: Asyn
             )
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateLinkError(
                 f"Link ({objective_id!r}, {design_id!r}) already exists"
             ) from exc
@@ -1018,7 +1019,7 @@ async def link_objective_application(
             )
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateLinkError(
                 f"Link ({objective_id!r}, {application_id!r}) already exists"
             ) from exc
@@ -1072,7 +1073,7 @@ async def link_objective_control(objective_id: str, control_id: str, session: As
             )
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateLinkError(
                 f"Link ({objective_id!r}, {control_id!r}) already exists"
             ) from exc
@@ -1128,7 +1129,7 @@ async def link_theme_framework(theme_id: str, framework_id: str, session: AsyncS
             )
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateLinkError(
                 f"Link ({theme_id!r}, {framework_id!r}) already exists"
             ) from exc

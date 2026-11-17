@@ -35,3 +35,47 @@ describe("hash routing (ADP-blp.53)", () => {
     expect(parseRoute(formatRoute(route))).toEqual(route);
   });
 });
+
+import { act, renderHook } from "@testing-library/react";
+import { readHashParam, useHashParam, writeHashParam } from "./routing";
+
+describe("page state in the URL (ADP-blp.68)", () => {
+  const TABS = ["domains", "capabilities", "heatmap"] as const;
+
+  it("reads the tab from the URL and falls back for a missing or unknown value", () => {
+    window.history.replaceState(null, "", "#/business?tab=capabilities");
+    expect(renderHook(() => useHashParam("tab", TABS, "domains")).result.current[0]).toBe("capabilities");
+    window.history.replaceState(null, "", "#/business?tab=nonsense");
+    expect(renderHook(() => useHashParam("tab", TABS, "domains")).result.current[0]).toBe("domains");
+    window.history.replaceState(null, "", "#/business");
+    expect(renderHook(() => useHashParam("tab", TABS, "domains")).result.current[0]).toBe("domains");
+  });
+
+  it("writes the choice into the URL without a new history entry, and omits the default", () => {
+    window.history.replaceState(null, "", "#/business?design=DSN-1");
+    const before = window.history.length;
+    const { result } = renderHook(() => useHashParam("tab", TABS, "domains"));
+    act(() => result.current[1]("heatmap"));
+    expect(result.current[0]).toBe("heatmap");
+    expect(window.location.hash).toBe("#/business?design=DSN-1&tab=heatmap");
+    expect(parseRoute(window.location.hash)).toEqual({ view: "business", entity: null, designId: "DSN-1" });
+    act(() => result.current[1]("domains"));
+    expect(window.location.hash).toBe("#/business?design=DSN-1");
+    expect(window.history.length).toBe(before);
+  });
+
+  it("follows Back/Forward and leaves a URL with no route alone", () => {
+    window.history.replaceState(null, "", "#/business?tab=heatmap");
+    const { result } = renderHook(() => useHashParam("tab", TABS, "domains"));
+    act(() => {
+      window.history.replaceState(null, "", "#/business?tab=capabilities");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(result.current[0]).toBe("capabilities");
+
+    window.history.replaceState(null, "", window.location.pathname);
+    writeHashParam("tab", "heatmap");
+    expect(window.location.hash).toBe("");
+    expect(readHashParam("tab")).toBeNull();
+  });
+});

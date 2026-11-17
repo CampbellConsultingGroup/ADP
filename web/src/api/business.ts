@@ -355,8 +355,8 @@ export interface DesignPickerItem {
 
 export function useDesigns() {
   return useQuery<{ designs: DesignPickerItem[]; total: number }>({
-    queryKey: ["designs-picker"],
-    queryFn: () => apiGet("/api/v1/designs?page=1&page_size=100"),
+    queryKey: ["designs", "picker"],
+    queryFn: () => apiGet("/api/v1/designs?page=1&page_size=200"),
     staleTime: 30_000,
   });
 }

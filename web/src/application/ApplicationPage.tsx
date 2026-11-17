@@ -8,6 +8,8 @@ import RationalizationView from "./RationalizationView";
 import RoadmapView from "./RoadmapView";
 import AppCapabilitiesView from "./AppCapabilitiesView";
 import { Tabs } from "../ui/Tabs";
+import { useHashParam } from "../shell/routing";
+import { PageHeader } from "../ui/primitives";
 
 function ApplicationPageInner({ initialAppId }: { initialAppId: string | null }) {
   const { data } = useApplications();
@@ -84,11 +86,17 @@ export default function ApplicationPage({
   initialAppId = null,
   initialAppCapId = null,
 }: { initialAppId?: string | null; initialAppCapId?: string | null } = {}) {
-  const [view, setView] = useState<ApplicationView>(
+  // ADP-blp.68: the tab is in the URL (?tab=...).
+  const [view, setView] = useHashParam<ApplicationView>(
+    "tab",
+    ["registry", "capabilities", "rationalization", "roadmap"],
     initialAppCapId ? "capabilities" : "registry",
   );
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ padding: "12px 16px 8px", flexShrink: 0 }}>
+        <PageHeader compact title="Applications" />
+      </div>
       <Tabs
         label="Applications"
         tabs={APPLICATION_TABS}

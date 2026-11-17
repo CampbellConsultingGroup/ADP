@@ -179,7 +179,7 @@ describe("DesignLinkEditor (capability)", () => {
     "GET /api/v1/business/capabilities/cap-1/designs": {
       items: [{ design_id: "DSN-1", title: "Payments Design", lifecycle_status: "draft" }],
     },
-    "GET /api/v1/designs?page=1&page_size=100": {
+    "GET /api/v1/designs?page=1&page_size=200": {
       designs: [
         { id: "DSN-1", title: "Payments Design" },
         { id: "DSN-2", title: "Ledger Design" },
@@ -262,7 +262,7 @@ describe("ValueStreamDetail", () => {
     const calls = mockFetch({
       "GET /api/v1/business/value-streams/vs-1": { ...VS, stages: [STAGE] },
       "GET /api/v1/business/value-streams/vs-1/designs": { items: [] },
-      "GET /api/v1/designs?page=1&page_size=100": { designs: [] },
+      "GET /api/v1/designs?page=1&page_size=200": { designs: [] },
       "GET /api/v1/business/value-streams/vs-1/stages/stg-1/capabilities": { items: [] },
       "GET /api/v1/business/capabilities": { items: [], total: 0 },
       "DELETE /api/v1/business/value-streams/vs-1": [204, null],

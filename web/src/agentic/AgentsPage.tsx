@@ -10,6 +10,7 @@ import AgentForm from "./AgentForm";
 import { RiskBadge } from "./agenticRisk";
 import { AUTONOMY_LEVELS, HUMAN_APPROVAL_LABELS, LIFECYCLE_LABELS, autonomyLabel } from "./autonomy";
 import { useCan } from "../auth/permissions";
+import { PageHeader } from "../ui/primitives";
 
 const cell: React.CSSProperties = { padding: "7px 10px", borderBottom: "1px solid var(--border)", fontSize: 12.5, textAlign: "left" };
 
@@ -66,9 +67,13 @@ export default function AgentsPage({
   return (
     <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12, overflow: "auto", height: "100%" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)", flex: 1 }}>
-          Every AI agent registered across all agentic solutions. Shared agents show more than one solution.
-        </p>
+        <div style={{ flex: 1 }}>
+          <PageHeader
+            compact
+            title="Agents"
+            lede="Every AI agent registered across all agentic solutions. Shared agents show more than one solution."
+          />
+        </div>
         <button
           type="button"
           className="ui-btn ui-btn-primary ui-btn-sm"

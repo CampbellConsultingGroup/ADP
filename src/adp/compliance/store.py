@@ -47,6 +47,7 @@ from adp.compliance.models import (
     RegulatoryFrameworkDetail,
     RegulatoryFrameworkUpdate,
 )
+from adp.db import is_unique_violation
 
 # ── Table definitions (SQLAlchemy Core — no ORM mapper needed) ────────────────
 # Migration owns FK/PK/UNIQUE/CHECK constraints (032_compliance_framework_registry.py);
@@ -547,7 +548,7 @@ async def create_control(
             )
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateControlCodeError(framework_id, data.code.strip()) from exc
         raise
 
@@ -605,7 +606,7 @@ async def update_control(
             _controls.update().where(_controls.c.id == control_id).values(**updates)
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateControlCodeError(
                 existing.framework_id, updates.get("code", existing.code)
             ) from exc
@@ -721,9 +722,7 @@ def _mapping_write_values(data: ControlMappingWrite) -> dict[str, Any]:
 
 
 def _is_unique_violation(exc: Exception) -> bool:
-    """Mirrors create_control/update_control's identical inline check."""
-    text = str(exc).lower()
-    return "unique" in text or "duplicate" in text or "23505" in text
+    return is_unique_violation(exc)
 
 
 async def _upsert_entity_mapping(

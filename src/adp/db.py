@@ -103,3 +103,21 @@ async def dispose() -> None:
         bucket = {}
     for engine, _factory in bucket.values():
         await engine.dispose()
+
+
+def is_unique_violation(exc: BaseException) -> bool:
+    """True when ``exc`` is a unique-constraint violation (ADP-blp.27).
+
+    The same three-way text test was copied into seventeen places in the stores. This is the
+    one place that knows how each driver reports it: PostgreSQL's SQLSTATE 23505 (asyncpg puts
+    it on the wrapped original error), SQLite's "UNIQUE constraint failed" message, and -- for
+    errors raised by test doubles -- the words "unique" or "duplicate" in the message.
+    """
+    for err in (getattr(exc, "orig", None), exc):
+        if err is None:
+            continue
+        code = getattr(err, "sqlstate", None) or getattr(err, "pgcode", None)
+        if code == "23505":
+            return True
+    text = str(exc).lower()
+    return "unique" in text or "duplicate" in text or "23505" in text

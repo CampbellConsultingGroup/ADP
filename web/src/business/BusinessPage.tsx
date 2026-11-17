@@ -11,6 +11,7 @@ import OrganizationTab, { useCanWriteBusiness } from "./OrganizationTab";
 import RegionalHeatMap from "./RegionalHeatMap";
 import { Tabs } from "../ui/Tabs";
 import { PageHeader } from "../ui/primitives";
+import { useHashParam } from "../shell/routing";
 
 type BusinessTab = "capabilities" | "heatmap" | "value-streams" | "domains" | "organization";
 
@@ -26,6 +27,9 @@ interface BusinessPageProps {
   initialFocusCapabilityId?: string | null;
 }
 
+const BUSINESS_TAB_IDS: readonly BusinessTab[] = [
+  "domains", "capabilities", "value-streams", "heatmap", "organization",
+];
 const BUSINESS_TABS: { id: BusinessTab; label: string }[] = [
   { id: "domains", label: "Domains" },
   { id: "capabilities", label: "Capabilities" },
@@ -35,7 +39,12 @@ const BUSINESS_TABS: { id: BusinessTab; label: string }[] = [
 ];
 
 export default function BusinessPage({ onGenerateDiagram, initialFocusCapabilityId = null }: BusinessPageProps): React.ReactElement {
-  const [tab, setTab] = useState<BusinessTab>(initialFocusCapabilityId ? "capabilities" : "domains");
+  // ADP-blp.68: the tab is in the URL (?tab=...), so a reload or shared link opens it.
+  const [tab, setTab] = useHashParam<BusinessTab>(
+    "tab",
+    BUSINESS_TAB_IDS,
+    initialFocusCapabilityId ? "capabilities" : "domains",
+  );
   const [selectedVsId, setSelectedVsId] = useState<string | null>(null);
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   // 043-capability-heat-map US3: set when a heat-map cell is clicked; cleared

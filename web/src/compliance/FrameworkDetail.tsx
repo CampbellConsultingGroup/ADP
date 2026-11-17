@@ -10,6 +10,7 @@ import FrameworkForm from "./FrameworkForm";
 import ControlTree from "./ControlTree";
 import { isHttpUrl } from "../ui/url";
 import { confirmAction } from "../ui/confirm";
+import { useCan } from "../auth/permissions";
 
 interface FrameworkDetailProps {
   frameworkId: string;
@@ -81,6 +82,7 @@ export default function FrameworkDetail({ frameworkId, onBack }: FrameworkDetail
   const updateMutation = useUpdateFramework(frameworkId);
   const deleteMutation = useDeleteFramework();
   const [editing, setEditing] = useState(false);
+  const canWrite = useCan("write_compliance"); // ADP-blp.65
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   if (isLoading) return <div style={{ padding: 16 }}>Loading…</div>;
@@ -144,10 +146,15 @@ export default function FrameworkDetail({ frameworkId, onBack }: FrameworkDetail
               )}
             </div>
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setEditing(true)} style={{ fontSize: 12 }}>
+              <button onClick={() => setEditing(true)} disabled={!canWrite.allowed} title={canWrite.reason} style={{ fontSize: 12 }}>
                 Edit
               </button>
-              <button onClick={handleDelete} disabled={deleteMutation.isPending} style={{ fontSize: 12 }}>
+              <button
+                onClick={handleDelete}
+                disabled={deleteMutation.isPending || !canWrite.allowed}
+                title={canWrite.reason}
+                style={{ fontSize: 12 }}
+              >
                 Delete Framework
               </button>
             </div>

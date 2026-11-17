@@ -185,3 +185,8 @@
 .ui-empty.compact p { font-size: 13px; margin-bottom: 0; }
 .ui-empty p.em-why { margin-bottom: 8px; }
 .ui-empty p:last-child { margin-bottom: 0; }
+
+/* Compact page header for the split-layout registries (ADP-blp.66) */
+.ui-pagehead.compact { margin-bottom: 0; }
+.ui-pagehead.compact .ui-h1 { font-size: 20px; margin: 0; }
+.ui-pagehead.compact .ui-lede { font-size: 13px; margin-top: 2px; }
