@@ -11,12 +11,11 @@
 // 002_knowledge_schema.py) when the migration job (ADP-fnv.7) runs --
 // no separate SQL-execution step needed here.
 //
-// Uses a single admin login for both server administration and the app's
-// own connection (ADP_DATABASE_URL), matching docker-compose.yml's existing
-// single-user (adp_user) precedent -- a separate low-privilege app role
-// would need its own SQL execution step this deployment doesn't otherwise
-// require, so it's deliberately not added to keep this the simplest
-// configuration consistent with what's already running locally.
+// The administrator login created here is used by the migration job only.
+// The API and Keycloak each connect as their own role (adp_app: rows in the
+// application database; adp_keycloak: the Keycloak database), created by
+// src/adp/ops/db_roles.py, which deploy.sh runs through the migration job
+// before the apps start (ADP-blp.7).
 
 @description('Azure region.')
 param location string

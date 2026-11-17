@@ -833,6 +833,18 @@ Each stage prints a what-if and asks before applying.
   and prints the `az keyvault purge` command to run.
 - **Paused environment.** If `pause.sh` stopped Postgres, run `resume.sh` first;
   `deploy.sh` checks for this.
+- **Database logins (ADP-blp.7).** Only the `adp-migrate` job uses the server
+  administrator (`adp_admin`). The API connects as `adp_app` (read and write rows
+  in the `adp` database, no DDL) and Keycloak as `adp_keycloak` (owns the objects
+  in the `keycloak` database only). `deploy.sh` deploys the jobs first, runs the
+  migrations, then runs `src/adp/ops/db_roles.py` through the migration job to
+  create or refresh both roles, and only then deploys the apps. Passwords are in
+  `infra/azure/.secrets/postgres-{app,keycloak}-password` and Key Vault. Tables a
+  later migration creates are covered by default privileges, so CD does not need
+  to re-run the role script. If the private DNS zone
+  `adp.private.postgres.database.azure.com` has no link to `adp-vnet`, every
+  database login fails with "could not translate host name"; recreate it with
+  `az network private-dns link vnet create -g adp-rg -z adp.private.postgres.database.azure.com -n adp-vnet-link --virtual-network adp-vnet --registration-enabled false`.
 
 **Still manual on a brand-new environment** (neither is safe to repeat blindly):
 - Load data with `seed-data.sh`. It isn't idempotent, so re-running it duplicates rows.
