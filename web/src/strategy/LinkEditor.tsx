@@ -6,6 +6,7 @@
  * Each is now a few lines that hands this component its options, linked ids and mutations.
  */
 import React, { useState } from "react";
+import NavLinkButton from "./NavLinkButton";
 import { useLinkFeedback } from "./useLinkFeedback";
 import { EntityLink } from "../shell/EntityLink";
 import type { EntityKind } from "../shell/routing";
@@ -43,12 +44,16 @@ interface LinkEditorProps {
   unlink: LinkMutation;
   /** When set, each linked item's name is a link to that entity on its own screen. */
   entityKind?: LinkedKind;
+  /** When set, each linked item's name is a button that opens it within the current screen. */
+  onOpen?: (id: string) => void;
+  /** Tooltip for that button, e.g. "Jump to this objective". */
+  openTitle?: string;
 }
 
 const muted: React.CSSProperties = { fontSize: "0.85rem", color: "var(--ink-2)" };
 
 export default function LinkEditor({
-  options, linkedIds, isLoading, noun, plural, prompt, link, unlink, entityKind,
+  options, linkedIds, isLoading, noun, plural, prompt, link, unlink, entityKind, onOpen, openTitle,
 }: LinkEditorProps): React.ReactElement {
   const [selectedId, setSelectedId] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -93,7 +98,15 @@ export default function LinkEditor({
             }}
           >
             <span style={{ flex: 1, fontSize: "0.85rem" }}>
-              {entityKind ? <EntityLink kind={entityKind} id={o.id}>{o.label}</EntityLink> : o.label}
+              {onOpen ? (
+                <NavLinkButton onClick={() => onOpen(o.id)} title={openTitle}>
+                  {o.label}
+                </NavLinkButton>
+              ) : entityKind ? (
+                <EntityLink kind={entityKind} id={o.id}>{o.label}</EntityLink>
+              ) : (
+                o.label
+              )}
             </span>
             <button
               onClick={() => unlink.mutate(o.id, { onSuccess: () => feedback.showRemoved(o.label) })}

@@ -20,6 +20,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.auth.actor import actor_of
 from adp.diagrams import store as dstore
 from adp.diagrams.models import (
     Diagram,
@@ -40,12 +41,7 @@ async def _get_session():
 
 
 def _get_actor(request: Request) -> str:
-    from adp.auth.models import UNAUTHENTICATED_USER
-
-    user = getattr(request.state, "user", UNAUTHENTICATED_USER)
-    if user is not UNAUTHENTICATED_USER:
-        return user.username
-    return request.headers.get("X-Actor", "architect")
+    return actor_of(request)
 
 
 # ── CRUD ───────────────────────────────────────────────────────────────────

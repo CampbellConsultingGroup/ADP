@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.agents.models import AgentSuggestionStatus
 from adp.agents.provenance import write_suggestion_audit
+from adp.auth.actor import actor_of
 from adp.business import store as bstore
 from adp.business.models import (
     BusinessCapability,
@@ -60,11 +61,7 @@ router = APIRouter(prefix="/api/v1/business", tags=["business"])
 # ── Shared helpers ────────────────────────────────────────────────────────────
 
 def _get_actor(request: Request) -> str:
-    from adp.auth.models import UNAUTHENTICATED_USER
-    user = getattr(request.state, "user", UNAUTHENTICATED_USER)
-    if user is not UNAUTHENTICATED_USER:
-        return user.username
-    return request.headers.get("X-Actor", "architect")
+    return actor_of(request)
 
 
 async def _get_session():

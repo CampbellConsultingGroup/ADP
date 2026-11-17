@@ -8,6 +8,7 @@ import {
 } from "../api/compliance";
 import ControlMappingsEditor from "./ControlMappingsEditor";
 import { confirmAction } from "../ui/confirm";
+import { useCan } from "../auth/permissions";
 
 interface ControlTreeProps {
   frameworkId: string;
@@ -25,6 +26,7 @@ function countDescendants(node: ControlNode): number {
 
 export default function ControlTree({ frameworkId, controls }: ControlTreeProps) {
   const [addingTopLevel, setAddingTopLevel] = useState(false);
+  const canWrite = useCan("write_compliance"); // ADP-blp.65
 
   return (
     <div>
@@ -44,7 +46,7 @@ export default function ControlTree({ frameworkId, controls }: ControlTreeProps)
           />
         </div>
       ) : (
-        <button onClick={() => setAddingTopLevel(true)} style={{ fontSize: 12, marginTop: 8 }}>
+        <button onClick={() => setAddingTopLevel(true)} disabled={!canWrite.allowed} title={canWrite.reason} style={{ fontSize: 12, marginTop: 8 }}>
           + Add top-level control
         </button>
       )}
@@ -64,6 +66,7 @@ function ControlRow({
   const [editing, setEditing] = useState(false);
   const [addingChild, setAddingChild] = useState(false);
   const [showMappings, setShowMappings] = useState(false);
+  const canWrite = useCan("write_compliance"); // ADP-blp.65
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [title, setTitle] = useState(node.title);
   const [description, setDescription] = useState(node.description ?? "");
@@ -142,13 +145,18 @@ function ControlRow({
             <button onClick={() => setShowMappings(!showMappings)} style={{ fontSize: 11 }}>
               {showMappings ? "Hide mappings" : "Mappings"}
             </button>
-            <button onClick={() => setAddingChild(!addingChild)} style={{ fontSize: 11 }}>
+            <button onClick={() => setAddingChild(!addingChild)} disabled={!canWrite.allowed} title={canWrite.reason} style={{ fontSize: 11 }}>
               {addingChild ? "Cancel" : "+ Sub-control"}
             </button>
-            <button onClick={() => setEditing(true)} style={{ fontSize: 11 }}>
+            <button onClick={() => setEditing(true)} disabled={!canWrite.allowed} title={canWrite.reason} style={{ fontSize: 11 }}>
               Edit
             </button>
-            <button onClick={handleDelete} disabled={del.isPending} style={{ fontSize: 11 }}>
+            <button
+              onClick={handleDelete}
+              disabled={del.isPending || !canWrite.allowed}
+              title={canWrite.reason}
+              style={{ fontSize: 11 }}
+            >
               Delete
             </button>
           </div>

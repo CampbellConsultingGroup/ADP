@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.auth.actor import actor_of
 from adp.patterns import store as pstore
 from adp.patterns.models import PatternKind
 from adp.patterns.parse import compute_digest, parse_pattern_yaml
@@ -82,12 +83,7 @@ _YAML_BODY = {
 
 
 def _get_actor(request: Request) -> str:
-    from adp.auth.models import UNAUTHENTICATED_USER
-
-    user = getattr(request.state, "user", UNAUTHENTICATED_USER)
-    if user is not UNAUTHENTICATED_USER:
-        return str(user.username)
-    return request.headers.get("X-Actor", "architect")
+    return actor_of(request)
 
 
 async def _get_session():  # type: ignore[no-untyped-def]

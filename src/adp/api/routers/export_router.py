@@ -13,6 +13,7 @@ import uuid
 import pydantic
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from adp.auth.actor import actor_of
 from adp.export.bundle import ExportOrchestrator
 from adp.export.importer import DesignImporter
 from adp.export.models import ExportRequest, ExportResult, ImportRequest, ImportResult
@@ -48,7 +49,9 @@ async def get_design_store():  # type: ignore[return]
 
 
 def _get_actor(request: Request) -> str:
-    return request.headers.get("X-Actor", "unknown")
+    # ADP-blp.27: this used to read only the X-Actor header, so an export by a signed-in user
+    # was recorded in the audit entry as "unknown".
+    return actor_of(request, default="unknown")
 
 
 @router.post(

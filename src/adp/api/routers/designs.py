@@ -16,6 +16,7 @@ from sqlalchemy import exc as sa_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.audit.writer import next_audit_id
+from adp.auth.actor import actor_of
 from adp.compliance.models import ControlMappingListResponse
 from adp.models import SCHEMA_VERSION, ArchitectureDescription, AuditEntry
 from adp.store import AuditIntegrityError
@@ -54,12 +55,7 @@ async def _get_compliance_session():
 
 
 def _get_actor(request: Request) -> str:
-    """Return actor identity: authenticated user if available, else X-Actor header."""
-    from adp.auth.models import UNAUTHENTICATED_USER
-    user = getattr(request.state, "user", UNAUTHENTICATED_USER)
-    if user is not UNAUTHENTICATED_USER:
-        return user.username
-    return request.headers.get("X-Actor", "architect")
+    return actor_of(request)
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────

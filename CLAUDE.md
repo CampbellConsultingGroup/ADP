@@ -173,6 +173,16 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P3 batch 6 (epic ADP-blp, more of .27 .36 .65 .68):
+  - `adp.auth.actor.actor_of(request, default)`: the one actor lookup for audit and log lines. All twenty
+    routers' `_get_actor` call it. The design export route used to read only the `X-Actor` header, so a
+    signed-in user's export was audited as "unknown"; it now records the username.
+  - `LinkEditor` gained `onOpen`/`openTitle` (open an item within the screen); the objective-initiative
+    and initiative-objective editors use it. Six strategy link editors now share it. Still separate: the
+    control link editor, `business/DesignLinkEditor` and the application-side editors.
+  - Portfolio "Group by" / "Then by" are in the URL (`?group=...&then=...`). The filter is not.
+  - Compliance control tree: add, edit and delete are disabled with a reason for roles without
+    `write_compliance`.
 - Fable review ADP-blp.57 and .59 (frontend only):
   - `application/ApplicationSummary.tsx`: score cards at the top of an application's Overview tab (health,
     business value, disposition, lifecycle, risk, cost, compliance). Risk, cost and compliance cards open
