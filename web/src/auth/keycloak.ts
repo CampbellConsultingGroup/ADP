@@ -23,13 +23,47 @@ export const keycloak = new Keycloak({
 // first call's result instead of re-entering keycloak.init().
 let initPromise: Promise<boolean> | null = null;
 
+// ADP-blp.53: the app's own location now lives in the URL hash ("#/business/<id>"), and
+// keycloak-js returns its login result in the hash too. A deep link is therefore set aside
+// before the login redirect and put back once Keycloak has finished with the URL, so the two
+// never share the fragment (an OAuth redirect URI may not carry one).
+const ROUTE_STASH_KEY = "adp.route";
+
+export function stashAppRoute(): void {
+  const hash = window.location.hash;
+  if (!hash.startsWith("#/")) return;
+  try {
+    window.sessionStorage.setItem(ROUTE_STASH_KEY, hash);
+  } catch {
+    return; // no storage: keep the hash where it is rather than lose it
+  }
+  window.history.replaceState(null, "", window.location.pathname + window.location.search);
+}
+
+export function restoreAppRoute(): void {
+  let saved: string | null = null;
+  try {
+    saved = window.sessionStorage.getItem(ROUTE_STASH_KEY);
+    window.sessionStorage.removeItem(ROUTE_STASH_KEY);
+  } catch {
+    return;
+  }
+  if (saved && !window.location.hash) window.history.replaceState(null, "", saved);
+}
+
 export function initKeycloak(): Promise<boolean> {
   if (!initPromise) {
-    initPromise = keycloak.init({
-      onLoad: "login-required",
-      pkceMethod: "S256",
-      checkLoginIframe: false,
-    });
+    stashAppRoute();
+    initPromise = keycloak
+      .init({
+        onLoad: "login-required",
+        pkceMethod: "S256",
+        checkLoginIframe: false,
+      })
+      .then((authenticated) => {
+        restoreAppRoute();
+        return authenticated;
+      });
   }
   return initPromise;
 }

@@ -34,3 +34,10 @@ if (typeof global.DOMMatrix === "undefined") {
     isIdentity = true;
   } as unknown as typeof DOMMatrix;
 }
+
+// ADP-blp.53: the app mirrors its location into the URL hash, which jsdom keeps for a whole
+// test file. Start every test at the default location. (adp-hash-reset)
+import { beforeEach } from "vitest";
+beforeEach(() => {
+  window.history.replaceState(null, "", window.location.pathname);
+});

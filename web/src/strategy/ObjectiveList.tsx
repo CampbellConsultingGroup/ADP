@@ -3,6 +3,7 @@ import { useObjectives, useCreateObjective, useThemes } from "../api/strategy";
 import NavLinkButton from "./NavLinkButton";
 import ObjectiveForm from "./ObjectiveForm";
 import { clickableRow } from "../ui/clickableRow";
+import { useCan } from "../auth/permissions";
 
 interface ObjectiveListProps {
   onSelect: (objectiveId: string) => void;
@@ -30,6 +31,7 @@ export default function ObjectiveList({
   const { data: themesData } = useThemes();
   const createMutation = useCreateObjective();
   const [creating, setCreating] = useState(false);
+  const canWrite = useCan("write_business_arch"); // strategy rides the business write rule
 
   if (isLoading) return <div style={{ padding: 20, color: "var(--ink-3)", fontSize: 14 }}>Loading objectives…</div>;
   if (error) return <div style={{ padding: 14, background: "var(--crit-wash)", borderRadius: 6, fontSize: 13, color: "var(--crit)" }}>Failed to load objectives: {error.message}</div>;
@@ -76,7 +78,13 @@ export default function ObjectiveList({
           )}
           <button
             onClick={() => setCreating(!creating)}
-            style={{ padding: "6px 14px", background: "var(--good)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+            disabled={!canWrite.allowed}
+            title={canWrite.reason}
+            style={{
+              padding: "6px 14px", background: "var(--good)", color: "#fff", border: "none", borderRadius: 4,
+              cursor: canWrite.allowed ? "pointer" : "not-allowed", opacity: canWrite.allowed ? 1 : 0.5,
+              fontSize: 13, fontWeight: 600,
+            }}
           >
             {creating ? "Cancel" : "+ New Objective"}
           </button>

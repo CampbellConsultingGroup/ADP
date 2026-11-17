@@ -172,6 +172,24 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P2 batch 5 (epic ADP-blp: .48, .53, .62) -- the last P2s:
+  - Routing: the app's location is mirrored into the URL hash (`web/src/shell/routing.ts`:
+    `#/<view>[/<entity id>][?design=DSN-x]`, plus `#/applications/capabilities/<id>` and
+    `#/patterns/adoptions/<id>`). `App.tsx` state stays the source of truth: a `route` memo is pushed to
+    history, and `popstate`/`hashchange` are applied back. Back/Forward, reload and pasted links work.
+    Tabs and filters are NOT in the URL yet. `auth/keycloak.ts` sets a deep-link hash aside in
+    sessionStorage before the login redirect and restores it afterwards (keycloak-js uses the fragment too)
+    -- NOT yet exercised against a real Keycloak. `tests/setup.ts` resets the hash before each test.
+    Gotcha: `page.goto` to the same URL with a different hash does not reload the page, so a browser check
+    can run stale modules -- call `page.reload()`.
+  - Permissions: `GET /api/v1/auth/permissions` (`adp.api.routers.me`) returns the caller's role and
+    granted actions from `PERMISSION_GRANTS`; `web/src/auth/permissions.ts` `useCan(action)` (allowed until
+    loaded or if the request fails). Applied to the create buttons on Agents, Compliance frameworks, and
+    Strategy themes/objectives/initiatives (disabled, with the reason as a tooltip). Other write controls on
+    those screens still fail after the click.
+  - Save feedback: `apiRequest` raises a `adp:write` window event after every successful non-GET request
+    (not for AI operations, chat, dry runs, renders); `ui/Toaster` in the shell shows "Saved" / "Removed".
+    Inline ticks (`useLinkFeedback`) remain alongside it.
 - Fable review P2 batch 4, UI shell (epic ADP-blp: .44, .45, .54, .56, .60); frontend only:
   - Search: `ui/SearchPalette` (`SearchLauncher` in the top bar, Ctrl/Cmd+K) over `GET /api/v1/search`;
     `App.onOpenSearchResult` opens capabilities, applications, application capabilities, technical

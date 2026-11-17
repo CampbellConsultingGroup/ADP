@@ -9,6 +9,7 @@ import AgentDetail from "./AgentDetail";
 import AgentForm from "./AgentForm";
 import { RiskBadge } from "./agenticRisk";
 import { AUTONOMY_LEVELS, HUMAN_APPROVAL_LABELS, LIFECYCLE_LABELS, autonomyLabel } from "./autonomy";
+import { useCan } from "../auth/permissions";
 
 const cell: React.CSSProperties = { padding: "7px 10px", borderBottom: "1px solid var(--border)", fontSize: 12.5, textAlign: "left" };
 
@@ -23,6 +24,7 @@ export default function AgentsPage({
   const [filters, setFilters] = useState<AgentFilters>({});
   const [selectedId, setSelectedId] = useState<string | null>(initialAgentId);
   const [creating, setCreating] = useState(false);
+  const canWrite = useCan("write_application"); // agents ride the application write rule
   const [error, setError] = useState<string | null>(null);
   const { data, isLoading } = useAgents(filters);
   const { data: unfiltered } = useAgents();
@@ -67,7 +69,13 @@ export default function AgentsPage({
         <p style={{ margin: 0, fontSize: 13, color: "var(--ink-2)", flex: 1 }}>
           Every AI agent registered across all agentic solutions. Shared agents show more than one solution.
         </p>
-        <button type="button" className="ui-btn ui-btn-primary ui-btn-sm" onClick={() => { setError(null); setCreating(true); }}>
+        <button
+          type="button"
+          className="ui-btn ui-btn-primary ui-btn-sm"
+          disabled={!canWrite.allowed}
+          title={canWrite.reason}
+          onClick={() => { setError(null); setCreating(true); }}
+        >
           Register agent
         </button>
       </div>
