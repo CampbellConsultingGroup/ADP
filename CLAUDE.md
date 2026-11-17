@@ -173,6 +173,16 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P3 batch 8 (epic ADP-blp, more of .34 .65 .68; frontend only):
+  - Portfolio filter is in the URL (`?filter=<field>&op=<operator>&value=<value>`), next to `group`/`then`.
+    The reset effects in `PortfolioPage` act only on a field or operator the user changed
+    (`lastFilter` ref), so a filter from the URL survives the first render and data refreshes.
+  - Capability create/update/delete call `invalidateCapabilityViews` (`api/business.ts`): the capability
+    list, `CAP_ANALYSIS_KEY`, `ORG_KEY`, `["portfolio"]` and `["strategy-heatmap"]`.
+  - Permissions: `useCanManagePatterns` asks the server (`write_pattern`); the control mapping editor's
+    Add/Edit/Remove need `write_compliance`; the Risk, Cost and Governance panels disable Save without
+    `write_application_{risk,cost,governance}` and show `<Restricted what="..."/>` (new primitive) when
+    the role may not read the tab.
 - Fable review ADP-blp.7 (least-privilege Postgres roles on Azure):
   - `src/adp/ops/db_roles.py` (run by `deploy.sh` through the `adp-migrate` job, command overridden)
     creates `adp_app` (SELECT/INSERT/UPDATE/DELETE in the `adp` database, default privileges for later

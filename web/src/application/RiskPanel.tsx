@@ -9,7 +9,8 @@ import type {
 } from "../api/application";
 import { useFrameworks } from "../api/compliance";
 import { hasStatus } from "../api/client";
-import { Loading, Button } from "../ui/primitives";
+import { useCan } from "../auth/permissions";
+import { Loading, Button, Restricted } from "../ui/primitives";
 
 /** APM US3 — application risk & compliance register (sensitive: gated server-side).
  *
@@ -35,6 +36,7 @@ const label: React.CSSProperties = { fontSize: 12, color: "var(--ink-2)" };
 export default function RiskPanel({ appId }: Props) {
   const { data: risk, isLoading, error } = useApplicationRisk(appId);
   const updateRisk = useUpdateApplicationRisk(appId);
+  const canWrite = useCan("write_application_risk"); // ADP-blp.65
   const { data: frameworksData } = useFrameworks();
 
   const [securityPosture, setSecurityPosture] = useState<string>("");
@@ -84,14 +86,8 @@ export default function RiskPanel({ appId }: Props) {
   if (isLoading) return <Loading />;
 
   if (error) {
-    const forbidden = hasStatus(error, 403);
-    return (
-      <div style={{ fontSize: 13, color: "var(--ink-3)" }}>
-        {forbidden
-          ? "You don't have permission to view risk & compliance data for this application."
-          : "Could not load risk & compliance data."}
-      </div>
-    );
+    if (hasStatus(error, 403)) return <Restricted what="risk & compliance data for this application" />;
+    return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>{"Could not load risk & compliance data."}</div>;
   }
 
   const showToast = (msg: string) => {
@@ -195,7 +191,7 @@ export default function RiskPanel({ appId }: Props) {
       )}
 
       <div>
-        <Button variant="primary" onClick={handleSave} disabled={updateRisk.isPending}>
+        <Button variant="primary" onClick={handleSave} disabled={updateRisk.isPending || !canWrite.allowed} title={canWrite.reason}>
           {updateRisk.isPending ? "Saving…" : "Save"}
         </Button>
       </div>

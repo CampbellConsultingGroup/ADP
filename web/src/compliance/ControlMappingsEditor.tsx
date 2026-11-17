@@ -15,6 +15,7 @@ import {
 } from "../api/compliance";
 import { useAgents } from "../api/agentic";
 import { confirmAction } from "../ui/confirm";
+import { useCan } from "../auth/permissions";
 
 interface ControlMappingsEditorProps {
   controlId: string;
@@ -57,6 +58,7 @@ export default function ControlMappingsEditor({ controlId }: ControlMappingsEdit
   const [adding, setAdding] = useState(false);
   const [editingKey, setEditingKey] = useState<string | null>(null);
   const del = useDeleteMapping(controlId);
+  const canWrite = useCan("write_compliance"); // ADP-blp.65
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   if (isLoading) {
@@ -137,10 +139,10 @@ export default function ControlMappingsEditor({ controlId }: ControlMappingsEdit
               <LinkedInitiatives controlId={controlId} targetType={m.target_type} targetId={m.target_id} />
             </div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-              <button onClick={() => setEditingKey(key)} style={{ fontSize: 11 }}>
+              <button onClick={() => setEditingKey(key)} disabled={!canWrite.allowed} title={canWrite.reason} style={{ fontSize: 11 }}>
                 Edit
               </button>
-              <button onClick={() => handleDelete(m)} disabled={del.isPending} style={{ fontSize: 11 }}>
+              <button onClick={() => handleDelete(m)} disabled={del.isPending || !canWrite.allowed} title={canWrite.reason} style={{ fontSize: 11 }}>
                 Remove
               </button>
             </div>
@@ -156,7 +158,7 @@ export default function ControlMappingsEditor({ controlId }: ControlMappingsEdit
           <MappingForm controlId={controlId} onDone={() => setAdding(false)} />
         </div>
       ) : (
-        <button onClick={() => setAdding(true)} style={{ fontSize: 12 }}>
+        <button onClick={() => setAdding(true)} disabled={!canWrite.allowed} title={canWrite.reason} style={{ fontSize: 12 }}>
           + Add mapping
         </button>
       )}

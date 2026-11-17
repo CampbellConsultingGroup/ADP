@@ -17,7 +17,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
-import { useAssignCapabilityDomain } from "./business";
+import { useAssignCapabilityDomain, useCreateCapability } from "./business";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -80,5 +80,24 @@ describe("useAssignCapabilityDomain", () => {
     expect(qc.getQueryState(["business-capabilities"])?.isInvalidated).toBe(true);
     expect(qc.getQueryState(["domains"])?.isInvalidated).toBe(true);
     expect(qc.getQueryState(["domain", "dom-1"])?.isInvalidated).toBe(true);
+  });
+});
+
+describe("capability writes refresh what is computed from the tree (ADP-blp.34)", () => {
+  it("creating a capability invalidates the analysis, organization and portfolio caches too", async () => {
+    vi.mocked(fetch).mockResolvedValue(jsonResponse({ id: "cap-9", name: "New", level: 1 }, 201));
+    const qc = new QueryClient();
+    const invalidate = vi.spyOn(qc, "invalidateQueries");
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      React.createElement(QueryClientProvider, { client: qc }, children);
+    const { result } = renderHook(() => useCreateCapability(), { wrapper });
+
+    result.current.mutate({ name: "New", level: 1 } as never);
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    const keys = invalidate.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey));
+    for (const key of [["business-capabilities"], ["cap-analysis"], ["organization"], ["portfolio"]]) {
+      expect(keys).toContain(JSON.stringify(key));
+    }
   });
 });

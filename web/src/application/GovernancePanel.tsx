@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useApplicationGovernance, useUpdateApplicationGovernance } from "../api/application";
 import type { ApplicationGovernanceUpdate } from "../api/application";
 import { hasStatus } from "../api/client";
-import { Loading, Button } from "../ui/primitives";
+import { useCan } from "../auth/permissions";
+import { Loading, Button, Restricted } from "../ui/primitives";
 
 /** APM US7 — application ownership & governance (sensitive: gated server-side). */
 
@@ -16,6 +17,7 @@ const label: React.CSSProperties = { fontSize: 12, color: "var(--ink-2)" };
 export default function GovernancePanel({ appId }: Props) {
   const { data: governance, isLoading, error } = useApplicationGovernance(appId);
   const updateGovernance = useUpdateApplicationGovernance(appId);
+  const canWrite = useCan("write_application_governance"); // ADP-blp.65
 
   const [contractTerms, setContractTerms] = useState("");
   const [renewalDate, setRenewalDate] = useState("");
@@ -38,14 +40,8 @@ export default function GovernancePanel({ appId }: Props) {
   if (isLoading) return <Loading />;
 
   if (error) {
-    const forbidden = hasStatus(error, 403);
-    return (
-      <div style={{ fontSize: 13, color: "var(--ink-3)" }}>
-        {forbidden
-          ? "You don't have permission to view governance data for this application."
-          : "Could not load governance data."}
-      </div>
-    );
+    if (hasStatus(error, 403)) return <Restricted what="governance data for this application" />;
+    return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>{"Could not load governance data."}</div>;
   }
 
   const showToast = (msg: string) => {
@@ -101,7 +97,7 @@ export default function GovernancePanel({ appId }: Props) {
       </label>
 
       <div>
-        <Button variant="primary" onClick={handleSave} disabled={updateGovernance.isPending}>
+        <Button variant="primary" onClick={handleSave} disabled={updateGovernance.isPending || !canWrite.allowed} title={canWrite.reason}>
           {updateGovernance.isPending ? "Saving…" : "Save"}
         </Button>
       </div>

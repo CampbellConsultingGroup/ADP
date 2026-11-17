@@ -47,6 +47,9 @@ COPY pyproject.toml ./
 COPY alembic.ini ./
 COPY src/ ./src/
 RUN pip install --no-cache-dir -e .
+# Take the current setuptools (pulled in as a dependency): the pinned-by-default one carried
+# known HIGH vulnerabilities, some in the libraries it bundles (ADP-blp.13 image scan).
+RUN pip install --no-cache-dir --upgrade setuptools
 
 # Stage 3: Python API + static files
 FROM python:3.12-slim AS api
@@ -55,7 +58,8 @@ WORKDIR /app
 # Runtime libraries only: libcairo2 for cairosvg (adp.diagrams.router imports it at module
 # load, so without the shared library the whole app fails to start, not just PNG export) and
 # libpq5 for PostgreSQL clients. No compiler in the image that serves requests.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# `upgrade` first: the base image lags Debian's security fixes between its own rebuilds.
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libpq5 \
     libcairo2 \
     && rm -rf /var/lib/apt/lists/*

@@ -2,6 +2,7 @@
  * WRITE_PATTERN / GOVERN_PATTERN rules stay authoritative. */
 
 import { useAuth } from "../auth/AuthProvider";
+import { useCan } from "../auth/permissions";
 
 const PATTERN_MANAGER_ROLES = new Set(["enterprise_architect", "platform_admin"]);
 const AUTH_ENABLED = import.meta.env.VITE_AUTH_ENABLED !== "false";
@@ -13,7 +14,8 @@ export function canManagePatterns(role: string | null | undefined, authEnabled =
   return PATTERN_MANAGER_ROLES.has(role);
 }
 
+/** ADP-blp.65: the server's answer once loaded; the role list above is the guess until then. */
 export function useCanManagePatterns(): boolean {
   const { user } = useAuth();
-  return canManagePatterns(user?.role ?? null);
+  return useCan("write_pattern", canManagePatterns(user?.role ?? null)).allowed;
 }

@@ -218,6 +218,22 @@ describe("PortfolioPage (ADP-9ye — Filter by)", () => {
     expect(screen.queryByText("Claims Core")).toBeNull();
   });
 
+  it("keeps the filter in the URL, and a link carrying one opens filtered (ADP-blp.68)", async () => {
+    window.location.hash = "#/portfolio";
+    const user = userEvent.setup();
+    const first = render(<PortfolioPage />);
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter by" }), "hosting_model");
+    expect(window.location.hash).toContain("filter=hosting_model");
+    expect(window.location.hash).toContain("value=on_prem");
+    first.unmount();
+
+    // A fresh page at that address -- a reload or a shared link -- shows the same cut.
+    render(<PortfolioPage />);
+    expect(screen.getByText(/1 of 2 application/)).toBeTruthy();
+    expect(screen.getByText("Fax Intake Tool")).toBeTruthy();
+    expect(screen.queryByText("Claims Core")).toBeNull();
+  });
+
   it("clearing the filter restores the full application set", async () => {
     const user = userEvent.setup();
     render(<PortfolioPage />);

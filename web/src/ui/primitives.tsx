@@ -98,6 +98,19 @@ export function Alert({ tone = "info", children }: { tone?: "crit" | "warn" | "g
 }
 
 /**
+ * Shown in place of content the signed-in user's role may not read (ADP-blp.65), so every
+ * gated tab says the same thing in the same way. `what` names the content, e.g. "cost data".
+ */
+export function Restricted({ what }: { what: string }): React.ReactElement {
+  return (
+    <div className="ui-alert info" role="status">
+      <strong>Restricted to your role.</strong> You don't have permission to view {what}. Ask an
+      administrator if you need access.
+    </div>
+  );
+}
+
+/**
  * A labelled form control. The label, hint and error are tied to the control (htmlFor,
  * aria-describedby, aria-invalid), which a bare <label> next to an <input> is not.
  * `children` receives the props to spread onto the control.
