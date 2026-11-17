@@ -173,6 +173,19 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.57 and .59 (frontend only):
+  - `application/ApplicationSummary.tsx`: score cards at the top of an application's Overview tab (health,
+    business value, disposition, lifecycle, risk, cost, compliance). Risk, cost and compliance cards open
+    their tab; a card the caller may not read says "Restricted". Compliance shows the worst mapped status.
+  - `business/CapabilityNode.tsx`: one "Details" button opens a panel with pill tabs (Links, Organization,
+    Regions, Compliance, Review) in place of five expander buttons per row; `detail` state holds the open
+    section. Tests click "Details" and then the section tab.
+  - `shell/EntityLink.tsx`: `<EntityLink kind id>` is a plain `<a href="#/...">` to the entity's own
+    screen (`entityHref`). `LinkEditor` takes `entityKind` to link the names of linked capabilities and
+    applications. Most other places that show an entity name still use the older nav contexts.
+  - Back: `App` keeps a trail of visited routes and passes `backView`/`onBack` to `AppShell`, which
+    shows "<- Back to <screen>" in the top bar after moving to another screen (uses history.back()).
+  - Not done from .59: the design-flow stepper. Not done from .57: replacing the nav contexts.
 - Fable review P3 batch 5 (epic ADP-blp.37): frontend API types generated from the API.
   - `adp-generate` now also writes `generated/openapi.json` (the app's OpenAPI document, keys sorted), and
     `adp-generate --check` fails when it is out of date. The Keycloak proxy route is excluded from the

@@ -360,7 +360,7 @@ describe("ApplicationDetail", () => {
     renderWithQuery(<ApplicationDetail appId="app-1" allApps={[APP]} onDeleted={vi.fn()} />);
 
     expect(await screen.findByText("CRM")).toBeDefined();
-    expect(screen.getByText("Invest")).toBeDefined();
+    expect(screen.getAllByText("Invest").length).toBeGreaterThan(0); // header badge and summary card
 
     fireEvent.click(screen.getByRole("tab", { name: "Capabilities" }));
     expect(await screen.findByText("Business Capabilities")).toBeDefined();

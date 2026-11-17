@@ -19,6 +19,7 @@ export default function ObjectiveCapabilityLinkEditor({ objective }: Props): Rea
   return (
     <LinkEditor
       noun="capability"
+      entityKind="business_capability"
       plural="capabilities"
       isLoading={all.isLoading}
       options={(all.data?.items ?? []).map((c) => ({ id: c.id, label: c.name }))}

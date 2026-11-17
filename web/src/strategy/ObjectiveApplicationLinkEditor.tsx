@@ -21,6 +21,7 @@ export default function ObjectiveApplicationLinkEditor({ objective }: Props): Re
   return (
     <LinkEditor
       noun="application"
+      entityKind="application"
       plural="applications"
       prompt="Link an application…"
       isLoading={all.isLoading}

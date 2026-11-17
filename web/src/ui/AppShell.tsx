@@ -126,10 +126,14 @@ interface AppShellProps {
   // Extra controls for the top bar, supplied by the app (e.g. the "Ask AI" launcher), so the
   // shell itself does not import feature code.
   topActions?: React.ReactNode;
+  // ADP-blp.57: the screen the user came from, when they followed a link here. Shows
+  // "Back to <screen>" in the top bar.
+  backView?: AppView | null;
+  onBack?: () => void;
   children: React.ReactNode;
 }
 
-export function AppShell({ currentView, onNavigate, designId, onStartNewDesign, onOpenSearchResult, topActions, children }: AppShellProps): React.ReactElement {
+export function AppShell({ currentView, onNavigate, designId, onStartNewDesign, onOpenSearchResult, topActions, backView, onBack, children }: AppShellProps): React.ReactElement {
   const { user, logout } = useAuth();
   const { cycle } = useTheme();
   const inDesign = !!designId;
@@ -201,6 +205,11 @@ export function AppShell({ currentView, onNavigate, designId, onStartNewDesign, 
 
       <div className="shell-main">
         <header className="shell-topbar">
+          {backView && onBack && (
+            <button type="button" className="shell-back" onClick={onBack}>
+              ← Back to {titleFor(backView)}
+            </button>
+          )}
           <div className="shell-crumb"><span>ADP</span><span>/</span><b>{titleFor(currentView)}</b></div>
           <SearchLauncher onOpenResult={onOpenSearchResult} />
           <div className="shell-topactions">

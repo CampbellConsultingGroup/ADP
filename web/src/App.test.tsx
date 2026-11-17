@@ -192,3 +192,23 @@ describe("URL hash routing (ADP-blp.53)", () => {
     expect(window.location.hash).toBe("#/overview");
   });
 });
+
+describe("Back to the previous screen (ADP-blp.57)", () => {
+  it("offers a way back after moving to another screen, and removes it once used", async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    expect(await screen.findByText("OverviewPage-stub")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /Back to/ })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Governance" }));
+    expect(await screen.findByRole("button", { name: "← Back to Overview" })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Business" }));
+    expect(await screen.findByRole("button", { name: "← Back to Governance" })).toBeTruthy();
+
+    // The browser steps back: the trail shortens with it.
+    window.history.replaceState(null, "", "#/governance");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(await screen.findByRole("button", { name: "← Back to Overview" })).toBeTruthy();
+  });
+});
