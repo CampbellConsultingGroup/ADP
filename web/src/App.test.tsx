@@ -160,3 +160,28 @@ describe("App: DESIGN_ONLY_VIEWS redirect (C4 Design with no design selected)", 
     expect(screen.queryByText("DesignsPage-stub")).toBeNull();
   });
 });
+
+describe("URL hash routing (ADP-blp.53)", () => {
+  it("opens the screen named in the hash, mirrors navigation into it, and follows Back", async () => {
+    window.history.replaceState(null, "", "#/governance");
+    const user = userEvent.setup();
+    render(<App />);
+    expect(await screen.findByText("GovernancePage-stub")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Business" }));
+    expect(await screen.findByText(/BusinessPage-stub/)).toBeTruthy();
+    expect(window.location.hash).toBe("#/business");
+
+    // Back: the browser restores the previous hash and announces it.
+    window.history.replaceState(null, "", "#/governance");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+    expect(await screen.findByText("GovernancePage-stub")).toBeTruthy();
+  });
+
+  it("starts on Overview and writes its address when the hash is empty or unknown", async () => {
+    window.history.replaceState(null, "", "#/nowhere");
+    render(<App />);
+    expect(await screen.findByText("OverviewPage-stub")).toBeTruthy();
+    expect(window.location.hash).toBe("#/overview");
+  });
+});

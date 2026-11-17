@@ -94,6 +94,30 @@ export function hasStatus(err: unknown, status: number): boolean {
   return err instanceof Error && err.message.includes(String(status));
 }
 
+/**
+ * Tell the app that a change was saved (ADP-blp.48). Screens confirmed a save in different ways
+ * -- an inline tick, the word "Saved", or nothing at all -- and controls that save as soon as a
+ * value is chosen gave no sign that they had. Every successful write now raises one event, which
+ * the shell's Toaster turns into the same brief confirmation everywhere.
+ *
+ * Requests that start work rather than save something (AI operations, chat, dry runs, renders)
+ * are left out.
+ */
+export const WRITE_EVENT = "adp:write";
+export interface WriteEventDetail {
+  kind: "saved" | "removed";
+}
+
+const NOT_A_SAVE =
+  /\/(messages|intake|recommend|validate|evaluate|agent-review|render|export|import|search|preview)(\/|$|\?)|^\/api\/v1\/chat\//;
+
+function announceWrite(method: string, path: string): void {
+  if (method === "GET" || method === "HEAD" || NOT_A_SAVE.test(path)) return;
+  if (typeof window === "undefined") return;
+  const detail: WriteEventDetail = { kind: method === "DELETE" ? "removed" : "saved" };
+  window.dispatchEvent(new CustomEvent<WriteEventDetail>(WRITE_EVENT, { detail }));
+}
+
 /** One request helper for every endpoint: auth header, JSON body, ApiError on failure. */
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const authHeader = await getAuthHeader();
@@ -101,7 +125,9 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
     ...init,
     headers: { "Content-Type": "application/json", ...authHeader, ...init?.headers },
   });
-  if (!res.ok) throw await toApiError(init?.method ?? "GET", path, res);
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (!res.ok) throw await toApiError(method, path, res);
+  announceWrite(method, path);
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }

@@ -1,4 +1,4 @@
-import React, { lazy, useState } from "react";
+import React, { lazy, useEffect, useMemo, useRef, useState } from "react";
 import OverviewPage from "./overview/OverviewPage";
 import { AppCapNavContext, CapabilityNavContext, type CapabilityNav } from "./application/appCapNav";
 import type { DiagramSeed } from "./diagrams/generators";
@@ -33,6 +33,7 @@ import { AskAiLauncher } from "./chat/AskAiLauncher";
 import { PageBoundary } from "./ui/PageBoundary";
 import type { SearchHit } from "./ui/SearchPalette";
 import type { AppView } from "./shell";
+import { formatRoute, parseRoute, type AppRoute, type EntityKind } from "./shell/routing";
 
 // C4 Design has no meaning without a design (it operates on elements that only
 // exist once one does) -- clicking it from the always-visible Design nav group
@@ -55,8 +56,13 @@ const DESIGN_ONLY_VIEW_LABELS: Record<string, string> = {
 // Initial view is "overview" (the landing dashboard). All views render inside
 // the shared AppShell (left-rail nav + top bar).
 export default function App(): React.ReactElement {
-  const [view, setView] = useState<AppView>("overview");
-  const [currentDesignId, setCurrentDesignId] = useState<string | null>(null);
+  // ADP-blp.53: the starting location comes from the URL hash, so a reload or a pasted link
+  // opens the same screen (and entity, and design) instead of always landing on Overview.
+  const [initialRoute] = useState<AppRoute | null>(() => parseRoute(window.location.hash));
+  const initialEntity = (kind: EntityKind): string | null =>
+    initialRoute?.entity?.kind === kind ? initialRoute.entity.id : null;
+  const [view, setView] = useState<AppView>(initialRoute?.view ?? "overview");
+  const [currentDesignId, setCurrentDesignId] = useState<string | null>(initialRoute?.designId ?? null);
   // Set when a design-only view is requested with no design selected yet --
   // consumed by onSelectDesign below so the user lands on the screen they
   // actually asked for (e.g. Recommendations) instead of always defaulting
@@ -67,10 +73,12 @@ export default function App(): React.ReactElement {
   // currentDesignId/onSelectDesign below exactly (research.md Decision 3).
   const [pendingDiagramSeed, setPendingDiagramSeed] = useState<DiagramSeed | null>(null);
   // 933-agent-registry: an application to open when an agent's solution link is followed.
-  const [pendingAppId, setPendingAppId] = useState<string | null>(null);
+  const [pendingAppId, setPendingAppId] = useState<string | null>(initialEntity("application"));
   // 937-application-capabilities: an application capability to open in Applications ->
   // Capabilities, when one is followed from a business/technical capability or an application.
-  const [pendingAppCapId, setPendingAppCapId] = useState<string | null>(null);
+  const [pendingAppCapId, setPendingAppCapId] = useState<string | null>(
+    initialEntity("application_capability"),
+  );
   const openAppCapability = (id: string) => {
     setPendingAppId(null);
     setPendingAppCapId(id);
@@ -78,16 +86,20 @@ export default function App(): React.ReactElement {
   };
   // 938-capability-model-analysis: the analysis lists navigate to business capabilities,
   // applications and technical capabilities on their own screens.
-  const [pendingBusinessCapId, setPendingBusinessCapId] = useState<string | null>(null);
-  const [pendingTechCapId, setPendingTechCapId] = useState<string | null>(null);
+  const [pendingBusinessCapId, setPendingBusinessCapId] = useState<string | null>(
+    initialEntity("business_capability"),
+  );
+  const [pendingTechCapId, setPendingTechCapId] = useState<string | null>(
+    initialEntity("technical_capability"),
+  );
   // 939-governance-architecture-health: an adoption to open on the Patterns screen.
-  const [pendingAdoptionId, setPendingAdoptionId] = useState<string | null>(null);
+  const [pendingAdoptionId, setPendingAdoptionId] = useState<string | null>(initialEntity("adoption"));
   const openAdoption = (id: string) => {
     setPendingAdoptionId(id);
     setView("patterns");
   };
   // 944-agent-traceability: an agent to open on the Agents screen.
-  const [pendingAgentId, setPendingAgentId] = useState<string | null>(null);
+  const [pendingAgentId, setPendingAgentId] = useState<string | null>(initialEntity("agent"));
   const capabilityNav: CapabilityNav = {
     openBusinessCapability: (id) => {
       setPendingBusinessCapId(id);
@@ -172,6 +184,60 @@ export default function App(): React.ReactElement {
     setPendingDiagramSeed(seed);
     setView("diagrams");
   };
+
+  // ── URL hash <-> state (ADP-blp.53) ─────────────────────────────────────────
+  // The state above stays the source of truth; the hash mirrors it. Every change of screen,
+  // open entity or design becomes a history entry, and Back/Forward (or an edited URL) is
+  // applied back onto the state.
+  const route: AppRoute = useMemo(() => {
+    let entity: AppRoute["entity"] = null;
+    const pick = (kind: EntityKind, id: string | null) => (id ? { kind, id } : null);
+    if (view === "business") entity = pick("business_capability", pendingBusinessCapId);
+    else if (view === "applications") {
+      entity = pick("application_capability", pendingAppCapId) ?? pick("application", pendingAppId);
+    } else if (view === "technical") entity = pick("technical_capability", pendingTechCapId);
+    else if (view === "agents") entity = pick("agent", pendingAgentId);
+    else if (view === "patterns") entity = pick("adoption", pendingAdoptionId);
+    const designScoped = view === "intake" || DESIGN_ONLY_VIEWS.includes(view);
+    return { view, entity, designId: designScoped ? currentDesignId : null };
+  }, [
+    view, currentDesignId, pendingBusinessCapId, pendingAppCapId, pendingAppId, pendingTechCapId,
+    pendingAgentId, pendingAdoptionId,
+  ]);
+
+  const firstSync = useRef(true);
+  useEffect(() => {
+    const hash = formatRoute(route);
+    const first = firstSync.current;
+    firstSync.current = false;
+    if (window.location.hash === hash) return;
+    // The first sync only fills in the address of the screen already showing.
+    if (first) window.history.replaceState(null, "", hash);
+    else window.history.pushState(null, "", hash);
+  }, [route]);
+
+  useEffect(() => {
+    function applyLocation() {
+      const next = parseRoute(window.location.hash);
+      if (!next) return;
+      const id = (kind: EntityKind) => (next.entity?.kind === kind ? next.entity.id : null);
+      setPendingBusinessCapId(id("business_capability"));
+      setPendingAppId(id("application"));
+      setPendingAppCapId(id("application_capability"));
+      setPendingTechCapId(id("technical_capability"));
+      setPendingAgentId(id("agent"));
+      setPendingAdoptionId(id("adoption"));
+      if (next.designId) setCurrentDesignId(next.designId);
+      setPendingView(null);
+      setView(next.view);
+    }
+    window.addEventListener("popstate", applyLocation);
+    window.addEventListener("hashchange", applyLocation);
+    return () => {
+      window.removeEventListener("popstate", applyLocation);
+      window.removeEventListener("hashchange", applyLocation);
+    };
+  }, []);
 
   function renderPage(): React.ReactElement {
     // Global views — independent of design selection.

@@ -11,6 +11,7 @@ import { Button } from "../ui";
 import NavLinkButton from "./NavLinkButton";
 import { useScrollHighlight } from "./useScrollHighlight";
 import EditFrame, { useReturnFocus } from "./EditFrame";
+import { useCan } from "../auth/permissions";
 
 function ThemeEditForm({ theme, onDone }: { theme: StrategicTheme; onDone: () => void }) {
   const updateMutation = useUpdateTheme(theme.id);
@@ -79,6 +80,7 @@ export default function ThemeList({ focusThemeId, onNavigateToObjectives }: Them
   const createMutation = useCreateTheme();
   const deleteMutation = useDeleteTheme();
   const [showForm, setShowForm] = useState(false);
+  const canWrite = useCan("write_business_arch"); // strategy rides the business write rule
   const [name, setName] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -140,7 +142,14 @@ export default function ThemeList({ focusThemeId, onNavigateToObjectives }: Them
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <h3 style={{ margin: 0, fontSize: 15, color: "var(--ink)" }}>Strategic Themes</h3>
-        <Button size="sm" variant={showForm ? "default" : "primary"} icon={showForm ? undefined : "plus"} onClick={() => setShowForm(!showForm)}>
+        <Button
+          size="sm"
+          variant={showForm ? "default" : "primary"}
+          icon={showForm ? undefined : "plus"}
+          disabled={!canWrite.allowed}
+          title={canWrite.reason}
+          onClick={() => setShowForm(!showForm)}
+        >
           {showForm ? "Cancel" : "New Theme"}
         </Button>
       </div>

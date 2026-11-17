@@ -40,6 +40,7 @@ from adp.api.routers import (
     theme,
     validate,
 )
+from adp.api.routers.me import router as me_router
 from adp.application import app_capabilities_router
 from adp.application import store as astore
 from adp.application.router import (
@@ -324,6 +325,7 @@ def create_app() -> FastAPI:
             response.headers.update(_SECURITY_HEADERS)
             return response
 
+    app.include_router(me_router)
     app.include_router(designs.router)
     app.include_router(layouts.router)
     app.include_router(theme.router)

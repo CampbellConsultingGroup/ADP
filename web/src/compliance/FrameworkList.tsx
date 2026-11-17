@@ -3,6 +3,7 @@ import { useFrameworks, useCreateFramework } from "../api/compliance";
 import { Button } from "../ui";
 import FrameworkForm from "./FrameworkForm";
 import { clickableRow } from "../ui/clickableRow";
+import { useCan } from "../auth/permissions";
 
 interface FrameworkListProps {
   onSelectFramework: (frameworkId: string) => void;
@@ -12,6 +13,7 @@ export default function FrameworkList({ onSelectFramework }: FrameworkListProps)
   const { data, isLoading, error } = useFrameworks();
   const createMutation = useCreateFramework();
   const [showForm, setShowForm] = useState(false);
+  const canWrite = useCan("write_compliance");
 
   if (isLoading) return <div style={{ padding: 16, color: "var(--ink-3)" }}>Loading frameworks…</div>;
   if (error) return <div className="ui-alert crit">Failed to load frameworks</div>;
@@ -26,6 +28,8 @@ export default function FrameworkList({ onSelectFramework }: FrameworkListProps)
           size="sm"
           variant={showForm ? "default" : "primary"}
           icon={showForm ? undefined : "plus"}
+          disabled={!canWrite.allowed}
+          title={canWrite.reason}
           onClick={() => setShowForm(!showForm)}
         >
           {showForm ? "Cancel" : "Add Framework"}

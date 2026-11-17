@@ -14,6 +14,7 @@ import InitiativeObjectiveLinkEditor from "./InitiativeObjectiveLinkEditor";
 import NavLinkButton from "./NavLinkButton";
 import { useScrollHighlight } from "./useScrollHighlight";
 import EditFrame, { useReturnFocus } from "./EditFrame";
+import { useCan } from "../auth/permissions";
 
 const STATUSES: InitiativeStatus[] = ["planned", "in_progress", "blocked", "complete", "cancelled"];
 const STATUS_LABEL: Record<InitiativeStatus, string> = {
@@ -134,6 +135,7 @@ export default function InitiativeList({ focusInitiativeId, onNavigateToObjectiv
   const createMutation = useCreateInitiative();
   const deleteMutation = useDeleteInitiative();
   const [showForm, setShowForm] = useState(false);
+  const canWrite = useCan("write_business_arch"); // strategy rides the business write rule
   const [name, setName] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -182,7 +184,14 @@ export default function InitiativeList({ focusInitiativeId, onNavigateToObjectiv
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <h3 style={{ margin: 0, fontSize: 15, color: "var(--ink)" }}>Strategy Initiatives</h3>
-        <Button size="sm" variant={showForm ? "default" : "primary"} icon={showForm ? undefined : "plus"} onClick={() => setShowForm(!showForm)}>
+        <Button
+          size="sm"
+          variant={showForm ? "default" : "primary"}
+          icon={showForm ? undefined : "plus"}
+          disabled={!canWrite.allowed}
+          title={canWrite.reason}
+          onClick={() => setShowForm(!showForm)}
+        >
           {showForm ? "Cancel" : "New Initiative"}
         </Button>
       </div>
