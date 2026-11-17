@@ -29,7 +29,11 @@ ART-IX: created_at recorded on every mapping (no updated_at -- spec.md 922 User 
 
 from __future__ import annotations
 
+import inspect
 import logging
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -429,175 +433,87 @@ async def _translate_mapping_delete_errors(coro) -> None:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
-@router.put(
-    "/controls/{control_id}/mappings/capabilities/{capability_id}", response_model=ControlMapping
-)
-async def upsert_capability_mapping(
-    control_id: str,
-    capability_id: str,
-    body: ControlMappingWrite,
-    request: Request,
-    session: AsyncSession = Depends(_get_session),
-):
-    mapping = await _translate_mapping_write_errors(
-        cstore.upsert_capability_mapping(control_id, capability_id, body, session)
-    )
-    await session.commit()
-    actor = _get_actor(request)
-    logger.info(
-        "compliance.mapping.upsert control_id=%s target_type=capability target_id=%s actor=%s",
-        control_id, capability_id, actor,
-    )
-    return mapping
+# ADP-blp.27: the five entity targets share one pair of handlers. Each used to have its own
+# PUT and DELETE (and, further down, its own "initiatives" GET), identical but for the noun,
+# so a new target meant another three near-copies here. A target is now one line in
+# _ENTITY_MAPPING_ROUTES. The estate-wide (organization) routes stay separate: no target id.
+
+@dataclass(frozen=True)
+class _EntityMappingRoute:
+    target_type: MappingTargetType
+    segment: str
+    """The plural path segment, e.g. "capabilities"."""
+    param: str
+    """The target's path parameter name, e.g. "capability_id"."""
+    initiatives_description: str | None = None
+    initiatives_dependencies: tuple[Any, ...] = ()
+    """Extra dependencies on the reverse "initiatives" route (application: governance read)."""
 
 
-@router.delete(
-    "/controls/{control_id}/mappings/capabilities/{capability_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_capability_mapping(
-    control_id: str,
-    capability_id: str,
-    request: Request,
-    session: AsyncSession = Depends(_get_session),
-):
-    await _translate_mapping_delete_errors(
-        cstore.delete_capability_mapping(control_id, capability_id, session)
-    )
-    await session.commit()
-    actor = _get_actor(request)
-    logger.info(
-        "compliance.mapping.delete control_id=%s target_type=capability target_id=%s actor=%s",
-        control_id, capability_id, actor,
-    )
+def _named_target(handler: Callable[..., Awaitable[Any]], param: str) -> Callable[..., Any]:
+    """`handler` takes the target as `target_id`; the published API names it per target
+    ("capability_id", "agent_id", ...). This returns the same handler under that name, so the
+    paths and the OpenAPI document are exactly what the hand-written routes produced."""
+    signature = inspect.signature(handler)
+    renamed = [
+        p.replace(name=param) if p.name == "target_id" else p
+        for p in signature.parameters.values()
+    ]
+
+    async def endpoint(**kwargs: Any) -> Any:
+        kwargs["target_id"] = kwargs.pop(param)
+        return await handler(**kwargs)
+
+    endpoint.__signature__ = signature.replace(parameters=renamed)  # type: ignore[attr-defined]
+    endpoint.__doc__ = handler.__doc__
+    return endpoint
 
 
-@router.put(
-    "/controls/{control_id}/mappings/applications/{application_id}", response_model=ControlMapping
-)
-async def upsert_application_mapping(
-    control_id: str,
-    application_id: str,
-    body: ControlMappingWrite,
-    request: Request,
-    session: AsyncSession = Depends(_get_session),
-):
-    mapping = await _translate_mapping_write_errors(
-        cstore.upsert_application_mapping(control_id, application_id, body, session)
-    )
-    await session.commit()
-    actor = _get_actor(request)
-    logger.info(
-        "compliance.mapping.upsert control_id=%s target_type=application target_id=%s actor=%s",
-        control_id, application_id, actor,
-    )
-    return mapping
+def _register_entity_mapping_writes(spec: _EntityMappingRoute) -> None:
+    noun = spec.target_type.value
+    path = f"/controls/{{control_id}}/mappings/{spec.segment}/{{{spec.param}}}"
 
+    async def upsert_mapping(
+        control_id: str,
+        target_id: str,
+        body: ControlMappingWrite,
+        request: Request,
+        session: AsyncSession = Depends(_get_session),
+    ):
+        mapping = await _translate_mapping_write_errors(
+            cstore.upsert_entity_mapping(spec.target_type, control_id, target_id, body, session)
+        )
+        await session.commit()
+        logger.info(
+            "compliance.mapping.upsert control_id=%s target_type=%s target_id=%s actor=%s",
+            control_id, noun, target_id, _get_actor(request),
+        )
+        return mapping
 
-@router.delete(
-    "/controls/{control_id}/mappings/applications/{application_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_application_mapping(
-    control_id: str,
-    application_id: str,
-    request: Request,
-    session: AsyncSession = Depends(_get_session),
-):
-    await _translate_mapping_delete_errors(
-        cstore.delete_application_mapping(control_id, application_id, session)
-    )
-    await session.commit()
-    actor = _get_actor(request)
-    logger.info(
-        "compliance.mapping.delete control_id=%s target_type=application target_id=%s actor=%s",
-        control_id, application_id, actor,
-    )
+    async def delete_mapping(
+        control_id: str,
+        target_id: str,
+        request: Request,
+        session: AsyncSession = Depends(_get_session),
+    ):
+        await _translate_mapping_delete_errors(
+            cstore.delete_entity_mapping(spec.target_type, control_id, target_id, session)
+        )
+        await session.commit()
+        logger.info(
+            "compliance.mapping.delete control_id=%s target_type=%s target_id=%s actor=%s",
+            control_id, noun, target_id, _get_actor(request),
+        )
 
-
-@router.put(
-    "/controls/{control_id}/mappings/designs/{design_id}", response_model=ControlMapping
-)
-async def upsert_design_mapping(
-    control_id: str,
-    design_id: str,
-    body: ControlMappingWrite,
-    request: Request,
-    session: AsyncSession = Depends(_get_session),
-):
-    mapping = await _translate_mapping_write_errors(
-        cstore.upsert_design_mapping(control_id, design_id, body, session)
+    router.add_api_route(
+        path, _named_target(upsert_mapping, spec.param), methods=["PUT"],
+        response_model=ControlMapping,
+        name=f"upsert_{noun}_mapping",
     )
-    await session.commit()
-    actor = _get_actor(request)
-    logger.info(
-        "compliance.mapping.upsert control_id=%s target_type=design target_id=%s actor=%s",
-        control_id, design_id, actor,
-    )
-    return mapping
-
-
-@router.delete(
-    "/controls/{control_id}/mappings/designs/{design_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_design_mapping(
-    control_id: str,
-    design_id: str,
-    request: Request,
-    session: AsyncSession = Depends(_get_session),
-):
-    await _translate_mapping_delete_errors(
-        cstore.delete_design_mapping(control_id, design_id, session)
-    )
-    await session.commit()
-    actor = _get_actor(request)
-    logger.info(
-        "compliance.mapping.delete control_id=%s target_type=design target_id=%s actor=%s",
-        control_id, design_id, actor,
-    )
-
-
-@router.put(
-    "/controls/{control_id}/mappings/patterns/{pattern_id}", response_model=ControlMapping
-)
-async def upsert_pattern_mapping(
-    control_id: str,
-    pattern_id: str,
-    body: ControlMappingWrite,
-    request: Request,
-    session: AsyncSession = Depends(_get_session),
-):
-    mapping = await _translate_mapping_write_errors(
-        cstore.upsert_pattern_mapping(control_id, pattern_id, body, session)
-    )
-    await session.commit()
-    actor = _get_actor(request)
-    logger.info(
-        "compliance.mapping.upsert control_id=%s target_type=pattern target_id=%s actor=%s",
-        control_id, pattern_id, actor,
-    )
-    return mapping
-
-
-@router.delete(
-    "/controls/{control_id}/mappings/patterns/{pattern_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def delete_pattern_mapping(
-    control_id: str,
-    pattern_id: str,
-    request: Request,
-    session: AsyncSession = Depends(_get_session),
-):
-    await _translate_mapping_delete_errors(
-        cstore.delete_pattern_mapping(control_id, pattern_id, session)
-    )
-    await session.commit()
-    actor = _get_actor(request)
-    logger.info(
-        "compliance.mapping.delete control_id=%s target_type=pattern target_id=%s actor=%s",
-        control_id, pattern_id, actor,
+    router.add_api_route(
+        path, _named_target(delete_mapping, spec.param), methods=["DELETE"],
+        status_code=status.HTTP_204_NO_CONTENT,
+        name=f"delete_{noun}_mapping",
     )
 
 
@@ -607,44 +523,6 @@ async def delete_pattern_mapping(
 # domain package (research.md R5).
 
 _MAX_STATUS_IDS = 200
-
-
-@router.put("/controls/{control_id}/mappings/agents/{agent_id}", response_model=ControlMapping)
-async def upsert_agent_mapping(
-    control_id: str,
-    agent_id: str,
-    body: ControlMappingWrite,
-    request: Request,
-    session: AsyncSession = Depends(_get_session),
-):
-    mapping = await _translate_mapping_write_errors(
-        cstore.upsert_agent_mapping(control_id, agent_id, body, session)
-    )
-    await session.commit()
-    logger.info(
-        "compliance.mapping.upsert control_id=%s target_type=agent target_id=%s actor=%s",
-        control_id, agent_id, _get_actor(request),
-    )
-    return mapping
-
-
-@router.delete(
-    "/controls/{control_id}/mappings/agents/{agent_id}", status_code=status.HTTP_204_NO_CONTENT
-)
-async def delete_agent_mapping(
-    control_id: str,
-    agent_id: str,
-    request: Request,
-    session: AsyncSession = Depends(_get_session),
-):
-    await _translate_mapping_delete_errors(
-        cstore.delete_agent_mapping(control_id, agent_id, session)
-    )
-    await session.commit()
-    logger.info(
-        "compliance.mapping.delete control_id=%s target_type=agent target_id=%s actor=%s",
-        control_id, agent_id, _get_actor(request),
-    )
 
 
 @router.get("/agents/statuses", response_model=AgentComplianceStatuses)
@@ -855,82 +733,51 @@ async def _list_control_mapping_initiatives(
     )
 
 
-@router.get(
-    "/controls/{control_id}/mappings/capabilities/{capability_id}/initiatives",
-    response_model=StrategyInitiativeListResponse,
-)
-async def list_capability_mapping_initiatives(
-    control_id: str,
-    capability_id: str,
-    strategy_session: AsyncSession = Depends(_get_strategy_session),
-    user: AuthenticatedUser = Depends(get_current_user),
-):
-    return await _list_control_mapping_initiatives(
-        control_id, MappingTargetType.CAPABILITY, capability_id, strategy_session, user
+def _register_entity_mapping_initiatives(spec: _EntityMappingRoute) -> None:
+    async def list_mapping_initiatives(
+        control_id: str,
+        target_id: str,
+        strategy_session: AsyncSession = Depends(_get_strategy_session),
+        user: AuthenticatedUser = Depends(get_current_user),
+    ):
+        return await _list_control_mapping_initiatives(
+            control_id, spec.target_type, target_id, strategy_session, user
+        )
+
+    router.add_api_route(
+        f"/controls/{{control_id}}/mappings/{spec.segment}/{{{spec.param}}}/initiatives",
+        _named_target(list_mapping_initiatives, spec.param),
+        methods=["GET"],
+        description=spec.initiatives_description,
+        response_model=StrategyInitiativeListResponse,
+        dependencies=list(spec.initiatives_dependencies),
+        name=f"list_{spec.target_type.value}_mapping_initiatives",
     )
 
 
-@router.get(
-    "/controls/{control_id}/mappings/applications/{application_id}/initiatives",
-    response_model=StrategyInitiativeListResponse,
-    dependencies=[Depends(_require_governance_read)],
+# Agent mappings (and the initiatives remediating them, ADP-321) are never filtered by
+# READ_APPLICATION_GOVERNANCE: agents are not Applications. Only the application target's
+# reverse lookup carries that gate.
+_ENTITY_MAPPING_ROUTES = (
+    _EntityMappingRoute(MappingTargetType.CAPABILITY, "capabilities", "capability_id"),
+    _EntityMappingRoute(
+        MappingTargetType.APPLICATION, "applications", "application_id",
+        initiatives_dependencies=(Depends(_require_governance_read),),
+    ),
+    _EntityMappingRoute(MappingTargetType.DESIGN, "designs", "design_id"),
+    _EntityMappingRoute(MappingTargetType.PATTERN, "patterns", "pattern_id"),
+    _EntityMappingRoute(
+        MappingTargetType.AGENT, "agents", "agent_id",
+        initiatives_description=(
+            "ADP-321: initiatives remediating an agent's mapping. Like the agent mapping itself, "
+            "never\nfiltered by READ_APPLICATION_GOVERNANCE."
+        ),
+    ),
 )
-async def list_application_mapping_initiatives(
-    control_id: str,
-    application_id: str,
-    strategy_session: AsyncSession = Depends(_get_strategy_session),
-    user: AuthenticatedUser = Depends(get_current_user),
-):
-    return await _list_control_mapping_initiatives(
-        control_id, MappingTargetType.APPLICATION, application_id, strategy_session, user
-    )
 
-
-@router.get(
-    "/controls/{control_id}/mappings/designs/{design_id}/initiatives",
-    response_model=StrategyInitiativeListResponse,
-)
-async def list_design_mapping_initiatives(
-    control_id: str,
-    design_id: str,
-    strategy_session: AsyncSession = Depends(_get_strategy_session),
-    user: AuthenticatedUser = Depends(get_current_user),
-):
-    return await _list_control_mapping_initiatives(
-        control_id, MappingTargetType.DESIGN, design_id, strategy_session, user
-    )
-
-
-@router.get(
-    "/controls/{control_id}/mappings/patterns/{pattern_id}/initiatives",
-    response_model=StrategyInitiativeListResponse,
-)
-async def list_pattern_mapping_initiatives(
-    control_id: str,
-    pattern_id: str,
-    strategy_session: AsyncSession = Depends(_get_strategy_session),
-    user: AuthenticatedUser = Depends(get_current_user),
-):
-    return await _list_control_mapping_initiatives(
-        control_id, MappingTargetType.PATTERN, pattern_id, strategy_session, user
-    )
-
-
-@router.get(
-    "/controls/{control_id}/mappings/agents/{agent_id}/initiatives",
-    response_model=StrategyInitiativeListResponse,
-)
-async def list_agent_mapping_initiatives(
-    control_id: str,
-    agent_id: str,
-    strategy_session: AsyncSession = Depends(_get_strategy_session),
-    user: AuthenticatedUser = Depends(get_current_user),
-):
-    """ADP-321: initiatives remediating an agent's mapping. Like the agent mapping itself, never
-    filtered by READ_APPLICATION_GOVERNANCE."""
-    return await _list_control_mapping_initiatives(
-        control_id, MappingTargetType.AGENT, agent_id, strategy_session, user
-    )
+for _spec in _ENTITY_MAPPING_ROUTES:
+    _register_entity_mapping_writes(_spec)
+    _register_entity_mapping_initiatives(_spec)
 
 
 @router.get(

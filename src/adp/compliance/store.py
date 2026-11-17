@@ -8,6 +8,8 @@ and are called from the router inside a `Depends(_get_session)`-yielded session.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, cast
 
@@ -767,58 +769,149 @@ async def _upsert_entity_mapping(
     return _row_to_mapping(row, target_type, target_id)
 
 
+# ── One description per entity-targeted mapping type (ADP-blp.27) ─────────────
+# Each of the five entity targets has its own table, key column and existence rule. They used
+# to be spelled out function by function (upsert, list, delete, two roll-up queries and the
+# status dispatch), so a new target meant editing about six parallel places here alone. They
+# now live in _ENTITY_TARGETS; the per-target functions below are one-line wrappers kept for
+# their callers. ORGANIZATION is not here: it has no target id (one row per control).
+
+async def _require_capability(capability_id: str, session: AsyncSession) -> None:
+    if not await capability_exists(capability_id, session):
+        raise MappingTargetNotFoundError("capability", capability_id)
+
+
+async def _require_application(application_id: str, session: AsyncSession) -> None:
+    if not await application_exists(application_id, session):
+        raise MappingTargetNotFoundError("application", application_id)
+
+
+async def _require_design(design_id: str, session: AsyncSession) -> None:
+    if not await design_exists(design_id, session):
+        raise MappingTargetNotFoundError("design", design_id)
+
+
+async def _require_pattern(pattern_id: str, session: AsyncSession) -> None:
+    kind = await get_knowledge_item_kind(pattern_id, session)
+    if kind is None:
+        raise MappingTargetNotFoundError("pattern", pattern_id)
+    if kind not in PATTERN_TARGET_KINDS:
+        raise InvalidPatternTargetError(pattern_id, kind)
+
+
+async def _require_agent(agent_id: str, session: AsyncSession) -> None:
+    if not await agent_exists(agent_id, session):
+        raise MappingTargetNotFoundError("agent", agent_id)
+
+
+@dataclass(frozen=True)
+class _EntityTarget:
+    table: sa.Table
+    column: str
+    """The table's target key column, e.g. "capability_id"."""
+    require: Callable[[str, AsyncSession], Awaitable[None]]
+    """Raises if the target does not exist (or, for patterns, is the wrong kind)."""
+
+
+# Insertion order is the order mappings are listed and rolled up in.
+_ENTITY_TARGETS: dict[MappingTargetType, _EntityTarget] = {
+    MappingTargetType.CAPABILITY: _EntityTarget(
+        _control_capability_mapping, "capability_id", _require_capability
+    ),
+    MappingTargetType.APPLICATION: _EntityTarget(
+        _control_application_mapping, "application_id", _require_application
+    ),
+    MappingTargetType.DESIGN: _EntityTarget(_control_design_mapping, "design_id", _require_design),
+    MappingTargetType.PATTERN: _EntityTarget(
+        _control_pattern_mapping, "pattern_id", _require_pattern
+    ),
+    MappingTargetType.AGENT: _EntityTarget(_control_agent_mapping, "agent_id", _require_agent),
+}
+
+
+def _entity_target(target_type: MappingTargetType) -> _EntityTarget:
+    try:
+        return _ENTITY_TARGETS[target_type]
+    except KeyError:
+        raise ValueError(
+            f"{target_type!r} is not an entity-targeted mapping type; "
+            f"must be one of {[t.value for t in _ENTITY_TARGETS]}"
+        ) from None
+
+
+async def upsert_entity_mapping(
+    target_type: MappingTargetType,
+    control_id: str,
+    target_id: str,
+    data: ControlMappingWrite,
+    session: AsyncSession,
+) -> ControlMapping:
+    """Create or update the mapping of one control to one entity of `target_type`."""
+    target = _entity_target(target_type)
+    if await get_control(control_id, session) is None:
+        raise ControlNotFoundError(control_id)
+    await target.require(target_id, session)
+    return await _upsert_entity_mapping(
+        target.table, target.column, target_type, control_id, target_id, data, session
+    )
+
+
+async def list_mappings_for_entity(
+    target_type: MappingTargetType, target_id: str, session: AsyncSession
+) -> list[ControlMapping]:
+    """Every control mapped to one entity of `target_type` (empty if none, or if unknown)."""
+    target = _entity_target(target_type)
+    result = await session.execute(
+        sa.select(target.table).where(target.table.c[target.column] == target_id)
+    )
+    return [_row_to_mapping(row, target_type, target_id) for row in result]
+
+
+async def delete_entity_mapping(
+    target_type: MappingTargetType, control_id: str, target_id: str, session: AsyncSession
+) -> None:
+    target = _entity_target(target_type)
+    result = await session.execute(
+        target.table.delete().where(
+            sa.and_(
+                target.table.c.control_id == control_id,
+                target.table.c[target.column] == target_id,
+            )
+        )
+    )
+    if _rowcount(result) == 0:
+        raise MappingNotFoundError(control_id, target_type.value, target_id)
+
+
 async def upsert_capability_mapping(
     control_id: str, capability_id: str, data: ControlMappingWrite, session: AsyncSession
 ) -> ControlMapping:
-    if await get_control(control_id, session) is None:
-        raise ControlNotFoundError(control_id)
-    if not await capability_exists(capability_id, session):
-        raise MappingTargetNotFoundError("capability", capability_id)
-    return await _upsert_entity_mapping(
-        _control_capability_mapping, "capability_id", MappingTargetType.CAPABILITY,
-        control_id, capability_id, data, session,
+    return await upsert_entity_mapping(
+        MappingTargetType.CAPABILITY, control_id, capability_id, data, session
     )
 
 
 async def upsert_application_mapping(
     control_id: str, application_id: str, data: ControlMappingWrite, session: AsyncSession
 ) -> ControlMapping:
-    if await get_control(control_id, session) is None:
-        raise ControlNotFoundError(control_id)
-    if not await application_exists(application_id, session):
-        raise MappingTargetNotFoundError("application", application_id)
-    return await _upsert_entity_mapping(
-        _control_application_mapping, "application_id", MappingTargetType.APPLICATION,
-        control_id, application_id, data, session,
+    return await upsert_entity_mapping(
+        MappingTargetType.APPLICATION, control_id, application_id, data, session
     )
 
 
 async def upsert_design_mapping(
     control_id: str, design_id: str, data: ControlMappingWrite, session: AsyncSession
 ) -> ControlMapping:
-    if await get_control(control_id, session) is None:
-        raise ControlNotFoundError(control_id)
-    if not await design_exists(design_id, session):
-        raise MappingTargetNotFoundError("design", design_id)
-    return await _upsert_entity_mapping(
-        _control_design_mapping, "design_id", MappingTargetType.DESIGN,
-        control_id, design_id, data, session,
+    return await upsert_entity_mapping(
+        MappingTargetType.DESIGN, control_id, design_id, data, session
     )
 
 
 async def upsert_pattern_mapping(
     control_id: str, pattern_id: str, data: ControlMappingWrite, session: AsyncSession
 ) -> ControlMapping:
-    if await get_control(control_id, session) is None:
-        raise ControlNotFoundError(control_id)
-    kind = await get_knowledge_item_kind(pattern_id, session)
-    if kind is None:
-        raise MappingTargetNotFoundError("pattern", pattern_id)
-    if kind not in PATTERN_TARGET_KINDS:
-        raise InvalidPatternTargetError(pattern_id, kind)
-    return await _upsert_entity_mapping(
-        _control_pattern_mapping, "pattern_id", MappingTargetType.PATTERN,
-        control_id, pattern_id, data, session,
+    return await upsert_entity_mapping(
+        MappingTargetType.PATTERN, control_id, pattern_id, data, session
     )
 
 
@@ -826,13 +919,8 @@ async def upsert_agent_mapping(
     control_id: str, agent_id: str, data: ControlMappingWrite, session: AsyncSession
 ) -> ControlMapping:
     """944: the sixth mapping target (research.md R4), same shape as the other entity targets."""
-    if await get_control(control_id, session) is None:
-        raise ControlNotFoundError(control_id)
-    if not await agent_exists(agent_id, session):
-        raise MappingTargetNotFoundError("agent", agent_id)
-    return await _upsert_entity_mapping(
-        _control_agent_mapping, "agent_id", MappingTargetType.AGENT,
-        control_id, agent_id, data, session,
+    return await upsert_entity_mapping(
+        MappingTargetType.AGENT, control_id, agent_id, data, session
     )
 
 
@@ -870,53 +958,20 @@ async def upsert_organization_mapping(
 async def list_mappings_for_control(
     control_id: str, session: AsyncSession
 ) -> list[ControlMapping]:
-    """Raises ControlNotFoundError if the control doesn't exist; otherwise unions all five
-    mapping tables filtered by control_id, tagging each row with its target_type."""
+    """Raises ControlNotFoundError if the control doesn't exist; otherwise every mapping of
+    that control, across the entity tables and the estate-wide one, each tagged with its
+    target_type."""
     if await get_control(control_id, session) is None:
         raise ControlNotFoundError(control_id)
 
     mappings: list[ControlMapping] = []
-
-    result = await session.execute(
-        sa.select(_control_capability_mapping).where(
-            _control_capability_mapping.c.control_id == control_id
+    for target_type, target in _ENTITY_TARGETS.items():
+        result = await session.execute(
+            sa.select(target.table).where(target.table.c.control_id == control_id)
         )
-    )
-    mappings += [
-        _row_to_mapping(row, MappingTargetType.CAPABILITY, row.capability_id) for row in result
-    ]
-
-    result = await session.execute(
-        sa.select(_control_application_mapping).where(
-            _control_application_mapping.c.control_id == control_id
-        )
-    )
-    mappings += [
-        _row_to_mapping(row, MappingTargetType.APPLICATION, row.application_id) for row in result
-    ]
-
-    result = await session.execute(
-        sa.select(_control_design_mapping).where(
-            _control_design_mapping.c.control_id == control_id
-        )
-    )
-    mappings += [
-        _row_to_mapping(row, MappingTargetType.DESIGN, row.design_id) for row in result
-    ]
-
-    result = await session.execute(
-        sa.select(_control_pattern_mapping).where(
-            _control_pattern_mapping.c.control_id == control_id
-        )
-    )
-    mappings += [
-        _row_to_mapping(row, MappingTargetType.PATTERN, row.pattern_id) for row in result
-    ]
-
-    result = await session.execute(
-        sa.select(_control_agent_mapping).where(_control_agent_mapping.c.control_id == control_id)
-    )
-    mappings += [_row_to_mapping(row, MappingTargetType.AGENT, row.agent_id) for row in result]
+        mappings += [
+            _row_to_mapping(row, target_type, getattr(row, target.column)) for row in result
+        ]
 
     result = await session.execute(
         sa.select(_control_organization_mapping).where(
@@ -931,127 +986,55 @@ async def list_mappings_for_control(
 async def list_mappings_for_capability(
     capability_id: str, session: AsyncSession
 ) -> list[ControlMapping]:
-    result = await session.execute(
-        sa.select(_control_capability_mapping).where(
-            _control_capability_mapping.c.capability_id == capability_id
-        )
-    )
-    return [
-        _row_to_mapping(row, MappingTargetType.CAPABILITY, row.capability_id) for row in result
-    ]
+    return await list_mappings_for_entity(MappingTargetType.CAPABILITY, capability_id, session)
 
 
 async def list_mappings_for_application(
     application_id: str, session: AsyncSession
 ) -> list[ControlMapping]:
-    result = await session.execute(
-        sa.select(_control_application_mapping).where(
-            _control_application_mapping.c.application_id == application_id
-        )
-    )
-    return [
-        _row_to_mapping(row, MappingTargetType.APPLICATION, row.application_id) for row in result
-    ]
+    return await list_mappings_for_entity(MappingTargetType.APPLICATION, application_id, session)
 
 
 async def list_mappings_for_design(
     design_id: str, session: AsyncSession
 ) -> list[ControlMapping]:
-    result = await session.execute(
-        sa.select(_control_design_mapping).where(
-            _control_design_mapping.c.design_id == design_id
-        )
-    )
-    return [_row_to_mapping(row, MappingTargetType.DESIGN, row.design_id) for row in result]
+    return await list_mappings_for_entity(MappingTargetType.DESIGN, design_id, session)
 
 
 async def list_mappings_for_pattern(
     pattern_id: str, session: AsyncSession
 ) -> list[ControlMapping]:
-    result = await session.execute(
-        sa.select(_control_pattern_mapping).where(
-            _control_pattern_mapping.c.pattern_id == pattern_id
-        )
-    )
-    return [_row_to_mapping(row, MappingTargetType.PATTERN, row.pattern_id) for row in result]
+    return await list_mappings_for_entity(MappingTargetType.PATTERN, pattern_id, session)
+
+
+async def list_mappings_for_agent(agent_id: str, session: AsyncSession) -> list[ControlMapping]:
+    return await list_mappings_for_entity(MappingTargetType.AGENT, agent_id, session)
 
 
 async def delete_capability_mapping(
     control_id: str, capability_id: str, session: AsyncSession
 ) -> None:
-    result = await session.execute(
-        _control_capability_mapping.delete().where(
-            sa.and_(
-                _control_capability_mapping.c.control_id == control_id,
-                _control_capability_mapping.c.capability_id == capability_id,
-            )
-        )
-    )
-    if _rowcount(result) == 0:
-        raise MappingNotFoundError(control_id, "capability", capability_id)
+    await delete_entity_mapping(MappingTargetType.CAPABILITY, control_id, capability_id, session)
 
 
 async def delete_application_mapping(
     control_id: str, application_id: str, session: AsyncSession
 ) -> None:
-    result = await session.execute(
-        _control_application_mapping.delete().where(
-            sa.and_(
-                _control_application_mapping.c.control_id == control_id,
-                _control_application_mapping.c.application_id == application_id,
-            )
-        )
-    )
-    if _rowcount(result) == 0:
-        raise MappingNotFoundError(control_id, "application", application_id)
+    await delete_entity_mapping(MappingTargetType.APPLICATION, control_id, application_id, session)
 
 
 async def delete_design_mapping(control_id: str, design_id: str, session: AsyncSession) -> None:
-    result = await session.execute(
-        _control_design_mapping.delete().where(
-            sa.and_(
-                _control_design_mapping.c.control_id == control_id,
-                _control_design_mapping.c.design_id == design_id,
-            )
-        )
-    )
-    if _rowcount(result) == 0:
-        raise MappingNotFoundError(control_id, "design", design_id)
+    await delete_entity_mapping(MappingTargetType.DESIGN, control_id, design_id, session)
 
 
 async def delete_pattern_mapping(
     control_id: str, pattern_id: str, session: AsyncSession
 ) -> None:
-    result = await session.execute(
-        _control_pattern_mapping.delete().where(
-            sa.and_(
-                _control_pattern_mapping.c.control_id == control_id,
-                _control_pattern_mapping.c.pattern_id == pattern_id,
-            )
-        )
-    )
-    if _rowcount(result) == 0:
-        raise MappingNotFoundError(control_id, "pattern", pattern_id)
-
-
-async def list_mappings_for_agent(agent_id: str, session: AsyncSession) -> list[ControlMapping]:
-    result = await session.execute(
-        sa.select(_control_agent_mapping).where(_control_agent_mapping.c.agent_id == agent_id)
-    )
-    return [_row_to_mapping(row, MappingTargetType.AGENT, row.agent_id) for row in result]
+    await delete_entity_mapping(MappingTargetType.PATTERN, control_id, pattern_id, session)
 
 
 async def delete_agent_mapping(control_id: str, agent_id: str, session: AsyncSession) -> None:
-    result = await session.execute(
-        _control_agent_mapping.delete().where(
-            sa.and_(
-                _control_agent_mapping.c.control_id == control_id,
-                _control_agent_mapping.c.agent_id == agent_id,
-            )
-        )
-    )
-    if _rowcount(result) == 0:
-        raise MappingNotFoundError(control_id, "agent", agent_id)
+    await delete_entity_mapping(MappingTargetType.AGENT, control_id, agent_id, session)
 
 
 async def get_agent_statuses(
@@ -1088,13 +1071,7 @@ async def delete_organization_mapping(control_id: str, session: AsyncSession) ->
 # get_entity_compliance_status() is the thin async dispatch wrapper that gathers a real
 # entity's current ControlMapping statuses and forwards them to it.
 
-_SUPPORTED_ENTITY_TYPES = (
-    MappingTargetType.CAPABILITY,
-    MappingTargetType.APPLICATION,
-    MappingTargetType.DESIGN,
-    MappingTargetType.PATTERN,
-    MappingTargetType.AGENT,
-)
+_SUPPORTED_ENTITY_TYPES = tuple(_ENTITY_TARGETS)
 
 
 def compute_compliance_status(statuses: list[ComplianceStatus]) -> ComplianceStatus:
@@ -1147,16 +1124,7 @@ async def get_entity_compliance_status(
             f"must be one of {[t.value for t in _SUPPORTED_ENTITY_TYPES]}"
         )
 
-    if entity_type == MappingTargetType.CAPABILITY:
-        mappings = await list_mappings_for_capability(entity_id, session)
-    elif entity_type == MappingTargetType.APPLICATION:
-        mappings = await list_mappings_for_application(entity_id, session)
-    elif entity_type == MappingTargetType.DESIGN:
-        mappings = await list_mappings_for_design(entity_id, session)
-    elif entity_type == MappingTargetType.AGENT:
-        mappings = await list_mappings_for_agent(entity_id, session)
-    else:
-        mappings = await list_mappings_for_pattern(entity_id, session)
+    mappings = await list_mappings_for_entity(entity_type, entity_id, session)
 
     return compute_compliance_status([m.compliance_status for m in mappings])
 
@@ -1201,90 +1169,17 @@ def _bucket_entities_by_status(rows: list[_EntityRow]) -> EntityStatusCounts:
 
 async def _framework_entity_rows(framework_id: str, session: AsyncSession) -> list[_EntityRow]:
     """Every entity-targeted ControlMapping row whose control belongs to framework_id, tagged
-    with its target_type. Four small queries (mirrors list_mappings_for_control's own five-way-
-    union style, filtered via a join on framework_id instead of a direct control_id equality --
-    research.md D3), not one UNION, consistent with this module's existing idiom."""
+    with its target_type. One small query per entity target (a join on framework_id), not one
+    UNION, consistent with this module's existing idiom (research.md D3)."""
     rows: list[_EntityRow] = []
-
-    result = await session.execute(
-        sa.select(
-            _control_capability_mapping.c.capability_id,
-            _control_capability_mapping.c.compliance_status,
+    for target_type, target in _ENTITY_TARGETS.items():
+        table = target.table
+        result = await session.execute(
+            sa.select(table.c[target.column], table.c.compliance_status)
+            .select_from(table.join(_controls, table.c.control_id == _controls.c.id))
+            .where(_controls.c.framework_id == framework_id)
         )
-        .select_from(
-            _control_capability_mapping.join(
-                _controls, _control_capability_mapping.c.control_id == _controls.c.id
-            )
-        )
-        .where(_controls.c.framework_id == framework_id)
-    )
-    rows += [
-        (MappingTargetType.CAPABILITY, r.capability_id, ComplianceStatus(r.compliance_status))
-        for r in result
-    ]
-
-    result = await session.execute(
-        sa.select(
-            _control_application_mapping.c.application_id,
-            _control_application_mapping.c.compliance_status,
-        )
-        .select_from(
-            _control_application_mapping.join(
-                _controls, _control_application_mapping.c.control_id == _controls.c.id
-            )
-        )
-        .where(_controls.c.framework_id == framework_id)
-    )
-    rows += [
-        (MappingTargetType.APPLICATION, r.application_id, ComplianceStatus(r.compliance_status))
-        for r in result
-    ]
-
-    result = await session.execute(
-        sa.select(_control_design_mapping.c.design_id, _control_design_mapping.c.compliance_status)
-        .select_from(
-            _control_design_mapping.join(
-                _controls, _control_design_mapping.c.control_id == _controls.c.id
-            )
-        )
-        .where(_controls.c.framework_id == framework_id)
-    )
-    rows += [
-        (MappingTargetType.DESIGN, r.design_id, ComplianceStatus(r.compliance_status))
-        for r in result
-    ]
-
-    result = await session.execute(
-        sa.select(
-            _control_pattern_mapping.c.pattern_id, _control_pattern_mapping.c.compliance_status
-        )
-        .select_from(
-            _control_pattern_mapping.join(
-                _controls, _control_pattern_mapping.c.control_id == _controls.c.id
-            )
-        )
-        .where(_controls.c.framework_id == framework_id)
-    )
-    rows += [
-        (MappingTargetType.PATTERN, r.pattern_id, ComplianceStatus(r.compliance_status))
-        for r in result
-    ]
-
-    # 944: agents are counted alongside the other entity targets (FR-010).
-    result = await session.execute(
-        sa.select(_control_agent_mapping.c.agent_id, _control_agent_mapping.c.compliance_status)
-        .select_from(
-            _control_agent_mapping.join(
-                _controls, _control_agent_mapping.c.control_id == _controls.c.id
-            )
-        )
-        .where(_controls.c.framework_id == framework_id)
-    )
-    rows += [
-        (MappingTargetType.AGENT, r.agent_id, ComplianceStatus(r.compliance_status))
-        for r in result
-    ]
-
+        rows += [(target_type, r[0], ComplianceStatus(r[1])) for r in result]
     return rows
 
 
@@ -1338,55 +1233,11 @@ async def _estate_entity_rows(session: AsyncSession) -> list[_EntityRow]:
     entity status, unlike _framework_entity_rows above. No join to controls needed since there is
     no framework_id filter to apply."""
     rows: list[_EntityRow] = []
-
-    result = await session.execute(
-        sa.select(
-            _control_capability_mapping.c.capability_id,
-            _control_capability_mapping.c.compliance_status,
+    for target_type, target in _ENTITY_TARGETS.items():
+        result = await session.execute(
+            sa.select(target.table.c[target.column], target.table.c.compliance_status)
         )
-    )
-    rows += [
-        (MappingTargetType.CAPABILITY, r.capability_id, ComplianceStatus(r.compliance_status))
-        for r in result
-    ]
-
-    result = await session.execute(
-        sa.select(
-            _control_application_mapping.c.application_id,
-            _control_application_mapping.c.compliance_status,
-        )
-    )
-    rows += [
-        (MappingTargetType.APPLICATION, r.application_id, ComplianceStatus(r.compliance_status))
-        for r in result
-    ]
-
-    result = await session.execute(
-        sa.select(_control_design_mapping.c.design_id, _control_design_mapping.c.compliance_status)
-    )
-    rows += [
-        (MappingTargetType.DESIGN, r.design_id, ComplianceStatus(r.compliance_status))
-        for r in result
-    ]
-
-    result = await session.execute(
-        sa.select(
-            _control_pattern_mapping.c.pattern_id, _control_pattern_mapping.c.compliance_status
-        )
-    )
-    rows += [
-        (MappingTargetType.PATTERN, r.pattern_id, ComplianceStatus(r.compliance_status))
-        for r in result
-    ]
-
-    result = await session.execute(
-        sa.select(_control_agent_mapping.c.agent_id, _control_agent_mapping.c.compliance_status)
-    )
-    rows += [
-        (MappingTargetType.AGENT, r.agent_id, ComplianceStatus(r.compliance_status))
-        for r in result
-    ]
-
+        rows += [(target_type, r[0], ComplianceStatus(r[1])) for r in result]
     return rows
 
 
