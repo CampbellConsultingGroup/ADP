@@ -26,7 +26,8 @@
     { "name": "EnterpriseArchitect", "path": "/EnterpriseArchitect" },
     { "name": "ADPAdministrator", "path": "/ADPAdministrator" },
     { "name": "SolutionArchitect", "path": "/SolutionArchitect" },
-    { "name": "TechnicalArchitect", "path": "/TechnicalArchitect" }
+    { "name": "TechnicalArchitect", "path": "/TechnicalArchitect" },
+    { "name": "Reviewer", "path": "/Reviewer" }
   ],
   "clients": [
     {

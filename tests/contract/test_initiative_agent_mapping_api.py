@@ -168,3 +168,41 @@ async def test_reverse_lookup_not_governance_gated(app_and_client):
     reverse = await client.get(f"{COMP}/controls/{ct}/mappings/agents/{ag}/initiatives")
     assert reverse.status_code == 200 and len(reverse.json()["items"]) == 1
     assert (await client.delete(link)).status_code == 403
+
+
+async def test_application_mappings_hidden_without_governance_read(app_and_client):
+    """ADP-blp.4: an initiative embeds its linked control mappings. Rows targeting an
+    Application carry governance data, so a caller without READ_APPLICATION_GOVERNANCE gets the
+    initiative with those rows removed -- on every route that returns an initiative."""
+    app, client = app_and_client
+    ag, ct, ini = await _setup(client)
+    application = await _post(client, "/api/v1/applications", {"name": "Billing"})
+    app_id = application["id"]
+    for target in (f"agents/{ag}", f"applications/{app_id}"):
+        resp = await client.put(
+            f"{COMP}/controls/{ct}/mappings/{target}", json={"compliance_status": "non_compliant"}
+        )
+        assert resp.status_code == 200, resp.text
+    for target in (f"agents/{ct}/{ag}", f"applications/{ct}/{app_id}"):
+        resp = await client.post(f"{STRAT}/initiatives/{ini}/control-mappings/{target}")
+        assert resp.status_code == 201, resp.text
+
+    def _types(initiative: dict) -> set[str]:
+        return {m["target_type"] for m in initiative["control_mappings"]}
+
+    # The default caller (Enterprise Architect) sees both.
+    assert _types((await client.get(f"{STRAT}/initiatives/{ini}")).json()) == {
+        "agent", "application",
+    }
+
+    app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
+        sub="u", username="u", email="u@localhost", role=PersonaRole.REVIEWER, groups=[]
+    )
+    assert _types((await client.get(f"{STRAT}/initiatives/{ini}")).json()) == {"agent"}
+    listed = (await client.get(f"{STRAT}/initiatives")).json()["items"]
+    assert [_types(i) for i in listed] == [{"agent"}]
+    reverse = await client.get(f"{COMP}/controls/{ct}/mappings/agents/{ag}/initiatives")
+    assert [_types(i) for i in reverse.json()["items"]] == [{"agent"}]
+    # The application-targeted reverse lookup stays refused outright.
+    gated = await client.get(f"{COMP}/controls/{ct}/mappings/applications/{app_id}/initiatives")
+    assert gated.status_code == 403

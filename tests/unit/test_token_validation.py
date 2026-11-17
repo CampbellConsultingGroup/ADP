@@ -53,6 +53,8 @@ def _make_token(
     groups: list[str] | None = None,
     sub: str = "user-sub-001",
     email: str = "alice@example.com",
+    azp: str | None = "adp-frontend",
+    aud: str | list[str] | None = "account",
 ):
     """Sign a JWT token using the test private key."""
     from jose import jwt
@@ -72,6 +74,10 @@ def _make_token(
         "email": email,
         "groups": groups or [],
     }
+    if azp is not None:
+        payload["azp"] = azp
+    if aud is not None:
+        payload["aud"] = aud
     return jwt.encode(payload, pem.decode(), algorithm="RS256", headers={"kid": "test-key-001"})
 
 
@@ -117,11 +123,12 @@ async def test_wrong_issuer_raises(rsa_key_pair, jwks_from_key):
 # ── T004: no group defaults to technical_architect ───────────────────────────
 
 @pytest.mark.asyncio
-async def test_no_group_defaults_to_technical_architect(rsa_key_pair, jwks_from_key):
+async def test_no_group_defaults_to_reviewer(rsa_key_pair, jwks_from_key):
+    """ADP-blp.1: no recognised group means least privilege, not an architect."""
     token = _make_token(rsa_key_pair, groups=[])
     cache = await _make_cache(jwks_from_key)
     user = await decode_token(token, jwks_cache=cache)
-    assert user.role == PersonaRole.TECHNICAL_ARCHITECT
+    assert user.role == PersonaRole.REVIEWER
 
 
 # ── T005: ADPAdministrator maps to platform_admin (ADP-SPEC-042) ────────────
@@ -160,7 +167,7 @@ async def test_platform_admin_outranks_enterprise_architect(rsa_key_pair, jwks_f
 # ── Additional: _map_groups_to_role unit tests ────────────────────────────────
 
 def test_map_groups_empty():
-    assert _map_groups_to_role([]) == PersonaRole.TECHNICAL_ARCHITECT
+    assert _map_groups_to_role([]) == PersonaRole.REVIEWER
 
 
 def test_map_groups_enterprise():
@@ -173,4 +180,57 @@ def test_map_groups_path_format():
 
 
 def test_map_groups_unknown_group():
-    assert _map_groups_to_role(["UnknownGroup", "AnotherGroup"]) == PersonaRole.TECHNICAL_ARCHITECT
+    assert _map_groups_to_role(["UnknownGroup", "AnotherGroup"]) == PersonaRole.REVIEWER
+
+
+# ── ADP-blp.1 / ADP-blp.2: least-privilege default and client binding ─────────
+
+def test_map_groups_reviewer():
+    assert _map_groups_to_role(["/Reviewer"]) == PersonaRole.REVIEWER
+    # A real role still outranks Reviewer.
+    assert _map_groups_to_role(["Reviewer", "SolutionArchitect"]) == PersonaRole.SOLUTION_ARCHITECT
+
+
+async def test_token_for_another_client_rejected(rsa_key_pair, jwks_from_key):
+    """Validly signed by the realm, but issued to a different client."""
+    token = _make_token(rsa_key_pair, azp="some-other-client", aud="account")
+    with pytest.raises(TokenValidationError, match="not issued for client"):
+        await decode_token(token, jwks_cache=await _make_cache(jwks_from_key))
+
+
+async def test_token_without_azp_or_aud_rejected(rsa_key_pair, jwks_from_key):
+    token = _make_token(rsa_key_pair, azp=None, aud=None)
+    with pytest.raises(TokenValidationError, match="not issued for client"):
+        await decode_token(token, jwks_cache=await _make_cache(jwks_from_key))
+
+
+@pytest.mark.parametrize("aud", ["adp-frontend", ["account", "adp-frontend"]])
+async def test_token_accepted_by_audience(rsa_key_pair, jwks_from_key, aud):
+    token = _make_token(rsa_key_pair, azp=None, aud=aud, groups=["TechnicalArchitect"])
+    user = await decode_token(token, jwks_cache=await _make_cache(jwks_from_key))
+    assert user.role == PersonaRole.TECHNICAL_ARCHITECT
+
+
+# ── ADP-blp.3: auth only turns off on an explicit "off" value ─────────────────
+
+@pytest.mark.parametrize("value", ["true", "TRUE", "1", "yes", "True ", "enabled", "", "flase"])
+def test_auth_stays_on(monkeypatch, value):
+    from adp.auth.middleware import _auth_enabled
+
+    monkeypatch.setenv("ADP_AUTH_ENABLED", value)
+    assert _auth_enabled() is True
+
+
+@pytest.mark.parametrize("value", ["false", "False", " false ", "0", "no", "off"])
+def test_auth_off_only_when_explicit(monkeypatch, value):
+    from adp.auth.middleware import _auth_enabled
+
+    monkeypatch.setenv("ADP_AUTH_ENABLED", value)
+    assert _auth_enabled() is False
+
+
+def test_auth_on_when_unset(monkeypatch):
+    from adp.auth.middleware import _auth_enabled
+
+    monkeypatch.delenv("ADP_AUTH_ENABLED", raising=False)
+    assert _auth_enabled() is True

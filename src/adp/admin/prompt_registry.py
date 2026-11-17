@@ -40,13 +40,12 @@ tests/CI environments with no reachable Postgres at all.
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 _logger = logging.getLogger("adp.admin.prompt_registry")
 
@@ -168,18 +167,15 @@ _engine_loop: Any = None
 
 
 def _get_session_factory() -> async_sessionmaker:
+    """Shares adp.db's single engine, which is already kept per event loop (ADP-blp.15).
+    A test may set this module's _session_factory and pin _engine_loop to its own loop."""
     import asyncio
 
-    global _engine, _session_factory, _engine_loop
-    current_loop = asyncio.get_running_loop()
-    if _session_factory is None or _engine_loop is not current_loop:
-        db_url = os.environ.get(
-            "ADP_DATABASE_URL", "postgresql+asyncpg://adp_user:adp_pass@127.0.0.1:5432/adp"
-        )
-        _engine = create_async_engine(db_url, echo=False)
-        _session_factory = async_sessionmaker(_engine, expire_on_commit=False)
-        _engine_loop = current_loop
-    return _session_factory
+    if _session_factory is not None and _engine_loop is asyncio.get_running_loop():
+        return _session_factory
+    from adp.db import get_session_factory
+
+    return get_session_factory()
 
 
 async def _fetch_override(agent_id: str, session: AsyncSession) -> sa.Row[Any] | None:

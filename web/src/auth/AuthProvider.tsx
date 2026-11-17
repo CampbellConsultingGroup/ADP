@@ -62,19 +62,21 @@ export function groupsToRole(groups: string[]): string {
   // distinct "platform_admin" role, which must outrank "enterprise_architect"
   // when a user carries both groups (was a no-op distinction before, since
   // both groups mapped to the same role).
-  const priority = ["ADPAdministrator", "EnterpriseArchitect", "SolutionArchitect", "TechnicalArchitect"];
+  const priority = ["ADPAdministrator", "EnterpriseArchitect", "SolutionArchitect", "TechnicalArchitect", "Reviewer"];
   const roleMap: Record<string, string> = {
     ADPAdministrator: "platform_admin",
     EnterpriseArchitect: "enterprise_architect",
     SolutionArchitect: "solution_architect",
     TechnicalArchitect: "technical_architect",
+    Reviewer: "reviewer",
   };
   for (const g of priority) {
     if (groups.some((ug) => ug === g || ug.endsWith(`/${g}`))) {
       return roleMap[g];
     }
   }
-  return "technical_architect";
+  // No recognised group -> least privilege, matching the server (ADP-blp.1).
+  return "reviewer";
 }
 
 function parseUser(): AuthUser | null {

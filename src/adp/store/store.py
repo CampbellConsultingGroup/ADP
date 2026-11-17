@@ -87,10 +87,25 @@ class DesignStore:
     """Typed async store for ArchitectureDescription persistence."""
 
     def __init__(self, database_url: str) -> None:
-        self._engine: AsyncEngine = create_async_engine(database_url, echo=False)
+        """A store with its own engine (tests, scripts). The API uses from_session_factory()
+        so that every request shares adp.db's single connection pool (ADP-blp.14)."""
+        self._engine: AsyncEngine | None = create_async_engine(database_url, echo=False)
         self._session_factory = async_sessionmaker(
             self._engine, class_=AsyncSession, expire_on_commit=False
         )
+
+    @classmethod
+    def from_session_factory(cls, session_factory: async_sessionmaker) -> DesignStore:
+        """A store on an existing session factory. It does not own the engine behind it, so
+        dispose() leaves that engine alone."""
+        store = cls.__new__(cls)
+        store._engine = None
+        store._session_factory = session_factory
+        return store
+
+    @property
+    def session_factory(self) -> async_sessionmaker:
+        return self._session_factory
 
     async def save(
         self,
@@ -435,5 +450,6 @@ class DesignStore:
         return f"DSN-{n:03d}"
 
     async def dispose(self) -> None:
-        """Release database connections."""
-        await self._engine.dispose()
+        """Release database connections (only when this store created its own engine)."""
+        if self._engine is not None:
+            await self._engine.dispose()
