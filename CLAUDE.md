@@ -173,6 +173,17 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.27 (compliance mappings driven from one table; no API change):
+  - `adp.compliance.store._ENTITY_TARGETS` describes each entity mapping target (table, key column,
+    existence rule). `upsert_entity_mapping` / `list_mappings_for_entity` / `delete_entity_mapping` take a
+    `MappingTargetType`; the per-target functions (`upsert_capability_mapping`, ...) are one-line wrappers
+    kept for their callers. `list_mappings_for_control`, the status dispatch and both roll-up row queries
+    loop over the table. ORGANIZATION is not in it (no target id).
+  - `adp.compliance.router._ENTITY_MAPPING_ROUTES` registers PUT, DELETE and the "initiatives" GET per
+    target from one pair of handlers. `_named_target` keeps each route's own path parameter name
+    (`capability_id`, `agent_id`, ...), so `generated/openapi.json` is unchanged.
+  - A new mapping target is now one entry in each table plus its mapping table and migration (and the
+    strategy side's own dispatch tables). Guard: `tests/unit/compliance/test_mapping_target_table.py`.
 - Fable review ADP-blp.36, next step (frontend only): the shared link editor moved to `web/src/links/`
   (`LinkEditor.tsx`, `useLinkFeedback.ts`, `NavLinkButton.tsx`; strategy imports updated). `LinkOption`
   gained `detail` (shown beside a linked item) and `LinkEditor` takes `linkedItems` for callers that load
