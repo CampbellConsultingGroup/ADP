@@ -49,3 +49,52 @@ def test_non_cookie_headers_still_relayed(monkeypatch) -> None:
 
     assert resp.headers["content-type"].startswith("text/html")
     assert resp.text == "<html>login</html>"
+
+
+# ── ADP-blp.6: only the login flow's paths are forwarded ──────────────────────
+
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/auth/realms/ADPRealm/protocol/openid-connect/token",
+        "/auth/realms/ADPRealm/.well-known/openid-configuration",
+        "/auth/resources/abc12/login/keycloak.v2/css/styles.css",
+        "/auth/js/keycloak.js",
+    ],
+)
+def test_login_flow_paths_are_forwarded(monkeypatch, path) -> None:
+    assert _client(monkeypatch).get(path).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/auth/admin/master/console/",
+        "/auth/admin/realms/ADPRealm/users",
+        "/auth/realms/master/protocol/openid-connect/token",
+        "/auth/realms/ADPRealmX/account",
+        "/auth/realms",
+        "/auth/",
+        "/auth/metrics",
+        "/auth/realms/ADPRealm/%2e%2e/master/account",
+    ],
+)
+def test_everything_else_is_refused(monkeypatch, path) -> None:
+    resp = _client(monkeypatch).get(path)
+    assert resp.status_code == 404
+    assert resp.text != "<html>login</html>"
+
+
+def test_dot_segments_are_refused() -> None:
+    assert not auth_proxy._is_allowed("realms/ADPRealm/../master/account")
+    assert not auth_proxy._is_allowed("resources/../admin")
+    assert auth_proxy._is_allowed("realms/ADPRealm")
+
+
+def test_realm_follows_the_configured_issuer(monkeypatch) -> None:
+    monkeypatch.setenv("ADP_KEYCLOAK_ISSUER", "https://x.example/auth/realms/Other/")
+    assert auth_proxy._is_allowed("realms/Other/account")
+    assert not auth_proxy._is_allowed("realms/ADPRealm/account")

@@ -11,6 +11,7 @@ The backend never parses or validates `dsl_source` (research.md Decision 2)
 from __future__ import annotations
 
 import logging
+import re
 
 import cairosvg
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -97,6 +98,32 @@ async def delete_diagram(diagram_id: str, session: AsyncSession = Depends(_get_s
 
 # ── Export (User Story 2, research.md Decision 3) ────────────────────────────
 
+# ADP-blp.5: rasterising allocates width x height pixels, so a small SVG that declares a huge
+# canvas can exhaust memory. Refuse anything larger than this on either side.
+_MAX_SVG_DIMENSION = 10_000
+_SVG_ROOT = re.compile(r"<svg\b[^>]*>", re.IGNORECASE | re.DOTALL)
+_SVG_SIZE_ATTR = re.compile(r"""\b(width|height)\s*=\s*["']\s*([0-9]*\.?[0-9]+)""", re.IGNORECASE)
+_SVG_VIEWBOX = re.compile(r"""\bviewBox\s*=\s*["']([^"']+)["']""", re.IGNORECASE)
+
+
+def _check_svg_dimensions(svg: str) -> None:
+    root = _SVG_ROOT.search(svg)
+    if root is None:
+        return  # not an SVG; cairosvg reports that itself
+    sizes = [float(value) for _name, value in _SVG_SIZE_ATTR.findall(root.group(0))]
+    viewbox = _SVG_VIEWBOX.search(root.group(0))
+    if viewbox is not None:
+        try:
+            sizes.extend(float(part) for part in re.split(r"[\s,]+", viewbox.group(1).strip())[2:4])
+        except ValueError:
+            pass
+    if any(size > _MAX_SVG_DIMENSION for size in sizes):
+        raise HTTPException(
+            status_code=422,
+            detail=f"SVG is too large to export: the limit is {_MAX_SVG_DIMENSION} px per side.",
+        )
+
+
 class DiagramExportRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     svg: str
@@ -116,6 +143,7 @@ async def export_diagram_png(
     if diagram is None:
         raise HTTPException(status_code=404, detail=f"Diagram {diagram_id!r} not found")
 
+    _check_svg_dimensions(body.svg)
     try:
         png_bytes = cairosvg.svg2png(bytestring=body.svg.encode("utf-8"))
     except Exception as exc:

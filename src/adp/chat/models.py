@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from adp.agents.models import GroundingCitation
 
@@ -65,12 +65,13 @@ class ChatConversationDetail(ChatConversationSummary):
 class SendMessageRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    content: str
+    # ADP-blp.5: bounded, because every role may chat and each message is sent to the model.
+    content: str = Field(max_length=20_000)
     # ADP-914.8: optional diagram context (title/type/current DSL), supplied
     # by the frontend when this endpoint is called from the diagram editor.
     # Never persisted (research.md Decision 2) -- consumed only by
     # orchestrator.run_turn for that one turn's system-prompt assembly.
-    diagram_context: str | None = None
+    diagram_context: str | None = Field(default=None, max_length=200_000)
 
     @field_validator("content")
     @classmethod

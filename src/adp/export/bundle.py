@@ -40,6 +40,17 @@ def _next_audit_id(design: ArchitectureDescription) -> str:
     return f"AUD-{(max_n + 1):03d}"
 
 
+class _PrefetchedStore:
+    """A synchronous stand-in store holding one already-loaded design (see aexport)."""
+
+    def __init__(self, design_id: str, design: object) -> None:
+        self._design_id = design_id
+        self._design = design
+
+    def get(self, design_id: str) -> object:
+        return self._design if design_id == self._design_id else None
+
+
 class ExportOrchestrator:
     """Orchestrates the full export pipeline: validate → generate → write atomically."""
 
@@ -55,6 +66,49 @@ class ExportOrchestrator:
         if self._render is not None:
             return self._render
         return RenderOrchestrator(design_store=self._store)
+
+    async def aexport(
+        self,
+        design_id: str,
+        export_root: str,
+        confirmation_id: str,
+        *,
+        actor: str,
+    ) -> ExportResult:
+        """export() for async callers such as the API route (ADP-blp.20).
+
+        export() is synchronous and drives the store with run_until_complete(), which fails
+        inside a running event loop -- so against the real, async DesignStore every export
+        raised "This event loop is already running". Here the design is awaited first, then the
+        synchronous pipeline (file writes, rendering, SVG->PNG) runs in a worker thread against
+        a store that just hands back that design, keeping the event loop free.
+        """
+        import asyncio
+        import inspect
+
+        if not (confirmation_id or "").strip():
+            raise ValueError(
+                "Export requires a non-empty confirmation_id (ART-VIII / FR-005)"
+            )
+        try:
+            design = self._store.get(design_id)  # type: ignore[attr-defined]
+            if inspect.isawaitable(design):
+                design = await design
+        except Exception as exc:
+            if "NotFound" in type(exc).__name__:
+                raise KeyError(f"Design {design_id!r} not found") from exc
+            raise
+        if design is None:
+            raise KeyError(f"Design {design_id!r} not found")
+
+        prefetched = _PrefetchedStore(design_id, design)
+        worker = ExportOrchestrator(
+            design_store=prefetched,
+            render_orchestrator=self._render or RenderOrchestrator(design_store=prefetched),
+        )
+        return await asyncio.to_thread(
+            worker.export, design_id, export_root, confirmation_id, actor=actor
+        )
 
     def export(
         self,

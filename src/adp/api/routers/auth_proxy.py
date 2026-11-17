@@ -19,7 +19,7 @@ from __future__ import annotations
 import os
 
 import httpx
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 
 router = APIRouter(tags=["auth-proxy"])
 
@@ -36,11 +36,37 @@ _HOP_BY_HOP = {
 }
 
 
+# ADP-blp.6: this proxy is reachable without a token (the browser needs it to log in), so it must
+# not expose all of Keycloak. Only the application realm's own endpoints and the static assets
+# its login pages load are forwarded. The admin console and REST API (/auth/admin/...) and the
+# master realm (/auth/realms/master/...), whose login is the Keycloak administrator's, are not.
+_STATIC_PREFIXES = ("resources/", "js/")
+
+
+def _realm() -> str:
+    issuer = os.environ.get("ADP_KEYCLOAK_ISSUER", "http://127.0.0.1:8080/realms/ADPRealm")
+    return issuer.rstrip("/").rsplit("/realms/", 1)[-1]
+
+
+def _is_allowed(path: str) -> bool:
+    # No dot segments or backslashes: "/auth/../x" would otherwise be normalised by the HTTP
+    # client into a path outside /auth on the internal host.
+    segments = path.split("/")
+    if any(segment in ("..", ".") for segment in segments) or "\\" in path:
+        return False
+    realm_root = f"realms/{_realm()}"
+    if path == realm_root or path.startswith(realm_root + "/"):
+        return True
+    return path.startswith(_STATIC_PREFIXES)
+
+
 @router.api_route(
     "/auth/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
 )
 async def proxy_to_keycloak(path: str, request: Request) -> Response:
+    if not _is_allowed(path):
+        raise HTTPException(status_code=404, detail="Not found")
     internal_url = os.environ["ADP_KEYCLOAK_INTERNAL_URL"].rstrip("/")
     target = f"{internal_url}/auth/{path}"
 

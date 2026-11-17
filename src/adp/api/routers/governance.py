@@ -164,7 +164,9 @@ async def get_compliance_exceptions(
     store=Depends(_get_design_store),
 ) -> ComplianceExceptionsResponse:
     """FAIL and ADVISORY findings extracted from canonical design JSONB."""
-    designs = await store.list_all()
+    # Every design, not the first page: list_all() defaults to 50, which silently left
+    # findings on older designs out of this report (ADP-blp.19).
+    designs = await store.list_all(page_size=None)
     exceptions: list[ComplianceExceptionRecord] = []
 
     for design in designs:
