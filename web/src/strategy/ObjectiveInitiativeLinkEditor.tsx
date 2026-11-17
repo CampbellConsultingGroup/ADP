@@ -9,7 +9,7 @@ import {
   useLinkObjectiveToInitiative,
   useUnlinkObjectiveFromInitiative,
 } from "../api/strategy";
-import LinkEditor from "./LinkEditor";
+import LinkEditor from "../links/LinkEditor";
 
 interface Props {
   objectiveId: string;

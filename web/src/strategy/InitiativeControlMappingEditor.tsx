@@ -26,7 +26,7 @@ import {
   STATUS_LABEL,
   TARGET_TYPE_LABEL,
 } from "../compliance/ControlMappingsEditor";
-import { useLinkFeedback } from "./useLinkFeedback";
+import { useLinkFeedback } from "../links/useLinkFeedback";
 
 interface Props {
   initiative: StrategyInitiative;

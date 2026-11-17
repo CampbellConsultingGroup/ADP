@@ -7,7 +7,7 @@ import {
   useUnlinkObjectiveValueStream,
   type StrategicObjective,
 } from "../api/strategy";
-import LinkEditor from "./LinkEditor";
+import LinkEditor from "../links/LinkEditor";
 
 interface Props {
   objective: StrategicObjective;

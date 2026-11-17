@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useObjectives, useCreateObjective, useThemes } from "../api/strategy";
-import NavLinkButton from "./NavLinkButton";
+import NavLinkButton from "../links/NavLinkButton";
 import ObjectiveForm from "./ObjectiveForm";
 import { clickableRow } from "../ui/clickableRow";
 import { useCan } from "../auth/permissions";

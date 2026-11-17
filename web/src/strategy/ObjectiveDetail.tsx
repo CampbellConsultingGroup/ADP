@@ -20,7 +20,7 @@ import ObjectiveApplicationLinkEditor from "./ObjectiveApplicationLinkEditor";
 import ObjectiveControlLinkEditor from "./ObjectiveControlLinkEditor";
 import { checkMetricFields } from "./objectiveMetric";
 import { Button, StatusBadge, type BadgeTone } from "../ui";
-import NavLinkButton from "./NavLinkButton";
+import NavLinkButton from "../links/NavLinkButton";
 import EditFrame, { useReturnFocus } from "./EditFrame";
 import { confirmAction } from "../ui/confirm";
 import { useCan } from "../auth/permissions";
