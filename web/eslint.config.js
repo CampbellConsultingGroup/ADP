@@ -15,6 +15,8 @@ export default tseslint.config(
       "node_modules/**",
       "playwright-report/**",
       "test-results/**",
+      // Generated from generated/openapi.json by `npm run gen:api`.
+      "src/api/generated/**",
       // Vendored from the Canvas diagram-core library; linted in its own repo.
       "src/diagrams/core/**",
       "src/diagrams/editor/**",

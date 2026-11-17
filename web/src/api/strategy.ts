@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
 import { MAPPING_PATH_SEGMENT, type ComplianceStatus, type MappingTargetType } from "./compliance";
+import type { components } from "./generated/schema";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -14,14 +15,10 @@ export type ObjectivePeriod = "Q1" | "Q2" | "Q3" | "Q4" | "FY";
 // (never set directly) -- abandoned is the one value a human sets.
 export type ObjectiveStatus = "proposed" | "active" | "at_risk" | "achieved" | "abandoned";
 
-export interface StrategicTheme {
-  id: string;
-  name: string;
-  description: string | null;
-  owner: string | null;
-  priority: number | null;
-  created_at: string;
-}
+// ADP-blp.37: taken from the API's own schema rather than written by hand. The hand-written
+// version had drifted -- it had no `framework_ids`, which the server has returned since 927.
+// New and changed types should come from `components["schemas"]` the same way.
+export type StrategicTheme = components["schemas"]["StrategicTheme"];
 
 export interface StrategicThemeCreate {
   name: string;

@@ -22,6 +22,7 @@ from adp.models import SCHEMA_VERSION, ArchitectureDescription
 _SCHEMA_PATH = Path("generated/architecture-description.schema.json")
 _THEME_SCHEMA_PATH = Path("src/adp/theme/c4-theme.schema.json")
 _PATTERN_SCHEMA_PATH = Path("generated/pattern.schema.json")
+_OPENAPI_PATH = Path("generated/openapi.json")
 
 _SCHEMA_ID = "https://adp.example.org/schemas/architecture-description.schema.json"
 _THEME_SCHEMA_ID = "https://adp.example.org/schemas/c4-theme.schema.json"
@@ -68,6 +69,27 @@ def generate_pattern_schema() -> str:
     return json.dumps(schema, sort_keys=True, indent=2) + "\n"
 
 
+def generate_openapi() -> str:
+    """The API's OpenAPI document, for generating the frontend's types (ADP-blp.37).
+
+    The web client's request and response types were written by hand and had already drifted
+    from the Pydantic models. This file is the contract both sides are checked against: the
+    drift gate below fails when the API changes without it being regenerated, and the web
+    build regenerates its types from it (web: `npm run gen:api`).
+    Never edit generated/openapi.json by hand; run adp-generate to regenerate.
+    """
+    import warnings
+
+    from adp.api.app import create_app
+
+    with warnings.catch_warnings():
+        # The /auth proxy registers one handler for several methods, which FastAPI reports as
+        # a duplicate operation id. Harmless here.
+        warnings.simplefilter("ignore")
+        schema = create_app().openapi()
+    return json.dumps(schema, sort_keys=True, indent=1) + "\n"
+
+
 def _check_one(fresh: str, committed_path: Path, label: str) -> bool:
     """Compare fresh generated output against committed file. Returns True if OK."""
     if not committed_path.exists():
@@ -105,6 +127,7 @@ def check(committed_path: Path = _SCHEMA_PATH) -> None:
     ok = _check_one(generate(), committed_path, "architecture-description") and ok
     ok = _check_one(generate_theme_schema(), _THEME_SCHEMA_PATH, "c4-theme") and ok
     ok = _check_one(generate_pattern_schema(), _PATTERN_SCHEMA_PATH, "ea-pattern") and ok
+    ok = _check_one(generate_openapi(), _OPENAPI_PATH, "openapi") and ok
     if not ok:
         sys.exit(1)
 
@@ -158,6 +181,7 @@ def main() -> None:
             (_SCHEMA_PATH, generate(), "architecture-description schema"),
             (_THEME_SCHEMA_PATH, generate_theme_schema(), "c4-theme schema"),
             (_PATTERN_SCHEMA_PATH, generate_pattern_schema(), "ea-pattern schema"),
+            (_OPENAPI_PATH, generate_openapi(), "OpenAPI document"),
         ]:
             try:
                 path.parent.mkdir(parents=True, exist_ok=True)

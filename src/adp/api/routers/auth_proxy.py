@@ -63,6 +63,10 @@ def _is_allowed(path: str) -> bool:
 @router.api_route(
     "/auth/{path:path}",
     methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+    # Not part of the ADP API: it relays Keycloak. Left out of the OpenAPI document, where one
+    # handler for seven methods also produced an operation id that changed from run to run
+    # (ADP-blp.37 needs that document to be reproducible).
+    include_in_schema=False,
 )
 async def proxy_to_keycloak(path: str, request: Request) -> Response:
     if not _is_allowed(path):
