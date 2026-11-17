@@ -99,8 +99,10 @@ resource apiApp 'Microsoft.App/containerApps@2025-01-01' = {
       ]
       secrets: [
         {
-          name: 'postgres-connection-string'
-          keyVaultUrl: '${keyVaultUri}secrets/postgres-connection-string'
+          // The app role's connection (rows only, application database only) -- not the
+          // administrator's, which only the migration job uses (ADP-blp.7).
+          name: 'postgres-app-connection-string'
+          keyVaultUrl: '${keyVaultUri}secrets/postgres-app-connection-string'
           identity: identityId
         }
         {
@@ -129,7 +131,7 @@ resource apiApp 'Microsoft.App/containerApps@2025-01-01' = {
             // ADP-cm9) -- Keycloak has internal-only ingress, unreachable by a
             // real browser directly.
             { name: 'ADP_KEYCLOAK_INTERNAL_URL', value: 'https://${keycloakFqdn}' }
-            { name: 'ADP_DATABASE_URL', secretRef: 'postgres-connection-string' }
+            { name: 'ADP_DATABASE_URL', secretRef: 'postgres-app-connection-string' }
             { name: 'ADP_LLM_API_KEY', secretRef: 'adp-llm-api-key' }
           ]
           resources: {

@@ -55,6 +55,10 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SECRETS_DIR="$SCRIPT_DIR/.secrets"
 PG_PASSWORD_FILE="$SECRETS_DIR/postgres-admin-password"
 KC_PASSWORD_FILE="$SECRETS_DIR/keycloak-admin-password"
+# Passwords of the two least-privilege database roles (ADP-blp.7). Hex, so they are
+# safe inside a connection URL without escaping.
+PG_APP_PASSWORD_FILE="$SECRETS_DIR/postgres-app-password"
+PG_KEYCLOAK_PASSWORD_FILE="$SECRETS_DIR/postgres-keycloak-password"
 ALLOWED_IPS_FILE="$SECRETS_DIR/allowed-ips"
 RESOURCE_GROUP="adp-rg"
 # Sub-scope deployment records are location-bound: reusing one name across
@@ -122,6 +126,15 @@ for f in "$PG_PASSWORD_FILE" "$KC_PASSWORD_FILE"; do
   fi
 done
 PG_ADMIN_PASSWORD="$(cat "$PG_PASSWORD_FILE")"
+for f in "$PG_APP_PASSWORD_FILE" "$PG_KEYCLOAK_PASSWORD_FILE"; do
+  if [[ ! -f "$f" ]]; then
+    echo "  Generating $(basename "$f") (first run) -> $f"
+    openssl rand -hex 24 > "$f"
+    chmod 600 "$f"
+  fi
+done
+PG_APP_PASSWORD="$(cat "$PG_APP_PASSWORD_FILE")"
+PG_KEYCLOAK_PASSWORD="$(cat "$PG_KEYCLOAK_PASSWORD_FILE")"
 KC_ADMIN_PASSWORD="$(cat "$KC_PASSWORD_FILE")"
 
 DEPLOYER_PRINCIPAL_ID="$(az ad signed-in-user show --query id -o tsv)"
@@ -265,7 +278,14 @@ retry 20 15 set_secret postgres-admin-password "$PG_ADMIN_PASSWORD"
 set_secret keycloak-admin-password "$KC_ADMIN_PASSWORD"
 set_secret postgres-connection-string \
   "postgresql+asyncpg://adp_admin:${PG_ADMIN_PASSWORD}@${POSTGRES_FQDN}:5432/${POSTGRES_DB}"
-echo "  postgres-admin-password, keycloak-admin-password, postgres-connection-string set."
+# The API connects as adp_app and Keycloak as adp_keycloak; only the migration job
+# uses the administrator connection above (ADP-blp.7).
+set_secret postgres-app-password "$PG_APP_PASSWORD"
+set_secret postgres-keycloak-password "$PG_KEYCLOAK_PASSWORD"
+set_secret postgres-app-connection-string \
+  "postgresql+asyncpg://adp_app:${PG_APP_PASSWORD}@${POSTGRES_FQDN}:5432/${POSTGRES_DB}"
+echo "  postgres-admin-password, keycloak-admin-password, postgres-connection-string,"
+echo "  postgres-app-password, postgres-keycloak-password, postgres-app-connection-string set."
 
 LLM_API_KEY=""
 if [[ -f "$REPO_ROOT/.env" ]]; then
@@ -345,9 +365,31 @@ az deployment group what-if --resource-group "$RESOURCE_GROUP" --name "$APPS_DEP
   --template-file "$SCRIPT_DIR/apps.bicep" --parameters "@$APPS_PARAMS_FILE"
 confirm "Deploy stage 2 (apps)?" || { echo "Aborted after stage 1 (infrastructure is in place)."; exit 1; }
 
-echo "== Stage 2/2: deploying =="
+echo "== Stage 2/2: deploying the jobs =="
+# The jobs go first: the apps log in to Postgres as roles that the migration job
+# creates, so those must exist before Keycloak and the API start (ADP-blp.7).
 # AcrPull for the apps' identity is also granted in stage 1; on a brand-new
 # environment its propagation can lag the first image pull, so allow a retry.
+retry 3 60 az deployment group create --resource-group "$RESOURCE_GROUP" --name "${APPS_DEPLOYMENT}-jobs" \
+  --template-file "$SCRIPT_DIR/apps.bicep" --parameters "@$APPS_PARAMS_FILE" --parameters jobsOnly=true \
+  --output none
+
+echo "== Running DB migrations (adp-migrate) =="
+run_job adp-migrate || { echo "Migration failed -- see RUNBOOK.md for reading job logs."; exit 1; }
+
+echo "== Creating/refreshing the database roles (adp_app, adp_keycloak) =="
+run_job adp-migrate \
+  --image "${ACR_LOGIN_SERVER}/adp-api:${API_IMAGE_TAG}" \
+  --container-name migrate \
+  --command "python3" "/app/src/adp/ops/db_roles.py" \
+  --env-vars \
+    "ADP_DATABASE_URL=secretref:postgres-connection-string" \
+    "ADP_DB_APP_PASSWORD=secretref:postgres-app-password" \
+    "ADP_DB_KEYCLOAK_PASSWORD=secretref:postgres-keycloak-password" \
+    "ADP_DB_KEYCLOAK_DATABASE=${KEYCLOAK_DB}" \
+  || { echo "Database role setup failed -- the apps cannot log in to Postgres without it."; exit 1; }
+
+echo "== Stage 2/2: deploying the apps =="
 retry 3 60 az deployment group create --resource-group "$RESOURCE_GROUP" --name "$APPS_DEPLOYMENT" \
   --template-file "$SCRIPT_DIR/apps.bicep" --parameters "@$APPS_PARAMS_FILE" --output none
 
@@ -360,9 +402,6 @@ KEYCLOAK_FQDN="$(apps_output keycloakFqdn)"
 
 # ------------------------------------------------------------ post-deploy
 echo
-echo "== Running DB migrations (adp-migrate) =="
-run_job adp-migrate || { echo "Migration failed -- see RUNBOOK.md for reading job logs."; exit 1; }
-
 echo "== Pointing Keycloak's adp-frontend client at https://$API_FQDN =="
 # Keycloak's --import-realm uses IGNORE_EXISTING, so the realm JSON's pinned
 # redirect URIs never update on a live realm; patch them through the admin

@@ -7,6 +7,11 @@
 // works here unmodified). Matches RUNBOOK.md's existing
 // `docker compose run --rm api alembic upgrade head` pattern rather than
 // running migrations on container boot.
+//
+// This job is the only workload that keeps the server administrator login
+// (ADP-blp.7). deploy.sh also starts it with the command overridden to run
+// src/adp/ops/db_roles.py, which creates the app and Keycloak roles; the two
+// role passwords are declared as secrets here so that run can reference them.
 
 @description('Azure region.')
 param location string
@@ -55,6 +60,16 @@ resource migrationJob 'Microsoft.App/jobs@2025-01-01' = {
         {
           name: 'postgres-connection-string'
           keyVaultUrl: '${keyVaultUri}secrets/postgres-connection-string'
+          identity: identityId
+        }
+        {
+          name: 'postgres-app-password'
+          keyVaultUrl: '${keyVaultUri}secrets/postgres-app-password'
+          identity: identityId
+        }
+        {
+          name: 'postgres-keycloak-password'
+          keyVaultUrl: '${keyVaultUri}secrets/postgres-keycloak-password'
           identity: identityId
         }
       ]

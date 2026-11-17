@@ -31,8 +31,8 @@ param postgresFqdn string
 @description('Name of the Keycloak database on the Flexible Server.')
 param keycloakDatabaseName string = 'keycloak'
 
-@description('Postgres admin username -- Keycloak connects with the same single admin login as the app (per ADP-fnv.2 simplification).')
-param postgresAdminUsername string = 'adp_admin'
+@description('Postgres role Keycloak connects as: owner of the Keycloak database objects only, not the server administrator (ADP-blp.7).')
+param postgresKeycloakUsername string = 'adp_keycloak'
 
 @description('Public base URL the browser reaches Keycloak through, e.g. https://adp-api.<domain>/auth (ADP-cm9). Keycloak has internal-only ingress -- a real browser can never reach it directly, so adp-api reverse-proxies /auth/* to it. KC_HOSTNAME tells Keycloak this is its own address so it emits correct absolute URLs/issuer claims itself, rather than leaking its internal FQDN.')
 param keycloakPublicBaseUrl string
@@ -63,8 +63,8 @@ resource keycloakApp 'Microsoft.App/containerApps@2025-01-01' = {
       ]
       secrets: [
         {
-          name: 'postgres-admin-password'
-          keyVaultUrl: '${keyVaultUri}secrets/postgres-admin-password'
+          name: 'postgres-keycloak-password'
+          keyVaultUrl: '${keyVaultUri}secrets/postgres-keycloak-password'
           identity: identityId
         }
         {
@@ -115,8 +115,10 @@ resource keycloakApp 'Microsoft.App/containerApps@2025-01-01' = {
           env: [
             { name: 'KC_DB', value: 'postgres' }
             { name: 'KC_DB_URL', value: 'jdbc:postgresql://${postgresFqdn}:5432/${keycloakDatabaseName}' }
-            { name: 'KC_DB_USERNAME', value: postgresAdminUsername }
-            { name: 'KC_DB_PASSWORD', secretRef: 'postgres-admin-password' }
+            // Its own role, owner of the Keycloak database's objects only (ADP-blp.7);
+            // created by src/adp/ops/db_roles.py before this app is deployed.
+            { name: 'KC_DB_USERNAME', value: postgresKeycloakUsername }
+            { name: 'KC_DB_PASSWORD', secretRef: 'postgres-keycloak-password' }
             // Both env var forms set: Keycloak renamed the bootstrap-admin
             // vars around the 26.x line and this pins to 26.2 without
             // having verified the exact cutover -- harmless if one pair is

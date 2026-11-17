@@ -48,7 +48,15 @@ param allowPublicIngress bool = false
 // output, to avoid a keycloak <-> apiApp circular dependency.
 var keycloakPublicBaseUrl = 'https://adp-api.${environmentDefaultDomain}/auth'
 
-module keycloak 'modules/keycloak.bicep' = {
+@description('Deploy only the two jobs, not the apps. deploy.sh does this first so the migration job can create the database roles the apps log in with before they start (ADP-blp.7).')
+param jobsOnly bool = false
+
+// Both names follow from the environment's default domain, so nothing has to wait for
+// the apps to exist: Keycloak has internal ingress, the API external.
+var keycloakFqdn = 'adp-keycloak.internal.${environmentDefaultDomain}'
+var apiFqdn = 'adp-api.${environmentDefaultDomain}'
+
+module keycloak 'modules/keycloak.bicep' = if (!jobsOnly) {
   name: 'keycloakDeploy'
   params: {
     location: location
@@ -63,7 +71,7 @@ module keycloak 'modules/keycloak.bicep' = {
   }
 }
 
-module apiApp 'modules/apiapp.bicep' = {
+module apiApp 'modules/apiapp.bicep' = if (!jobsOnly) {
   name: 'apiAppDeploy'
   params: {
     location: location
@@ -72,7 +80,7 @@ module apiApp 'modules/apiapp.bicep' = {
     acrLoginServer: acrLoginServer
     apiImageTag: apiImageTag
     keyVaultUri: keyVaultUri
-    keycloakFqdn: keycloak.outputs.fqdn
+    keycloakFqdn: keycloakFqdn
     keycloakPublicBaseUrl: keycloakPublicBaseUrl
     allowedIpRanges: allowedIpRanges
     allowPublicIngress: allowPublicIngress
@@ -100,12 +108,12 @@ module keycloakAdminJob 'modules/keycloakadminjob.bicep' = {
     acrLoginServer: acrLoginServer
     apiImageTag: apiImageTag
     keyVaultUri: keyVaultUri
-    keycloakFqdn: keycloak.outputs.fqdn
+    keycloakFqdn: keycloakFqdn
     keycloakRealm: 'ADPRealm'
   }
 }
 
-output keycloakFqdn string = keycloak.outputs.fqdn
-output apiFqdn string = apiApp.outputs.fqdn
+output keycloakFqdn string = keycloakFqdn
+output apiFqdn string = apiFqdn
 output migrationJobName string = migrationJob.outputs.jobName
 output keycloakAdminJobName string = keycloakAdminJob.outputs.jobName

@@ -173,6 +173,16 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.7 (least-privilege Postgres roles on Azure):
+  - `src/adp/ops/db_roles.py` (run by `deploy.sh` through the `adp-migrate` job, command overridden)
+    creates `adp_app` (SELECT/INSERT/UPDATE/DELETE in the `adp` database, default privileges for later
+    tables, no write to `alembic_version`) and `adp_keycloak` (owns the `keycloak` database's objects).
+    Only the migration job keeps the administrator login. Idempotent; resets both passwords.
+  - Key Vault: `postgres-app-connection-string` (the API's `ADP_DATABASE_URL`), `postgres-app-password`,
+    `postgres-keycloak-password`. `postgres-connection-string` is now the migration job's only.
+  - `apps.bicep` has `jobsOnly`: `deploy.sh` deploys the jobs, runs migrations, runs the role script, then
+    deploys the apps. `keycloakFqdn`/`apiFqdn` outputs are computed from the environment domain.
+  - The app must not run DDL at runtime: it has no right to. Schema changes go in a migration.
 - Fable review ADP-blp.64 (auth proxy and metrics, checked on a deployed Azure environment):
   - `/auth/*` proxy: every forwarding header the client sent (`Forwarded`, `X-Forwarded-*`, `X-Real-IP`)
     is dropped. The proxy sets `X-Forwarded-For` to the last entry of the incoming header (the one the
