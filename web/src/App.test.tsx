@@ -91,7 +91,7 @@ describe("App: onSelectDesign (regression -- opening a design lands on a populat
 
     await user.click(screen.getByRole("button", { name: "Open DSN-1" }));
 
-    expect(screen.getByText(/IntakePage-stub designId=DSN-1/)).toBeTruthy();
+    expect(await screen.findByText(/IntakePage-stub designId=DSN-1/)).toBeTruthy();
     expect(screen.getByText("Design · DSN-1")).toBeTruthy();
   });
 });
@@ -104,13 +104,13 @@ describe("App: onStartNewDesign (nav 'Intake' click == New Design)", () => {
     // Get into a "design selected, viewing Intake" state first.
     await user.click(screen.getByRole("button", { name: "Designs" }));
     await user.click(screen.getByRole("button", { name: "Open DSN-1" }));
-    expect(screen.getByText(/IntakePage-stub designId=DSN-1/)).toBeTruthy();
+    expect(await screen.findByText(/IntakePage-stub designId=DSN-1/)).toBeTruthy();
 
     // Clicking the nav bar's "Intake" (not "Open a design") resets to blank.
     await user.click(screen.getByRole("button", { name: "New Design" }));
 
-    expect(screen.getByText(/IntakePage-stub designId=null/)).toBeTruthy();
-    expect(screen.getByText("Design")).toBeTruthy();
+    expect(await screen.findByText(/IntakePage-stub designId=null/)).toBeTruthy();
+    expect(screen.getAllByText("Design").length).toBeGreaterThan(0); // rail label (and the step)
     expect(screen.queryByText("Design · DSN-1")).toBeNull();
   });
 
@@ -124,7 +124,7 @@ describe("App: onStartNewDesign (nav 'Intake' click == New Design)", () => {
     await user.click(screen.getByRole("button", { name: "Designs" }));
     await user.click(screen.getByRole("button", { name: "Open DSN-1" }));
 
-    expect(screen.getByText(/IntakePage-stub designId=DSN-1/)).toBeTruthy();
+    expect(await screen.findByText(/IntakePage-stub designId=DSN-1/)).toBeTruthy();
   });
 });
 
@@ -156,7 +156,7 @@ describe("App: DESIGN_ONLY_VIEWS redirect (C4 Design with no design selected)", 
 
     await user.click(screen.getByRole("button", { name: "New Design" }));
 
-    expect(screen.getByText(/IntakePage-stub designId=null/)).toBeTruthy();
+    expect(await screen.findByText(/IntakePage-stub designId=null/)).toBeTruthy();
     expect(screen.queryByText("DesignsPage-stub")).toBeNull();
   });
 });

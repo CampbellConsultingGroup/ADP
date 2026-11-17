@@ -208,3 +208,19 @@
 .shell-back { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; margin-right: 6px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface); color: var(--ink-2); font-family: var(--font); font-size: 12.5px; cursor: pointer; white-space: nowrap; }
 .shell-back:hover { color: var(--ink); border-color: var(--border-strong); }
 .shell-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Design-flow steps (ADP-blp.59) */
+.ui-steps { flex-shrink: 0; padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--surface); }
+.ui-steps ol { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px; flex-wrap: wrap; }
+.ui-steps li { display: flex; }
+.ui-steps .s { display: flex; align-items: center; gap: 9px; padding: 6px 12px 6px 8px; border-radius: 9px; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink-2); text-decoration: none; font-family: var(--font); }
+.ui-steps a.s:hover { border-color: var(--border-strong); color: var(--ink); }
+.ui-steps a.s:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ui-steps .n { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 650; background: var(--surface-3); color: var(--ink-2); }
+.ui-steps .t { display: flex; flex-direction: column; line-height: 1.2; }
+.ui-steps .l { font-size: 13px; font-weight: 600; color: var(--ink); }
+.ui-steps .h { font-size: 11.5px; color: var(--ink-2); }
+.ui-steps li.current .s { border-color: var(--accent); background: var(--accent-wash); }
+.ui-steps li.current .n { background: var(--accent); color: var(--accent-ink); }
+.ui-steps li.done .n { background: var(--good-wash); color: var(--good); }
+.ui-steps li.off .s { opacity: .55; }

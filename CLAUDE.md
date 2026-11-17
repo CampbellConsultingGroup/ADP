@@ -173,6 +173,11 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.59, last part: `designs/DesignFlowSteps.tsx` shows the four steps of creating a
+  design (Describe, Recommend, Design, Validate) above the New Design and C4 Design screens. Each step is
+  a link to its screen; steps that need a design are inactive until one exists. `IntakePage`'s tab is now
+  in the URL (`?tab=recommend`) so the Recommend step can link to it. App wraps those two views in a flex
+  column with the steps on top (`DESIGN_FLOW_VIEWS`).
 - Fable review P3 batch 6 (epic ADP-blp, more of .27 .36 .65 .68):
   - `adp.auth.actor.actor_of(request, default)`: the one actor lookup for audit and log lines. All twenty
     routers' `_get_actor` call it. The design export route used to read only the `X-Actor` header, so a
