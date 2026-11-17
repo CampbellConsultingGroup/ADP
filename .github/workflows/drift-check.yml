@@ -98,6 +98,16 @@ jobs:
         working-directory: web
         run: npx tsc --noEmit
 
+      # ADP-blp.32: ESLint (typescript-eslint, react-hooks, jsx-a11y) -- zero warnings allowed.
+      - name: Lint (eslint)
+        working-directory: web
+        run: npm run lint
+
+      # ADP-blp.32: a production build must succeed (catches bundling errors tsc cannot).
+      - name: Production build (vite)
+        working-directory: web
+        run: npx vite build
+
       - name: Unit and component tests with coverage (vitest)
         working-directory: web
         run: npx vitest run --coverage
