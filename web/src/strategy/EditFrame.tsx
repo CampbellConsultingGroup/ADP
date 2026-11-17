@@ -11,6 +11,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type React from "react";
 import { Button } from "../ui";
+import { confirmAction } from "../ui/confirm";
 
 export const DISCARD_PROMPT = "Discard your unsaved changes?";
 
@@ -56,8 +57,8 @@ export default function EditFrame({
     headingRef.current?.focus();
   }, []);
 
-  function requestClose() {
-    if (dirty && !confirm(DISCARD_PROMPT)) return;
+  async function requestClose() {
+    if (dirty && !(await confirmAction(DISCARD_PROMPT))) return;
     onClose();
   }
 

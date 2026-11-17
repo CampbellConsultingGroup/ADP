@@ -85,11 +85,32 @@ describe("DiagramListPage: browse (User Story 3)", () => {
       isPending: false,
     } as unknown as ReturnType<typeof api.useDeleteDiagram>);
     const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
 
     render(<DiagramListPage onOpen={vi.fn()} />);
     await user.click(screen.getByLabelText("Delete Claims Flow"));
 
+    expect(confirm).toHaveBeenCalledWith('Delete diagram "Claims Flow"?');
     expect(mutate).toHaveBeenCalledWith("d-1");
+    confirm.mockRestore();
+  });
+
+  it("does not delete when the confirmation is declined (ADP-blp.47)", async () => {
+    mockDiagrams(ITEMS);
+    const mutate = vi.fn();
+    mockedApi.useDeleteDiagram.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof api.useDeleteDiagram>);
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false);
+
+    render(<DiagramListPage onOpen={vi.fn()} />);
+    await user.click(screen.getByLabelText("Delete Claims Flow"));
+
+    expect(confirm).toHaveBeenCalled();
+    expect(mutate).not.toHaveBeenCalled();
+    confirm.mockRestore();
   });
 
   it("shows ADP's dashed-border empty state with no diagrams", () => {

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import type { IntegrationDir } from "../api/application";
 import { useAppDomainIntegrations, useCreateAppDomainIntegration, useDeleteAppDomainIntegration } from "../api/application";
 import { useDomains } from "../api/business";
+import { confirmAction } from "../ui/confirm";
 
 const DIRECTIONS: IntegrationDir[] = ["inbound", "outbound", "bidirectional"];
 const DIR_ICON: Record<IntegrationDir, string> = { inbound: "←", outbound: "→", bidirectional: "↔" };
@@ -41,7 +42,12 @@ export default function DomainIntegrationEditor({ appId }: Props) {
           <span style={{ fontSize: 13 }}>{DIR_ICON[item.direction]}</span>
           <span style={{ flex: 1, fontSize: 13 }}>{item.domain_name ?? "External"}</span>
           <span style={{ fontSize: 11, color: "var(--ink-3)" }}>{item.integration_type}</span>
-          <button onClick={() => deleteIntegration.mutate(item.id)} style={{ fontSize: 11, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+          <button
+            aria-label={`Delete integration with ${item.domain_name ?? "External"}`}
+            onClick={async () => {
+              if (await confirmAction("Delete this integration?")) deleteIntegration.mutate(item.id);
+            }}
+            style={{ fontSize: 11, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}>✕</button>
         </div>
       ))}
       <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>

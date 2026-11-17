@@ -15,6 +15,8 @@ import NavLinkButton from "./NavLinkButton";
 import { useScrollHighlight } from "./useScrollHighlight";
 import EditFrame, { useReturnFocus } from "./EditFrame";
 import { useCan } from "../auth/permissions";
+import { confirmAction } from "../ui/confirm";
+import { EmptyState } from "../ui/primitives";
 
 const STATUSES: InitiativeStatus[] = ["planned", "in_progress", "blocked", "complete", "cancelled"];
 const STATUS_LABEL: Record<InitiativeStatus, string> = {
@@ -166,8 +168,8 @@ export default function InitiativeList({ focusInitiativeId, onNavigateToObjectiv
     );
   }
 
-  function handleDelete(initiative: StrategyInitiative) {
-    if (!confirm(`Delete initiative "${initiative.name}"?`)) return;
+  async function handleDelete(initiative: StrategyInitiative) {
+    if (!(await confirmAction(`Delete initiative "${initiative.name}"?`))) return;
     // FR-011: unconditional -- deleting an initiative is never blocked by
     // existing objective links, unlike theme delete.
     deleteMutation.mutate(initiative.id);
@@ -228,7 +230,14 @@ export default function InitiativeList({ focusInitiativeId, onNavigateToObjectiv
       )}
 
       {items.length === 0 && !showForm && (
-        <div style={{ color: "var(--ink-3)", fontSize: 13 }}>No initiatives yet. Create one above.</div>
+        <EmptyState
+          compact
+          icon="go"
+          title="No initiatives yet"
+          why="An initiative is the project or change doing the work towards one or more objectives, or closing a compliance gap."
+        >
+          No initiatives yet. Create one above.
+        </EmptyState>
       )}
 
       {items.map((i) =>

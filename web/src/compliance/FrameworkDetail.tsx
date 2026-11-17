@@ -9,6 +9,7 @@ import type { ComplianceStatus, ControlNode, EntityStatusCounts } from "../api/c
 import FrameworkForm from "./FrameworkForm";
 import ControlTree from "./ControlTree";
 import { isHttpUrl } from "../ui/url";
+import { confirmAction } from "../ui/confirm";
 
 interface FrameworkDetailProps {
   frameworkId: string;
@@ -87,13 +88,13 @@ export default function FrameworkDetail({ frameworkId, onBack }: FrameworkDetail
     return <div style={{ padding: 16, color: "var(--crit)" }}>Framework not found</div>;
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     const controlCount = countAllControls(framework!.controls);
     const message =
       controlCount > 0
         ? `Deleting '${framework!.name}' will also remove ${controlCount} control(s) recorded under it. Continue?`
         : `Delete framework '${framework!.name}'?`;
-    if (!window.confirm(message)) return;
+    if (!(await confirmAction(message))) return;
     setDeleteError(null);
     deleteMutation.mutate(frameworkId, {
       onSuccess: () => onBack(),

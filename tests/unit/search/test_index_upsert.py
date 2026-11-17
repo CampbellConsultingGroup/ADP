@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import threading
 
+import pytest
+
 from adp.knowledge import embedder as embedder_module
 from adp.search.index import SearchIndex
 
@@ -57,6 +59,7 @@ async def test_changed_or_new_text_is_embedded_in_a_worker_thread():
         assert len(session.statements) == 2  # lookup + upsert
 
 
+@pytest.mark.real_embedding_model  # this test is about the real loader
 def test_providers_share_one_loaded_model(monkeypatch):
     """Each provider used to load its own copy of the model."""
     loads = []

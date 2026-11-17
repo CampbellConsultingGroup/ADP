@@ -18,6 +18,7 @@ import { SCOPE_LABELS, STATUS_LABELS, STATUS_TONES } from "./labels";
 import { useCanManagePatterns } from "./permissions";
 import PinsEditor from "./PinsEditor";
 import { flowchartToSeed } from "./saveAsDiagram";
+import { confirmAction } from "../ui/confirm";
 
 function Plateau({ report }: { report: ConformanceReport }) {
   if (!report.plateau) return null;
@@ -126,7 +127,7 @@ export default function AdoptionPage({ adoptionId, onBack, onGenerateDiagram }: 
             className="ui-btn ui-btn-danger ui-btn-sm"
             style={{ alignSelf: "flex-start" }}
             onClick={async () => {
-              if (!window.confirm(`Delete adoption "${adoption.name}"?`)) return;
+              if (!(await confirmAction(`Delete adoption "${adoption.name}"?`))) return;
               setDeleteError(null);
               try { await del.mutateAsync(); onBack(); } catch (err) { setDeleteError(errorDetail(err)); }
             }}

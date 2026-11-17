@@ -22,6 +22,7 @@ import { checkMetricFields } from "./objectiveMetric";
 import { Button, StatusBadge, type BadgeTone } from "../ui";
 import NavLinkButton from "./NavLinkButton";
 import EditFrame, { useReturnFocus } from "./EditFrame";
+import { confirmAction } from "../ui/confirm";
 
 interface ObjectiveDetailProps {
   objectiveId: string;
@@ -129,9 +130,9 @@ export default function ObjectiveDetail({ objectiveId, onBack, backLabel = "Back
     );
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!objective) return;
-    if (!confirm(`Delete objective "${objective.statement}"?`)) return;
+    if (!(await confirmAction(`Delete objective "${objective.statement}"?`))) return;
     deleteMutation.mutate(objective.id, { onSuccess: onBack });
   }
 

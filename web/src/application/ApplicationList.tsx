@@ -1,5 +1,6 @@
 import type { Application, TimeClassification } from "../api/application";
 import { Button, StatusBadge, type BadgeTone } from "../ui";
+import { EmptyState } from "../ui/primitives";
 
 export const TIME_TONE: Record<TimeClassification, BadgeTone> = {
   Invest: "good",
@@ -23,7 +24,16 @@ export default function ApplicationList({ apps, selectedId, onSelect, onAdd }: P
         <Button variant="primary" size="sm" icon="plus" onClick={onAdd}>Add</Button>
       </div>
       {apps.length === 0 && (
-        <div style={{ padding: 24, textAlign: "center", color: "var(--ink-3)", fontSize: 13 }}>No applications yet.</div>
+        <div style={{ padding: 12 }}>
+          <EmptyState
+            compact
+            icon="ent"
+            title="No applications yet"
+            why="The registry lists every application in the estate, with its owner, health, cost, risk and the capabilities it supports."
+          >
+            No applications yet. Use Add to register the first one.
+          </EmptyState>
+        </div>
       )}
       {apps.map((app) => {
         const active = selectedId === app.id;

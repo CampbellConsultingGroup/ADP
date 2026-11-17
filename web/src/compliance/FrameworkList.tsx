@@ -4,6 +4,7 @@ import { Button } from "../ui";
 import FrameworkForm from "./FrameworkForm";
 import { clickableRow } from "../ui/clickableRow";
 import { useCan } from "../auth/permissions";
+import { EmptyState } from "../ui/primitives";
 
 interface FrameworkListProps {
   onSelectFramework: (frameworkId: string) => void;
@@ -57,9 +58,14 @@ export default function FrameworkList({ onSelectFramework }: FrameworkListProps)
       )}
 
       {items.length === 0 && !showForm && (
-        <div style={{ color: "var(--ink-3)", fontSize: 13 }}>
+        <EmptyState
+          compact
+          icon="check"
+          title="No frameworks yet"
+          why="A framework is a regulation or standard (GDPR, the EU AI Act, SOC 2) broken down into the controls you track compliance against."
+        >
           No frameworks tracked yet. Add one above.
-        </div>
+        </EmptyState>
       )}
 
       {items.map((fw) => (

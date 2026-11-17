@@ -3,6 +3,7 @@ import { useAddStage, useDeleteStage, useReorderStages, useUpdateStage } from ".
 import type { ValueStreamStage } from "../api/business";
 import StageCapsEditor from "./StageCapsEditor";
 import { StageAutomatedBy } from "../agentic/AutomatedBy";
+import { confirmAction } from "../ui/confirm";
 
 interface ValueStreamStageEditorProps {
   vsId: string;
@@ -93,7 +94,11 @@ export default function ValueStreamStageEditor({ vsId, stages }: ValueStreamStag
                 <button onClick={() => handleMoveUp(index)} disabled={index === 0} title="Move up" style={{ ...btnStyle, opacity: index === 0 ? 0.3 : 1 }}>↑</button>
                 <button onClick={() => handleMoveDown(index)} disabled={index === stages.length - 1} title="Move down" style={{ ...btnStyle, opacity: index === stages.length - 1 ? 0.3 : 1 }}>↓</button>
                 <button
-                  onClick={() => deleteStage.mutate(stage.id)}
+                  onClick={async () => {
+                    if (await confirmAction(`Delete stage "${stage.name}"? Its capability links are removed too.`)) {
+                      deleteStage.mutate(stage.id);
+                    }
+                  }}
                   title="Delete stage"
                   style={{ ...btnStyle, color: "var(--crit)" }}
                 >×</button>

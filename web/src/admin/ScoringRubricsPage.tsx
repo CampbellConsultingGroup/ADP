@@ -4,6 +4,7 @@ import RubricEditor from "./RubricEditor";
 import RubricHistory from "./RubricHistory";
 import { clickableRow } from "../ui/clickableRow";
 import { Tabs } from "../ui/Tabs";
+import { confirmAction } from "../ui/confirm";
 
 const CARD: React.CSSProperties = {
   border: "1px solid var(--border)",
@@ -41,9 +42,9 @@ export default function ScoringRubricsPage(): React.ReactElement {
 
   // Warn before discarding unsaved edits when switching rubrics in-app
   // (mirrors AdminPage.tsx's own FR-011 precedent).
-  const trySelect = (rubricId: string) => {
+  const trySelect = async (rubricId: string) => {
     if (isDirty && rubricId !== selectedId) {
-      const proceed = window.confirm(
+      const proceed = await confirmAction(
         "You have unsaved changes to this rubric's weights. Discard them and switch rubrics?",
       );
       if (!proceed) return;

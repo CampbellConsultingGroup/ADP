@@ -7,6 +7,7 @@ import type React from "react";
 import { errorDetail } from "../api/appCapabilities";
 import type { Geography } from "../api/organization";
 import { useCreateGeography, useDeleteGeography, useGeographies } from "../api/organization";
+import { confirmAction } from "../ui/confirm";
 
 const muted: React.CSSProperties = { fontSize: 12, color: "var(--ink-3)" };
 const smallBtn: React.CSSProperties = { background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "var(--accent)", padding: "1px 4px" };
@@ -94,7 +95,7 @@ export default function GeographyTree({ canWrite }: { canWrite: boolean }): Reac
       return n;
     });
   const remove = async (g: Geography) => {
-    if (!confirm(`Remove "${g.name}"? Org units linked to it lose that link.`)) return;
+    if (!(await confirmAction(`Remove "${g.name}"? Org units linked to it lose that link.`))) return;
     try {
       setDelError(null);
       await del.mutateAsync(g.id);

@@ -18,6 +18,7 @@ import {
   autonomyLabel,
   costLabel,
 } from "./autonomy";
+import { confirmAction } from "../ui/confirm";
 
 interface Props {
   agentId: string;
@@ -57,7 +58,7 @@ export default function AgentDetail({ agentId, onBack, onOpenSolution }: Props) 
   const handleDelete = async () => {
     const n = agent.solution_count;
     const scope = n > 0 ? ` It will be removed from ${n} solution${n === 1 ? "" : "s"}.` : "";
-    if (!confirm(`Delete agent "${agent.name}"?${scope}`)) return;
+    if (!(await confirmAction(`Delete agent "${agent.name}"?${scope}`))) return;
     await del.mutateAsync(agentId);
     onBack();
   };

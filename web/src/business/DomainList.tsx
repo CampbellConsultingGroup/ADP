@@ -9,6 +9,7 @@ import { Button, StatusBadge } from "../ui";
 import { CLASSIFICATION_TONE, CLASSIFICATION_LABEL } from "./classification";
 import DomainForm from "./DomainForm";
 import { clickableRow } from "../ui/clickableRow";
+import { confirmAction } from "../ui/confirm";
 
 interface DomainListProps {
   onSelect: (domainId: string) => void;
@@ -77,9 +78,9 @@ export default function DomainList({ onSelect }: DomainListProps) {
               {CLASSIFICATION_LABEL[d.classification] ?? d.classification}
             </StatusBadge>
             <button
-              onClick={(e) => {
+              onClick={async (e) => {
                 e.stopPropagation();
-                if (confirm(`Delete domain "${d.name}"?`)) deleteMutation.mutate(d.id);
+                if (await confirmAction(`Delete domain "${d.name}"?`)) deleteMutation.mutate(d.id);
               }}
               style={{ fontSize: 13, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}
             >

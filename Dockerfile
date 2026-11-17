@@ -39,6 +39,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
+# CPU-only torch first (ADP-blp.69). sentence-transformers needs torch, and the default wheel
+# bundles several gigabytes of NVIDIA CUDA libraries that a CPU-only container never loads --
+# the image was 9.9 GB. With torch already present, the install below keeps this build.
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch
 COPY pyproject.toml ./
 COPY alembic.ini ./
 COPY src/ ./src/

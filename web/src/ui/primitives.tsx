@@ -48,6 +48,26 @@ export function PageHeader({ eyebrow, eyebrowColor, title, lede }: {
   );
 }
 
+/**
+ * What to show when a list has nothing in it (ADP-blp.61): what belongs here and why it matters,
+ * then the next step. Most lists showed one grey line ("No themes yet.") that explained neither.
+ * `children` is the next-step sentence; `action` is an optional button.
+ */
+export function EmptyState({ icon, title, why, children, action, compact }: {
+  icon?: string; title: string; why?: React.ReactNode; children?: React.ReactNode;
+  action?: React.ReactNode; compact?: boolean;
+}): React.ReactElement {
+  return (
+    <div className={`ui-empty${compact ? " compact" : ""}`}>
+      {icon && <div className="em-ic"><Icon name={icon} size={compact ? 26 : 40} style={{ margin: "0 auto" }} /></div>}
+      <h2>{title}</h2>
+      {why && <p className="em-why">{why}</p>}
+      {children && <p>{children}</p>}
+      {action}
+    </div>
+  );
+}
+
 export function KpiTile({ label, icon, value, delta, alert }: {
   label: React.ReactNode; icon?: string; value: React.ReactNode; delta?: React.ReactNode; alert?: boolean;
 }): React.ReactElement {
