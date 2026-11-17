@@ -133,10 +133,7 @@ export default function ControlMappingsEditor({ controlId }: ControlMappingsEdit
                   </span>
                 )}
               </div>
-              {/* 944: initiatives link to five target types only; agents have no initiative linkage. */}
-              {m.target_type !== "agent" && (
-                <LinkedInitiatives controlId={controlId} targetType={m.target_type} targetId={m.target_id} />
-              )}
+              <LinkedInitiatives controlId={controlId} targetType={m.target_type} targetId={m.target_id} />
             </div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
               <button onClick={() => setEditingKey(key)} style={{ fontSize: 11 }}>
@@ -320,7 +317,7 @@ function LinkedInitiatives({
 }
 
 /** 944: an agent target is picked from the registry rather than typed as an id. */
-function AgentPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+export function AgentPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
   const { data, isLoading } = useAgents();
   return (
     <select
@@ -338,7 +335,7 @@ function AgentPicker({ value, onChange }: { value: string; onChange: (id: string
   );
 }
 
-function AgentName({ agentId }: { agentId: string }) {
+export function AgentName({ agentId }: { agentId: string }) {
   const { data } = useAgents();
   return <>{data?.items.find((a) => a.id === agentId)?.name ?? agentId}</>;
 }

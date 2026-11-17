@@ -31,6 +31,7 @@ from adp.compliance.models import ComplianceStatus, MappingTargetType
 from adp.strategy.store import (
     DuplicateLinkError,
     LinkNotFoundError,
+    _control_agent_mapping_mirror,
     _control_application_mapping_mirror,
     _control_capability_mapping_mirror,
     _control_design_mapping_mirror,
@@ -233,6 +234,16 @@ _initiative_control_organization_mapping = sa.Table(
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
 )
 
+# ADP-321: the sixth table (migration 053), for 944's agent mapping target.
+_initiative_control_agent_mapping = sa.Table(
+    "initiative_control_agent_mapping",
+    _metadata,
+    sa.Column("initiative_id", sa.String(36), nullable=False),
+    sa.Column("control_id", sa.String(36), nullable=False),
+    sa.Column("agent_id", sa.String(36), nullable=False),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+)
+
 # Dispatch tables keyed by MappingTargetType -- (link table, target-id column name or None for
 # organization) and (mirror table from adp.strategy.store, target-id column name or None).
 _LINK_TABLE_BY_TARGET_TYPE: dict[MappingTargetType, tuple[sa.Table, str | None]] = {
@@ -241,6 +252,7 @@ _LINK_TABLE_BY_TARGET_TYPE: dict[MappingTargetType, tuple[sa.Table, str | None]]
     MappingTargetType.DESIGN: (_initiative_control_design_mapping, "design_id"),
     MappingTargetType.PATTERN: (_initiative_control_pattern_mapping, "pattern_id"),
     MappingTargetType.ORGANIZATION: (_initiative_control_organization_mapping, None),
+    MappingTargetType.AGENT: (_initiative_control_agent_mapping, "agent_id"),
 }
 
 _MIRROR_BY_TARGET_TYPE: dict[MappingTargetType, tuple[sa.Table, str | None]] = {
@@ -249,6 +261,7 @@ _MIRROR_BY_TARGET_TYPE: dict[MappingTargetType, tuple[sa.Table, str | None]] = {
     MappingTargetType.DESIGN: (_control_design_mapping_mirror, "design_id"),
     MappingTargetType.PATTERN: (_control_pattern_mapping_mirror, "pattern_id"),
     MappingTargetType.ORGANIZATION: (_control_organization_mapping_mirror, None),
+    MappingTargetType.AGENT: (_control_agent_mapping_mirror, "agent_id"),
 }
 
 _objective_dependencies = sa.Table(

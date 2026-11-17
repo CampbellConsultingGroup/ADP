@@ -171,13 +171,13 @@ describe("ControlMappingsEditor agent target (944)", () => {
     );
   });
 
-  it("shows an agent row by name with no initiative linkage", () => {
+  it("shows an agent row by name with its remediation initiatives (ADP-321)", () => {
     mockedApi.useControlMappings.mockReturnValue({
       data: { items: [makeMapping({ target_type: "agent", target_id: "ag-1" })], total: 1 },
       isLoading: false,
     } as unknown as ReturnType<typeof complianceApi.useControlMappings>);
     renderWithQueryClient(<ControlMappingsEditor controlId="c1" />);
     screen.getByText("Agent: Chat assistant");
-    expect(mockedApi.useControlMappingInitiatives).not.toHaveBeenCalled();
+    expect(mockedApi.useControlMappingInitiatives).toHaveBeenCalledWith("c1", "agent", "ag-1");
   });
 });
