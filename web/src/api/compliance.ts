@@ -229,7 +229,7 @@ export type ComplianceStatus =
   | "not_assessed"
   | "not_applicable";
 
-export type MappingTargetType = "capability" | "application" | "design" | "pattern" | "organization";
+export type MappingTargetType = "capability" | "application" | "design" | "pattern" | "organization" | "agent";
 
 export interface ControlMapping {
   control_id: string;
@@ -263,6 +263,7 @@ export const MAPPING_PATH_SEGMENT: Record<MappingTargetType, string> = {
   design: "designs",
   pattern: "patterns",
   organization: "organization",
+  agent: "agents",
 };
 
 function mappingUrl(controlId: string, targetType: MappingTargetType, targetId?: string | null): string {
@@ -298,6 +299,7 @@ export function useUpsertMapping(controlId: string) {
       ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["control-mappings", controlId] });
+      void qc.invalidateQueries({ queryKey: ["agent-compliance"] });
     },
   });
 }
@@ -314,7 +316,35 @@ export function useDeleteMapping(controlId: string) {
       apiMutation<void>("DELETE", mappingUrl(controlId, targetType, targetId)),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["control-mappings", controlId] });
+      void qc.invalidateQueries({ queryKey: ["agent-compliance"] });
     },
+  });
+}
+
+// ── Agent compliance (944-agent-traceability, US2) ────────────────────────────
+// An agent's own mappings and derived status. Never folded into its solution's status (FR-009a).
+
+export interface AgentComplianceMappings {
+  items: ControlMapping[];
+  total: number;
+  status: ComplianceStatus;
+}
+
+export function useAgentComplianceMappings(agentId: string | null) {
+  return useQuery<AgentComplianceMappings>({
+    queryKey: ["agent-compliance", "mappings", agentId],
+    queryFn: () => apiGet(`/api/v1/compliance/agents/${agentId}/mappings`),
+    enabled: !!agentId,
+  });
+}
+
+/** One request for many agents' derived statuses (a solution's Agents tab). */
+export function useAgentComplianceStatuses(agentIds: string[]) {
+  const ids = agentIds.join(",");
+  return useQuery<{ items: { agent_id: string; status: ComplianceStatus }[] }>({
+    queryKey: ["agent-compliance", "statuses", ids],
+    queryFn: () => apiGet(`/api/v1/compliance/agents/statuses?ids=${encodeURIComponent(ids)}`),
+    enabled: agentIds.length > 0,
   });
 }
 

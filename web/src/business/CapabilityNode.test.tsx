@@ -14,9 +14,11 @@ import * as businessApi from "../api/business";
 import * as complianceApi from "../api/compliance";
 import * as capAnalysisApi from "../api/capAnalysis";
 import type { CapabilityTreeNode } from "./CapabilityTree";
+import * as agenticApi from "../api/agentic";
 
 vi.mock("../api/business");
 vi.mock("../api/compliance");
+vi.mock("../api/agentic");
 vi.mock("../api/capAnalysis", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../api/capAnalysis")>()),
   useBusinessTechnology: vi.fn(),
@@ -196,5 +198,31 @@ describe("CapabilityNode technology dependencies (938-capability-model-analysis 
     renderWithQueryClient(<CapabilityNode capability={L3} selected={false} onToggleSelect={vi.fn()}>{null}</CapabilityNode>);
     await user.click(screen.getByRole("button", { name: /Technology dependencies/ }));
     expect(screen.getByText(/No technical capability is reached/)).toBeTruthy();
+  });
+});
+
+
+describe("CapabilityNode automated by agents (944)", () => {
+  it("lists the agents that automate an L3 capability on expand", async () => {
+    vi.mocked(agenticApi.useAutomatedBy).mockReturnValue({
+      data: {
+        items: [{
+          id: "ag-1", name: "Payment Agent", lifecycle_status: "active", autonomy_level: 3,
+          agentic_risk: { band: "high", factors: [], missing: [], not_considered: ["tool_side_effects"] },
+        }],
+        total: 1,
+      },
+      isLoading: false,
+    } as never);
+    renderWithQueryClient(<CapabilityNode capability={{ ...CAPABILITY, level: 3, parent_id: "p" }} selected={false} onToggleSelect={vi.fn()}>{null}</CapabilityNode>);
+    expect(screen.queryByText("Payment Agent")).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: /Automated by agents/ }));
+    screen.getByText("Payment Agent");
+    screen.getByText("High risk");
+  });
+
+  it("has no automated-by expander on L1/L2 rows", () => {
+    renderWithQueryClient(<CapabilityNode capability={CAPABILITY} selected={false} onToggleSelect={vi.fn()}>{null}</CapabilityNode>);
+    expect(screen.queryByRole("button", { name: /Automated by agents/ })).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useAddStage, useDeleteStage, useReorderStages, useUpdateStage } from "../api/business";
 import type { ValueStreamStage } from "../api/business";
 import StageCapsEditor from "./StageCapsEditor";
+import { StageAutomatedBy } from "../agentic/AutomatedBy";
 
 interface ValueStreamStageEditorProps {
   vsId: string;
@@ -103,6 +104,8 @@ export default function ValueStreamStageEditor({ vsId, stages }: ValueStreamStag
           {/* Stage capabilities (ADP-SPEC-035) */}
           <div style={{ padding: "6px 12px 10px 12px", borderTop: "1px solid var(--surface-2)" }}>
             <StageCapsEditor vsId={vsId} stageId={stage.id} />
+            {/* 944: agents that automate this stage (edited on the agent). */}
+            <StageAutomatedBy stageId={stage.id} />
           </div>
         </div>
       ))}

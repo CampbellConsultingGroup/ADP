@@ -3,7 +3,9 @@
 Writes `<root>/agentic/agents/<agent_id>.json` -- every agent's fields plus the solutions it
 belongs to (`solutions: [{app_id, role, position}]`). Cost estimates are exported unredacted,
 matching adp.export.application_arch's documented treatment of application cost (research.md D8).
-Two queries per cycle (agents, memberships) -- no N+1. Reuses adp.export.common verbatim: atomic,
+944-agent-traceability adds `automates` (capabilities / stages / activities, id and name) and
+`compliance_mappings` (control, framework, status). A fixed six queries per cycle -- no N+1.
+Reuses adp.export.common verbatim: atomic,
 content-diff-aware writes, orphan cleanup, opt-in background loop sharing
 ADP_BUSINESS_ARCH_EXPORT_ROOT/_INTERVAL_SECONDS with the other export domains.
 """
@@ -22,14 +24,25 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.agentic import store as agstore
+from adp.compliance import store as cstore
 from adp.export import common
 from adp.export.common import _cleanup_orphan_files, _safe_filename, _write_entity_file
 
 _logger = logging.getLogger("adp.export.agentic")
 
 
-def _serialize_agent(row: Any, solutions: list[dict[str, Any]]) -> dict[str, Any]:
-    """Pure: one agent row + its memberships → the exported JSON document."""
+_EMPTY_AUTOMATES: dict[str, list[dict[str, str]]] = {
+    "capabilities": [], "stages": [], "activities": [],
+}
+
+
+def _serialize_agent(
+    row: Any,
+    solutions: list[dict[str, Any]],
+    automates: dict[str, list[dict[str, str]]] | None = None,
+    compliance_mappings: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Pure: one agent row + its memberships, links and mappings → the exported JSON document."""
     cost = row.est_cost_per_run
     return {
         "id": row.id,
@@ -50,7 +63,58 @@ def _serialize_agent(row: Any, solutions: list[dict[str, Any]]) -> dict[str, Any
         "runs_per_month": row.runs_per_month,
         "external_registry_ref": row.external_registry_ref,
         "solutions": sorted(solutions, key=lambda s: s["app_id"]),
+        "automates": {
+            kind: sorted(items, key=lambda t: t["id"])
+            for kind, items in (automates or _EMPTY_AUTOMATES).items()
+        },
+        "compliance_mappings": sorted(
+            compliance_mappings or [], key=lambda m: m["control_id"]
+        ),
     }
+
+
+async def _fetch_automates(session: AsyncSession) -> dict[str, dict[str, list[dict[str, str]]]]:
+    """agent_id -> {capabilities, stages, activities}: three queries, inner-joined to the target
+    mirrors so a dangling link never surfaces."""
+    out: dict[str, dict[str, list[dict[str, str]]]] = defaultdict(
+        lambda: {"capabilities": [], "stages": [], "activities": []}
+    )
+    for key, (table, col, mirror) in (
+        ("capabilities", agstore._LINKS["capability"]),
+        ("stages", agstore._LINKS["stage"]),
+        ("activities", agstore._LINKS["activity"]),
+    ):
+        result = await session.execute(
+            sa.select(table.c.agent_id, mirror.c.id, mirror.c.name).select_from(
+                table.join(mirror, mirror.c.id == table.c[col])
+            )
+        )
+        for r in result:
+            out[r.agent_id][key].append({"id": r.id, "name": r.name})
+    return out
+
+
+async def _fetch_compliance(session: AsyncSession) -> dict[str, list[dict[str, Any]]]:
+    """agent_id -> its control mappings with control code and framework: one query."""
+    m, c, f = cstore._control_agent_mapping, cstore._controls, cstore._frameworks
+    result = await session.execute(
+        sa.select(
+            m.c.agent_id, m.c.control_id, m.c.compliance_status,
+            c.c.code, c.c.framework_id, f.c.name.label("framework_name"),
+        ).select_from(m.join(c, c.c.id == m.c.control_id).join(f, f.c.id == c.c.framework_id))
+    )
+    out: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for r in result:
+        out[r.agent_id].append(
+            {
+                "control_id": r.control_id,
+                "control_code": r.code,
+                "framework_id": r.framework_id,
+                "framework_name": r.framework_name,
+                "compliance_status": r.compliance_status,
+            }
+        )
+    return out
 
 
 async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSession) -> None:
@@ -64,12 +128,16 @@ async def run_reconciliation_cycle(export_root: Path | str, session: AsyncSessio
                 {"app_id": m.solution_app_id, "role": m.role, "position": m.position}
             )
 
+        automates = await _fetch_automates(session)
+        compliance = await _fetch_compliance(session)
+
         root = Path(export_root) / "agentic" / "agents"
         now = datetime.now(timezone.utc)
         for row in agents:
-            _write_entity_file(
-                root / _safe_filename(row.id), _serialize_agent(row, memberships[row.id]), now
+            doc = _serialize_agent(
+                row, memberships[row.id], automates.get(row.id), compliance.get(row.id)
             )
+            _write_entity_file(root / _safe_filename(row.id), doc, now)
         _cleanup_orphan_files(root, {row.id for row in agents})
     except Exception:
         _logger.warning("agentic_export.cycle_failed", exc_info=True)

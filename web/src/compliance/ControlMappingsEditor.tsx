@@ -13,6 +13,7 @@ import {
   useDeleteMapping,
   useUpsertMapping,
 } from "../api/compliance";
+import { useAgents } from "../api/agentic";
 
 interface ControlMappingsEditorProps {
   controlId: string;
@@ -27,6 +28,7 @@ export const TARGET_TYPE_LABEL: Record<MappingTargetType, string> = {
   design: "Design",
   pattern: "Pattern",
   organization: "Estate-wide (organization)",
+  agent: "Agent",
 };
 
 const STATUS_OPTIONS: ComplianceStatus[] = [
@@ -112,7 +114,11 @@ export default function ControlMappingsEditor({ controlId }: ControlMappingsEdit
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, fontWeight: 500, color: "var(--ink)" }}>
                 {TARGET_TYPE_LABEL[m.target_type]}
-                {m.target_id ? `: ${m.target_id}` : ""}
+                {m.target_type === "agent" && m.target_id ? (
+                  <>: <AgentName agentId={m.target_id} /></>
+                ) : (
+                  m.target_id ? `: ${m.target_id}` : ""
+                )}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 2 }}>
                 <span style={{ fontSize: 11, fontWeight: 600, color: STATUS_COLOR[m.compliance_status] }}>
@@ -127,7 +133,10 @@ export default function ControlMappingsEditor({ controlId }: ControlMappingsEdit
                   </span>
                 )}
               </div>
-              <LinkedInitiatives controlId={controlId} targetType={m.target_type} targetId={m.target_id} />
+              {/* 944: initiatives link to five target types only; agents have no initiative linkage. */}
+              {m.target_type !== "agent" && (
+                <LinkedInitiatives controlId={controlId} targetType={m.target_type} targetId={m.target_id} />
+              )}
             </div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
               <button onClick={() => setEditingKey(key)} style={{ fontSize: 11 }}>
@@ -228,7 +237,10 @@ function MappingForm({
               ))}
             </select>
           </label>
-          {targetType !== "organization" && (
+          {targetType === "agent" && (
+            <AgentPicker value={targetId} onChange={setTargetId} />
+          )}
+          {targetType !== "organization" && targetType !== "agent" && (
             <input
               value={targetId}
               onChange={(e) => setTargetId(e.target.value)}
@@ -305,4 +317,28 @@ function LinkedInitiatives({
       Remediation: {items.map((i) => i.name).join(", ")}
     </div>
   );
+}
+
+/** 944: an agent target is picked from the registry rather than typed as an id. */
+function AgentPicker({ value, onChange }: { value: string; onChange: (id: string) => void }) {
+  const { data, isLoading } = useAgents();
+  return (
+    <select
+      aria-label="Agent"
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={isLoading}
+      style={{ fontSize: 13 }}
+    >
+      <option value="">{isLoading ? "Loading agents…" : "Choose an agent…"}</option>
+      {(data?.items ?? []).map((a) => (
+        <option key={a.id} value={a.id}>{a.name}</option>
+      ))}
+    </select>
+  );
+}
+
+function AgentName({ agentId }: { agentId: string }) {
+  const { data } = useAgents();
+  return <>{data?.items.find((a) => a.id === agentId)?.name ?? agentId}</>;
 }

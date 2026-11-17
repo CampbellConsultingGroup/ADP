@@ -173,6 +173,15 @@ _control_organization_mapping = sa.Table(
     *_mapping_columns(),
 )
 
+# 944-agent-traceability (migration 052): the sixth mapping target. FKs live in the migration.
+_control_agent_mapping = sa.Table(
+    "control_agent_mapping",
+    _metadata,
+    sa.Column("control_id", sa.String(36), primary_key=True),
+    sa.Column("agent_id", sa.String(36), primary_key=True),
+    *_mapping_columns(),
+)
+
 # ── Narrow mirror tables for target existence/kind validation (research.md D4) ─
 # Only the columns needed for validation -- not full domain objects. Same
 # physical Postgres database, same session; extends adp.strategy.store's own
@@ -187,6 +196,14 @@ _applications_mirror = sa.Table(
 )
 _designs_mirror = sa.Table(
     "designs", _metadata, sa.Column("id", sa.Text(), primary_key=True)
+)
+# Narrow mirror of adp.agentic's agents table (944). Fixtures that also create adp.agentic.store's
+# metadata must create it FIRST; create_all(checkfirst) then skips this mirror.
+_agents_mirror = sa.Table(
+    "agents",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.String(255), nullable=False),
 )
 _knowledge_items_mirror = sa.Table(
     "knowledge_items",
@@ -658,6 +675,14 @@ async def design_exists(design_id: str, session: AsyncSession) -> bool:
     return result.first() is not None
 
 
+async def agent_exists(agent_id: str, session: AsyncSession) -> bool:
+    """944: an agent mapping target exists (narrow mirror of adp.agentic's agents table)."""
+    result = await session.execute(
+        sa.select(_agents_mirror.c.id).where(_agents_mirror.c.id == agent_id)
+    )
+    return result.first() is not None
+
+
 async def get_knowledge_item_kind(pattern_id: str, session: AsyncSession) -> str | None:
     """Returns the knowledge_items row's `kind`, or None if pattern_id doesn't exist -- feeds
     both existence and the D5 kind == 'pattern' check in one query."""
@@ -800,6 +825,20 @@ async def upsert_pattern_mapping(
     )
 
 
+async def upsert_agent_mapping(
+    control_id: str, agent_id: str, data: ControlMappingWrite, session: AsyncSession
+) -> ControlMapping:
+    """944: the sixth mapping target (research.md R4), same shape as the other entity targets."""
+    if await get_control(control_id, session) is None:
+        raise ControlNotFoundError(control_id)
+    if not await agent_exists(agent_id, session):
+        raise MappingTargetNotFoundError("agent", agent_id)
+    return await _upsert_entity_mapping(
+        _control_agent_mapping, "agent_id", MappingTargetType.AGENT,
+        control_id, agent_id, data, session,
+    )
+
+
 async def upsert_organization_mapping(
     control_id: str, data: ControlMappingWrite, session: AsyncSession
 ) -> ControlMapping:
@@ -876,6 +915,11 @@ async def list_mappings_for_control(
     mappings += [
         _row_to_mapping(row, MappingTargetType.PATTERN, row.pattern_id) for row in result
     ]
+
+    result = await session.execute(
+        sa.select(_control_agent_mapping).where(_control_agent_mapping.c.control_id == control_id)
+    )
+    mappings += [_row_to_mapping(row, MappingTargetType.AGENT, row.agent_id) for row in result]
 
     result = await session.execute(
         sa.select(_control_organization_mapping).where(
@@ -993,6 +1037,43 @@ async def delete_pattern_mapping(
         raise MappingNotFoundError(control_id, "pattern", pattern_id)
 
 
+async def list_mappings_for_agent(agent_id: str, session: AsyncSession) -> list[ControlMapping]:
+    result = await session.execute(
+        sa.select(_control_agent_mapping).where(_control_agent_mapping.c.agent_id == agent_id)
+    )
+    return [_row_to_mapping(row, MappingTargetType.AGENT, row.agent_id) for row in result]
+
+
+async def delete_agent_mapping(control_id: str, agent_id: str, session: AsyncSession) -> None:
+    result = await session.execute(
+        _control_agent_mapping.delete().where(
+            sa.and_(
+                _control_agent_mapping.c.control_id == control_id,
+                _control_agent_mapping.c.agent_id == agent_id,
+            )
+        )
+    )
+    if _rowcount(result) == 0:
+        raise MappingNotFoundError(control_id, "agent", agent_id)
+
+
+async def get_agent_statuses(
+    agent_ids: list[str], session: AsyncSession
+) -> dict[str, ComplianceStatus]:
+    """944 (FR-009a): each agent's derived status, in one query. Unknown or unmapped ids give
+    NOT_ASSESSED. Never folded into a solution's own status."""
+    statuses: dict[str, list[ComplianceStatus]] = {a: [] for a in agent_ids}
+    if agent_ids:
+        result = await session.execute(
+            sa.select(
+                _control_agent_mapping.c.agent_id, _control_agent_mapping.c.compliance_status
+            ).where(_control_agent_mapping.c.agent_id.in_(agent_ids))
+        )
+        for r in result:
+            statuses[r.agent_id].append(ComplianceStatus(r.compliance_status))
+    return {a: compute_compliance_status(s) for a, s in statuses.items()}
+
+
 async def delete_organization_mapping(control_id: str, session: AsyncSession) -> None:
     result = await session.execute(
         _control_organization_mapping.delete().where(
@@ -1015,6 +1096,7 @@ _SUPPORTED_ENTITY_TYPES = (
     MappingTargetType.APPLICATION,
     MappingTargetType.DESIGN,
     MappingTargetType.PATTERN,
+    MappingTargetType.AGENT,
 )
 
 
@@ -1074,6 +1156,8 @@ async def get_entity_compliance_status(
         mappings = await list_mappings_for_application(entity_id, session)
     elif entity_type == MappingTargetType.DESIGN:
         mappings = await list_mappings_for_design(entity_id, session)
+    elif entity_type == MappingTargetType.AGENT:
+        mappings = await list_mappings_for_agent(entity_id, session)
     else:
         mappings = await list_mappings_for_pattern(entity_id, session)
 
@@ -1189,6 +1273,21 @@ async def _framework_entity_rows(framework_id: str, session: AsyncSession) -> li
         for r in result
     ]
 
+    # 944: agents are counted alongside the other entity targets (FR-010).
+    result = await session.execute(
+        sa.select(_control_agent_mapping.c.agent_id, _control_agent_mapping.c.compliance_status)
+        .select_from(
+            _control_agent_mapping.join(
+                _controls, _control_agent_mapping.c.control_id == _controls.c.id
+            )
+        )
+        .where(_controls.c.framework_id == framework_id)
+    )
+    rows += [
+        (MappingTargetType.AGENT, r.agent_id, ComplianceStatus(r.compliance_status))
+        for r in result
+    ]
+
     return rows
 
 
@@ -1280,6 +1379,14 @@ async def _estate_entity_rows(session: AsyncSession) -> list[_EntityRow]:
     )
     rows += [
         (MappingTargetType.PATTERN, r.pattern_id, ComplianceStatus(r.compliance_status))
+        for r in result
+    ]
+
+    result = await session.execute(
+        sa.select(_control_agent_mapping.c.agent_id, _control_agent_mapping.c.compliance_status)
+    )
+    rows += [
+        (MappingTargetType.AGENT, r.agent_id, ComplianceStatus(r.compliance_status))
         for r in result
     ]
 

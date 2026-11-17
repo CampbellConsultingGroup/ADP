@@ -14,6 +14,9 @@ import {
 } from "../api/agentic";
 import type { AgentWrite, SolutionRole } from "../api/agentic";
 import AgentForm from "./AgentForm";
+import { useAgentComplianceStatuses } from "../api/compliance";
+import { RiskBadge, SolutionRiskBanner } from "./agenticRisk";
+import { ComplianceStatusText } from "./ComplianceStatusText";
 import { HUMAN_APPROVAL_LABELS, ROLE_LABELS, autonomyLabel } from "./autonomy";
 
 const ROLES = Object.keys(ROLE_LABELS) as SolutionRole[];
@@ -37,6 +40,9 @@ export default function SolutionAgentsPanel({ appId }: { appId: string }) {
 
   const members = data?.items ?? [];
   const memberIds = new Set(members.map((m) => m.agent.id));
+  // 944 (FR-009a): each agent's own compliance status, in one request; never the solution's.
+  const { data: compliance } = useAgentComplianceStatuses(members.map((m) => m.agent.id));
+  const complianceOf = new Map((compliance?.items ?? []).map((c) => [c.agent_id, c.status]));
   const candidates = (allAgents?.items ?? []).filter((a) => !memberIds.has(a.id));
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -86,6 +92,7 @@ export default function SolutionAgentsPanel({ appId }: { appId: string }) {
         registry (Agents screen) and can belong to several solutions.
       </p>
       {error && <div role="alert" style={{ color: "var(--crit)", fontSize: 13 }}>{error}</div>}
+      {data?.solution_risk && <SolutionRiskBanner risk={data.solution_risk} />}
 
       {members.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--ink-3)" }}>No agents yet.</div>
@@ -93,7 +100,7 @@ export default function SolutionAgentsPanel({ appId }: { appId: string }) {
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              {["#", "Agent", "Role", "Autonomy", "Approval", "Model", ""].map((h) => (
+              {["#", "Agent", "Role", "Autonomy", "Approval", "Risk", "Compliance", "Model", ""].map((h) => (
                 <th key={h} style={{ ...cell, textAlign: "left", color: "var(--ink-3)", fontWeight: 600 }}>{h}</th>
               ))}
             </tr>
@@ -118,6 +125,10 @@ export default function SolutionAgentsPanel({ appId }: { appId: string }) {
                 </td>
                 <td style={cell}>{autonomyLabel(m.agent.autonomy_level)}</td>
                 <td style={cell}>{HUMAN_APPROVAL_LABELS[m.agent.human_approval]}</td>
+                <td style={cell}><RiskBadge band={m.agent.agentic_risk.band} /></td>
+                <td style={cell}>
+                  {complianceOf.get(m.agent.id) ? <ComplianceStatusText status={complianceOf.get(m.agent.id)!} /> : "—"}
+                </td>
                 <td style={cell}>{[m.agent.model_provider, m.agent.model_id].filter(Boolean).join(" · ") || "—"}</td>
                 <td style={{ ...cell, whiteSpace: "nowrap" }}>
                   <button type="button" style={smallBtn} aria-label={`Move ${m.agent.name} up`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>{" "}

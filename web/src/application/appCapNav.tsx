@@ -43,6 +43,8 @@ export interface CapabilityNav {
   openApplication: (id: string) => void;
   /** Technical Architecture, scrolled to and highlighting the capability. */
   openTechnicalCapability: (id: string) => void;
+  /** 944: Agents, with the agent open. Optional so screens that predate it need no change. */
+  openAgent?: (id: string) => void;
 }
 
 export const CapabilityNavContext = createContext<CapabilityNav | null>(null);

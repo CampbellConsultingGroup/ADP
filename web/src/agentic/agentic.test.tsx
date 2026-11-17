@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as agenticApi from "../api/agentic";
+import * as complianceApi from "../api/compliance";
 import type { Agent, AgentDetail as AgentDetailType, SolutionAgent } from "../api/agentic";
 import AgentForm from "./AgentForm";
 import AgentDetail from "./AgentDetail";
@@ -14,6 +15,10 @@ import SolutionAgentsPanel from "./SolutionAgentsPanel";
 import { costLabel } from "./autonomy";
 
 vi.mock("../api/agentic");
+// 944: Agent detail's Automates and Compliance sections have their own tests.
+vi.mock("./AgentAutomates", () => ({ default: () => null }));
+vi.mock("./AgentCompliance", () => ({ default: () => null }));
+vi.mock("../api/compliance");
 const api = vi.mocked(agenticApi);
 
 function agent(overrides: Partial<Agent> = {}): Agent {
@@ -37,6 +42,12 @@ function agent(overrides: Partial<Agent> = {}): Agent {
     cost_visible: true,
     external_registry_ref: null,
     solution_count: 0,
+    agentic_risk: {
+      band: "medium",
+      factors: [{ code: "autonomy", label: "autonomy 2" }],
+      missing: [],
+      not_considered: ["tool_side_effects"],
+    },
     created_at: "2026-11-13T00:00:00Z",
     updated_at: "2026-11-13T00:00:00Z",
     ...overrides,
@@ -49,6 +60,9 @@ function mutation(mutateAsync = vi.fn().mockResolvedValue({})) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(complianceApi.useAgentComplianceStatuses).mockReturnValue({
+    data: { items: [{ agent_id: "a", status: "partial" }] },
+  } as never);
   api.errorDetail.mockImplementation((err: unknown) => (err instanceof Error ? err.message : String(err)));
   for (const hook of [
     "useCreateAgent",
@@ -138,6 +152,33 @@ describe("SolutionAgentsPanel", () => {
     api.useAgents.mockReturnValue({
       data: { items: [members[0].agent, members[1].agent, agent({ id: "c", name: "Spare" })], total: 3 },
     } as never);
+  });
+
+  it("shows the solution's risk band, each member's band and compliance (944)", () => {
+    api.useSolutionAgents.mockReturnValue({
+      data: {
+        items: members,
+        total: 2,
+        solution_risk: { band: "high", agents: [{ id: "a", name: "Orchestrator" }], not_considered: ["tool_side_effects"] },
+      },
+      isLoading: false,
+    } as never);
+    render(<SolutionAgentsPanel appId="app-1" />);
+    const banner = screen.getByRole("status", { name: "Solution agentic risk" });
+    expect(within(banner).getByText("High risk")).toBeTruthy();
+    expect(within(banner).getByText(/set by Orchestrator/)).toBeTruthy();
+    expect(within(banner).getByText(/Tool side effects are not yet considered/)).toBeTruthy();
+    expect(screen.getAllByText("Medium risk")).toHaveLength(2);
+    expect(screen.getByText("Partial")).toBeTruthy();
+  });
+
+  it("says No agents when the solution has no counted agents (944)", () => {
+    api.useSolutionAgents.mockReturnValue({
+      data: { items: [], total: 0, solution_risk: { band: null, agents: [], not_considered: ["tool_side_effects"] } },
+      isLoading: false,
+    } as never);
+    render(<SolutionAgentsPanel appId="app-1" />);
+    expect(screen.getByText("No agents")).toBeTruthy();
   });
 
   it("lists members in order and only offers non-members to add", async () => {

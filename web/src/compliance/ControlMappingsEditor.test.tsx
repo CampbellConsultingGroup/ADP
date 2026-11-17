@@ -9,8 +9,10 @@ import type { ReactElement } from "react";
 import ControlMappingsEditor from "./ControlMappingsEditor";
 import * as complianceApi from "../api/compliance";
 import type { ControlMapping } from "../api/compliance";
+import * as agenticApi from "../api/agentic";
 
 vi.mock("../api/compliance");
+vi.mock("../api/agentic");
 
 const mockedApi = vi.mocked(complianceApi);
 
@@ -41,6 +43,9 @@ beforeEach(() => {
   mockedApi.useDeleteMapping.mockReturnValue({
     mutate: deleteMutate, isPending: false,
   } as unknown as ReturnType<typeof complianceApi.useDeleteMapping>);
+  vi.mocked(agenticApi.useAgents).mockReturnValue({
+    data: { items: [{ id: "ag-1", name: "Chat assistant" }], total: 1 }, isLoading: false,
+  } as never);
   // 925-strategy-compliance-linkage: "Linked Initiatives" read-only line, empty by default.
   mockedApi.useControlMappingInitiatives.mockReturnValue({
     data: { items: [], total: 0 },
@@ -145,5 +150,34 @@ describe("ControlMappingsEditor (COMPLY-02)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Remove" }));
 
     expect(deleteMutate).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("ControlMappingsEditor agent target (944)", () => {
+  it("picks an agent from the registry and submits an agent mapping", async () => {
+    mockedApi.useControlMappings.mockReturnValue({
+      data: { items: [], total: 0 }, isLoading: false,
+    } as unknown as ReturnType<typeof complianceApi.useControlMappings>);
+    renderWithQueryClient(<ControlMappingsEditor controlId="c1" />);
+    await userEvent.click(screen.getByRole("button", { name: "+ Add mapping" }));
+    await userEvent.selectOptions(screen.getByLabelText("Target type"), "Agent");
+    expect(screen.queryByPlaceholderText(/id$/)).toBeNull();
+    await userEvent.selectOptions(screen.getByLabelText("Agent"), "ag-1");
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(upsertMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ targetType: "agent", targetId: "ag-1" }),
+      expect.anything(),
+    );
+  });
+
+  it("shows an agent row by name with no initiative linkage", () => {
+    mockedApi.useControlMappings.mockReturnValue({
+      data: { items: [makeMapping({ target_type: "agent", target_id: "ag-1" })], total: 1 },
+      isLoading: false,
+    } as unknown as ReturnType<typeof complianceApi.useControlMappings>);
+    renderWithQueryClient(<ControlMappingsEditor controlId="c1" />);
+    screen.getByText("Agent: Chat assistant");
+    expect(mockedApi.useControlMappingInitiatives).not.toHaveBeenCalled();
   });
 });

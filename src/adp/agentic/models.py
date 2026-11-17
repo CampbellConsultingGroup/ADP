@@ -74,6 +74,58 @@ class OrderMismatchError(Exception):
     """Raised when a reorder's id list is not exactly the solution's current members."""
 
 
+# 944-agent-traceability (ADP-12x): automates links.
+
+
+class TargetNotFoundError(Exception):
+    """Raised when a capability, stage or activity id does not exist."""
+
+
+class LevelRuleError(Exception):
+    """Raised when an agent is linked to a business capability that isn't L3 (FR-002)."""
+
+
+class DuplicateLinkError(Exception):
+    """Raised when the agent already automates the target."""
+
+
+class LinkNotFoundError(Exception):
+    """Raised when removing a link that doesn't exist."""
+
+
+# ── Agentic risk (944, derived on read, never stored) ─────────────────────────
+
+RiskBand = Literal["high", "medium", "low"]
+RiskFactorCode = Literal["autonomy", "no_human_approval", "sensitive_data"]
+MissingInput = Literal["data_classification"]
+NotConsidered = Literal["tool_side_effects"]
+
+
+class RiskFactor(BaseModel):
+    code: RiskFactorCode
+    label: str
+
+
+class AgenticRisk(BaseModel):
+    band: RiskBand
+    factors: list[RiskFactor] = Field(default_factory=list)
+    missing: list[MissingInput] = Field(default_factory=list)
+    not_considered: list[NotConsidered] = Field(default_factory=list)
+
+
+class RiskAgentRef(BaseModel):
+    id: str
+    name: str
+
+
+class SolutionAgenticRisk(BaseModel):
+    """band None means the solution has no non-retired agents ("No agents")."""
+
+    band: RiskBand | None
+    agents: list[RiskAgentRef] = Field(default_factory=list)
+    not_considered: list[NotConsidered] = Field(default_factory=list)
+
+
 # ── Agents ────────────────────────────────────────────────────────────────────
 
 
@@ -145,6 +197,7 @@ class Agent(BaseModel):
     cost_visible: bool = True
     external_registry_ref: str | None = None
     solution_count: int = 0
+    agentic_risk: AgenticRisk
     created_at: datetime
     updated_at: datetime
 
@@ -192,4 +245,66 @@ class SolutionAgent(BaseModel):
 
 class SolutionAgentListResponse(BaseModel):
     items: list[SolutionAgent]
+    total: int
+    solution_risk: SolutionAgenticRisk
+
+
+# ── Automates links (944) ─────────────────────────────────────────────────────
+
+AutomatesKind = Literal["capability", "stage", "activity"]
+
+
+class CapabilityLinkCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    capability_id: str
+
+
+class StageLinkCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    stage_id: str
+
+
+class ActivityLinkCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    activity_id: str
+
+
+class AutomatesCapability(BaseModel):
+    id: str
+    name: str
+    level: int
+    path: list[str]
+
+
+class AutomatesStage(BaseModel):
+    id: str
+    name: str
+    value_stream_id: str
+    value_stream_name: str
+
+
+class AutomatesActivity(BaseModel):
+    id: str
+    name: str
+    category: Literal["primary", "support"]
+    value_chain_id: str
+    value_chain_name: str
+
+
+class AgentAutomates(BaseModel):
+    capabilities: list[AutomatesCapability] = Field(default_factory=list)
+    stages: list[AutomatesStage] = Field(default_factory=list)
+    activities: list[AutomatesActivity] = Field(default_factory=list)
+
+
+class AgentSummary(BaseModel):
+    id: str
+    name: str
+    lifecycle_status: AgentLifecycle
+    autonomy_level: int
+    agentic_risk: AgenticRisk
+
+
+class AgentSummaryListResponse(BaseModel):
+    items: list[AgentSummary]
     total: int

@@ -115,6 +115,7 @@ Auto-generated from all feature plans. Last updated: 2026-11-14 (934-pattern-met
 - PostgreSQL 16. Migration `043` (`down_revision="042"`) adds two new tables and re-creates one CHECK constraint on `applications`. (933-agent-registry)
 - Python 3.12 runtime, 3.11+ compatible. + Pydantic v2 and `pyyaml>=6.0` (both existing). **One new runtime dependency:** `cel-expr-python==0.1.4`, pinned exactly (research D1). It ships cp311/cp312 manylinux_2_28 wheels and has no transitive dependencies. (934-pattern-metamodel)
 
+- Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; agent traceability (ADP-12x): agent -> business L3 / value stream stage / value chain activity "automates" links owned by `adp.agentic` (narrow mirrors, reverse lookups on the agentic router), `MappingTargetType.AGENT` + `control_agent_mapping` in `adp.compliance` (no initiative linkage), pure `adp.agentic.risk` band derived on read; migration `052` (4 tables, additive) (944-agent-traceability, implemented)
 - Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; mapping rationale (target/tactical/transitional/redundant) + optional geography on 937's app_capability_realizations, migration `051` (2 nullable columns, CHECK, FK SET NULL in the migration only); 938 overlaps derive needs_attention/explained + reasons on read (943-mapping-rationale)
 - Python 3.12 (3.11+) and TypeScript 5.x + React 18 (existing). + FastAPI, SQLAlchemy 2 async Core, Alembic, Pydantic v2, TanStack Query v5. All existing; **zero new packages**. (938-capability-model-analysis)
 - Python 3.12 (3.11+) + TypeScript 5.x/React 18 -- existing stacks, zero new packages; new `adp.organization` package (org units + geography, routes under `/api/v1/business/`), ISO 3166/UN M49 data committed as `src/adp/organization/data/geographies.json`, migration `048` (org_units, geographies seeded, org_unit_geographies, applications.owning_org_unit_id) (940-org-units-geography)
@@ -171,6 +172,37 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 944-agent-traceability: Implemented (ADP-12x, Agentic P3 of `docs/agentic-solutions-plan.md`; clarify
+  2026-11-16: capability links L3 only, the FR-013 risk rule as written, agent and solution compliance kept
+  separate). Three additions to the 933 agent registry, all derived data computed on read.
+  - Automates links (migration `052`, FKs CASCADE only in the migration): agent -> business L3 capability /
+    value stream stage / value chain activity, owned by `adp.agentic` and validated through narrow mirrors
+    (`adp.agentic` still imports no other domain package). Store `add_link/remove_link/get_automates/
+    list_agents_for(kind, ...)`; L3 rule -> `LevelRuleError` 422. Routes under `/api/v1/agentic/`:
+    `/agents/{id}/automates[...]` and reverse lookups `/capabilities|value-stream-stages|
+    value-chain-activities/{id}/agents` (on the agentic router so `adp.business` doesn't import agentic).
+  - Compliance: `MappingTargetType.AGENT` + `control_agent_mapping` (033 shape) in `adp.compliance`;
+    PUT/DELETE `/controls/{id}/mappings/agents/{agent_id}`, GET `/compliance/agents/{id}/mappings` (+ derived
+    status) and `/compliance/agents/statuses?ids=` (max 200). Agents feed `get_entity_compliance_status`,
+    the framework roll-up and the summary. Initiative linkage stays at five types (guard
+    `test_initiative_agent_excluded.py`; follow-on ADP-321). Never filtered by READ_APPLICATION_GOVERNANCE.
+  - Risk: pure `adp.agentic.risk` -- high = autonomy >= 3 and (approval none or confidential/restricted
+    data); medium = autonomy >= 2 or sensitive; else low. `Agent.agentic_risk` on every read (no query);
+    `SolutionAgentListResponse.solution_risk` = highest non-retired member, null = "No agents". Tools are
+    `not_considered` until P2 (ADP-a00 noted). Guard `test_agentic_risk_not_stored.py`.
+  - UI: Agent detail gains Automates (save on choose; stage/activity via stream/chain first), Compliance and
+    risk; Agents list Risk column; Agents tab solution banner + per-agent risk and compliance; "Automated by
+    agents" expander on business L3 rows and list on value stream stages (`web/src/agentic/AutomatedBy.tsx`);
+    Agent target (registry picker) in the control mapping editor; `CapabilityNav.openAgent` +
+    `AgentsPage initialAgentId`. First frontend value chain hooks (`useValueChains/useValueChain`).
+  - Export: agent files gain `automates` and `compliance_mappings` (fixed 6 queries/cycle). Seed phase D: L1
+    "Technology & Architecture" > "Architecture Management" L3s automated by ADP's agents, chat assistant
+    mapped to EU AI Act Art. 50 (framework found by name or created); new tables in WIPE_TABLES (not run).
+  - Gotchas: fixtures creating bstore + agstore must create bstore first; agstore before cstore (cstore
+    mirrors `agents`). `ValueStreamStageEditor.tsx` is CRLF -- edit with newline-preserving I/O.
+  - Tests: 2740 backend, 839 frontend. Verified live (migration up/down/up on Postgres, curl quickstart,
+    Playwright). Follow-on ADP-aav (agents on a future value chain activity screen).
+    See `specs/944-agent-traceability/`.
 - 943-mapping-rationale: Implemented (ADP-55k.4, spec 4 of 4 in epic ADP-55k; clarify 2026-11-16 confirmed
   all four defaults). 937's realization link (application capability L3 <-> application) gains an optional
   `rationale` (target / tactical / transitional / redundant; NULL = unclassified) and an optional `geography_id`

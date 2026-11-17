@@ -20,18 +20,29 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from adp.agentic.models import (
     Agent,
+    AgentAutomates,
     AgentCreate,
     AgentDetail,
     AgentNotFoundError,
     AgentSolution,
+    AgentSummary,
     AgentUpdate,
+    AutomatesActivity,
+    AutomatesCapability,
+    AutomatesKind,
+    AutomatesStage,
+    DuplicateLinkError,
     DuplicateSolutionAgentError,
+    LevelRuleError,
+    LinkNotFoundError,
     MembershipNotFoundError,
     NotAgenticSolutionError,
     OrderMismatchError,
     SolutionAgent,
     SolutionNotFoundError,
+    TargetNotFoundError,
 )
+from adp.agentic.risk import agent_risk
 from adp.search import ENTITY_AGENT, build_text, index_entity, unindex_entity
 
 _metadata = sa.MetaData()
@@ -77,6 +88,66 @@ _applications_mirror = sa.Table(
     sa.Column("id", sa.String(36), primary_key=True),
     sa.Column("name", sa.String(255), nullable=False),
     sa.Column("application_type", sa.Text()),
+)
+
+# ── Automates links (944-agent-traceability, migration 052) ───────────────────
+# Plain columns: the FKs (CASCADE on both legs) exist only in the migration, because the targets
+# live on adp.business's metadata (research.md R1, 940's owning_org_unit_id precedent).
+
+
+def _link_table(name: str, target_col: str) -> sa.Table:
+    return sa.Table(
+        name,
+        _metadata,
+        sa.Column("agent_id", sa.String(36), primary_key=True),
+        sa.Column(target_col, sa.String(36), primary_key=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    )
+
+
+_agent_capability_links = _link_table("agent_capability_links", "capability_id")
+_agent_stage_links = _link_table("agent_stage_links", "stage_id")
+_agent_activity_links = _link_table("agent_activity_links", "activity_id")
+
+# Narrow read-only mirrors of adp.business's tables, used to validate link targets and to
+# describe them. Fixtures that also create adp.business.store's metadata must create it FIRST;
+# create_all(checkfirst) then skips these mirrors (the astore/agstore order rule).
+_capabilities_mirror = sa.Table(
+    "business_capabilities",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.String(255), nullable=False),
+    sa.Column("level", sa.Integer(), nullable=False),
+    sa.Column("parent_id", sa.String(36)),
+)
+_value_streams_mirror = sa.Table(
+    "value_streams",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.String(255), nullable=False),
+)
+_stages_mirror = sa.Table(
+    "value_stream_stages",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("value_stream_id", sa.String(36), nullable=False),
+    sa.Column("name", sa.String(255), nullable=False),
+    sa.Column("position", sa.Integer(), nullable=False, default=0),
+)
+_value_chains_mirror = sa.Table(
+    "value_chains",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.String(255), nullable=False),
+)
+_activities_mirror = sa.Table(
+    "value_chain_activities",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("value_chain_id", sa.String(36), nullable=False),
+    sa.Column("name", sa.String(255), nullable=False),
+    sa.Column("category", sa.Text(), nullable=False),
+    sa.Column("position", sa.Integer(), nullable=False, default=0),
 )
 
 _AGENT_FIELDS = (
@@ -143,6 +214,9 @@ def _row_to_agent(row: Any, solution_count: int = 0) -> Agent:
         runs_per_month=row.runs_per_month,
         external_registry_ref=row.external_registry_ref,
         solution_count=solution_count,
+        agentic_risk=agent_risk(
+            row.autonomy_level, row.human_approval, row.data_classification_max
+        ),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -313,6 +387,8 @@ async def delete_agent(agent_id: str, session: AsyncSession) -> bool:
     )
     app_ids = [r.solution_app_id for r in affected]
     await session.execute(_solution_agents.delete().where(_solution_agents.c.agent_id == agent_id))
+    for link_table, _target_col, _mirror in _LINKS.values():
+        await session.execute(link_table.delete().where(link_table.c.agent_id == agent_id))
     await session.execute(_agents.delete().where(_agents.c.id == agent_id))
     for app_id in app_ids:
         await _renormalise(app_id, session)
@@ -418,3 +494,170 @@ async def remove_solution_agent(app_id: str, agent_id: str, session: AsyncSessio
     if _rowcount(result) == 0:
         raise MembershipNotFoundError(f"Agent {agent_id!r} is not part of solution {app_id!r}")
     await _renormalise(app_id, session)
+
+
+# ── Automates links (944-agent-traceability, US1) ─────────────────────────────
+
+# kind -> (link table, target column, target mirror)
+_LINKS: dict[str, tuple[sa.Table, str, sa.Table]] = {
+    "capability": (_agent_capability_links, "capability_id", _capabilities_mirror),
+    "stage": (_agent_stage_links, "stage_id", _stages_mirror),
+    "activity": (_agent_activity_links, "activity_id", _activities_mirror),
+}
+_KIND_LABEL = {"capability": "Capability", "stage": "Stage", "activity": "Activity"}
+
+
+async def _require_agent(agent_id: str, session: AsyncSession) -> None:
+    if not await _agent_exists(agent_id, session):
+        raise AgentNotFoundError(f"Agent {agent_id!r} not found")
+
+
+async def _require_target(kind: str, target_id: str, session: AsyncSession) -> Any:
+    _table, _col, mirror = _LINKS[kind]
+    row = (await session.execute(sa.select(mirror).where(mirror.c.id == target_id))).first()
+    if row is None:
+        raise TargetNotFoundError(f"{_KIND_LABEL[kind]} {target_id!r} not found")
+    return row
+
+
+async def _capability_paths(rows: list[Any], session: AsyncSession) -> dict[str, list[str]]:
+    """[L1 name, L2 name] for each capability row, from the mirror's parent ids."""
+    names: dict[str, tuple[str, str | None]] = {}
+    pending = {r.parent_id for r in rows if r.parent_id}
+    while pending:
+        result = await session.execute(
+            sa.select(
+                _capabilities_mirror.c.id,
+                _capabilities_mirror.c.name,
+                _capabilities_mirror.c.parent_id,
+            ).where(_capabilities_mirror.c.id.in_(pending))
+        )
+        found = {r.id: (r.name, r.parent_id) for r in result}
+        names.update(found)
+        pending = {p for _n, p in found.values() if p and p not in names}
+    paths: dict[str, list[str]] = {}
+    for r in rows:
+        path: list[str] = []
+        parent = r.parent_id
+        while parent and parent in names:
+            name, parent = names[parent]
+            path.insert(0, name)
+        paths[r.id] = path
+    return paths
+
+
+async def get_automates(agent_id: str, session: AsyncSession) -> AgentAutomates:
+    """Everything the agent automates, with context. Inner joins: a link whose target row is gone
+    (SQLite doesn't enforce the migration's CASCADE) never surfaces."""
+    await _require_agent(agent_id, session)
+    links = _agent_capability_links
+    caps = _capabilities_mirror
+    cap_rows = list(
+        await session.execute(
+            sa.select(caps)
+            .select_from(links.join(caps, caps.c.id == links.c.capability_id))
+            .where(links.c.agent_id == agent_id)
+        )
+    )
+    paths = await _capability_paths(cap_rows, session)
+    capabilities = sorted(
+        (
+            AutomatesCapability(id=r.id, name=r.name, level=r.level, path=paths[r.id])
+            for r in cap_rows
+        ),
+        key=lambda c: ([p.lower() for p in c.path], c.name.lower()),
+    )
+
+    st, vs, sl = _stages_mirror, _value_streams_mirror, _agent_stage_links
+    stage_rows = await session.execute(
+        sa.select(st.c.id, st.c.name, st.c.value_stream_id, vs.c.name.label("vs_name"))
+        .select_from(
+            sl.join(st, st.c.id == sl.c.stage_id).join(vs, vs.c.id == st.c.value_stream_id)
+        )
+        .where(sl.c.agent_id == agent_id)
+        .order_by(vs.c.name, st.c.position, st.c.name)
+    )
+    stages = [
+        AutomatesStage(
+            id=r.id, name=r.name, value_stream_id=r.value_stream_id, value_stream_name=r.vs_name
+        )
+        for r in stage_rows
+    ]
+
+    act, ch, al = _activities_mirror, _value_chains_mirror, _agent_activity_links
+    primary_first = sa.case((act.c.category == "primary", 0), else_=1)
+    act_rows = await session.execute(
+        sa.select(act.c.id, act.c.name, act.c.category, act.c.value_chain_id,
+                  ch.c.name.label("ch_name"))
+        .select_from(
+            al.join(act, act.c.id == al.c.activity_id).join(ch, ch.c.id == act.c.value_chain_id)
+        )
+        .where(al.c.agent_id == agent_id)
+        .order_by(ch.c.name, primary_first, act.c.position, act.c.name)
+    )
+    activities = [
+        AutomatesActivity(
+            id=r.id, name=r.name, category=r.category, value_chain_id=r.value_chain_id,
+            value_chain_name=r.ch_name,
+        )
+        for r in act_rows
+    ]
+    return AgentAutomates(capabilities=capabilities, stages=stages, activities=activities)
+
+
+async def add_link(
+    kind: AutomatesKind, agent_id: str, target_id: str, session: AsyncSession
+) -> AgentAutomates:
+    await _require_agent(agent_id, session)
+    target = await _require_target(kind, target_id, session)
+    if kind == "capability" and target.level != 3:
+        raise LevelRuleError(
+            f"Agents automate business capabilities at L3 only; {target.name!r} is L{target.level}"
+        )
+    table, col, _mirror = _LINKS[kind]
+    exists = await session.execute(
+        sa.select(table.c.agent_id).where(table.c.agent_id == agent_id, table.c[col] == target_id)
+    )
+    if exists.first() is not None:
+        raise DuplicateLinkError(
+            f"Agent {agent_id!r} already automates {kind} {target_id!r}"
+        )
+    await session.execute(
+        table.insert().values(agent_id=agent_id, created_at=_now(), **{col: target_id})
+    )
+    return await get_automates(agent_id, session)
+
+
+async def remove_link(
+    kind: AutomatesKind, agent_id: str, target_id: str, session: AsyncSession
+) -> None:
+    table, col, _mirror = _LINKS[kind]
+    result = await session.execute(
+        table.delete().where(table.c.agent_id == agent_id, table.c[col] == target_id)
+    )
+    if _rowcount(result) == 0:
+        raise LinkNotFoundError(f"Agent {agent_id!r} does not automate {kind} {target_id!r}")
+
+
+async def list_agents_for(
+    kind: AutomatesKind, target_id: str, session: AsyncSession
+) -> list[AgentSummary]:
+    """Reverse lookup: the agents that automate a capability, stage or activity, by name."""
+    await _require_target(kind, target_id, session)
+    table, col, _mirror = _LINKS[kind]
+    result = await session.execute(
+        sa.select(_agents)
+        .select_from(table.join(_agents, _agents.c.id == table.c.agent_id))
+        .where(table.c[col] == target_id)
+        .order_by(_agents.c.name, _agents.c.id)
+    )
+    return [
+        AgentSummary(
+            id=r.id,
+            name=r.name,
+            lifecycle_status=r.lifecycle_status,
+            autonomy_level=r.autonomy_level,
+            agentic_risk=agent_risk(r.autonomy_level, r.human_approval, r.data_classification_max),
+        )
+        for r in result
+    ]
