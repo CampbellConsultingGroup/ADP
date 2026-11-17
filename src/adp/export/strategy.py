@@ -234,16 +234,8 @@ async def _fetch_all(session: AsyncSession) -> StrategyExportSnapshot:
     for row in progress_rows:
         progress_by_objective.setdefault(row["objective_id"], []).append(dict(row))
 
-    # Deviation from research.md Decision 4's original fully-bulk plan, recorded rather than
-    # silently patched over: sinit.list_initiatives() calls get_initiative() once per initiative
-    # internally (itself issuing 1 query for objective_ids + 5 mirror-table JOINs for
-    # control_mappings), an N+1 shape research.md's own text initially set out to avoid.
-    # Reusing it here anyway, rather than duplicating _linked_control_mappings' five-table
-    # target_type dispatch a second time in this module: at this domain's stated scale (low
-    # hundreds of initiatives), ~7 queries/initiative stays well within "completes within its
-    # own interval" (plan.md's actual performance goal), and reusing already-correct, already-
-    # tested logic is lower-risk than re-deriving the same dispatch table here for a query-count
-    # win this domain's scale doesn't actually need.
+    # sinit.list_initiatives() is bulk since ADP-blp.17 (eight queries for all initiatives), so
+    # the N+1 deviation this module used to record here no longer applies.
     initiatives = (await sinit.list_initiatives(session)).items
 
     return StrategyExportSnapshot(

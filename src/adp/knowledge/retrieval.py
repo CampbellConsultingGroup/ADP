@@ -6,6 +6,7 @@ Reciprocal Rank Fusion (RRF). Every result carries a CitationRef for QG-12.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -97,7 +98,7 @@ class KnowledgeRetrieval:
         start = time.perf_counter()
         query_id = str(uuid.uuid4())
         try:
-            embedding = self._embedder.embed(query.query_text)
+            embedding = await asyncio.to_thread(self._embedder.embed, query.query_text)
             embedding_literal = f"[{','.join(str(x) for x in embedding)}]"
 
             base_q = (

@@ -703,11 +703,7 @@ async def list_objective_initiatives(
     if await sstore.get_objective(objective_id, session) is None:
         raise HTTPException(status_code=404, detail=f"Objective {objective_id!r} not found")
     initiative_ids = await sinit.list_objective_initiative_ids(objective_id, session)
-    items = []
-    for initiative_id in initiative_ids:
-        initiative = await sinit.get_initiative(initiative_id, session)
-        assert initiative is not None
-        items.append(redact(initiative))
+    items = [redact(i) for i in await sinit.get_initiatives(initiative_ids, session)]
     return StrategyInitiativeListResponse(items=items, total=len(items))
 
 

@@ -141,8 +141,10 @@ async def import_calm_pattern(
     # Generate embedding
     embedding: list[float]
     try:
+        # The model is shared process-wide and encoding runs in a worker thread (ADP-blp.16);
+        # this used to load a fresh copy of the model on every import, on the event loop.
         embedder = EmbeddingProvider("all-MiniLM-L6-v2")
-        embedding = embedder.embed(f"{item.title}\n{full_text}")
+        embedding = await embedder.aembed(f"{item.title}\n{full_text}")
     except Exception as exc:
         logger.warning("calm-import: embedding failed, using zero vector: %s", exc)
         embedding = [0.0] * 384

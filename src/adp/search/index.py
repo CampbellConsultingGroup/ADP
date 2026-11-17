@@ -13,6 +13,7 @@ search-index hiccup never blocks the primary registry write.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from dataclasses import dataclass
@@ -128,8 +129,22 @@ class SearchIndex:
     async def upsert(
         self, entity_type: str, entity_id: str, text: str, session: "AsyncSession"
     ) -> None:
-        """Insert or update the index row for an entity (embedding regenerated)."""
-        embedding = self._get_embedder().embed(text)
+        """Insert or update the index row for an entity.
+
+        ADP-blp.16: nothing is done when the stored text is already the same -- many writes
+        (a maturity or lifecycle change, say) do not alter the indexed text, and re-embedding
+        is the expensive part. When it has changed, the embedding is computed in a worker
+        thread, because encoding is CPU-bound and this runs inside request handlers.
+        """
+        stored = await session.execute(
+            sa.select(searchable_items.c.text).where(
+                searchable_items.c.entity_type == entity_type,
+                searchable_items.c.entity_id == entity_id,
+            )
+        )
+        if stored.scalar_one_or_none() == text:
+            return
+        embedding = await asyncio.to_thread(self._get_embedder().embed, text)
         stmt = pg_insert(searchable_items).values(
             entity_type=entity_type,
             entity_id=entity_id,
@@ -195,7 +210,7 @@ class SearchIndex:
         # must degrade to keyword-only results, never fail the whole search.
         vec_rows: Any = []
         try:
-            embedding = self._get_embedder().embed(query_text)
+            embedding = await asyncio.to_thread(self._get_embedder().embed, query_text)
             emb_literal = f"[{','.join(str(x) for x in embedding)}]"
             vec_q = _with_type_filter(
                 sa.select(*cols)

@@ -10,6 +10,7 @@ ART-VII: embeddings always regenerated on write to keep grounding quality curren
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime
@@ -254,7 +255,8 @@ async def create_knowledge_item(
             status_code=422,
             detail="Pattern projections are created only by the Patterns registry",
         )
-    embedding = _embed(request.title, request.full_text)
+    # In a worker thread: encoding is CPU-bound (ADP-blp.16).
+    embedding = await asyncio.to_thread(_embed, request.title, request.full_text)
 
     item = KnowledgeItem(
         id=item_id,
@@ -292,7 +294,7 @@ async def update_knowledge_item(
     need_reembed = (request.title is not None or request.full_text is not None)
 
     if need_reembed:
-        embedding = _embed(new_title, new_full_text)
+        embedding = await asyncio.to_thread(_embed, new_title, new_full_text)
     else:
         embedding = list(row.embedding or [0.0] * 384)
 

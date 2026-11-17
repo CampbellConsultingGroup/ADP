@@ -5,13 +5,37 @@ No external API calls. The model is loaded lazily on first use.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import threading
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "all-MiniLM-L6-v2"
 EMBEDDING_DIM = 384
+
+
+# One loaded model per name for the whole process (ADP-blp.16). Each EmbeddingProvider used to
+# load its own copy, so the search index and the knowledge writer held two, and a CALM import
+# built a provider -- and reloaded the model from disk -- on every request.
+_models: dict[str, Any] = {}
+_models_lock = threading.Lock()
+
+
+def _load_model(model_name: str) -> Any:
+    with _models_lock:  # embedding now runs in worker threads: load once, not once per thread
+        model = _models.get(model_name)
+        if model is None:
+            try:
+                from sentence_transformers import SentenceTransformer
+            except ImportError as exc:
+                raise ImportError(
+                    "sentence-transformers is required for embedding generation. "
+                    "Install it with: pip install sentence-transformers"
+                ) from exc
+            model = _models[model_name] = SentenceTransformer(model_name)
+        return model
 
 
 class EmbeddingProvider:
@@ -23,14 +47,7 @@ class EmbeddingProvider:
 
     def _get_model(self) -> Any:
         if self._model is None:
-            try:
-                from sentence_transformers import SentenceTransformer
-            except ImportError as exc:
-                raise ImportError(
-                    "sentence-transformers is required for embedding generation. "
-                    "Install it with: pip install sentence-transformers"
-                ) from exc
-            self._model = SentenceTransformer(self._model_name)
+            self._model = _load_model(self._model_name)
         return self._model
 
     @property
@@ -43,6 +60,11 @@ class EmbeddingProvider:
         """Embed a single text string. Use embed_batch for efficiency."""
         result: Any = self._get_model().encode(text, convert_to_numpy=True)
         return result.tolist()  # type: ignore[no-any-return]
+
+    async def aembed(self, text: str) -> list[float]:
+        """embed() in a worker thread, for async callers: encoding is CPU-bound and would
+        otherwise stall every other request on the event loop (ADP-blp.16)."""
+        return await asyncio.to_thread(self.embed, text)
 
     def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """Embed a batch of texts in one forward pass (preferred for indexing)."""
@@ -75,3 +97,8 @@ def embed_or_zero(title: str, full_text: str) -> list[float]:
     except Exception as exc:  # noqa: BLE001 - documented zero-vector fallback
         logger.warning("Embedding generation failed, using zero vector: %s", exc)
         return [0.0] * EMBEDDING_DIM
+
+
+async def aembed_or_zero(title: str, full_text: str) -> list[float]:
+    """embed_or_zero() in a worker thread, for async request handlers (ADP-blp.16)."""
+    return await asyncio.to_thread(embed_or_zero, title, full_text)

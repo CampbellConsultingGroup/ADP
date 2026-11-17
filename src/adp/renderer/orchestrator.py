@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import inspect
 
@@ -50,7 +51,7 @@ class RenderOrchestrator:
 
         dsl = design_to_dsl(design, theme, level)  # type: ignore[arg-type]
         svg = design_to_svg(design, theme, level)  # type: ignore[arg-type]
-        png = svg_to_png(svg)
+        png = await asyncio.to_thread(svg_to_png, svg)  # CPU-bound (ADP-blp.16)
         png_b64 = base64.b64encode(png).decode("utf-8")
 
         return RenderResult(
