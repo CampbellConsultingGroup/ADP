@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Any, Literal
 
@@ -326,13 +327,53 @@ async def get_initiative(initiative_id: str, session: AsyncSession) -> StrategyI
     )
 
 
+async def get_initiatives(
+    initiative_ids: Sequence[str], session: AsyncSession
+) -> list[StrategyInitiative]:
+    """Several initiatives in a fixed number of queries (ADP-blp.17), in the given order; an id
+    with no initiative row is skipped.
+
+    One query for the rows, one for their objective links, and one per mapping target type --
+    eight in all, however many initiatives. Calling get_initiative() per id cost eight each.
+    """
+    ids = list(dict.fromkeys(initiative_ids))
+    if not ids:
+        return []
+    rows_result = await session.execute(sa.select(_initiatives).where(_initiatives.c.id.in_(ids)))
+    rows = {row["id"]: row for row in rows_result.mappings().all()}
+
+    links_result = await session.execute(
+        sa.select(
+            _initiative_objective_links.c.initiative_id,
+            _initiative_objective_links.c.objective_id,
+        )
+        .where(_initiative_objective_links.c.initiative_id.in_(ids))
+        .order_by(_initiative_objective_links.c.objective_id)
+    )
+    objective_ids: dict[str, list[str]] = {}
+    for link in links_result:
+        objective_ids.setdefault(link.initiative_id, []).append(link.objective_id)
+
+    mappings = await _control_mappings_by_initiative(ids, session)
+    return [
+        StrategyInitiative(
+            id=row["id"],
+            name=row["name"],
+            description=row["description"],
+            owner=row["owner"],
+            status=row["status"],
+            objective_ids=objective_ids.get(row["id"], []),
+            control_mappings=mappings.get(row["id"], []),
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+        for row in (rows[i] for i in initiative_ids if i in rows)
+    ]
+
+
 async def list_initiatives(session: AsyncSession) -> StrategyInitiativeListResponse:
     result = await session.execute(sa.select(_initiatives.c.id).order_by(_initiatives.c.name))
-    items = []
-    for row in result:
-        initiative = await get_initiative(row.id, session)
-        assert initiative is not None
-        items.append(initiative)
+    items = await get_initiatives([row.id for row in result], session)
     return StrategyInitiativeListResponse(items=items, total=len(items))
 
 
@@ -505,7 +546,17 @@ async def _linked_control_mappings(
     """Live JOIN against adp.strategy.store's read-only ControlMapping mirrors on every call --
     compliance_status is never cached or copied onto the link row itself (FR-008, research.md
     D3)."""
-    refs: list[ControlMappingRef] = []
+    return (await _control_mappings_by_initiative([initiative_id], session)).get(initiative_id, [])
+
+
+async def _control_mappings_by_initiative(
+    initiative_ids: Sequence[str], session: AsyncSession
+) -> dict[str, list[ControlMappingRef]]:
+    """_linked_control_mappings for several initiatives: one query per target type, whatever
+    the number of initiatives (ADP-blp.17)."""
+    refs: dict[str, list[ControlMappingRef]] = {}
+    if not initiative_ids:
+        return refs
     for target_type, (link_table, link_target_col) in _LINK_TABLE_BY_TARGET_TYPE.items():
         mirror, target_col = _MIRROR_BY_TARGET_TYPE[target_type]
         join_condition = [link_table.c.control_id == mirror.c.control_id]
@@ -521,6 +572,7 @@ async def _linked_control_mappings(
             target_id_expr = getattr(mirror.c, target_col)
         query = (
             sa.select(
+                link_table.c.initiative_id,
                 mirror.c.control_id,
                 target_id_expr.label("target_id"),
                 mirror.c.compliance_status,
@@ -528,11 +580,11 @@ async def _linked_control_mappings(
                 mirror.c.assessed_at,
             )
             .select_from(link_table.join(mirror, sa.and_(*join_condition)))
-            .where(link_table.c.initiative_id == initiative_id)
+            .where(link_table.c.initiative_id.in_(list(initiative_ids)))
         )
         result = await session.execute(query)
         for row in result:
-            refs.append(
+            refs.setdefault(row.initiative_id, []).append(
                 ControlMappingRef(
                     control_id=row.control_id,
                     target_type=target_type,
@@ -561,11 +613,7 @@ async def list_initiatives_for_control_mapping(
     result = await session.execute(
         sa.select(link_table.c.initiative_id).where(*conditions).order_by(link_table.c.initiative_id)
     )
-    items = []
-    for row in result:
-        initiative = await get_initiative(row.initiative_id, session)
-        if initiative is not None:
-            items.append(initiative)
+    items = await get_initiatives([row.initiative_id for row in result], session)
     return StrategyInitiativeListResponse(items=items, total=len(items))
 
 

@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Sequence
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, cast
@@ -372,7 +373,7 @@ async def create_theme(body: StrategicThemeCreate, session: AsyncSession) -> Str
 
 async def list_themes(session: AsyncSession) -> StrategicThemeListResponse:
     result = await session.execute(sa.select(_themes).order_by(_themes.c.name))
-    items = [await _row_to_theme(row, session) for row in result.mappings().all()]
+    items = await _rows_to_themes(result.mappings().all(), session)
     return StrategicThemeListResponse(items=items, total=len(items))
 
 
@@ -493,6 +494,97 @@ async def _status_for_objective(
     return status, row["status_reason"] if status == "abandoned" else None
 
 
+# ── Bulk variants for list reads (ADP-blp.17) ─────────────────────────────────
+# A list used to run one progress query per objective (and, for reverse lookups, one more to load
+# each objective), so the objective list, the heat map and the Overview summary were each 1+N.
+# These load everything for a set of rows in a fixed number of queries and reuse the same pure
+# compute_status().
+
+
+async def _statuses_for_objectives(
+    rows: Sequence[Any], session: AsyncSession
+) -> dict[str, tuple[ObjectiveStatus, str | None]]:
+    """status and status_reason for every objective row, from ONE progress query."""
+    if not rows:
+        return {}
+    ids = [row["id"] for row in rows]
+    result = await session.execute(
+        sa.select(_progress.c.objective_id, _progress.c.as_of_date, _progress.c.actual_value)
+        .where(_progress.c.objective_id.in_(ids))
+        .order_by(_progress.c.objective_id, _progress.c.as_of_date)
+    )
+    progress: dict[str, list[tuple[Any, Any]]] = {}
+    for r in result:
+        progress.setdefault(r.objective_id, []).append((r.as_of_date, r.actual_value))
+    statuses: dict[str, tuple[ObjectiveStatus, str | None]] = {}
+    for row in rows:
+        status = compute_status(
+            row["status"], row["target_value"], row["direction"], progress.get(row["id"], [])
+        )
+        statuses[row["id"]] = (status, row["status_reason"] if status == "abandoned" else None)
+    return statuses
+
+
+async def _rows_to_summaries(
+    rows: Sequence[Any], session: AsyncSession
+) -> list[StrategicObjectiveSummary]:
+    statuses = await _statuses_for_objectives(rows, session)
+    return [
+        StrategicObjectiveSummary(
+            id=row["id"],
+            theme_id=row["theme_id"],
+            owner=row["owner"],
+            statement=row["statement"],
+            fiscal_year=row["fiscal_year"],
+            period=row["period"],
+            status=statuses[row["id"]][0],
+            updated_at=row["updated_at"],
+        )
+        for row in rows
+    ]
+
+
+async def _summaries_for_ids(
+    objective_ids: Sequence[str], session: AsyncSession
+) -> list[StrategicObjectiveSummary]:
+    """Summaries for the given ids, in the given order; ids with no objective row are skipped
+    (a dangling link on a backend that does not enforce the cascade)."""
+    if not objective_ids:
+        return []
+    result = await session.execute(
+        sa.select(_objectives).where(_objectives.c.id.in_(list(objective_ids)))
+    )
+    by_id = {row["id"]: row for row in result.mappings().all()}
+    rows = [by_id[oid] for oid in objective_ids if oid in by_id]
+    return await _rows_to_summaries(rows, session)
+
+
+async def _rows_to_themes(rows: Sequence[Any], session: AsyncSession) -> list[StrategicTheme]:
+    """Themes with their framework_ids, from ONE link query."""
+    if not rows:
+        return []
+    result = await session.execute(
+        sa.select(_theme_framework_links.c.theme_id, _theme_framework_links.c.framework_id)
+        .where(_theme_framework_links.c.theme_id.in_([row["id"] for row in rows]))
+        .order_by(_theme_framework_links.c.framework_id)
+    )
+    frameworks: dict[str, list[str]] = {}
+    for r in result:
+        frameworks.setdefault(r.theme_id, []).append(r.framework_id)
+    return [
+        StrategicTheme(
+            id=row["id"],
+            name=row["name"],
+            description=row["description"],
+            owner=row["owner"],
+            priority=row["priority"],
+            created_at=row["created_at"],
+            framework_ids=frameworks.get(row["id"], []),
+        )
+        for row in rows
+    ]
+
+
 async def _linked_capability_ids(objective_id: str, session: AsyncSession) -> list[str]:
     result = await session.execute(
         sa.select(_objective_capabilities.c.capability_id)
@@ -509,20 +601,6 @@ async def _linked_value_stream_ids(objective_id: str, session: AsyncSession) -> 
         .order_by(_objective_value_streams.c.value_stream_id)
     )
     return [row.value_stream_id for row in result]
-
-
-async def _row_to_summary(row: Any, session: AsyncSession) -> StrategicObjectiveSummary:
-    status, _reason = await _status_for_objective(row, session)
-    return StrategicObjectiveSummary(
-        id=row.id,
-        theme_id=row.theme_id,
-        owner=row.owner,
-        statement=row.statement,
-        fiscal_year=row.fiscal_year,
-        period=row.period,
-        status=status,
-        updated_at=row.updated_at,
-    )
 
 
 async def create_objective(
@@ -586,7 +664,7 @@ async def list_objectives(session: AsyncSession) -> StrategicObjectiveListRespon
     result = await session.execute(
         sa.select(_objectives).order_by(_objectives.c.updated_at.desc())
     )
-    items = [await _row_to_summary(row, session) for row in result.mappings().all()]
+    items = await _rows_to_summaries(result.mappings().all(), session)
     return StrategicObjectiveListResponse(items=items, total=len(items))
 
 
@@ -899,14 +977,7 @@ async def list_objectives_for_design(
         .where(_objective_design_links.c.design_id == design_id)
         .order_by(_objective_design_links.c.objective_id)
     )
-    items = []
-    for row in result:
-        objective_row = await session.execute(
-            sa.select(_objectives).where(_objectives.c.id == row.objective_id)
-        )
-        obj = objective_row.mappings().first()
-        if obj is not None:
-            items.append(await _row_to_summary(obj, session))
+    items = await _summaries_for_ids([row.objective_id for row in result], session)
     return StrategicObjectiveListResponse(items=items, total=len(items))
 
 
@@ -950,14 +1021,7 @@ async def list_objectives_for_application(
         .where(_objective_application_links.c.application_id == application_id)
         .order_by(_objective_application_links.c.objective_id)
     )
-    items = []
-    for row in result:
-        objective_row = await session.execute(
-            sa.select(_objectives).where(_objectives.c.id == row.objective_id)
-        )
-        obj = objective_row.mappings().first()
-        if obj is not None:
-            items.append(await _row_to_summary(obj, session))
+    items = await _summaries_for_ids([row.objective_id for row in result], session)
     return StrategicObjectiveListResponse(items=items, total=len(items))
 
 
@@ -1011,14 +1075,7 @@ async def list_objectives_for_control(
         .where(_objective_control_links.c.control_id == control_id)
         .order_by(_objective_control_links.c.objective_id)
     )
-    items = []
-    for row in result:
-        objective_row = await session.execute(
-            sa.select(_objectives).where(_objectives.c.id == row.objective_id)
-        )
-        obj = objective_row.mappings().first()
-        if obj is not None:
-            items.append(await _row_to_summary(obj, session))
+    items = await _summaries_for_ids([row.objective_id for row in result], session)
     return StrategicObjectiveListResponse(items=items, total=len(items))
 
 
@@ -1072,12 +1129,12 @@ async def list_themes_for_framework(
         .where(_theme_framework_links.c.framework_id == framework_id)
         .order_by(_theme_framework_links.c.theme_id)
     )
-    items = []
-    for row in result:
-        theme_row = await session.execute(sa.select(_themes).where(_themes.c.id == row.theme_id))
-        theme = theme_row.mappings().first()
-        if theme is not None:
-            items.append(await _row_to_theme(theme, session))
+    theme_ids = [row.theme_id for row in result]
+    if not theme_ids:
+        return StrategicThemeListResponse(items=[], total=0)
+    themes_result = await session.execute(sa.select(_themes).where(_themes.c.id.in_(theme_ids)))
+    by_id = {row["id"]: row for row in themes_result.mappings().all()}
+    items = await _rows_to_themes([by_id[tid] for tid in theme_ids if tid in by_id], session)
     return StrategicThemeListResponse(items=items, total=len(items))
 
 
@@ -1152,8 +1209,8 @@ async def _tally_objective_statuses(session: AsyncSession) -> dict[str, int]:
     against any backend, including this package's SQLite test fixture."""
     result = await session.execute(sa.select(_objectives))
     counts = {"proposed": 0, "active": 0, "at_risk": 0, "achieved": 0, "abandoned": 0}
-    for row in result.mappings().all():
-        status, _reason = await _status_for_objective(row, session)
+    statuses = await _statuses_for_objectives(result.mappings().all(), session)
+    for status, _reason in statuses.values():
         counts[status] += 1
     return counts
 
@@ -1218,12 +1275,15 @@ async def get_strategy_heatmap(
     wanted_theme_ids = set(counts.keys())
 
     objectives_result = await session.execute(sa.select(_objectives))
+    objective_rows = [
+        row
+        for row in objectives_result.mappings().all()
+        if theme_id is None or row["theme_id"] in wanted_theme_ids
+    ]
+    statuses = await _statuses_for_objectives(objective_rows, session)
     total_objectives = 0
-    for obj_row in objectives_result.mappings().all():
-        if theme_id is not None and obj_row["theme_id"] not in wanted_theme_ids:
-            continue
-        status, _reason = await _status_for_objective(obj_row, session)
-        counts[obj_row["theme_id"]][status] += 1
+    for obj_row in objective_rows:
+        counts[obj_row["theme_id"]][statuses[obj_row["id"]][0]] += 1
         total_objectives += 1
 
     themes = [

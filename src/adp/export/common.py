@@ -15,7 +15,9 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -25,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 # File/directory names are always derived from an entity's own internal ID,
@@ -67,10 +70,42 @@ def _write_file_atomic(path: Path, content: str) -> None:
         raise
 
 
+# What this process last saw on disk for each exported file: (digest of the entity data, file
+# mtime, file size). ADP-blp.18: every cycle used to read and JSON-parse every existing file to
+# decide whether it had changed -- thousands of blocking reads a minute on the event loop for a
+# large registry. Now a file whose data digest matches, and which is still the same file on disk
+# (same mtime and size), is skipped with a single stat(). Anything else -- first sight after a
+# restart, changed data, a file edited or replaced by someone else -- takes the full path below.
+_seen: dict[Path, tuple[str, int, int]] = {}
+
+
+def _digest(data: dict[str, Any]) -> str:
+    canonical = json.dumps(data, sort_keys=True, default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _remember(path: Path, digest: str) -> None:
+    try:
+        stat = path.stat()
+    except OSError:
+        _seen.pop(path, None)
+        return
+    _seen[path] = (digest, stat.st_mtime_ns, stat.st_size)
+
+
 def _write_entity_file(path: Path, data: dict[str, Any], now: datetime) -> None:
     """Stamp `exported_at` and write via `_write_file_atomic` -- unless the
     file already exists with identical content (ignoring `exported_at`), in
     which case do nothing at all, not even touch its mtime."""
+    digest = _digest(data)
+    seen = _seen.get(path)
+    if seen is not None and seen[0] == digest:
+        try:
+            stat = path.stat()
+        except OSError:
+            stat = None
+        if stat is not None and (stat.st_mtime_ns, stat.st_size) == seen[1:]:
+            return
     if path.exists():
         try:
             existing = json.loads(path.read_text(encoding="utf-8"))
@@ -79,10 +114,12 @@ def _write_entity_file(path: Path, data: dict[str, Any], now: datetime) -> None:
         if existing is not None:
             existing.pop("exported_at", None)
             if existing == data:
+                _remember(path, digest)
                 return
     stamped = {**data, "exported_at": now.isoformat()}
     content = json.dumps(stamped, indent=2, sort_keys=True) + "\n"
     _write_file_atomic(path, content)
+    _remember(path, digest)
 
 
 def _cleanup_orphan_files(dir_path: Path, live_ids: set[str]) -> None:
@@ -92,7 +129,8 @@ def _cleanup_orphan_files(dir_path: Path, live_ids: set[str]) -> None:
         return
     for f in dir_path.glob("*.json"):
         if f.stem not in live_ids:
-            f.unlink()
+            f.unlink(missing_ok=True)  # another worker may have removed it first
+            _seen.pop(f, None)
 
 
 def _cleanup_orphan_dirs(parent_dir: Path, live_ids: set[str]) -> None:
@@ -104,7 +142,9 @@ def _cleanup_orphan_dirs(parent_dir: Path, live_ids: set[str]) -> None:
         return
     for d in parent_dir.iterdir():
         if d.is_dir() and d.name not in live_ids:
-            shutil.rmtree(d)
+            shutil.rmtree(d, ignore_errors=True)  # another worker may be removing it too
+            for path in [p for p in _seen if d in p.parents]:
+                _seen.pop(path, None)
 
 
 # ── Background task lifecycle ─────────────────────────────────────────────────
@@ -123,8 +163,34 @@ async def _background_loop(
 ) -> None:
     while True:
         async with session_factory() as session:
-            await reconcile_fn(export_root, session)
+            if await _try_cycle_lock(session, reconcile_fn):
+                await reconcile_fn(export_root, session)
         await asyncio.sleep(interval_seconds)
+
+
+async def _try_cycle_lock(session: AsyncSession, reconcile_fn: ReconcileFn) -> bool:
+    """True when this worker may run the cycle (ADP-blp.18).
+
+    The API runs several worker processes and each starts every export loop, so each cycle ran
+    once per worker against the same directory: doubled work, and two workers cleaning up the
+    same orphan files at once. On Postgres a transaction-level advisory lock, keyed by the
+    domain, lets one worker run a cycle while any other that arrives during it skips that cycle.
+    The lock is released when the cycle's session closes. Other databases (tests) always run.
+    """
+    try:
+        if session.get_bind().dialect.name != "postgresql":
+            return True
+        module = getattr(reconcile_fn, "__module__", "")
+        key = f"adp.export:{module}.{getattr(reconcile_fn, '__qualname__', '')}"
+        result = await session.execute(
+            sa.text("SELECT pg_try_advisory_xact_lock(hashtext(:key))"), {"key": key}
+        )
+        return bool(result.scalar())
+    except Exception as exc:  # noqa: BLE001 - never let the lock stop the export loop
+        logging.getLogger("adp.export").warning(
+            "export cycle lock unavailable, running the cycle anyway: %s", exc
+        )
+        return True
 
 
 def start_background_sync(

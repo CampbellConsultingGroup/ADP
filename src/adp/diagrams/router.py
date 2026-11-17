@@ -10,6 +10,7 @@ The backend never parses or validates `dsl_source` (research.md Decision 2)
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
@@ -145,7 +146,10 @@ async def export_diagram_png(
 
     _check_svg_dimensions(body.svg)
     try:
-        png_bytes = cairosvg.svg2png(bytestring=body.svg.encode("utf-8"))
+        # Rasterising is CPU-bound: keep it off the event loop (ADP-blp.16).
+        png_bytes = await asyncio.to_thread(
+            cairosvg.svg2png, bytestring=body.svg.encode("utf-8")
+        )
     except Exception as exc:
         raise HTTPException(status_code=422, detail=f"Invalid SVG: {exc}") from exc
 

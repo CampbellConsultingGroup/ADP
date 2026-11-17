@@ -172,6 +172,22 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P2 batch 2 (epic ADP-blp: .16, .17, .18):
+  - Event loop: embedding and SVG rasterising run in worker threads (`EmbeddingProvider.aembed`,
+    `aembed_or_zero`, `asyncio.to_thread` in `SearchIndex.upsert/hybrid_search`, the knowledge and CALM
+    routes, `KnowledgeRetriever.vector_search`, diagram PNG export, `RenderOrchestrator.arender`). One loaded
+    model per name for the process (`embedder._models`). `SearchIndex.upsert` does nothing when the stored
+    text is unchanged (one lookup, no re-embed, no write).
+  - Strategy reads are bulk: `_statuses_for_objectives` (one progress query), `_rows_to_summaries`,
+    `_summaries_for_ids`, `_rows_to_themes`; `sinit.get_initiatives(ids)` loads any number of initiatives in
+    eight queries (`_control_mappings_by_initiative`). List objectives/themes, the heat map, the Overview
+    tally, the reverse lookups and `GET /strategy/initiatives` no longer grow with row count (guard
+    `tests/unit/strategy/test_bulk_reads.py` counts queries). The strategy export's recorded N+1 deviation
+    is gone.
+  - Export loops (`adp.export.common`): `_write_entity_file` skips a file with one `stat()` when its data
+    digest and the file's mtime/size match what this process last saw (`_seen`); a cycle takes a Postgres
+    transaction-level advisory lock per domain (`_try_cycle_lock`) so a second worker arriving during a
+    cycle skips it. Still open: the DB is re-read every cycle and the file phase is not threaded.
 - Fable review P2 batch 1 (epic ADP-blp: .5, .6, .9, .19, .20, .22):
   - Limits (`adp.api.limits`): `BodySizeLimitMiddleware` refuses bodies over `ADP_MAX_REQUEST_BYTES` (default
     2 MiB, 0 = off) with 413, counting received bytes as well as Content-Length; `enforce_llm_rate_limit`
