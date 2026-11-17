@@ -60,10 +60,10 @@ jobs:
     name: Build + Deploy API image
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Azure login (OIDC)
-        uses: azure/login@v2
+        uses: azure/login@7184910d9eb2b1c5e48f7073824a90609bb9b6d6 # v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
@@ -87,19 +87,26 @@ jobs:
             --build-arg VITE_KEYCLOAK_URL="https://adp-api.${ENV_DOMAIN}/auth" \
             .
 
-      - name: Container image CVE scan (Trivy, report-only)
-        # ADP-cm9: not yet gating -- expect noise from the third-party
-        # keycloak base image and OS packages we don't control on the spot;
-        # this is visibility first, blocking later once triaged.
-        continue-on-error: true
+      - name: Container image CVE scan (Trivy)
+        # ADP-blp.13: the scanner is pinned (it was :latest) and a fixable CRITICAL
+        # vulnerability now stops the deploy. HIGH findings are listed but do not
+        # block: the list is short today (see the Dockerfile's upgrade steps) and can
+        # be promoted to blocking once it has stayed empty. The image is read from the
+        # registry, not through the Docker socket.
         run: |
-          az acr login --name "${{ env.ACR_NAME }}"
-          docker pull "${{ env.ACR_NAME }}.azurecr.io/adp-api:${{ github.sha }}"
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy:latest image \
-            --severity HIGH,CRITICAL \
-            "${{ env.ACR_NAME }}.azurecr.io/adp-api:${{ github.sha }}"
+          TOKEN="$(az acr login --name "${{ env.ACR_NAME }}" --expose-token --query accessToken -o tsv)"
+          IMAGE="${{ env.ACR_NAME }}.azurecr.io/adp-api:${{ github.sha }}"
+          scan() {
+            docker run --rm \
+              -e TRIVY_USERNAME=00000000-0000-0000-0000-000000000000 \
+              -e TRIVY_PASSWORD="$TOKEN" \
+              aquasec/trivy:0.76.2 image --image-src remote --scanners vuln \
+              --ignore-unfixed --timeout 15m "$@" "$IMAGE"
+          }
+          echo "::group::HIGH (report only)"
+          scan --severity HIGH --exit-code 0
+          echo "::endgroup::"
+          scan --severity CRITICAL --exit-code 1
 
       - name: Run DB migrations (adp-migrate) on the new image
         # ADP-0r4: both jobs run the API image, but only adp-api used to be
