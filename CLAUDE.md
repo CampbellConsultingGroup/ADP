@@ -172,6 +172,16 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P3 batch 4 (epic ADP-blp: .49, part of .36, part of .13); frontend plus CI:
+  - `web/src/ui/tones.ts` holds every status-to-tone map (design and pattern lifecycle, conformance,
+    objective status, risk band, TIME, classification, validation verdict) against one stated meaning for
+    each tone; the feature modules re-export from it under their old names. `tones.test.ts` fails if an
+    ended state is "crit" or the same word gets two tones. A validation verdict of "indeterminate" is now
+    blue (info), matching conformance; it was amber.
+  - `strategy/LinkEditor.tsx`: the shared link editor. The objective's capability, value stream, design and
+    application editors are thin wrappers over it (538 lines -> 264). Not yet converted: the control,
+    initiative and initiative-objective editors (extra behaviour) and the application-side ones.
+  - CI: the actions in `drift-check.yml` are pinned to commit SHAs (the tag is kept as a comment).
 - Fable review P3 batch 3 (epic ADP-blp: .50 .66, parts of .27 .34 .65 .68):
   - `docs/ui-glossary.md`: the words the UI uses (Link vs Map vs Realized by; Add / Delete / Remove; names
     written in full; what each status colour means). "Tech Caps" -> "Technical Capabilities", "APM

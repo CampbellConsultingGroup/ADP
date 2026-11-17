@@ -5,9 +5,10 @@
 import type React from "react";
 import type { AgenticRisk, RiskBand, SolutionAgenticRisk } from "../api/agentic";
 import { StatusBadge, type BadgeTone } from "../ui";
+import { RISK_BAND_TONES } from "../ui/tones";
 
 export const RISK_LABEL: Record<RiskBand, string> = { high: "High", medium: "Medium", low: "Low" };
-const RISK_TONE: Record<RiskBand, BadgeTone> = { high: "crit", medium: "warn", low: "good" };
+const RISK_TONE: Record<RiskBand, BadgeTone> = RISK_BAND_TONES; // ADP-blp.49
 
 export const NOT_CONSIDERED_NOTE = "Tool side effects are not yet considered.";
 

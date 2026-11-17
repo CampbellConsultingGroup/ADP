@@ -8,17 +8,13 @@
 import React, { useState } from "react";
 import { useStartValidation, useValidationStatus, useOverrideVerdict } from "../api/validate";
 import { Button, StatusBadge, type BadgeTone } from "../ui";
+import { VERDICT_TONES } from "../ui/tones";
 
 interface ValidateDesignButtonProps {
   designId: string;
 }
 
-const STATUS_TONE: Record<string, BadgeTone> = {
-  pass: "good",
-  fail: "crit",
-  indeterminate: "warn",
-  overridden: "info",
-};
+const STATUS_TONE: Record<string, BadgeTone> = VERDICT_TONES; // ADP-blp.49
 
 export default function ValidateDesignButton({
   designId,
