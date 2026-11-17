@@ -1,134 +1,31 @@
-/** ObjectiveDesignLinkEditor — near-verbatim mirror of
- * ObjectiveCapabilityLinkEditor.tsx's structure (ADP-d8u.2), adapted to link
- * a StrategicObjective to real designs instead of capabilities. Unlike the
- * capability editor, the design list comes from a plain, non-Suspense query
- * (useDesignsForLinking) rather than web/src/api/designs.ts's own hooks --
- * see research.md/data-model.md for why. */
+/** Links a strategic objective to designs, with the shared LinkEditor (ADP-blp.36). The design
+ * list comes from a plain, non-Suspense query (useDesignsForLinking) rather than
+ * web/src/api/designs.ts's own hooks. */
 
-import React, { useState } from "react";
+import React from "react";
 import {
   useDesignsForLinking,
   useLinkObjectiveDesign,
   useUnlinkObjectiveDesign,
   type StrategicObjective,
 } from "../api/strategy";
-import { useLinkFeedback } from "./useLinkFeedback";
+import LinkEditor from "./LinkEditor";
 
 interface Props {
   objective: StrategicObjective;
 }
 
 export default function ObjectiveDesignLinkEditor({ objective }: Props): React.ReactElement {
-  const [selectedId, setSelectedId] = useState<string>("");
-  const [linkError, setLinkError] = useState<string | null>(null);
-  const feedback = useLinkFeedback();
-
-  const allDesigns = useDesignsForLinking();
-  const link = useLinkObjectiveDesign(objective.id);
-  const unlink = useUnlinkObjectiveDesign(objective.id);
-
-  const linkedIds = new Set(objective.design_ids);
-  const linked = (allDesigns.data?.designs ?? []).filter((d) => linkedIds.has(d.id));
-  const available = (allDesigns.data?.designs ?? []).filter((d) => !linkedIds.has(d.id));
-
-  function handleAdd(chosenId: string) {
-    if (!chosenId) return;
-    setSelectedId(chosenId);
-    setLinkError(null);
-    const title = available.find((d) => d.id === chosenId)?.title ?? chosenId;
-    link.mutate(chosenId, {
-      onSuccess: () => {
-        setSelectedId("");
-        feedback.showLinked(title);
-      },
-      onError: (err: Error & { status?: number }) => {
-        setSelectedId("");
-        if (err.status === 409) {
-          setLinkError("Already linked");
-        } else {
-          setLinkError(err.message || "Failed to link design");
-        }
-      },
-    });
-  }
-
-  if (allDesigns.isLoading) {
-    return <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)" }}>Loading designs…</p>;
-  }
-
+  const all = useDesignsForLinking();
   return (
-    <div style={{ marginTop: "0.75rem" }}>
-      <div style={{ marginBottom: "0.5rem" }}>
-        {linked.length === 0 && (
-          <p style={{ fontSize: "0.85rem", color: "var(--text-secondary)", margin: "0 0 0.5rem" }}>
-            No designs linked yet.
-          </p>
-        )}
-        {linked.map((d) => (
-          <div
-            key={d.id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              padding: "0.35rem 0",
-              borderBottom: "1px solid var(--border)",
-            }}
-          >
-            <span style={{ flex: 1, fontSize: "0.85rem" }}>{d.title}</span>
-            <button
-              onClick={() => unlink.mutate(d.id, { onSuccess: () => feedback.showRemoved(d.title) })}
-              disabled={unlink.isPending}
-              style={{
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: "4px",
-                cursor: "pointer",
-                padding: "2px 8px",
-                fontSize: "0.75rem",
-                color: "var(--text-secondary)",
-              }}
-            >
-              Remove
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-        <select
-          value={selectedId}
-          onChange={(e) => handleAdd(e.target.value)}
-          disabled={link.isPending}
-          style={{
-            flex: 1,
-            minWidth: "160px",
-            padding: "0.3rem 0.5rem",
-            fontSize: "0.85rem",
-            border: "1px solid var(--border)",
-            borderRadius: "4px",
-            background: "var(--bg)",
-            color: "var(--text)",
-          }}
-        >
-          <option value="">Link a design…</option>
-          {available.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.title}
-            </option>
-          ))}
-        </select>
-      </div>
-      {linkError && (
-        <p style={{ color: "var(--error, var(--crit))", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>
-          {linkError}
-        </p>
-      )}
-      {feedback.message && (
-        <p style={{ color: "var(--good)", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>
-          {feedback.message}
-        </p>
-      )}
-    </div>
+    <LinkEditor
+      noun="design"
+      plural="designs"
+      isLoading={all.isLoading}
+      options={(all.data?.designs ?? []).map((d) => ({ id: d.id, label: d.title }))}
+      linkedIds={objective.design_ids}
+      link={useLinkObjectiveDesign(objective.id)}
+      unlink={useUnlinkObjectiveDesign(objective.id)}
+    />
   );
 }

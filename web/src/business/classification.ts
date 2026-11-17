@@ -1,11 +1,8 @@
 import type { BadgeTone } from "../ui";
+import { CLASSIFICATION_TONES } from "../ui/tones";
 
 /** Business domain classification → semantic badge tone + label. */
-export const CLASSIFICATION_TONE: Record<string, BadgeTone> = {
-  strategic: "good",
-  differentiating: "warn",
-  commodity: "neutral",
-};
+export const CLASSIFICATION_TONE: Record<string, BadgeTone> = CLASSIFICATION_TONES; // ADP-blp.49
 
 export const CLASSIFICATION_LABEL: Record<string, string> = {
   strategic: "Strategic",

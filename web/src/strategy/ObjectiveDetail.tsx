@@ -24,6 +24,7 @@ import NavLinkButton from "./NavLinkButton";
 import EditFrame, { useReturnFocus } from "./EditFrame";
 import { confirmAction } from "../ui/confirm";
 import { useCan } from "../auth/permissions";
+import { OBJECTIVE_STATUS_TONES } from "../ui/tones";
 
 interface ObjectiveDetailProps {
   objectiveId: string;
@@ -52,14 +53,7 @@ const DIRECTIONS: { value: ObjectiveDirection; label: string }[] = [
 
 // ADP-d8u.5: status is always computed server-side (never set directly,
 // except "abandoned") -- this is purely a display mapping.
-const STATUS_TONE: Record<ObjectiveStatus, BadgeTone> = {
-  proposed: "neutral",
-  active: "info",
-  at_risk: "warn",
-  achieved: "good",
-  // ADP-blp.49: an ended state, not a failure -- red is kept for things that need attention.
-  abandoned: "neutral",
-};
+const STATUS_TONE: Record<ObjectiveStatus, BadgeTone> = OBJECTIVE_STATUS_TONES; // ADP-blp.49
 const STATUS_LABEL: Record<ObjectiveStatus, string> = {
   proposed: "Not yet started",
   active: "On track",

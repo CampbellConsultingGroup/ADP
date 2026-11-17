@@ -1,13 +1,9 @@
 import type { Application, TimeClassification } from "../api/application";
 import { Button, StatusBadge, type BadgeTone } from "../ui";
 import { EmptyState } from "../ui/primitives";
+import { TIME_TONES } from "../ui/tones";
 
-export const TIME_TONE: Record<TimeClassification, BadgeTone> = {
-  Invest: "good",
-  Migrate: "warn",
-  Eliminate: "crit",
-  Tolerate: "neutral",
-};
+export const TIME_TONE: Record<TimeClassification, BadgeTone> = TIME_TONES; // ADP-blp.49
 
 interface Props {
   apps: Application[];
