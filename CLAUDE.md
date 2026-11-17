@@ -173,6 +173,18 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.64 (auth proxy and metrics, checked on a deployed Azure environment):
+  - `/auth/*` proxy: every forwarding header the client sent (`Forwarded`, `X-Forwarded-*`, `X-Real-IP`)
+    is dropped. The proxy sets `X-Forwarded-For` to the last entry of the incoming header (the one the
+    ingress appended) or the socket peer, and `X-Forwarded-Proto`/`-Host` from `ADP_KEYCLOAK_ISSUER`.
+  - `/metrics`: open when auth is off; with auth on it needs `Authorization: Bearer <ADP_METRICS_TOKEN>`
+    and answers 404 otherwise (also when no token is configured).
+  - `infra/keycloak/adp-realm.json`: `sslRequired` is `external`. The file is only read when the realm is
+    first created; a running realm is changed with the `adp-keycloak-admin` job (`KC_PATCH_TARGET=realm`).
+  - `apiapp.bicep`: an empty `allowedIpRanges` without `allowPublicIngress=true` gives one Deny-all rule
+    (`deploy.sh` passes the flag for `ADP_ALLOW_PUBLIC=1`).
+  - Azure gotcha: a fresh deploy can leave the Postgres private DNS zone without its VNet link (the
+    migration job then cannot resolve the database host); see `bd memories azure-private-dns`.
 - Fable review ADP-blp.26 and .46, first increments:
   - .26: `tests/support/schema.py`. `find_drift()` compares every duplicate table declaration (27 tables
     are declared in more than one store) with the widest one, on the PostgreSQL dialect;

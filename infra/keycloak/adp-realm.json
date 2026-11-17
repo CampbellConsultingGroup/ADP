@@ -1,7 +1,7 @@
 {
   "realm": "ADPRealm",
   "enabled": true,
-  "sslRequired": "none",
+  "sslRequired": "external",
   "registrationAllowed": false,
   "bruteForceProtected": true,
   "failureFactor": 10,

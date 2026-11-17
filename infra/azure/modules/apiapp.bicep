@@ -8,7 +8,8 @@
 // rule exists, Container Apps denies all other traffic. deploy.sh supplies
 // the list from infra/azure/.secrets/allowed-ips and refuses to deploy with
 // an empty list unless explicitly told to, so a redeploy can't silently
-// expose the app.
+// expose the app. The template enforces the same rule itself: an empty list
+// without allowPublicIngress=true denies all traffic (ADP-blp.64).
 //
 // minReplicas=0 (unlike Keycloak's minReplicas=1): a FastAPI/uvicorn cold
 // start is seconds, not the tens of seconds Keycloak's JVM needs, so
@@ -48,8 +49,28 @@ param keycloakClientId string = 'adp-frontend'
 @description('Port the API listens on inside the container (matches ADP_PORT).')
 param apiPort int = 8001
 
-@description('Client IP ranges allowed to reach the API, as objects { cidr: string, description: string }. Empty = no restriction (fully public).')
+@description('Client IP ranges allowed to reach the API, as objects { cidr: string, description: string }.')
 param allowedIpRanges array
+
+@description('Deploy with NO IP restriction. Must be set on purpose: an empty allowedIpRanges without it closes the ingress to everyone instead of opening it (ADP-blp.64).')
+param allowPublicIngress bool = false
+
+// One Allow rule makes Container Apps deny everything else. With no ranges and no explicit
+// "public" flag, a single Deny-all rule is used, so a forgotten or emptied list fails closed.
+var allowRules = [for (range, i) in allowedIpRanges: {
+  name: 'allowed-ip-${i + 1}'
+  description: range.description
+  ipAddressRange: range.cidr
+  action: 'Allow'
+}]
+var denyAllRule = [
+  {
+    name: 'deny-all'
+    description: 'No allowed ranges were supplied and allowPublicIngress is false'
+    ipAddressRange: '0.0.0.0/0'
+    action: 'Deny'
+  }
+]
 
 resource apiApp 'Microsoft.App/containerApps@2025-01-01' = {
   name: 'adp-api'
@@ -68,12 +89,7 @@ resource apiApp 'Microsoft.App/containerApps@2025-01-01' = {
         external: true
         targetPort: apiPort
         transport: 'auto'
-        ipSecurityRestrictions: [for (range, i) in allowedIpRanges: {
-          name: 'allowed-ip-${i + 1}'
-          description: range.description
-          ipAddressRange: range.cidr
-          action: 'Allow'
-        }]
+        ipSecurityRestrictions: empty(allowedIpRanges) && !allowPublicIngress ? denyAllRule : allowRules
       }
       registries: [
         {
