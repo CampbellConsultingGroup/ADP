@@ -35,7 +35,7 @@
  * show one); the value control swaps from the v1 bucket <select> to a
  * free-form number/text <input> whenever the field has no bucket set at all,
  * or the chosen operator isn't "=". */
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useApplications } from "../api/application";
 import { useOrgUnits } from "../api/organization";
 import { useApplicationCapabilityGroups } from "../api/portfolio";
@@ -60,7 +60,7 @@ import {
 import BucketCard, { AppChip } from "./BucketCard";
 import CrossTabGrid from "./CrossTabGrid";
 import { PageHeader } from "../ui/primitives";
-import { useHashParam } from "../shell/routing";
+import { readHashParam, useHashParam, writeHashParam } from "../shell/routing";
 
 export default function PortfolioPage(): React.ReactElement {
   // useSuspenseQuery, consumed directly with no local <Suspense> wrapper --
@@ -69,12 +69,26 @@ export default function PortfolioPage(): React.ReactElement {
   const apps = useApplications();
   const capabilityGroups = useApplicationCapabilityGroups();
   // ADP-blp.68: the two grouping choices are in the URL (?group=...&then=...), so a reload or a
-  // shared link shows the same cut of the portfolio. The filter is still page state.
+  // shared link shows the same cut of the portfolio. So is the filter
+  // (?filter=<field>&op=<operator>&value=<value>).
   const [dimensionA, setDimensionA] = useHashParam<Dimension>("group", ALL_DIMENSIONS, "capability");
   const [dimensionB, setDimensionB] = useHashParam<Dimension>("then", ALL_DIMENSIONS, "capability");
-  const [filterField, setFilterField] = useState<FilterField | "">("");
-  const [filterOperator, setFilterOperator] = useState<FilterOperator>("eq");
-  const [filterValue, setFilterValue] = useState<string>("");
+  const [filterField, setFilterField] = useState<FilterField | "">(() => {
+    const field = readHashParam("filter");
+    return field && (ALL_FILTER_FIELDS as string[]).includes(field) ? (field as FilterField) : "";
+  });
+  const [filterOperator, setFilterOperator] = useState<FilterOperator>(() => {
+    const field = readHashParam("filter");
+    const op = readHashParam("op");
+    return field && op && (ALL_FILTER_FIELDS as string[]).includes(field)
+      && (operatorsForField(field as FilterField) as string[]).includes(op)
+      ? (op as FilterOperator)
+      : "eq";
+  });
+  const [filterValue, setFilterValue] = useState<string>(() => readHashParam("value") ?? "");
+  // What the reset effects below last saw, so they act on a change the user made and not on
+  // the first render (which may carry a filter from the URL) or on a data refresh.
+  const lastFilter = useRef({ field: filterField, operator: filterOperator });
 
   // 940-org-units-geography: group/filter business units by org unit where linked (R6).
   const orgUnits = useOrgUnits();
@@ -104,12 +118,30 @@ export default function PortfolioPage(): React.ReactElement {
   // behavior for every field that only ever had one), so switching fields
   // never strands the picker on an operator the new field doesn't support.
   useEffect(() => {
-    setFilterOperator("eq");
+    if (lastFilter.current.field !== filterField) setFilterOperator("eq");
   }, [filterField]);
 
   useEffect(() => {
-    setFilterValue(usingBucketValue ? (filterValueOptions[0]?.axis.key ?? "") : "");
+    const changed =
+      lastFilter.current.field !== filterField || lastFilter.current.operator !== filterOperator;
+    lastFilter.current = { field: filterField, operator: filterOperator };
+    if (usingBucketValue) {
+      // Keep a value that is one of the choices (e.g. from the URL); otherwise take the first.
+      setFilterValue((current) =>
+        filterValueOptions.some((o) => o.axis.key === current)
+          ? current
+          : (filterValueOptions[0]?.axis.key ?? (changed ? "" : current)),
+      );
+    } else if (changed) {
+      setFilterValue("");
+    }
   }, [filterField, filterOperator, usingBucketValue, filterValueOptions]);
+
+  useEffect(() => {
+    writeHashParam("filter", filterField || null);
+    writeHashParam("op", filterField && filterOperator !== "eq" ? filterOperator : null);
+    writeHashParam("value", filterField && filterValue ? filterValue : null);
+  }, [filterField, filterOperator, filterValue]);
 
   const filteredApps = useMemo(
     () =>

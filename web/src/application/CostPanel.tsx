@@ -3,7 +3,8 @@ import { useApplicationCost, useUpdateApplicationCost } from "../api/application
 import type { ApplicationCostUpdate, CostBucket, TcoBucketKey } from "../api/application";
 import { TCO_BUCKET_KEYS } from "../api/application";
 import { hasStatus } from "../api/client";
-import { Loading, Button } from "../ui/primitives";
+import { useCan } from "../auth/permissions";
+import { Loading, Button, Restricted } from "../ui/primitives";
 
 /** APM US4 — Total Cost of Ownership (ADP-9x6, sensitive: gated server-side). */
 
@@ -37,6 +38,7 @@ function formatMoney(value: string): string {
 export default function CostPanel({ appId }: Props) {
   const { data: cost, isLoading, error } = useApplicationCost(appId);
   const updateCost = useUpdateApplicationCost(appId);
+  const canWrite = useCan("write_application_cost"); // ADP-blp.65
 
   const [currency, setCurrency] = useState("USD");
   const [horizon, setHorizon] = useState("5");
@@ -57,14 +59,8 @@ export default function CostPanel({ appId }: Props) {
   if (isLoading) return <Loading />;
 
   if (error) {
-    const forbidden = hasStatus(error, 403);
-    return (
-      <div style={{ fontSize: 13, color: "var(--ink-3)" }}>
-        {forbidden
-          ? "You don't have permission to view cost data for this application."
-          : "Could not load cost data."}
-      </div>
-    );
+    if (hasStatus(error, 403)) return <Restricted what="cost data for this application" />;
+    return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>{"Could not load cost data."}</div>;
   }
 
   const showToast = (msg: string) => {
@@ -153,7 +149,7 @@ export default function CostPanel({ appId }: Props) {
       </div>
 
       <div>
-        <Button variant="primary" onClick={handleSave} disabled={updateCost.isPending}>
+        <Button variant="primary" onClick={handleSave} disabled={updateCost.isPending || !canWrite.allowed} title={canWrite.reason}>
           {updateCost.isPending ? "Saving…" : "Save"}
         </Button>
       </div>

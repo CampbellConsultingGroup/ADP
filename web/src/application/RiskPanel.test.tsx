@@ -10,6 +10,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import RiskPanel from "./RiskPanel";
 import * as applicationApi from "../api/application";
+import { ApiError } from "../api/client";
 import * as complianceApi from "../api/compliance";
 import type { ApplicationRisk } from "../api/application";
 import type { RegulatoryFramework, RegulatoryFrameworkListResponse } from "../api/compliance";
@@ -146,5 +147,19 @@ describe("RiskPanel — regulatory framework picker", () => {
     render(<RiskPanel appId="app-1" />);
 
     expect(screen.getByText("GDPR")).toBeTruthy();
+  });
+
+  it("says the tab is restricted when the role may not read it (ADP-blp.65)", () => {
+    mockFrameworks([]);
+    mockedApplicationApi.useApplicationRisk.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      error: new ApiError(403, "Forbidden"),
+    } as unknown as ReturnType<typeof applicationApi.useApplicationRisk>);
+
+    render(<RiskPanel appId="app-1" />);
+
+    expect(screen.getByText("Restricted to your role.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
   });
 });

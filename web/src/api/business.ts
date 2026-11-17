@@ -1,7 +1,10 @@
 /** TypeScript interfaces and TanStack Query hooks for the Business Architecture API (ADP-SPEC-033/034). */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
+import { CAP_ANALYSIS_KEY } from "./capAnalysis";
 import { apiGet, apiMutation } from "./client";
+import { ORG_KEY } from "./organization";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -133,14 +136,26 @@ export function useCapability(id: string | null) {
   });
 }
 
+/**
+ * A capability write changes more than the capability list (ADP-blp.34): the roll-ups and
+ * findings, the organization findings and regional heat map, and the portfolio's grouping
+ * by capability are all computed from the tree. Without this they stayed stale until
+ * their own refetch.
+ */
+function invalidateCapabilityViews(qc: QueryClient): void {
+  void qc.invalidateQueries({ queryKey: ["business-capabilities"] });
+  void qc.invalidateQueries({ queryKey: CAP_ANALYSIS_KEY });
+  void qc.invalidateQueries({ queryKey: ORG_KEY });
+  void qc.invalidateQueries({ queryKey: ["portfolio"] });
+  void qc.invalidateQueries({ queryKey: ["strategy-heatmap"] });
+}
+
 export function useCreateCapability() {
   const qc = useQueryClient();
   return useMutation<BusinessCapability, Error, BusinessCapabilityCreate>({
     mutationFn: (body) =>
       apiMutation<BusinessCapability, BusinessCapabilityCreate>("POST", "/api/v1/business/capabilities", body),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["business-capabilities"] });
-    },
+    onSuccess: () => invalidateCapabilityViews(qc),
   });
 }
 
@@ -153,9 +168,7 @@ export function useUpdateCapability(capId: string) {
         `/api/v1/business/capabilities/${capId}`,
         body,
       ),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["business-capabilities"] });
-    },
+    onSuccess: () => invalidateCapabilityViews(qc),
   });
 }
 
@@ -163,9 +176,7 @@ export function useDeleteCapability() {
   const qc = useQueryClient();
   return useMutation<void, Error & { status?: number }, string>({
     mutationFn: (capId) => apiMutation<void>("DELETE", `/api/v1/business/capabilities/${capId}`),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["business-capabilities"] });
-    },
+    onSuccess: () => invalidateCapabilityViews(qc),
   });
 }
 
