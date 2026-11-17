@@ -7,6 +7,7 @@ import type React from "react";
 import { useAutomatedBy, type AgentSummary, type AutomatesKind } from "../api/agentic";
 import { useCapabilityNav } from "../application/appCapNav";
 import { RiskBadge } from "./agenticRisk";
+import { Loading } from "../ui/primitives";
 
 export function AutomatedByItems({ items }: { items: AgentSummary[] }): React.ReactElement {
   const open = useCapabilityNav()?.openAgent;
@@ -37,7 +38,7 @@ export function AutomatedByItems({ items }: { items: AgentSummary[] }): React.Re
 
 function Loaded({ kind, targetId }: { kind: AutomatesKind; targetId: string }) {
   const { data, isLoading } = useAutomatedBy(kind, targetId);
-  if (isLoading) return <div style={{ fontSize: 12, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading) return <Loading />;
   return <AutomatedByItems items={data?.items ?? []} />;
 }
 

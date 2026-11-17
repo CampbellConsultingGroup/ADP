@@ -5,6 +5,7 @@ import {
   useUnlinkCapabilityFromStage,
   useCapabilities,
 } from "../api/business";
+import { Loading } from "../ui/primitives";
 
 interface StageCapsEditorProps {
   vsId: string;
@@ -33,7 +34,7 @@ export default function StageCapsEditor({ vsId, stageId }: StageCapsEditorProps)
     });
   }
 
-  if (isLoading) return <div style={{ fontSize: 12, color: "var(--ink-3)", padding: "4px 0" }}>Loading…</div>;
+  if (isLoading) return <Loading />;
 
   return (
     <div style={{ marginTop: 8 }}>

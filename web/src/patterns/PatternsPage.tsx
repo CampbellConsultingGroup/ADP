@@ -11,7 +11,7 @@ import { KIND_LABELS, LIFECYCLE_LABELS, LIFECYCLE_TONES } from "./labels";
 import PatternVersion from "./PatternVersion";
 import { useCanManagePatterns } from "./permissions";
 import type { DiagramSeed } from "../diagrams/generators";
-import { PageHeader } from "../ui/primitives";
+import { PageHeader, Loading } from "../ui/primitives";
 
 const cell: React.CSSProperties = { padding: "7px 10px", borderBottom: "1px solid var(--border)", fontSize: 12.5, textAlign: "left" };
 
@@ -122,7 +122,7 @@ function PatternCatalog() {
       </div>
 
       {isLoading ? (
-        <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>
+        <Loading />
       ) : items.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--ink-3)" }}>No patterns match.</div>
       ) : (

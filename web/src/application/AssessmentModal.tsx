@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "../ui";
 import { ModalOverlay } from "../ui/ModalOverlay";
+import { Loading } from "../ui/primitives";
 
 /** Generic popup shared by HealthAssessmentModal.tsx and
  *  BusinessValueAssessmentModal.tsx (extracted per
@@ -90,7 +91,7 @@ export default function AssessmentModal({
         <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-2)" }}>{description}</p>
 
         {isLoading ? (
-          <div style={{ padding: 20, fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>
+          <Loading pad={20} />
         ) : (
           <div style={{ overflowX: "auto" }}>
             <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12 }}>

@@ -9,6 +9,7 @@ import type {
 } from "../api/application";
 import { useFrameworks } from "../api/compliance";
 import { hasStatus } from "../api/client";
+import { Loading, Button } from "../ui/primitives";
 
 /** APM US3 — application risk & compliance register (sensitive: gated server-side).
  *
@@ -80,7 +81,7 @@ export default function RiskPanel({ appId }: Props) {
     );
   }
 
-  if (isLoading) return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading) return <Loading />;
 
   if (error) {
     const forbidden = hasStatus(error, 403);
@@ -194,17 +195,9 @@ export default function RiskPanel({ appId }: Props) {
       )}
 
       <div>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={updateRisk.isPending}
-          style={{
-            padding: "6px 14px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 6,
-            background: "var(--accent)", color: "var(--accent-ink)", cursor: "pointer",
-          }}
-        >
+        <Button variant="primary" onClick={handleSave} disabled={updateRisk.isPending}>
           {updateRisk.isPending ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </div>
     </div>
   );

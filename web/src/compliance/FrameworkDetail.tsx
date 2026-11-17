@@ -11,6 +11,7 @@ import ControlTree from "./ControlTree";
 import { isHttpUrl } from "../ui/url";
 import { confirmAction } from "../ui/confirm";
 import { useCan } from "../auth/permissions";
+import { Loading } from "../ui/primitives";
 
 interface FrameworkDetailProps {
   frameworkId: string;
@@ -85,7 +86,7 @@ export default function FrameworkDetail({ frameworkId, onBack }: FrameworkDetail
   const canWrite = useCan("write_compliance"); // ADP-blp.65
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  if (isLoading) return <div style={{ padding: 16 }}>Loading…</div>;
+  if (isLoading) return <Loading pad={16} />;
   if (error || !framework) {
     return <div style={{ padding: 16, color: "var(--crit)" }}>Framework not found</div>;
   }

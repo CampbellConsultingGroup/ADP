@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useApplicationGovernance, useUpdateApplicationGovernance } from "../api/application";
 import type { ApplicationGovernanceUpdate } from "../api/application";
 import { hasStatus } from "../api/client";
+import { Loading, Button } from "../ui/primitives";
 
 /** APM US7 — application ownership & governance (sensitive: gated server-side). */
 
@@ -34,7 +35,7 @@ export default function GovernancePanel({ appId }: Props) {
     setDecisionRights(governance.decision_rights ?? "");
   }, [governance]);
 
-  if (isLoading) return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading) return <Loading />;
 
   if (error) {
     const forbidden = hasStatus(error, 403);
@@ -100,17 +101,9 @@ export default function GovernancePanel({ appId }: Props) {
       </label>
 
       <div>
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={updateGovernance.isPending}
-          style={{
-            padding: "6px 14px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 6,
-            background: "var(--accent)", color: "var(--accent-ink)", cursor: "pointer",
-          }}
-        >
+        <Button variant="primary" onClick={handleSave} disabled={updateGovernance.isPending}>
           {updateGovernance.isPending ? "Saving…" : "Save"}
-        </button>
+        </Button>
       </div>
     </div>
   );

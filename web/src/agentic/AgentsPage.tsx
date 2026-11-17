@@ -10,7 +10,7 @@ import AgentForm from "./AgentForm";
 import { RiskBadge } from "./agenticRisk";
 import { AUTONOMY_LEVELS, HUMAN_APPROVAL_LABELS, LIFECYCLE_LABELS, autonomyLabel } from "./autonomy";
 import { useCan } from "../auth/permissions";
-import { PageHeader } from "../ui/primitives";
+import { PageHeader, Loading } from "../ui/primitives";
 
 const cell: React.CSSProperties = { padding: "7px 10px", borderBottom: "1px solid var(--border)", fontSize: 12.5, textAlign: "left" };
 
@@ -116,7 +116,7 @@ export default function AgentsPage({
       </div>
 
       {isLoading ? (
-        <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>
+        <Loading />
       ) : items.length === 0 ? (
         <div style={{ fontSize: 13, color: "var(--ink-3)" }}>No agents match.</div>
       ) : (

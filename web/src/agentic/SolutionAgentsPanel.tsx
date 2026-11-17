@@ -18,6 +18,7 @@ import { useAgentComplianceStatuses } from "../api/compliance";
 import { RiskBadge, SolutionRiskBanner } from "./agenticRisk";
 import { ComplianceStatusText } from "./ComplianceStatusText";
 import { HUMAN_APPROVAL_LABELS, ROLE_LABELS, autonomyLabel } from "./autonomy";
+import { Loading } from "../ui/primitives";
 
 const ROLES = Object.keys(ROLE_LABELS) as SolutionRole[];
 
@@ -69,7 +70,7 @@ export default function SolutionAgentsPanel({ appId }: { appId: string }) {
       setRegistering(false);
     });
 
-  if (isLoading) return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
+  if (isLoading) return <Loading />;
 
   if (registering) {
     return (

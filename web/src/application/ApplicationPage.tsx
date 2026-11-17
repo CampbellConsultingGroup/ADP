@@ -9,7 +9,7 @@ import RoadmapView from "./RoadmapView";
 import AppCapabilitiesView from "./AppCapabilitiesView";
 import { Tabs } from "../ui/Tabs";
 import { useHashParam } from "../shell/routing";
-import { PageHeader } from "../ui/primitives";
+import { PageHeader, Loading } from "../ui/primitives";
 
 function ApplicationPageInner({ initialAppId }: { initialAppId: string | null }) {
   const { data } = useApplications();
@@ -106,7 +106,7 @@ export default function ApplicationPage({
       />
       <div style={{ flex: 1, overflow: "hidden" }}>
         {view === "registry" && (
-          <Suspense fallback={<div style={{ padding: 24, color: "var(--ink-3)" }}>Loading…</div>}>
+          <Suspense fallback={<Loading pad={24} />}>
             <ApplicationPageInner initialAppId={initialAppId} />
           </Suspense>
         )}

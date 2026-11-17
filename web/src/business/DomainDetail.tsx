@@ -7,6 +7,7 @@ import {
   type BusinessDomain,
 } from "../api/business";
 import DomainForm from "./DomainForm";
+import { Loading } from "../ui/primitives";
 
 interface DomainDetailProps {
   domainId: string;
@@ -20,7 +21,7 @@ export default function DomainDetail({ domainId, onBack }: DomainDetailProps) {
   const [editing, setEditing] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
-  if (isLoading) return <div style={{ padding: 16 }}>Loading…</div>;
+  if (isLoading) return <Loading pad={16} />;
   if (error || !domain) return <div style={{ padding: 16, color: "var(--crit)" }}>Domain not found</div>;
 
   const assignedIds = new Set(domain.capabilities.map((c) => c.capability_id));

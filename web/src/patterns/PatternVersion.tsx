@@ -14,6 +14,7 @@ import PatternViews from "./PatternViews";
 import { useCanManagePatterns } from "./permissions";
 import YamlEditor from "./YamlEditor";
 import { confirmAction } from "../ui/confirm";
+import { Loading } from "../ui/primitives";
 
 type Tab = "overview" | "yaml" | "views" | "discovery" | "history";
 
@@ -135,7 +136,7 @@ export default function PatternVersion({
   const deleteDraft = useDeleteDraft(patternKey, version);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  if (isLoading) return <div style={{ padding: 20, fontSize: 13 }}>Loading…</div>;
+  if (isLoading) return <Loading pad={20} />;
   if (error || !detail) return <div style={{ padding: 20 }} role="alert">Pattern version not found.</div>;
 
   const tabs: { id: Tab; label: string }[] = [

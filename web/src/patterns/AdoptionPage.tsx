@@ -19,6 +19,7 @@ import { useCanManagePatterns } from "./permissions";
 import PinsEditor from "./PinsEditor";
 import { flowchartToSeed } from "./saveAsDiagram";
 import { confirmAction } from "../ui/confirm";
+import { Loading } from "../ui/primitives";
 
 function Plateau({ report }: { report: ConformanceReport }) {
   if (!report.plateau) return null;
@@ -70,7 +71,7 @@ export default function AdoptionPage({ adoptionId, onBack, onGenerateDiagram }: 
   const [view, setView] = useState<AdoptionViewKind>("conformance");
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  if (isLoading) return <div style={{ padding: 20, fontSize: 13 }}>Loading…</div>;
+  if (isLoading) return <Loading pad={20} />;
   if (error || !adoption) return <div style={{ padding: 20 }} role="alert">Adoption not found.</div>;
 
   const scope = adoption.scope_type === "business_domain" ? adoption.scope_name ?? adoption.scope_ref

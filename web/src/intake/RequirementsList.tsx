@@ -1,12 +1,13 @@
 import React from "react";
 import { useRequirements } from "../api/intake";
 import { KIND_HUE, kindLabel } from "./kinds";
+import { Loading } from "../ui/primitives";
 
 interface RequirementsListProps { designId: string; }
 
 export default function RequirementsList({ designId }: RequirementsListProps): React.ReactElement {
   const { data, isLoading } = useRequirements(designId);
-  if (isLoading) return <div style={{ padding: 8, color: "var(--ink-3)", fontSize: 12 }}>Loading…</div>;
+  if (isLoading) return <Loading pad={8} />;
   const requirements = data?.requirements ?? [];
   if (requirements.length === 0) {
     return <div style={{ padding: 12, color: "var(--ink-3)", fontSize: 13, fontStyle: "italic" }}>No requirements yet — use the intake form.</div>;

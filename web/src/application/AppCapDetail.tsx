@@ -23,6 +23,7 @@ import { Button } from "../ui";
 import { MissingTechBadge } from "./AppCapTree";
 import RealizationList from "./RealizationList";
 import { confirmAction } from "../ui/confirm";
+import { Loading } from "../ui/primitives";
 
 export function pathLabel(path: CapRef[], name?: string): string {
   return [...path.map((p) => p.name), ...(name ? [name] : [])].join(" › ");
@@ -186,7 +187,7 @@ export default function AppCapDetail({
   const [description, setDescription] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  if (isLoading) return <div style={{ color: "var(--ink-3)", fontSize: 13 }}>Loading…</div>;
+  if (isLoading) return <Loading />;
   if (error || !ac) return <div role="alert" style={{ color: "var(--crit)", fontSize: 13 }}>Could not load this application capability.</div>;
 
   const startEdit = () => {

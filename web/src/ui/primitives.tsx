@@ -73,6 +73,61 @@ export function EmptyState({ icon, title, why, children, action, compact }: {
   );
 }
 
+/**
+ * Shared feedback and form pieces (ADP-blp.46). Screens wrote these by hand: 38 separate
+ * "Loading…" lines in six styles, error text in a dozen, and labels that were not tied to their
+ * control. Use these in new and changed screens.
+ */
+
+/** "Loading…", announced politely. `pad` adds space around it for a panel-sized placeholder. */
+export function Loading({ label = "Loading…", pad }: { label?: string; pad?: number }): React.ReactElement {
+  return (
+    <div className="ui-loading" role="status" style={pad ? { padding: pad } : undefined}>
+      {label}
+    </div>
+  );
+}
+
+/** A boxed message. `crit` and `warn` are announced as alerts; the others as status. */
+export function Alert({ tone = "info", children }: { tone?: "crit" | "warn" | "good" | "info"; children: React.ReactNode }): React.ReactElement {
+  return (
+    <div className={`ui-alert ${tone}`} role={tone === "crit" || tone === "warn" ? "alert" : "status"}>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * A labelled form control. The label, hint and error are tied to the control (htmlFor,
+ * aria-describedby, aria-invalid), which a bare <label> next to an <input> is not.
+ * `children` receives the props to spread onto the control.
+ */
+export function Field({ label, required, hint, error, children }: {
+  label: string; required?: boolean; hint?: React.ReactNode; error?: React.ReactNode;
+  children: (control: { id: string; "aria-describedby"?: string; "aria-invalid"?: boolean; "aria-required"?: boolean }) => React.ReactNode;
+}): React.ReactElement {
+  const id = React.useId();
+  const describedBy = [hint ? `${id}-hint` : null, error ? `${id}-error` : null].filter(Boolean).join(" ");
+  return (
+    <div className="ui-field">
+      <label className="ui-label" htmlFor={id}>
+        {label}
+        {required && <span className="req" aria-hidden="true"> *</span>}
+      </label>
+      {children({
+        id,
+        "aria-describedby": describedBy || undefined,
+        "aria-invalid": error ? true : undefined,
+        // aria-required, not the native attribute: forms here validate themselves and show
+        // their own message, which the browser's built-in "fill in this field" bubble would pre-empt.
+        "aria-required": required || undefined,
+      })}
+      {hint && <div className="ui-hint" id={`${id}-hint`}>{hint}</div>}
+      {error && <div className="ui-field-error" id={`${id}-error`} role="alert">{error}</div>}
+    </div>
+  );
+}
+
 export function KpiTile({ label, icon, value, delta, alert }: {
   label: React.ReactNode; icon?: string; value: React.ReactNode; delta?: React.ReactNode; alert?: boolean;
 }): React.ReactElement {
