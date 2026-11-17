@@ -8,7 +8,7 @@ import {
   useUnlinkInitiativeObjective,
   type StrategyInitiative,
 } from "../api/strategy";
-import LinkEditor from "./LinkEditor";
+import LinkEditor from "../links/LinkEditor";
 
 interface Props {
   initiative: StrategyInitiative;

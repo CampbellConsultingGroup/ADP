@@ -196,8 +196,8 @@ describe("DesignLinkEditor (capability)", () => {
 
     expect(await screen.findByText("Payments Design")).toBeDefined();
 
+    // Choosing a design links it (the shared link editor, ADP-blp.36): no separate Link button.
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "DSN-2" } });
-    fireEvent.click(screen.getByRole("button", { name: "Link" }));
 
     await waitFor(() =>
       expect(lastCall(calls, "POST")?.body).toEqual({ design_id: "DSN-2" }),

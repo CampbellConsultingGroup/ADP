@@ -13,7 +13,7 @@ import {
   useUnlinkObjectiveControl,
   type StrategicObjective,
 } from "../api/strategy";
-import { useLinkFeedback } from "./useLinkFeedback";
+import { useLinkFeedback } from "../links/useLinkFeedback";
 
 interface Props {
   objective: StrategicObjective;

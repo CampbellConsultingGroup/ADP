@@ -173,6 +173,13 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.36, next step (frontend only): the shared link editor moved to `web/src/links/`
+  (`LinkEditor.tsx`, `useLinkFeedback.ts`, `NavLinkButton.tsx`; strategy imports updated). `LinkOption`
+  gained `detail` (shown beside a linked item) and `LinkEditor` takes `linkedItems` for callers that load
+  the linked rows themselves, so a linked item outside the picker's capped list is still shown.
+  `business/DesignLinkEditor` (capability and value stream design links) is now a wrapper over it: choosing
+  a design links it, there is no separate Link button. Still separate: the control link editor, the
+  initiative control-mapping editor and the application-side editors (they carry extra fields).
 - Fable review P3 batch 8 (epic ADP-blp, more of .34 .65 .68; frontend only):
   - Portfolio filter is in the URL (`?filter=<field>&op=<operator>&value=<value>`), next to `group`/`then`.
     The reset effects in `PortfolioPage` act only on a field or operator the user changed

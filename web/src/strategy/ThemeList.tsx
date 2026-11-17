@@ -8,7 +8,7 @@ import {
   type StrategicTheme,
 } from "../api/strategy";
 import { Button } from "../ui";
-import NavLinkButton from "./NavLinkButton";
+import NavLinkButton from "../links/NavLinkButton";
 import { useScrollHighlight } from "./useScrollHighlight";
 import EditFrame, { useReturnFocus } from "./EditFrame";
 import { useCan } from "../auth/permissions";

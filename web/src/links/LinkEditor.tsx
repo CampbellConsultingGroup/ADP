@@ -1,6 +1,7 @@
 /**
- * The link editor shared by an objective's capability, value stream, design and application
- * links (ADP-blp.36). Those four were separate files of about 135 lines each that differed only
+ * The link editor shared across screens: an objective's capability, value stream, design,
+ * application and initiative links, and a capability's or value stream's design links
+ * (ADP-blp.36). Those four were separate files of about 135 lines each that differed only
  * in the noun: the same list of linked items with a Remove button, the same "Link a …" picker
  * that saves as soon as a value is chosen, the same 409 handling and the same confirmation.
  * Each is now a few lines that hands this component its options, linked ids and mutations.
@@ -14,6 +15,8 @@ import type { EntityKind } from "../shell/routing";
 export interface LinkOption {
   id: string;
   label: string;
+  /** Shown beside a linked item's name, e.g. a design's lifecycle status. */
+  detail?: string;
 }
 
 /** The kinds of linked thing that have a screen of their own to open (ADP-blp.57). */
@@ -33,6 +36,12 @@ interface LinkEditorProps {
   /** Everything that could be linked. */
   options: LinkOption[];
   linkedIds: readonly string[];
+  /**
+   * The linked items themselves, when the caller has them (with their own labels). Without
+   * this they are looked up in `options`, so a linked item missing from `options` -- a
+   * picker list is usually capped -- would not be shown.
+   */
+  linkedItems?: LinkOption[];
   isLoading?: boolean;
   /** "capability" */
   noun: string;
@@ -53,14 +62,15 @@ interface LinkEditorProps {
 const muted: React.CSSProperties = { fontSize: "0.85rem", color: "var(--ink-2)" };
 
 export default function LinkEditor({
-  options, linkedIds, isLoading, noun, plural, prompt, link, unlink, entityKind, onOpen, openTitle,
+  options, linkedIds, linkedItems, isLoading, noun, plural, prompt, link, unlink, entityKind, onOpen,
+  openTitle,
 }: LinkEditorProps): React.ReactElement {
   const [selectedId, setSelectedId] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
   const feedback = useLinkFeedback();
 
   const linkedSet = new Set(linkedIds);
-  const linked = options.filter((o) => linkedSet.has(o.id));
+  const linked = linkedItems ?? options.filter((o) => linkedSet.has(o.id));
   const available = options.filter((o) => !linkedSet.has(o.id));
 
   function handleAdd(chosenId: string) {
@@ -108,6 +118,11 @@ export default function LinkEditor({
                 o.label
               )}
             </span>
+            {o.detail && (
+              <span style={{ fontSize: "0.75rem", color: "var(--ink-2)", textTransform: "capitalize" }}>
+                {o.detail}
+              </span>
+            )}
             <button
               onClick={() => unlink.mutate(o.id, { onSuccess: () => feedback.showRemoved(o.label) })}
               disabled={unlink.isPending}
