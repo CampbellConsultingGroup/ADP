@@ -7,13 +7,21 @@ import type { AgentFilters, AgentLifecycle, AgentWrite } from "../api/agentic";
 import { StatusBadge } from "../ui";
 import AgentDetail from "./AgentDetail";
 import AgentForm from "./AgentForm";
+import { RiskBadge } from "./agenticRisk";
 import { AUTONOMY_LEVELS, HUMAN_APPROVAL_LABELS, LIFECYCLE_LABELS, autonomyLabel } from "./autonomy";
 
 const cell: React.CSSProperties = { padding: "7px 10px", borderBottom: "1px solid var(--border)", fontSize: 12.5, textAlign: "left" };
 
-export default function AgentsPage({ onOpenSolution }: { onOpenSolution?: (appId: string) => void }) {
+export default function AgentsPage({
+  onOpenSolution,
+  initialAgentId = null,
+}: {
+  onOpenSolution?: (appId: string) => void;
+  /** 944: open this agent on arrival (from a capability, stage or control). */
+  initialAgentId?: string | null;
+}) {
   const [filters, setFilters] = useState<AgentFilters>({});
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialAgentId);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { data, isLoading } = useAgents(filters);
@@ -102,7 +110,7 @@ export default function AgentsPage({ onOpenSolution }: { onOpenSolution?: (appId
         <table style={{ borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
-              {["Agent", "Owner", "Model provider", "Autonomy", "Approval", "Lifecycle", "Solutions"].map((h) => (
+              {["Agent", "Owner", "Model provider", "Autonomy", "Approval", "Risk", "Lifecycle", "Solutions"].map((h) => (
                 <th key={h} style={{ ...cell, color: "var(--ink-3)", fontWeight: 600 }}>{h}</th>
               ))}
             </tr>
@@ -123,6 +131,7 @@ export default function AgentsPage({ onOpenSolution }: { onOpenSolution?: (appId
                 <td style={cell}>{a.model_provider ?? "—"}</td>
                 <td style={cell}>{autonomyLabel(a.autonomy_level)}</td>
                 <td style={cell}>{HUMAN_APPROVAL_LABELS[a.human_approval]}</td>
+                <td style={cell}><RiskBadge band={a.agentic_risk.band} /></td>
                 <td style={cell}>{LIFECYCLE_LABELS[a.lifecycle_status]}</td>
                 <td style={cell}>
                   {a.solution_count === 0 ? <StatusBadge tone="warn">Unassigned</StatusBadge> : a.solution_count}

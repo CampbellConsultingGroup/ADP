@@ -74,6 +74,8 @@ export default function App(): React.ReactElement {
     setPendingAdoptionId(id);
     setView("patterns");
   };
+  // 944-agent-traceability: an agent to open on the Agents screen.
+  const [pendingAgentId, setPendingAgentId] = useState<string | null>(null);
   const capabilityNav: CapabilityNav = {
     openBusinessCapability: (id) => {
       setPendingBusinessCapId(id);
@@ -88,6 +90,10 @@ export default function App(): React.ReactElement {
       setPendingTechCapId(id);
       setView("technical");
     },
+    openAgent: (id) => {
+      setPendingAgentId(id);
+      setView("agents");
+    },
   };
 
   const onNavigate = (nextView: AppView) => {
@@ -101,6 +107,7 @@ export default function App(): React.ReactElement {
     setPendingBusinessCapId(null);
     setPendingTechCapId(null);
     setPendingAdoptionId(null);
+    setPendingAgentId(null);
     setView(nextView);
   };
 
@@ -161,6 +168,8 @@ export default function App(): React.ReactElement {
       case "agents":
         return (
           <AgentsPage
+            key={pendingAgentId ?? "agents"}
+            initialAgentId={pendingAgentId}
             onOpenSolution={(appId) => {
               setPendingAppId(appId);
               setPendingAppCapId(null);

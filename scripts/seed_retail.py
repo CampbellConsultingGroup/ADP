@@ -33,6 +33,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from adp.agentic import store as agstore
 from adp.agentic.models import AgentCreate
+from adp.compliance import store as cstore
+from adp.compliance.models import (
+    ComplianceStatus,
+    ControlCreate,
+    ControlMappingWrite,
+    RegulatoryFrameworkCreate,
+)
 from adp.application import store as astore
 from adp.application.models import (
     ApplicationCapabilityLinkCreate,
@@ -91,6 +98,11 @@ WIPE_TABLES = [
     # 933-agent-registry: agent memberships + agents (agents are not owned by applications,
     # so an applications TRUNCATE ... CASCADE alone would leave them behind).
     "solution_agents",
+    # 944-agent-traceability: automates links and agent compliance mappings (before agents).
+    "agent_capability_links",
+    "agent_stage_links",
+    "agent_activity_links",
+    "control_agent_mapping",
     "agents",
     # 940-org-units-geography: org units and their geography links. NEVER the geographies table
     # itself -- migration 048 seeds it, and nothing here can recreate it.
@@ -154,6 +166,18 @@ ADP_AGENTS = [
      "agent_review_business_capability", "Reviews capabilities and suggests changes for "
      "architect confirmation."),
 ]
+
+# 944-agent-traceability: agent name -> business L3s it automates.
+ADP_AGENT_AUTOMATES = {
+    "ADP Intake Extractor": ["Requirements Capture"],
+    "ADP Recommendation Engine": ["Solution Option Analysis"],
+    "ADP LLM-as-Judge Critics": ["Design Validation"],
+    "ADP Agent Review": ["Capability Model Review"],
+}
+# The chat assistant answers users directly, so EU AI Act Art. 50 (transparency) applies to it.
+# The framework is found by name or created; frameworks are never wiped.
+ADP_AGENT_CONTROL = ("ADP Chat Assistant", "EU AI Act", "Art. 50",
+                     "Transparency obligations for providers and deployers of AI systems")
 
 # ── Business domains ──────────────────────────────────────────────────────────
 # (name, classification, org_unit, scope_statement, [risk_flags])
@@ -220,6 +244,13 @@ CAPABILITIES = [
         # region-specific rather than copied per country.
         ("Human Capital Management", ["Statutory eSocial Reporting"]),
         ("Enterprise Data & Analytics", []),
+    ]),
+    # 944-agent-traceability: what ADP's own agents automate (ADP_AGENT_AUTOMATES below).
+    ("Technology & Architecture", "IT & Data", [
+        ("Architecture Management", [
+            "Requirements Capture", "Solution Option Analysis", "Design Validation",
+            "Capability Model Review",
+        ]),
     ]),
     # 937-application-capabilities: the user's worked Store POS example (ADP-6et). Business L3s
     # are deliberately one function each, so each maps cleanly to one application capability.
@@ -1060,6 +1091,7 @@ async def seed(db_url: str) -> None:
             ),
             session,
         )
+        agent_ids: dict[str, str] = {}
         for name, role, autonomy, approval, framework, prompt_ref, desc in ADP_AGENTS:
             agent = await agstore.create_agent(
                 AgentCreate(
@@ -1071,8 +1103,55 @@ async def seed(db_url: str) -> None:
                 session,
             )
             await agstore.add_solution_agent(solution.id, agent.id, role, session)
+            agent_ids[name] = agent.id
+        link_count = 0
+        for agent_name, l3_names in ADP_AGENT_AUTOMATES.items():
+            for l3_name in l3_names:
+                await agstore.add_link(
+                    "capability", agent_ids[agent_name], cap_ids[l3_name], session
+                )
+                link_count += 1
         await session.commit()
-        print(f"  1 agentic solution, {len(ADP_AGENTS)} agents")
+        print(f"  1 agentic solution, {len(ADP_AGENTS)} agents, {link_count} automates links")
+
+    # ── Phase D2: agent compliance (944-agent-traceability) ───────────────────
+    async with session_factory() as session:
+        agent_name, fw_name, code, title = ADP_AGENT_CONTROL
+        fw = next((f for f in await cstore.list_frameworks(session) if f.name == fw_name), None)
+        if fw is None:
+            fw = await cstore.create_framework(
+                RegulatoryFrameworkCreate(
+                    name=fw_name, jurisdiction="EU", authority="European Union",
+                    version="Regulation (EU) 2024/1689",
+                ),
+                session,
+            )
+        detail = await cstore.get_framework_detail(fw.id, session)
+
+        def _find(nodes):
+            for n in nodes:
+                if n.code == code:
+                    return n
+                found = _find(n.children)
+                if found:
+                    return found
+            return None
+
+        control = _find(detail.controls if detail else [])
+        if control is None:
+            control = await cstore.create_control(
+                fw.id, ControlCreate(code=code, title=title, description=title), session
+            )
+        await cstore.upsert_agent_mapping(
+            control.id, agent_ids[agent_name],
+            ControlMappingWrite(
+                compliance_status=ComplianceStatus.PARTIAL,
+                evidence_ref="AI interaction disclosure in chat panel header",
+            ),
+            session,
+        )
+        await session.commit()
+        print(f"  {agent_name} mapped to {fw_name} {code} (partial)")
 
     await engine.dispose()
     print("\nDone. Retail portfolio seeded.")

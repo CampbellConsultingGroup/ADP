@@ -6,6 +6,9 @@ import type { AgentWrite } from "../api/agentic";
 import { Button, StatusBadge } from "../ui";
 import { isHttpUrl } from "../ui/url";
 import AgentForm from "./AgentForm";
+import AgentAutomates from "./AgentAutomates";
+import AgentCompliance from "./AgentCompliance";
+import { RiskBadge, RiskFactors } from "./agenticRisk";
 import {
   AUTONOMY_LEVELS,
   DATA_CLASSIFICATION_LABELS,
@@ -92,6 +95,12 @@ export default function AgentDetail({ agentId, onBack, onOpenSolution }: Props) 
               {level && <span style={{ color: "var(--ink-3)" }}> — {level.meaning}</span>}
             </Field>
             <Field label="Human approval">{HUMAN_APPROVAL_LABELS[agent.human_approval]}</Field>
+            <Field label="Agentic risk">
+              <span style={{ display: "inline-flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <RiskBadge band={agent.agentic_risk.band} />
+                <RiskFactors risk={agent.agentic_risk} />
+              </span>
+            </Field>
             <Field label="Model">
               {[agent.model_provider, agent.model_id, agent.model_version].filter(Boolean).join(" · ") || "—"}
             </Field>
@@ -113,6 +122,16 @@ export default function AgentDetail({ agentId, onBack, onOpenSolution }: Props) 
           </div>
         </>
       )}
+
+      <section aria-label="Automates">
+        <h3 style={{ fontSize: 14, margin: "8px 0 6px" }}>Automates</h3>
+        <AgentAutomates agentId={agentId} />
+      </section>
+
+      <section aria-label="Compliance">
+        <h3 style={{ fontSize: 14, margin: "8px 0 6px" }}>Compliance</h3>
+        <AgentCompliance agentId={agentId} />
+      </section>
 
       <div>
         <h3 style={{ fontSize: 14, margin: "8px 0 6px" }}>Solutions ({agent.solutions.length})</h3>

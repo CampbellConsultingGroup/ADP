@@ -14,6 +14,30 @@ export type AgentLifecycle = "planned" | "active" | "sunset" | "retired";
 export type DataClassification = "public" | "internal" | "confidential" | "restricted";
 export type SolutionRole = "orchestrator" | "worker" | "reviewer" | "router";
 
+// ── Agentic risk (944-agent-traceability): derived on read, never stored ──────
+
+export type RiskBand = "high" | "medium" | "low";
+export type RiskFactorCode = "autonomy" | "no_human_approval" | "sensitive_data";
+
+export interface RiskFactor {
+  code: RiskFactorCode;
+  label: string;
+}
+
+export interface AgenticRisk {
+  band: RiskBand;
+  factors: RiskFactor[];
+  missing: "data_classification"[];
+  not_considered: "tool_side_effects"[];
+}
+
+export interface SolutionAgenticRisk {
+  /** null = the solution has no non-retired agents ("No agents"). */
+  band: RiskBand | null;
+  agents: { id: string; name: string }[];
+  not_considered: "tool_side_effects"[];
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -36,6 +60,7 @@ export interface Agent {
   cost_visible: boolean;
   external_registry_ref: string | null;
   solution_count: number;
+  agentic_risk: AgenticRisk;
   created_at: string;
   updated_at: string;
 }
@@ -76,6 +101,53 @@ export interface SolutionAgent {
   position: number;
 }
 
+export interface SolutionAgentList {
+  items: SolutionAgent[];
+  total: number;
+  solution_risk: SolutionAgenticRisk;
+}
+
+// ── Automates links (944) ─────────────────────────────────────────────────────
+
+export type AutomatesKind = "capability" | "stage" | "activity";
+
+export interface AutomatesCapability {
+  id: string;
+  name: string;
+  level: number;
+  /** [L1 name, L2 name] */
+  path: string[];
+}
+
+export interface AutomatesStage {
+  id: string;
+  name: string;
+  value_stream_id: string;
+  value_stream_name: string;
+}
+
+export interface AutomatesActivity {
+  id: string;
+  name: string;
+  category: "primary" | "support";
+  value_chain_id: string;
+  value_chain_name: string;
+}
+
+export interface AgentAutomates {
+  capabilities: AutomatesCapability[];
+  stages: AutomatesStage[];
+  activities: AutomatesActivity[];
+}
+
+export interface AgentSummary {
+  id: string;
+  name: string;
+  lifecycle_status: AgentLifecycle;
+  autonomy_level: number;
+  agentic_risk: AgenticRisk;
+}
+
 export interface AgentFilters {
   autonomy_min?: number;
   model_provider?: string;
@@ -103,6 +175,8 @@ const keys = {
   agents: ["agentic-agents"] as const,
   agent: (id: string) => ["agentic-agent", id] as const,
   solution: (appId: string) => ["agentic-solution", appId] as const,
+  automates: (id: string) => ["agentic-automates", id] as const,
+  automatedBy: (kind: AutomatesKind, id: string) => ["agentic-automated-by", kind, id] as const,
 };
 
 function useInvalidateAll() {
@@ -163,7 +237,7 @@ export function useDeleteAgent() {
 // ── Solution membership ───────────────────────────────────────────────────────
 
 export function useSolutionAgents(appId: string) {
-  return useQuery<ListResponse<SolutionAgent>>({
+  return useQuery<SolutionAgentList>({
     queryKey: keys.solution(appId),
     queryFn: () => apiGet(`${API}/solutions/${appId}/agents`),
   });
@@ -200,5 +274,61 @@ export function useRemoveSolutionAgent(appId: string) {
   return useMutation<void, Error, string>({
     mutationFn: (agentId) => apiMutation<void>("DELETE", `${API}/solutions/${appId}/agents/${agentId}`),
     onSuccess: invalidate,
+  });
+}
+
+// ── Automates links (944-agent-traceability) ──────────────────────────────────
+
+const KIND_PATH: Record<AutomatesKind, { segment: string; field: string; reverse: string }> = {
+  capability: { segment: "capabilities", field: "capability_id", reverse: "capabilities" },
+  stage: { segment: "stages", field: "stage_id", reverse: "value-stream-stages" },
+  activity: { segment: "activities", field: "activity_id", reverse: "value-chain-activities" },
+};
+
+export function useAgentAutomates(agentId: string | null) {
+  return useQuery<AgentAutomates>({
+    queryKey: keys.automates(agentId ?? ""),
+    queryFn: () => apiGet(`${API}/agents/${agentId}/automates`),
+    enabled: !!agentId,
+  });
+}
+
+function useInvalidateAutomates(agentId: string) {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: keys.automates(agentId) });
+    void qc.invalidateQueries({ queryKey: ["agentic-automated-by"] });
+  };
+}
+
+export function useAddAutomates(agentId: string) {
+  const invalidate = useInvalidateAutomates(agentId);
+  return useMutation<AgentAutomates, Error, { kind: AutomatesKind; targetId: string }>({
+    mutationFn: ({ kind, targetId }) =>
+      apiMutation("POST", `${API}/agents/${agentId}/automates/${KIND_PATH[kind].segment}`, {
+        [KIND_PATH[kind].field]: targetId,
+      }),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRemoveAutomates(agentId: string) {
+  const invalidate = useInvalidateAutomates(agentId);
+  return useMutation<void, Error, { kind: AutomatesKind; targetId: string }>({
+    mutationFn: ({ kind, targetId }) =>
+      apiMutation<void>(
+        "DELETE",
+        `${API}/agents/${agentId}/automates/${KIND_PATH[kind].segment}/${targetId}`,
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+/** Reverse lookup: the agents that automate a capability, stage or activity. */
+export function useAutomatedBy(kind: AutomatesKind, targetId: string | null, enabled = true) {
+  return useQuery<ListResponse<AgentSummary>>({
+    queryKey: keys.automatedBy(kind, targetId ?? ""),
+    queryFn: () => apiGet(`${API}/${KIND_PATH[kind].reverse}/${targetId}/agents`),
+    enabled: !!targetId && enabled,
   });
 }

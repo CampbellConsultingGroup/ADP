@@ -41,6 +41,9 @@ from adp.authz.permissions import is_permitted
 from adp.authz.roles import ActionType
 from adp.compliance import store as cstore
 from adp.compliance.models import (
+    AgentComplianceMappings,
+    AgentComplianceStatus,
+    AgentComplianceStatuses,
     AmendmentNotFoundError,
     ApplicationPhaseNotFoundError,
     ComplianceSummaryResponse,
@@ -598,6 +601,81 @@ async def delete_pattern_mapping(
         "compliance.mapping.delete control_id=%s target_type=pattern target_id=%s actor=%s",
         control_id, pattern_id, actor,
     )
+
+
+# ── Agent mappings (944-agent-traceability, ADP-12x, US2) ────────────────────
+# The sixth target. Agents are not Applications, so READ_APPLICATION_GOVERNANCE never applies.
+# The agent-side read lives here rather than on the agentic router, which imports no other
+# domain package (research.md R5).
+
+_MAX_STATUS_IDS = 200
+
+
+@router.put("/controls/{control_id}/mappings/agents/{agent_id}", response_model=ControlMapping)
+async def upsert_agent_mapping(
+    control_id: str,
+    agent_id: str,
+    body: ControlMappingWrite,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    mapping = await _translate_mapping_write_errors(
+        cstore.upsert_agent_mapping(control_id, agent_id, body, session)
+    )
+    await session.commit()
+    logger.info(
+        "compliance.mapping.upsert control_id=%s target_type=agent target_id=%s actor=%s",
+        control_id, agent_id, _get_actor(request),
+    )
+    return mapping
+
+
+@router.delete(
+    "/controls/{control_id}/mappings/agents/{agent_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def delete_agent_mapping(
+    control_id: str,
+    agent_id: str,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    await _translate_mapping_delete_errors(
+        cstore.delete_agent_mapping(control_id, agent_id, session)
+    )
+    await session.commit()
+    logger.info(
+        "compliance.mapping.delete control_id=%s target_type=agent target_id=%s actor=%s",
+        control_id, agent_id, _get_actor(request),
+    )
+
+
+@router.get("/agents/statuses", response_model=AgentComplianceStatuses)
+async def agent_compliance_statuses(
+    ids: str = "",
+    session: AsyncSession = Depends(_get_session),
+):
+    """Each agent's derived status in one call (FR-009a), for a solution's Agents tab."""
+    agent_ids = list(dict.fromkeys(i.strip() for i in ids.split(",") if i.strip()))
+    if len(agent_ids) > _MAX_STATUS_IDS:
+        raise HTTPException(
+            status_code=422, detail=f"At most {_MAX_STATUS_IDS} agent ids per request"
+        )
+    statuses = await cstore.get_agent_statuses(agent_ids, session)
+    return AgentComplianceStatuses(
+        items=[AgentComplianceStatus(agent_id=a, status=statuses[a]) for a in agent_ids]
+    )
+
+
+@router.get("/agents/{agent_id}/mappings", response_model=AgentComplianceMappings)
+async def agent_compliance_mappings(
+    agent_id: str,
+    session: AsyncSession = Depends(_get_session),
+):
+    if not await cstore.agent_exists(agent_id, session):
+        raise HTTPException(status_code=404, detail=f"Agent {agent_id!r} not found")
+    items = await cstore.list_mappings_for_agent(agent_id, session)
+    status_ = cstore.compute_compliance_status([m.compliance_status for m in items])
+    return AgentComplianceMappings(items=items, total=len(items), status=status_)
 
 
 @router.put("/controls/{control_id}/mappings/organization", response_model=ControlMapping)

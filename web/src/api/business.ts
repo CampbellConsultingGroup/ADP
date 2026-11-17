@@ -186,6 +186,46 @@ export function useValueStream(id: string | null) {
   });
 }
 
+// ── Value Chain read hooks (944-agent-traceability) ───────────────────────────
+// The first frontend hooks for ADP-nag's value chains: the agent "automates" picker needs them.
+// A value chain screen is ADP-o9p's.
+
+export interface ValueChain {
+  id: string;
+  name: string;
+  description: string | null;
+  margin_label: string;
+  position: number;
+}
+
+export interface ValueChainActivity {
+  id: string;
+  value_chain_id: string;
+  name: string;
+  category: "primary" | "support";
+  position: number;
+}
+
+export interface ValueChainDetail extends ValueChain {
+  primary_activities: ValueChainActivity[];
+  support_activities: ValueChainActivity[];
+}
+
+export function useValueChains() {
+  return useQuery<{ items: ValueChain[]; total: number }>({
+    queryKey: ["business-value-chains"],
+    queryFn: () => apiGet("/api/v1/business/value-chains"),
+  });
+}
+
+export function useValueChain(id: string | null) {
+  return useQuery<ValueChainDetail>({
+    queryKey: ["business-value-chain", id],
+    queryFn: () => apiGet(`/api/v1/business/value-chains/${id}`),
+    enabled: !!id,
+  });
+}
+
 export function useCreateValueStream() {
   const qc = useQueryClient();
   return useMutation<ValueStream, Error, ValueStreamCreate>({

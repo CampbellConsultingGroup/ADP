@@ -5,6 +5,11 @@ GET/PATCH/DELETE         /api/v1/agentic/agents/{agent_id}               — one
 GET/POST                 /api/v1/agentic/solutions/{app_id}/agents       — a solution's members
 PATCH/DELETE             /api/v1/agentic/solutions/{app_id}/agents/{agent_id} — role / remove
 PUT                      /api/v1/agentic/solutions/{app_id}/agents/order — reorder
+GET                      /api/v1/agentic/agents/{agent_id}/automates     — what it automates (944)
+POST/DELETE              /api/v1/agentic/agents/{agent_id}/automates/{kind}[/{target_id}]
+                         kind = capabilities | stages | activities
+GET                      /api/v1/agentic/{target}/{id}/agents — reverse lookups (944); target =
+                         capabilities | value-stream-stages | value-chain-activities
 
 ART-V: mutations require WRITE_APPLICATION via the `/api/v1/agentic/` prefix rule. Cost estimates
         (Clarification Q2) mirror application cost: reads redact them inline for a caller lacking
@@ -25,14 +30,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from adp.agentic import store as agstore
 from adp.agentic.models import (
     COST_FIELDS,
+    ActivityLinkCreate,
     Agent,
+    AgentAutomates,
     AgentCreate,
     AgentDetail,
     AgentLifecycle,
     AgentListResponse,
     AgentNotFoundError,
+    AgentSummaryListResponse,
     AgentUpdate,
+    AutomatesKind,
+    CapabilityLinkCreate,
+    DuplicateLinkError,
     DuplicateSolutionAgentError,
+    LevelRuleError,
+    LinkNotFoundError,
     MembershipNotFoundError,
     NotAgenticSolutionError,
     OrderMismatchError,
@@ -42,7 +55,10 @@ from adp.agentic.models import (
     SolutionAgentOrder,
     SolutionAgentUpdate,
     SolutionNotFoundError,
+    StageLinkCreate,
+    TargetNotFoundError,
 )
+from adp.agentic.risk import solution_risk
 from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
 from adp.authz.permissions import is_permitted
@@ -97,7 +113,10 @@ def _require_cost_write(fields_set: set[str], user: AuthenticatedUser) -> None:
 
 def _redact_members(items: list[SolutionAgent], readable: bool) -> SolutionAgentListResponse:
     redacted = [m.model_copy(update={"agent": _redact(m.agent, readable)}) for m in items]
-    return SolutionAgentListResponse(items=redacted, total=len(redacted))
+    risk = solution_risk(
+        (m.agent.id, m.agent.name, m.agent.lifecycle_status, m.agent.agentic_risk) for m in items
+    )
+    return SolutionAgentListResponse(items=redacted, total=len(redacted), solution_risk=risk)
 
 
 # ── Agents ────────────────────────────────────────────────────────────────────
@@ -315,3 +334,154 @@ async def remove_solution_agent(
         agent_id,
         _get_actor(request),
     )
+
+
+# ── Automates links (944-agent-traceability, US1) ─────────────────────────────
+
+_LINK_ERRORS: dict[type[Exception], int] = {
+    AgentNotFoundError: 404,
+    TargetNotFoundError: 404,
+    LinkNotFoundError: 404,
+    DuplicateLinkError: 409,
+    LevelRuleError: 422,
+}
+_LinkError = tuple(_LINK_ERRORS)
+
+
+def _link_http_error(exc: Exception) -> HTTPException:
+    return HTTPException(status_code=_LINK_ERRORS[type(exc)], detail=str(exc))
+
+
+@router.get("/agents/{agent_id}/automates", response_model=AgentAutomates)
+async def get_automates(agent_id: str, session: AsyncSession = Depends(_get_session)):
+    try:
+        return await agstore.get_automates(agent_id, session)
+    except _LinkError as exc:
+        raise _link_http_error(exc) from exc
+
+
+async def _add_link(
+    kind: AutomatesKind, agent_id: str, target_id: str, request: Request, session: AsyncSession
+) -> AgentAutomates:
+    try:
+        out = await agstore.add_link(kind, agent_id, target_id, session)
+    except _LinkError as exc:
+        raise _link_http_error(exc) from exc
+    await session.commit()
+    logger.info(
+        "agentic.automates.create agent=%s kind=%s target=%s actor=%s",
+        agent_id, kind, target_id, _get_actor(request),
+    )
+    return out
+
+
+async def _remove_link(
+    kind: AutomatesKind, agent_id: str, target_id: str, request: Request, session: AsyncSession
+) -> None:
+    try:
+        await agstore.remove_link(kind, agent_id, target_id, session)
+    except _LinkError as exc:
+        raise _link_http_error(exc) from exc
+    await session.commit()
+    logger.info(
+        "agentic.automates.delete agent=%s kind=%s target=%s actor=%s",
+        agent_id, kind, target_id, _get_actor(request),
+    )
+
+
+@router.post(
+    "/agents/{agent_id}/automates/capabilities",
+    response_model=AgentAutomates,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_capability_link(
+    agent_id: str,
+    body: CapabilityLinkCreate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    return await _add_link("capability", agent_id, body.capability_id, request, session)
+
+
+@router.post(
+    "/agents/{agent_id}/automates/stages",
+    response_model=AgentAutomates,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_stage_link(
+    agent_id: str,
+    body: StageLinkCreate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    return await _add_link("stage", agent_id, body.stage_id, request, session)
+
+
+@router.post(
+    "/agents/{agent_id}/automates/activities",
+    response_model=AgentAutomates,
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_activity_link(
+    agent_id: str,
+    body: ActivityLinkCreate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+):
+    return await _add_link("activity", agent_id, body.activity_id, request, session)
+
+
+@router.delete(
+    "/agents/{agent_id}/automates/capabilities/{target_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_capability_link(
+    agent_id: str, target_id: str, request: Request, session: AsyncSession = Depends(_get_session)
+):
+    await _remove_link("capability", agent_id, target_id, request, session)
+
+
+@router.delete(
+    "/agents/{agent_id}/automates/stages/{target_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+async def remove_stage_link(
+    agent_id: str, target_id: str, request: Request, session: AsyncSession = Depends(_get_session)
+):
+    await _remove_link("stage", agent_id, target_id, request, session)
+
+
+@router.delete(
+    "/agents/{agent_id}/automates/activities/{target_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def remove_activity_link(
+    agent_id: str, target_id: str, request: Request, session: AsyncSession = Depends(_get_session)
+):
+    await _remove_link("activity", agent_id, target_id, request, session)
+
+
+async def _agents_for(
+    kind: AutomatesKind, target_id: str, session: AsyncSession
+) -> AgentSummaryListResponse:
+    try:
+        items = await agstore.list_agents_for(kind, target_id, session)
+    except _LinkError as exc:
+        raise _link_http_error(exc) from exc
+    return AgentSummaryListResponse(items=items, total=len(items))
+
+
+@router.get("/capabilities/{target_id}/agents", response_model=AgentSummaryListResponse)
+async def capability_agents(target_id: str, session: AsyncSession = Depends(_get_session)):
+    return await _agents_for("capability", target_id, session)
+
+
+@router.get("/value-stream-stages/{target_id}/agents", response_model=AgentSummaryListResponse)
+async def stage_agents(target_id: str, session: AsyncSession = Depends(_get_session)):
+    return await _agents_for("stage", target_id, session)
+
+
+@router.get(
+    "/value-chain-activities/{target_id}/agents", response_model=AgentSummaryListResponse
+)
+async def activity_agents(target_id: str, session: AsyncSession = Depends(_get_session)):
+    return await _agents_for("activity", target_id, session)

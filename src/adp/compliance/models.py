@@ -390,6 +390,8 @@ class MappingTargetType(StrEnum):
     DESIGN = "design"
     PATTERN = "pattern"
     ORGANIZATION = "organization"
+    # 944-agent-traceability (ADP-12x): the sixth target. No initiative linkage (research.md R6).
+    AGENT = "agent"
 
 
 class ControlMapping(BaseModel):
@@ -422,6 +424,29 @@ class ControlMappingListResponse(BaseModel):
 
     items: list[ControlMapping]
     total: int
+
+
+class AgentComplianceMappings(BaseModel):
+    """944: an agent's own mappings plus its derived status (never stored, never folded into a
+    solution's status -- spec.md FR-009a)."""
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[ControlMapping]
+    total: int
+    status: ComplianceStatus
+
+
+class AgentComplianceStatus(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    agent_id: str
+    status: ComplianceStatus
+
+
+class AgentComplianceStatuses(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    items: list[AgentComplianceStatus]
 
 
 # ── Typed exceptions (COMPLY-02) ────────────────────────────────────────────
