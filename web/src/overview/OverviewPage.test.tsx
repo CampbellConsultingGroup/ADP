@@ -75,6 +75,14 @@ beforeEach(() => {
   mockedKnowledgeApi.useKnowledgeItems.mockReturnValue(
     listResult([]) as unknown as ReturnType<typeof knowledgeApi.useKnowledgeItems>,
   );
+  mockedPortfolioApi.useEstateCounts.mockReturnValue({
+    data: {
+      capabilities: 0, value_streams: 0, domains: 0, technical_capabilities: 0,
+      knowledge_items: 0, integrations: 0,
+    },
+    isLoading: false,
+    isError: false,
+  } as unknown as ReturnType<typeof portfolioApi.useEstateCounts>);
   mockedPortfolioApi.usePortfolioSummary.mockReturnValue({
     data: { total_designs: 0, by_status: {}, overdue_review_count: 0 },
     isLoading: false,

@@ -26,7 +26,7 @@ const BADGE_CUSTOM: React.CSSProperties = {
   fontSize: 11,
   padding: "2px 8px",
   borderRadius: 999,
-  background: "var(--ent, #2874A6)",
+  background: "var(--ent)",
   color: "#fff",
 };
 
@@ -66,7 +66,7 @@ export default function ScoringRubricsPage(): React.ReactElement {
         {items.map((item) => (
           <div
             key={item.rubric_id}
-            style={{ ...CARD, outline: selectedId === item.rubric_id ? "2px solid var(--ent, #2874A6)" : "none" }}
+            style={{ ...CARD, outline: selectedId === item.rubric_id ? "2px solid var(--ent)" : "none" }}
             {...clickableRow(() => trySelect(item.rubric_id))}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

@@ -12,6 +12,7 @@ import uuid
 from typing import TYPE_CHECKING, Any
 
 from adp.admin import prompt_registry
+from adp.background import spawn
 from adp.knowledge.schema import CitationRef, RetrievalQuery
 from adp.models import ElementKind
 from adp.recommendation.models import (
@@ -54,7 +55,6 @@ def _write_reasoning_for_options(
     operation_id: str,
 ) -> None:
     """Fire-and-forget write of generation reasoning for each option."""
-    import asyncio as _asyncio
 
     from adp.store.reasoning import ReasoningRecord, _hash_prompt
 
@@ -63,7 +63,7 @@ def _write_reasoning_for_options(
     per_option_out = output_tokens // max(1, len(candidates))
 
     for opt in candidates:
-        _asyncio.create_task(_fire_reasoning_write(ReasoningRecord(
+        spawn(_fire_reasoning_write(ReasoningRecord(
             operation_id=operation_id,
             option_id=opt.option_id,
             step_name=step_name,
@@ -87,11 +87,10 @@ def _write_reasoning_for_option(
     operation_id: str,
 ) -> None:
     """Fire-and-forget write of reasoning for a single option."""
-    import asyncio as _asyncio
 
     from adp.store.reasoning import ReasoningRecord, _hash_prompt
 
-    _asyncio.create_task(_fire_reasoning_write(ReasoningRecord(
+    spawn(_fire_reasoning_write(ReasoningRecord(
         operation_id=operation_id,
         option_id=option.option_id,
         step_name=step_name,

@@ -106,7 +106,7 @@ export default function GovernancePanel({ appId }: Props) {
           disabled={updateGovernance.isPending}
           style={{
             padding: "6px 14px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 6,
-            background: "var(--accent, #2874A6)", color: "#fff", cursor: "pointer",
+            background: "var(--accent)", color: "var(--accent-ink)", cursor: "pointer",
           }}
         >
           {updateGovernance.isPending ? "Saving…" : "Save"}

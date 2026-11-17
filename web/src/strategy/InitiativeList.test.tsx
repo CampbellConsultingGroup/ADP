@@ -9,6 +9,13 @@ import InitiativeList from "./InitiativeList";
 import * as strategyApi from "../api/strategy";
 
 vi.mock("../api/strategy");
+// ADP-blp.58: edit mode embeds the control-mapping editor, whose control pickers read these.
+vi.mock("../api/compliance", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../api/compliance")>()),
+  useFrameworks: () => ({ data: { items: [], total: 0 } }),
+  useFramework: () => ({ data: undefined }),
+  useAllControls: () => ({ byId: new Map(), isLoading: false }),
+}));
 
 const mockedApi = vi.mocked(strategyApi);
 

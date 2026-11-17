@@ -34,3 +34,29 @@ def test_reviewer_cannot_write_but_an_architect_can():
     architect = _client(PersonaRole.SOLUTION_ARCHITECT).get("/api/v1/auth/permissions").json()
     assert ActionType.WRITE_BUSINESS_ARCH.value not in reviewer
     assert ActionType.WRITE_BUSINESS_ARCH.value in architect["actions"]
+
+
+def test_estate_counts_come_from_one_query():
+    """ADP-blp.39: the Overview page's totals without downloading six collections."""
+    from unittest.mock import AsyncMock, MagicMock
+
+    from adp.api.app import create_app
+    from adp.api.deps import get_kb_session
+
+    row = {
+        "capabilities": 40, "value_streams": 4, "domains": 9, "technical_capabilities": 12,
+        "knowledge_items": 31, "integrations": None,
+    }
+    result = MagicMock()
+    result.mappings.return_value.one.return_value = row
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=result)
+
+    async def _session():
+        yield session
+
+    app = create_app()
+    app.dependency_overrides[get_kb_session] = _session
+    body = TestClient(app).get("/api/v1/portfolio/counts").json()
+    assert body == {**row, "integrations": 0}
+    assert session.execute.await_count == 1

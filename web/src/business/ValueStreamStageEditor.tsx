@@ -83,7 +83,7 @@ export default function ValueStreamStageEditor({ vsId, stages }: ValueStreamStag
                   onKeyDown={(e) => { if (e.key === "Enter") handleSaveEdit(); if (e.key === "Escape") setEditingId(null); }}
                   style={{ flex: 1, padding: "3px 6px", fontSize: 13, border: "1px solid var(--accent)", borderRadius: 3 }}
                 />
-                <button onClick={handleSaveEdit} style={{ padding: "2px 8px", fontSize: 12, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 3, cursor: "pointer" }}>Save</button>
+                <button onClick={handleSaveEdit} style={{ padding: "2px 8px", fontSize: 12, background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 3, cursor: "pointer" }}>Save</button>
                 <button onClick={() => setEditingId(null)} style={{ padding: "2px 8px", fontSize: 12, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 3, cursor: "pointer" }}>×</button>
               </>
             ) : (
@@ -119,7 +119,7 @@ export default function ValueStreamStageEditor({ vsId, stages }: ValueStreamStag
             placeholder="Stage name"
             style={{ flex: 1, padding: "5px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 4 }}
           />
-          <button type="submit" disabled={!addingName.trim() || addStage.isPending} style={{ padding: "5px 10px", fontSize: 13, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>
+          <button type="submit" disabled={!addingName.trim() || addStage.isPending} style={{ padding: "5px 10px", fontSize: 13, background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 4, cursor: "pointer" }}>
             {addStage.isPending ? "…" : "Add"}
           </button>
           <button type="button" onClick={() => { setShowAdd(false); setAddingName(""); }} style={{ padding: "5px 10px", fontSize: 13, background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer" }}>

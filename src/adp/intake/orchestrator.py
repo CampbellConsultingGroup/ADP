@@ -15,6 +15,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from adp.audit.writer import next_audit_id
+from adp.background import spawn
 from adp.intake.linker import KnowledgeLinker
 from adp.intake.models import (
     ExtractedProposal,
@@ -428,7 +429,6 @@ def _write_extraction_reasoning(
     design_id: str | None = None,
 ) -> None:
     """Fire-and-forget write of intake extraction reasoning (ADP-SPEC-027)."""
-    import asyncio as _asyncio
 
     from adp.store.reasoning import ReasoningRecord, _hash_prompt
 
@@ -451,6 +451,6 @@ def _write_extraction_reasoning(
             _logger.debug("intake reasoning write skipped: %s", exc)
 
     try:
-        _asyncio.create_task(_do_write())
+        spawn(_do_write())
     except RuntimeError:
         pass  # No event loop — skip write (e.g. in sync test context)

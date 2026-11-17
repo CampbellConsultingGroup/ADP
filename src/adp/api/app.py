@@ -221,6 +221,10 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await stop_strategy_export(_strategy_export_task)
     await stop_agentic_export(_agentic_export_task)
     await stop_pattern_export(_pattern_export_task)
+    # ADP-blp.24: let audit/provenance writes still in flight finish before the pool closes.
+    from adp import background as _background
+
+    await _background.drain()
     # ADP-blp.15: close the shared connection pool.
     from adp import db as _db
 
@@ -229,6 +233,30 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from adp.llm.client import aclose_shared_clients
 
     await aclose_shared_clients()
+
+
+# ADP-blp.11. The SPA is served from this origin and talks only to it (Keycloak is reached
+# through /auth on the same origin). Inline styles are allowed because the UI sets them on
+# almost every element; inline and third-party scripts are not. Override the whole policy with
+# ADP_CONTENT_SECURITY_POLICY, or set it to an empty string to send none.
+_DEFAULT_CSP = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob:",
+        "font-src 'self' data:",
+        "connect-src 'self'",
+        "object-src 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+    ]
+)
+
+
+def _content_security_policy() -> str:
+    return os.environ.get("ADP_CONTENT_SECURITY_POLICY", _DEFAULT_CSP).strip()
 
 
 def _metric_route(request: Request) -> str:
@@ -271,7 +299,23 @@ def create_app() -> FastAPI:
         "Cross-Origin-Resource-Policy": "same-origin",
         "X-Frame-Options": "DENY",
         "Referrer-Policy": "strict-origin-when-cross-origin",
+        # ADP-blp.11: browsers that have seen the site over HTTPS keep using HTTPS. Ignored
+        # over plain HTTP, so local development is unaffected.
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains",
     }
+
+    def _apply_security_headers(request: Request, response: Response) -> None:
+        response.headers.update(_SECURITY_HEADERS)
+        # ADP-blp.11: a Content-Security-Policy limits what an injected script could do. Not on
+        # the Keycloak pages relayed under /auth (Keycloak sets its own policy for its login
+        # theme), and never over a policy a response already carries.
+        policy = _content_security_policy()
+        if (
+            policy
+            and not request.url.path.startswith("/auth/")
+            and "content-security-policy" not in response.headers
+        ):
+            response.headers["Content-Security-Policy"] = policy
 
     @app.exception_handler(Exception)
     async def _unhandled_exception_handler(request: Request, exc: Exception) -> Response:
@@ -286,7 +330,7 @@ def create_app() -> FastAPI:
             status_code=500,
             media_type="application/json",
         )
-        resp.headers.update(_SECURITY_HEADERS)
+        _apply_security_headers(request, resp)
         return resp
 
     @app.middleware("http")
@@ -322,7 +366,7 @@ def create_app() -> FastAPI:
                 ERROR_COUNTER.labels(route=route).inc()
             ACTIVE_REQUESTS.dec()
             response.headers["X-Trace-ID"] = trace_id
-            response.headers.update(_SECURITY_HEADERS)
+            _apply_security_headers(request, response)
             return response
 
     app.include_router(me_router)

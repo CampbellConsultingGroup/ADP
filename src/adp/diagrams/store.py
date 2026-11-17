@@ -120,7 +120,11 @@ async def get_diagram(diagram_id: str, session: AsyncSession) -> Diagram | None:
 
 
 async def list_diagrams(session: AsyncSession) -> DiagramListResponse:
-    result = await session.execute(sa.select(_diagrams).order_by(_diagrams.c.updated_at.desc()))
+    # ADP-blp.23: only the summary columns -- not every diagram's DSL source.
+    c = _diagrams.c
+    result = await session.execute(
+        sa.select(c.id, c.title, c.diagram_type, c.updated_at).order_by(c.updated_at.desc())
+    )
     items = [_row_to_summary(row) for row in result.mappings().all()]
     return DiagramListResponse(items=items, total=len(items))
 

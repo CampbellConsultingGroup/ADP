@@ -117,7 +117,7 @@ export default function RubricHistory({ rubric }: RubricHistoryProps): React.Rea
               <button
                 onClick={handleConfirmRestore}
                 disabled={restore.isPending}
-                style={{ padding: "8px 18px", background: "var(--ent, #2874A6)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 14, fontWeight: 600 }}
+                style={{ padding: "8px 18px", background: "var(--ent)", color: "var(--accent-ink)", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 14, fontWeight: 600 }}
               >
                 {restore.isPending ? "Restoring..." : "Confirm & Restore"}
               </button>

@@ -134,7 +134,7 @@ export default function PromptEditor({ agent, onDirtyChange }: PromptEditorProps
           style={{
             padding: "8px 18px", borderRadius: 4, border: "none", fontSize: 14, fontWeight: 600,
             cursor: !isDirty || isEmpty ? "not-allowed" : "pointer",
-            background: !isDirty || isEmpty ? "var(--border)" : "var(--ent, #2874A6)",
+            background: !isDirty || isEmpty ? "var(--border)" : "var(--ent)",
             color: "#fff",
           }}
         >
@@ -167,7 +167,7 @@ export default function PromptEditor({ agent, onDirtyChange }: PromptEditorProps
               <button
                 onClick={handleConfirm}
                 disabled={confirmEdit.isPending}
-                style={{ padding: "8px 18px", background: "var(--ent, #2874A6)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 14, fontWeight: 600 }}
+                style={{ padding: "8px 18px", background: "var(--ent)", color: "var(--accent-ink)", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 14, fontWeight: 600 }}
               >
                 {confirmEdit.isPending ? "Saving..." : "Confirm & Save"}
               </button>

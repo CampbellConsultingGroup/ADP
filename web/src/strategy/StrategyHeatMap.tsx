@@ -19,7 +19,7 @@ const STATUS_COLUMNS: {
   { key: "active_count", label: "On track", tint: "var(--accent-wash)" },
   { key: "at_risk_count", label: "At risk", tint: "var(--warn-wash)" },
   { key: "achieved_count", label: "Achieved", tint: "var(--good-wash)" },
-  { key: "abandoned_count", label: "Abandoned", tint: "var(--crit-wash)" },
+  { key: "abandoned_count", label: "Abandoned", tint: "var(--surface-3)" }, // ended, not failing (ADP-blp.49)
 ];
 
 export default function StrategyHeatMap() {

@@ -46,6 +46,24 @@ const CAPABILITY_GROUPS_KEY = ["portfolio", "application-capability-groups"] as 
 
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 
+/** How many of each thing exist: one small request for the Overview page (ADP-blp.39). */
+export interface EstateCounts {
+  capabilities: number;
+  value_streams: number;
+  domains: number;
+  technical_capabilities: number;
+  knowledge_items: number;
+  integrations: number;
+}
+
+export function useEstateCounts(): UseQueryResult<EstateCounts> {
+  return useQuery<EstateCounts>({
+    queryKey: ["portfolio", "counts"],
+    queryFn: () => apiGet<EstateCounts>("/api/v1/portfolio/counts"),
+    staleTime: 60_000,
+  });
+}
+
 export function usePortfolioSummary(): UseQueryResult<PortfolioSummary> {
   return useQuery<PortfolioSummary>({
     queryKey: SUMMARY_KEY,
