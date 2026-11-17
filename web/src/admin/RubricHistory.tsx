@@ -6,6 +6,7 @@ import {
   type RubricView,
   type RubricHistoryEntry,
 } from "../api/adminRubrics";
+import { ModalOverlay } from "../ui/ModalOverlay";
 
 interface RubricHistoryProps {
   rubric: RubricView;
@@ -97,12 +98,7 @@ export default function RubricHistory({ rubric }: RubricHistoryProps): React.Rea
       ))}
 
       {pendingRestore && (
-        <div
-          style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
-          }}
-        >
+        <ModalOverlay label="Confirm restore" onClose={() => setPendingRestore(null)}>
           <div style={{ background: "var(--surface)", borderRadius: 8, padding: 24, maxWidth: 480, width: "90%" }}>
             <h3 style={{ margin: "0 0 8px", fontSize: 17, fontWeight: 700 }}>Confirm restore</h3>
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--ink-3)" }}>
@@ -127,7 +123,7 @@ export default function RubricHistory({ rubric }: RubricHistoryProps): React.Rea
               </button>
             </div>
           </div>
-        </div>
+        </ModalOverlay>
       )}
     </div>
   );

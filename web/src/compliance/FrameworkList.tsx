@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useFrameworks, useCreateFramework } from "../api/compliance";
 import { Button } from "../ui";
 import FrameworkForm from "./FrameworkForm";
+import { clickableRow } from "../ui/clickableRow";
 
 interface FrameworkListProps {
   onSelectFramework: (frameworkId: string) => void;
@@ -60,7 +61,7 @@ export default function FrameworkList({ onSelectFramework }: FrameworkListProps)
       {items.map((fw) => (
         <div
           key={fw.id}
-          onClick={() => onSelectFramework(fw.id)}
+          {...clickableRow(() => onSelectFramework(fw.id))}
           style={{
             border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", marginBottom: 8,
             cursor: "pointer", background: "var(--surface)",

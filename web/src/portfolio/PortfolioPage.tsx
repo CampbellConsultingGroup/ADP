@@ -82,7 +82,7 @@ export default function PortfolioPage(): React.ReactElement {
     () => withOrgUnitLabels(apps.data?.items ?? [], orgUnitNames),
     [apps.data, orgUnitNames],
   );
-  const links = capabilityGroups.data?.items ?? [];
+  const links = useMemo(() => capabilityGroups.data?.items ?? [], [capabilityGroups.data]);
   const sameDimension = dimensionA === dimensionB;
 
   const filterOperatorOptions = filterField ? operatorsForField(filterField) : [];

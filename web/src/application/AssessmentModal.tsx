@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "../ui";
+import { ModalOverlay } from "../ui/ModalOverlay";
 
 /** Generic popup shared by HealthAssessmentModal.tsx and
  *  BusinessValueAssessmentModal.tsx (extracted per
@@ -77,12 +78,7 @@ export default function AssessmentModal({
   }
 
   return (
-    <div
-      style={{
-        position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
-        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
-      }}
-    >
+    <ModalOverlay label={title} onClose={saving ? undefined : onClose}>
       <div
         style={{
           background: "var(--surface)", borderRadius: 8, padding: 24,
@@ -152,7 +148,7 @@ export default function AssessmentModal({
           <div style={{ marginTop: 10, fontSize: 12, color: "var(--crit)" }}>{saveError}</div>
         )}
       </div>
-    </div>
+    </ModalOverlay>
   );
 }
 

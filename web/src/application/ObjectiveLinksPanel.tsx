@@ -11,6 +11,7 @@ import {
   useLinkApplicationToObjective,
   useUnlinkApplicationFromObjective,
 } from "../api/strategy";
+import { hasStatus } from "../api/client";
 
 interface Props {
   appId: string;
@@ -38,7 +39,7 @@ export default function ObjectiveLinksPanel({ appId }: Props) {
       await link.mutateAsync(selectedObjectiveId);
       setSelectedObjectiveId("");
     } catch (e) {
-      showToast((e as Error).message.includes("409") ? "Already linked" : "Failed to link");
+      showToast(hasStatus(e, 409) ? "Already linked" : "Failed to link");
     }
   };
 

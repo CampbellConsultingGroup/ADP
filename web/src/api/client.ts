@@ -33,15 +33,81 @@ export async function getAuthHeader(): Promise<Record<string, string>> {
   }
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
+/**
+ * The human-readable reason in an error response body, if it has one (ADP-blp.33).
+ *
+ * FastAPI puts it in `detail`: a string for a refused request (the rule-named 409/422 messages),
+ * a list of field errors for a body that failed validation, or an object with a `message`.
+ */
+export function describeErrorBody(body: unknown): string | null {
+  if (!body || typeof body !== "object") return null;
+  const detail = (body as { detail?: unknown }).detail;
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const parts = detail
+      .map((item) => {
+        if (!item || typeof item !== "object") return null;
+        const { loc, msg } = item as { loc?: unknown; msg?: unknown };
+        if (typeof msg !== "string") return null;
+        const field = Array.isArray(loc) ? loc.filter((p) => p !== "body").join(".") : "";
+        return field ? `${field}: ${msg}` : msg;
+      })
+      .filter((part): part is string => part !== null);
+    return parts.length > 0 ? parts.join("; ") : null;
+  }
+  if (detail && typeof detail === "object") {
+    const message = (detail as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message;
+  }
+  return null;
+}
+
+/**
+ * Build the ApiError for a failed response. Its message is the server's own reason when the
+ * body carries one, so a component that shows `error.message` tells the user what was refused;
+ * otherwise it is the generic "<METHOD> <path> failed: <status>". The status and parsed body are
+ * always on the error -- use hasStatus() rather than searching the message for a number.
+ */
+export async function toApiError(method: string, path: string, res: Response): Promise<ApiError> {
+  let body: unknown;
+  try {
+    body = await res.json();
+  } catch {
+    // Non-JSON error body -- leave it undefined.
+  }
+  const message = describeErrorBody(body) ?? `${method} ${path} failed: ${res.status}`;
+  return new ApiError(res.status, message, body);
+}
+
+/** The message to show for a failed request: the server's reason, else the error's own text. */
+export function errorDetail(err: unknown): string {
+  if (err instanceof ApiError) return describeErrorBody(err.body) ?? err.message;
+  return err instanceof Error ? err.message : String(err);
+}
+
+/** True when the error is a response with this HTTP status. */
+export function hasStatus(err: unknown, status: number): boolean {
+  if (err instanceof ApiError) return err.status === status;
+  // Errors built by hand (older tests) carry the status as a property or only in the text.
+  const own = (err as { status?: unknown } | null)?.status;
+  if (typeof own === "number") return own === status;
+  return err instanceof Error && err.message.includes(String(status));
+}
+
+/** One request helper for every endpoint: auth header, JSON body, ApiError on failure. */
+export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const authHeader = await getAuthHeader();
   const res = await fetch(path, {
-    headers: { ...authHeader, "Content-Type": "application/json" },
+    ...init,
+    headers: { "Content-Type": "application/json", ...authHeader, ...init?.headers },
   });
-  if (!res.ok) {
-    throw new ApiError(res.status, `GET ${path} failed: ${res.status}`);
-  }
+  if (!res.ok) throw await toApiError(init?.method ?? "GET", path, res);
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+export async function apiGet<T>(path: string): Promise<T> {
+  return apiRequest<T>(path);
 }
 
 export async function apiMutation<T, B = unknown>(
@@ -49,21 +115,8 @@ export async function apiMutation<T, B = unknown>(
   path: string,
   body?: B,
 ): Promise<T> {
-  const authHeader = await getAuthHeader();
-  const res = await fetch(path, {
+  return apiRequest<T>(path, {
     method,
-    headers: { ...authHeader, "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) {
-    let parsedBody: unknown;
-    try {
-      parsedBody = await res.json();
-    } catch {
-      // Non-JSON error body — leave parsedBody undefined.
-    }
-    throw new ApiError(res.status, `${method} ${path} failed: ${res.status}`, parsedBody);
-  }
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
 }

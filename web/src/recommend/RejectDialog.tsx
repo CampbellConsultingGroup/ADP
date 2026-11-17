@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { SolutionOption } from "../api/recommend";
+import { ModalOverlay } from "../ui/ModalOverlay";
 
 interface RejectDialogProps {
   option: SolutionOption;
@@ -13,7 +14,7 @@ export default function RejectDialog({ option, onConfirm, onCancel, isPending }:
   const canConfirm = !isPending && reason.trim().length > 0;
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "32px 16px", boxSizing: "border-box" }}>
+    <ModalOverlay label="Reject Recommendation" onClose={onCancel} style={{ padding: "32px 16px", boxSizing: "border-box" }}>
       {/* maxHeight + flex column keeps Cancel/Confirm reachable on short viewports — mirrors the AcceptDialog fix */}
       <div style={{ background: "var(--surface)", borderRadius: 8, padding: 24, maxWidth: 500, width: "90%", maxHeight: "100%", display: "flex", flexDirection: "column", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <h3 style={{ margin: "0 0 4px", fontSize: 17, fontWeight: 700, flexShrink: 0 }}>Reject Recommendation</h3>
@@ -63,6 +64,6 @@ export default function RejectDialog({ option, onConfirm, onCancel, isPending }:
           </button>
         </div>
       </div>
-    </div>
+    </ModalOverlay>
   );
 }

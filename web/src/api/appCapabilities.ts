@@ -2,7 +2,7 @@
 // Uses the shared client so a 409/422 carries the server's rule message (ApiError.body.detail).
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, apiGet, apiMutation } from "./client";
+import { apiGet, apiMutation, errorDetail } from "./client";
 
 const BASE = "/api/v1/application-capabilities";
 
@@ -99,14 +99,7 @@ const LINK_BODY_KEY: Record<LinkKind, string> = {
   application: "app_id",
 };
 
-/** The server's message for a failed write (rule text for 409/422), else the error message. */
-export function errorDetail(err: unknown): string {
-  if (err instanceof ApiError) {
-    const detail = (err.body as { detail?: unknown } | undefined)?.detail;
-    if (typeof detail === "string") return detail;
-  }
-  return err instanceof Error ? err.message : String(err);
-}
+export { errorDetail };
 
 const KEY = ["app-capabilities"] as const;
 

@@ -116,3 +116,24 @@ async def test_bulk_results_match_the_single_row_paths(db):
     picked = await sinit.get_initiatives([some[2], "nope", some[0]], session)
     assert [i.id for i in picked] == [some[2], some[0]]
     assert await sinit.get_initiatives([], session) == []
+
+
+async def test_control_objectives_for_framework_is_one_query(db):
+    """ADP-blp.35: the control tree's per-control lookups, in one query."""
+    session, counter = db
+    objective_ids = await _seed(session, 3)
+    for cid, fw in (("c1", "fw1"), ("c2", "fw1"), ("c3", "fw2")):
+        await session.execute(
+            sstore._controls_mirror.insert().values(id=cid, code=cid, title=cid, framework_id=fw)
+        )
+    await sstore.link_objective_control(objective_ids[0], "c1", session)
+    await sstore.link_objective_control(objective_ids[1], "c1", session)
+    await sstore.link_objective_control(objective_ids[2], "c3", session)
+    await session.commit()
+
+    queries, by_control = await _queries(
+        counter, sstore.list_control_objectives_for_framework("fw1", session)
+    )
+    assert queries == 1
+    assert set(by_control) == {"c1"}  # c2 has no objective; c3 is another framework
+    assert {oid for oid, _statement in by_control["c1"]} == set(objective_ids[:2])

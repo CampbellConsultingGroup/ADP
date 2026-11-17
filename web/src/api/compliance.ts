@@ -364,11 +364,20 @@ export interface InitiativeRefListResponse {
   total: number;
 }
 
-export function useControlObjectives(controlId: string | null) {
-  return useQuery<{ items: { id: string; statement: string }[]; total: number }>({
-    queryKey: ["control-objectives", controlId],
-    queryFn: () => apiGet(`/api/v1/compliance/controls/${controlId}/objectives`),
-    enabled: !!controlId,
+/**
+ * The objectives linked to every control of a framework, in one request (ADP-blp.35). The control
+ * tree shows them on each row; asking per control fired one request for every control.
+ */
+export function useFrameworkControlObjectives(frameworkId: string | null) {
+  return useQuery<Map<string, { id: string; statement: string }[]>>({
+    queryKey: ["control-objectives", "framework", frameworkId],
+    queryFn: async () => {
+      const data = await apiGet<{
+        items: { control_id: string; objectives: { id: string; statement: string }[] }[];
+      }>(`/api/v1/compliance/frameworks/${frameworkId}/control-objectives`);
+      return new Map(data.items.map((item) => [item.control_id, item.objectives]));
+    },
+    enabled: !!frameworkId,
   });
 }
 

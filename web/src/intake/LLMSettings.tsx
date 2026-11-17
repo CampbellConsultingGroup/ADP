@@ -42,11 +42,11 @@ export default function LLMSettings(): React.ReactElement {
       </div>
 
       <div style={{ marginBottom: 14 }}>
-        <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
+        <label htmlFor="llm-settings-f0" style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
           {connected ? "Update API Key" : "API Key"}
         </label>
         <div style={{ display: "flex", gap: 6 }}>
-          <input
+          <input id="llm-settings-f0"
             type="password"
             value={apiKeyDraft}
             onChange={(e) => setApiKeyDraft(e.target.value)}
@@ -89,10 +89,10 @@ export default function LLMSettings(): React.ReactElement {
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
+        <label htmlFor="llm-settings-extraction-model" style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
           Extraction Model
         </label>
-        <select
+        <select id="llm-settings-extraction-model"
           value={config?.extraction_model ?? "claude-sonnet-4-6"}
           onChange={(e) => update.mutate({ extraction_model: e.target.value })}
           disabled={!connected}
@@ -110,10 +110,10 @@ export default function LLMSettings(): React.ReactElement {
       </div>
 
       <div style={{ marginBottom: 12 }}>
-        <label style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
+        <label htmlFor="llm-settings-recommendation-model" style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
           Recommendation Model
         </label>
-        <select
+        <select id="llm-settings-recommendation-model"
           value={config?.recommendation_model ?? "claude-sonnet-4-6"}
           onChange={(e) => update.mutate({ recommendation_model: e.target.value })}
           disabled={!connected}

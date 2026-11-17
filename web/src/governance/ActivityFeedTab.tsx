@@ -55,24 +55,24 @@ export default function ActivityFeedTab(): React.ReactElement {
       {/* Filter controls */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 16, alignItems: "flex-end" }}>
         <div>
-          <label className="ui-label">From</label>
-          <input type="date" className="ui-input" value={fromDate}
+          <label htmlFor="activity-from" className="ui-label">From</label>
+          <input id="activity-from" type="date" className="ui-input" value={fromDate}
             onChange={(e) => { setFromDate(e.target.value); setRangeError(""); }} />
         </div>
         <div>
-          <label className="ui-label">To</label>
-          <input type="date" className="ui-input" value={toDate}
+          <label htmlFor="activity-to" className="ui-label">To</label>
+          <input id="activity-to" type="date" className="ui-input" value={toDate}
             onChange={(e) => { setToDate(e.target.value); setRangeError(""); }} />
         </div>
         <div>
-          <label className="ui-label">Action</label>
-          <select className="ui-select" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
+          <label htmlFor="activity-action" className="ui-label">Action</label>
+          <select id="activity-action" className="ui-select" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
             {ACTION_TYPES.map((a) => <option key={a.value} value={a.value}>{a.label}</option>)}
           </select>
         </div>
         <div>
-          <label className="ui-label">Actor</label>
-          <input type="text" className="ui-input" style={{ width: 130 }} value={actorFilter}
+          <label htmlFor="activity-actor" className="ui-label">Actor</label>
+          <input id="activity-actor" type="text" className="ui-input" style={{ width: 130 }} value={actorFilter}
             onChange={(e) => setActorFilter(e.target.value)} placeholder="username" />
         </div>
         <Button onClick={handleApply}>Apply</Button>

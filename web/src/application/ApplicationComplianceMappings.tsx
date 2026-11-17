@@ -1,4 +1,5 @@
 import { useApplicationComplianceMappings } from "../api/compliance";
+import { hasStatus } from "../api/client";
 
 /** COMPLY-02 US3 — reverse lookup of Controls mapped to this Application. Read-only here;
  *  mapping creation/editing happens on the Control's own side
@@ -13,7 +14,7 @@ export default function ApplicationComplianceMappings({ appId }: Props) {
   if (isLoading) return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
 
   if (error) {
-    const forbidden = (error as Error).message.includes("403");
+    const forbidden = hasStatus(error, 403);
     return (
       <div style={{ fontSize: 13, color: "var(--ink-3)" }}>
         {forbidden

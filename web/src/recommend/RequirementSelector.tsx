@@ -24,6 +24,9 @@ export default function RequirementSelector({ designId, onSubmit, isPending }: R
     if (requirements.length > 0) {
       setSelected(new Set(requirements.map((r) => r.id)));
     }
+    // Re-select everything only when the number of requirements changes, not on every refetch
+    // (which returns a new array and would discard the user's own choices).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requirements.length]);
 
   if (requirements.length === 0) {

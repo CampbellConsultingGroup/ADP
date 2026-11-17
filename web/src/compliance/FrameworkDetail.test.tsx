@@ -54,9 +54,9 @@ beforeEach(() => {
     data: undefined, isLoading: false,
   } as unknown as ReturnType<typeof complianceApi.useFrameworkRollup>);
   // 925-strategy-compliance-linkage: "Linked Objectives" read-only line, empty by default.
-  mockedApi.useControlObjectives.mockReturnValue({
-    data: { items: [], total: 0 },
-  } as unknown as ReturnType<typeof complianceApi.useControlObjectives>);
+  mockedApi.useFrameworkControlObjectives.mockReturnValue({
+    data: new Map(),
+  } as unknown as ReturnType<typeof complianceApi.useFrameworkControlObjectives>);
 });
 
 describe("FrameworkDetail (COMPLY-01 US3 — delete scope disclosure)", () => {

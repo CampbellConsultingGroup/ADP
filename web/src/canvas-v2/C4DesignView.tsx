@@ -25,6 +25,7 @@ import { Button, StatusBadge } from "../ui/primitives";
 import { elementsToC4Model } from "./c4Adapter";
 import { applyIdReplacements, reconcile } from "./reconcile";
 import { useDesignObjectives } from "../api/strategy";
+import { clickableRow } from "../ui/clickableRow";
 
 const LEVELS: { label: string; value: C4Level }[] = [
   { label: "Context", value: "context" },
@@ -218,7 +219,7 @@ export function C4DesignView({ designId }: C4DesignViewProps) {
                   key={el.id}
                   data-testid={`element-row-${el.id}`}
                   className={`ui-list-row selectable${selectedElementId === el.id ? " active" : ""}`}
-                  onClick={() => setSelectedElementId(el.id)}
+                  {...clickableRow(() => setSelectedElementId(el.id))}
                 >
                   <span>{el.name}</span>
                   <StatusBadge tone="neutral">{el.kind}</StatusBadge>

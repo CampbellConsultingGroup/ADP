@@ -2,7 +2,7 @@
  * ADP-mmm.2; specs/935-pattern-registry/contracts/rest-api.md). */
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ApiError, apiGet, apiMutation, getAuthHeader } from "./client";
+import { ApiError, apiGet, apiMutation, errorDetail, getAuthHeader } from "./client";
 
 const API = "/api/v1/patterns";
 
@@ -164,14 +164,7 @@ export class PatternIssuesError extends Error {
   }
 }
 
-/** FastAPI puts a human-readable reason in `detail`; fall back to the generic message. */
-export function errorDetail(err: unknown): string {
-  if (err instanceof ApiError && err.body && typeof err.body === "object") {
-    const detail = (err.body as { detail?: unknown }).detail;
-    if (typeof detail === "string") return detail;
-  }
-  return err instanceof Error ? err.message : String(err);
-}
+export { errorDetail };
 
 /** Issues carried by an error, if any (rejected import, blocked promotion, invalid draft). */
 export function errorIssues(err: unknown): PatternIssue[] {

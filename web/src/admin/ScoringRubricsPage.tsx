@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRubrics } from "../api/adminRubrics";
 import RubricEditor from "./RubricEditor";
 import RubricHistory from "./RubricHistory";
+import { clickableRow } from "../ui/clickableRow";
 
 const CARD: React.CSSProperties = {
   border: "1px solid var(--border)",
@@ -65,7 +66,7 @@ export default function ScoringRubricsPage(): React.ReactElement {
           <div
             key={item.rubric_id}
             style={{ ...CARD, outline: selectedId === item.rubric_id ? "2px solid var(--ent, #2874A6)" : "none" }}
-            onClick={() => trySelect(item.rubric_id)}
+            {...clickableRow(() => trySelect(item.rubric_id))}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontWeight: 500, fontSize: 13 }}>{item.display_name}</span>

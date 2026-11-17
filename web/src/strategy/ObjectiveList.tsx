@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useObjectives, useCreateObjective, useThemes } from "../api/strategy";
 import NavLinkButton from "./NavLinkButton";
 import ObjectiveForm from "./ObjectiveForm";
+import { clickableRow } from "../ui/clickableRow";
 
 interface ObjectiveListProps {
   onSelect: (objectiveId: string) => void;
@@ -109,7 +110,7 @@ export default function ObjectiveList({
         <div
           key={obj.id}
           data-objective-row
-          onClick={() => onSelect(obj.id)}
+          {...clickableRow(() => onSelect(obj.id))}
           style={{
             padding: "12px 16px",
             background: "var(--surface)",
@@ -131,7 +132,7 @@ export default function ObjectiveList({
             <div style={{ fontSize: 12, color: "var(--ink-3)", marginTop: 2 }}>
               Theme:{" "}
               {onNavigateToTheme ? (
-                <span onClick={(e) => e.stopPropagation()}>
+                <span role="presentation" onClick={(e) => e.stopPropagation()}>
                   <NavLinkButton onClick={() => onNavigateToTheme(obj.theme_id)} title="Jump to this theme">
                     {themeName(obj.theme_id)}
                   </NavLinkButton>

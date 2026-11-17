@@ -84,37 +84,37 @@ export default function TechnologyEditor({
   return (
     <div style={{ marginTop: 8 }}>
       <div style={{ marginBottom: 8 }}>
-        <label style={labelStyle}>Technology</label>
-        <input style={inputStyle("technology")} value={technology} onChange={e => setTechnology(e.target.value)} placeholder="e.g. Apache Kafka" />
+        <label htmlFor="tech-editor-technology" style={labelStyle}>Technology</label>
+        <input id="tech-editor-technology" style={inputStyle("technology")} value={technology} onChange={e => setTechnology(e.target.value)} placeholder="e.g. Apache Kafka" />
         {errors.technology && <div style={errorStyle}>{errors.technology}</div>}
       </div>
 
       <div style={{ marginBottom: 8 }}>
-        <label style={labelStyle}>Vendor</label>
-        <input style={inputStyle("vendor")} value={vendor} onChange={e => setVendor(e.target.value)} placeholder="e.g. Confluent" />
+        <label htmlFor="tech-editor-vendor" style={labelStyle}>Vendor</label>
+        <input id="tech-editor-vendor" style={inputStyle("vendor")} value={vendor} onChange={e => setVendor(e.target.value)} placeholder="e.g. Confluent" />
         {errors.vendor && <div style={errorStyle}>{errors.vendor}</div>}
       </div>
 
       <div style={{ marginBottom: 8 }}>
-        <label style={labelStyle}>Platform</label>
-        <input style={inputStyle("platform")} value={platform} onChange={e => setPlatform(e.target.value)} placeholder="e.g. AWS EKS" />
+        <label htmlFor="tech-editor-platform" style={labelStyle}>Platform</label>
+        <input id="tech-editor-platform" style={inputStyle("platform")} value={platform} onChange={e => setPlatform(e.target.value)} placeholder="e.g. AWS EKS" />
         {errors.platform && <div style={errorStyle}>{errors.platform}</div>}
       </div>
 
       <div style={{ marginBottom: 8 }}>
-        <label style={labelStyle}>Version</label>
-        <input style={inputStyle("version")} value={version} onChange={e => setVersion(e.target.value)} placeholder="e.g. 3.4.1" />
+        <label htmlFor="tech-editor-version" style={labelStyle}>Version</label>
+        <input id="tech-editor-version" style={inputStyle("version")} value={version} onChange={e => setVersion(e.target.value)} placeholder="e.g. 3.4.1" />
         {errors.version && <div style={errorStyle}>{errors.version}</div>}
       </div>
 
       <div style={{ marginBottom: 8 }}>
-        <label style={labelStyle}>Owner Team</label>
-        <input style={inputStyle("owner_team")} value={ownerTeam} onChange={e => setOwnerTeam(e.target.value)} placeholder="e.g. Platform Engineering" />
+        <label htmlFor="tech-editor-owner-team" style={labelStyle}>Owner Team</label>
+        <input id="tech-editor-owner-team" style={inputStyle("owner_team")} value={ownerTeam} onChange={e => setOwnerTeam(e.target.value)} placeholder="e.g. Platform Engineering" />
         {errors.owner_team && <div style={errorStyle}>{errors.owner_team}</div>}
       </div>
 
       <div style={{ marginBottom: 10 }}>
-        <label style={labelStyle}>Tags</label>
+        <label htmlFor="tech-editor-tags" style={labelStyle}>Tags</label>
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 4 }}>
           {tags.map(tag => (
             <span key={tag} style={{ background: "var(--biz-wash)", color: "var(--biz)", fontSize: 11, padding: "2px 6px", borderRadius: 3, display: "flex", alignItems: "center", gap: 4 }}>
@@ -125,6 +125,7 @@ export default function TechnologyEditor({
         </div>
         <div style={{ display: "flex", gap: 4 }}>
           <input
+            id="tech-editor-tags"
             style={{ ...inputStyle("tags"), flex: 1, marginBottom: 0 }}
             value={tagInput}
             onChange={e => setTagInput(e.target.value)}

@@ -76,14 +76,14 @@ export default function LifecycleTransitionButton({
 
           {(DATE_FIELDS[pending] ?? []).map((df) => (
             <div key={df.key} style={{ marginBottom: 8 }}>
-              <label className="ui-label">{df.label}</label>
-              <input type="date" className="ui-input" value={dateValue} onChange={(e) => setDateValue(e.target.value)} />
+              <label htmlFor="lifecycle-f0" className="ui-label">{df.label}</label>
+              <input id="lifecycle-f0" type="date" className="ui-input" value={dateValue} onChange={(e) => setDateValue(e.target.value)} />
             </div>
           ))}
 
           <div style={{ marginBottom: 10 }}>
-            <label className="ui-label">Note (optional, max 500 chars)</label>
-            <textarea className="ui-textarea" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} />
+            <label htmlFor="lifecycle-note-optional-max-500-ch" className="ui-label">Note (optional, max 500 chars)</label>
+            <textarea id="lifecycle-note-optional-max-500-ch" className="ui-textarea" value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={500} />
           </div>
 
           {mutation.isError && (

@@ -44,9 +44,9 @@ beforeEach(() => {
     mutate: deleteMutate, isPending: false,
   } as unknown as ReturnType<typeof complianceApi.useDeleteControl>);
   // 925-strategy-compliance-linkage: "Linked Objectives" read-only line, empty by default.
-  mockedApi.useControlObjectives.mockReturnValue({
-    data: { items: [], total: 0 },
-  } as unknown as ReturnType<typeof complianceApi.useControlObjectives>);
+  mockedApi.useFrameworkControlObjectives.mockReturnValue({
+    data: new Map(),
+  } as unknown as ReturnType<typeof complianceApi.useFrameworkControlObjectives>);
 });
 
 describe("ControlTree (COMPLY-01 US3 — delete scope disclosure)", () => {
@@ -95,5 +95,24 @@ describe("ControlTree (COMPLY-01 US3 — delete scope disclosure)", () => {
     // getByText throws if no match is found -- presence is the assertion.
     screen.getByText(/Art\. 5 —/);
     screen.getByText(/Art\. 5\(1\)\(a\) —/);
+  });
+});
+
+describe("ControlTree linked objectives (ADP-blp.35)", () => {
+  it("shows each control's objectives from one framework-wide query", () => {
+    mockedApi.useFrameworkControlObjectives.mockReturnValue({
+      data: new Map([["c1", [{ id: "o1", statement: "Reduce breach risk" }]]]),
+    } as unknown as ReturnType<typeof complianceApi.useFrameworkControlObjectives>);
+    const controls = [
+      { id: "c1", framework_id: "fw1", parent_id: null, code: "A.1", title: "One", description: "", children: [] },
+      { id: "c2", framework_id: "fw1", parent_id: null, code: "A.2", title: "Two", description: "", children: [] },
+    ] as unknown as Parameters<typeof ControlTree>[0]["controls"];
+    render(<ControlTree frameworkId="fw1" controls={controls} />);
+    expect(screen.getByText("Regulatory driver for: Reduce breach risk")).toBeTruthy();
+    expect(screen.getAllByText(/Regulatory driver for/)).toHaveLength(1);
+    // Every row asks for the same framework: the query cache makes that one request.
+    for (const call of mockedApi.useFrameworkControlObjectives.mock.calls) {
+      expect(call[0]).toBe("fw1");
+    }
   });
 });

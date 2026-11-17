@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useApplicationCost, useUpdateApplicationCost } from "../api/application";
 import type { ApplicationCostUpdate, CostBucket, TcoBucketKey } from "../api/application";
 import { TCO_BUCKET_KEYS } from "../api/application";
+import { hasStatus } from "../api/client";
 
 /** APM US4 — Total Cost of Ownership (ADP-9x6, sensitive: gated server-side). */
 
@@ -55,7 +56,7 @@ export default function CostPanel({ appId }: Props) {
   if (isLoading) return <div style={{ fontSize: 13, color: "var(--ink-3)" }}>Loading…</div>;
 
   if (error) {
-    const forbidden = (error as Error).message.includes("403");
+    const forbidden = hasStatus(error, 403);
     return (
       <div style={{ fontSize: 13, color: "var(--ink-3)" }}>
         {forbidden
@@ -82,7 +83,7 @@ export default function CostPanel({ appId }: Props) {
       await updateCost.mutateAsync(body);
       showToast("Saved");
     } catch (e) {
-      const forbidden = (e as Error).message.includes("403");
+      const forbidden = hasStatus(e, 403);
       showToast(forbidden ? "You don't have permission to edit cost data" : "Save failed");
     }
   };

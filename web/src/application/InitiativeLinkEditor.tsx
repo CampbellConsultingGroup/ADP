@@ -6,6 +6,7 @@ import {
   useDeleteInitiativeLink,
 } from "../api/application";
 import type { Disposition } from "../api/application";
+import { hasStatus } from "../api/client";
 
 interface Props { appId: string; }
 
@@ -35,7 +36,7 @@ export default function InitiativeLinkEditor({ appId }: Props) {
       setSelectedId("");
       setDisposition("modernize");
     } catch (e) {
-      showToast((e as Error).message.includes("409") ? "Already linked" : "Failed to link");
+      showToast(hasStatus(e, 409) ? "Already linked" : "Failed to link");
     }
   };
 
