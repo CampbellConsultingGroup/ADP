@@ -13,7 +13,13 @@ import {
   type StrategyInitiative,
 } from "../api/strategy";
 import type { MappingTargetType } from "../api/compliance";
-import { STATUS_COLOR, STATUS_LABEL, TARGET_TYPE_LABEL } from "../compliance/ControlMappingsEditor";
+import {
+  AgentName,
+  AgentPicker,
+  STATUS_COLOR,
+  STATUS_LABEL,
+  TARGET_TYPE_LABEL,
+} from "../compliance/ControlMappingsEditor";
 import { useLinkFeedback } from "./useLinkFeedback";
 
 interface Props {
@@ -21,7 +27,7 @@ interface Props {
 }
 
 const TARGET_TYPES: MappingTargetType[] = [
-  "capability", "application", "design", "pattern", "organization",
+  "capability", "application", "design", "pattern", "organization", "agent",
 ];
 
 function refLabel(ref: ControlMappingRef): string {
@@ -95,7 +101,15 @@ export default function InitiativeControlMappingEditor({ initiative }: Props): R
               borderBottom: "1px solid var(--border)",
             }}
           >
-            <span style={{ flex: 1, fontSize: "0.85rem" }}>{refLabel(ref)}</span>
+            <span style={{ flex: 1, fontSize: "0.85rem" }}>
+              {ref.target_type === "agent" && ref.target_id ? (
+                <>
+                  {ref.control_id} → {TARGET_TYPE_LABEL.agent}: <AgentName agentId={ref.target_id} />
+                </>
+              ) : (
+                refLabel(ref)
+              )}
+            </span>
             <span style={{ fontSize: "0.75rem", fontWeight: 600, color: STATUS_COLOR[ref.compliance_status] }}>
               {STATUS_LABEL[ref.compliance_status]}
             </span>
@@ -138,7 +152,11 @@ export default function InitiativeControlMappingEditor({ initiative }: Props): R
         />
         <select
           value={targetType}
-          onChange={(e) => setTargetType(e.target.value as MappingTargetType)}
+          onChange={(e) => {
+            setTargetType(e.target.value as MappingTargetType);
+            setTargetId("");
+          }}
+          aria-label="Target type"
           style={{
             padding: "0.3rem 0.5rem",
             fontSize: "0.85rem",
@@ -154,7 +172,16 @@ export default function InitiativeControlMappingEditor({ initiative }: Props): R
             </option>
           ))}
         </select>
-        {targetType !== "organization" && (
+        {targetType === "agent" && (
+          <AgentPicker
+            value={targetId}
+            onChange={(id) => {
+              setTargetId(id);
+              setLinkError(null);
+            }}
+          />
+        )}
+        {targetType !== "organization" && targetType !== "agent" && (
           <input
             value={targetId}
             onChange={(e) => {

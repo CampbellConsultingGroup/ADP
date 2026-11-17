@@ -12,7 +12,7 @@ PATCH /api/v1/strategy/objectives/{id}/abandon
 POST/DELETE /api/v1/strategy/objectives/{id}/controls[/{control_id}]
     (925-strategy-compliance-linkage)
 POST/DELETE /api/v1/strategy/initiatives/{id}/control-mappings/{capabilities|applications|
-    designs|patterns}/{control_id}/{target_id}, .../organization/{control_id}
+    designs|patterns|agents}/{control_id}/{target_id}, .../organization/{control_id}
     (925-strategy-compliance-linkage, COMPLY-05)
 
 Write endpoints are gated by ActionType.WRITE_BUSINESS_ARCH via the app-level
@@ -863,6 +863,34 @@ async def unlink_initiative_organization_mapping(
 ):
     await _unlink_initiative_control_mapping(
         initiative_id, control_id, MappingTargetType.ORGANIZATION, None, session
+    )
+
+
+@router.post(
+    "/initiatives/{initiative_id}/control-mappings/agents/{control_id}/{agent_id}",
+    response_model=StrategyInitiative,
+    status_code=status.HTTP_201_CREATED,
+)
+async def link_initiative_agent_mapping(
+    initiative_id: str, control_id: str, agent_id: str,
+    session: AsyncSession = Depends(_get_session),
+):
+    """ADP-321: link an initiative to an agent's control mapping (944's sixth target)."""
+    return await _link_initiative_control_mapping(
+        initiative_id, control_id, MappingTargetType.AGENT, agent_id, session
+    )
+
+
+@router.delete(
+    "/initiatives/{initiative_id}/control-mappings/agents/{control_id}/{agent_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def unlink_initiative_agent_mapping(
+    initiative_id: str, control_id: str, agent_id: str,
+    session: AsyncSession = Depends(_get_session),
+):
+    await _unlink_initiative_control_mapping(
+        initiative_id, control_id, MappingTargetType.AGENT, agent_id, session
     )
 
 

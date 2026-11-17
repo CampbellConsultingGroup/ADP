@@ -792,7 +792,7 @@ async def _list_control_mapping_initiatives(
     target_id: str | None,
     strategy_session: AsyncSession,
 ) -> StrategyInitiativeListResponse:
-    """Shared handler body for the five GET routes below (spec.md FR-007 reverse direction)."""
+    """Shared handler body for the six GET routes below (spec.md FR-007 reverse direction)."""
     from adp.strategy import store as sstore
 
     if not await sstore.control_exists(control_id, strategy_session):
@@ -859,6 +859,22 @@ async def list_pattern_mapping_initiatives(
 ):
     return await _list_control_mapping_initiatives(
         control_id, MappingTargetType.PATTERN, pattern_id, strategy_session
+    )
+
+
+@router.get(
+    "/controls/{control_id}/mappings/agents/{agent_id}/initiatives",
+    response_model=StrategyInitiativeListResponse,
+)
+async def list_agent_mapping_initiatives(
+    control_id: str,
+    agent_id: str,
+    strategy_session: AsyncSession = Depends(_get_strategy_session),
+):
+    """ADP-321: initiatives remediating an agent's mapping. Like the agent mapping itself, never
+    filtered by READ_APPLICATION_GOVERNANCE."""
+    return await _list_control_mapping_initiatives(
+        control_id, MappingTargetType.AGENT, agent_id, strategy_session
     )
 
 

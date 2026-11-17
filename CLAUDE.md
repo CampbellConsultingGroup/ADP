@@ -172,6 +172,17 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- ADP-321 (initiative linkage for agent compliance mappings, follow-on to 944): 925's remediation loop now
+  covers all six mapping targets. Migration `053` adds `initiative_control_agent_mapping` in 034's shape (composite
+  FK to `control_agent_mapping`, CASCADE on every leg); `adp.strategy` gains a `control_agent_mapping` mirror and
+  AGENT entries in both initiative dispatch tables. Routes POST/DELETE
+  `/strategy/initiatives/{id}/control-mappings/agents/{control_id}/{agent_id}` and GET
+  `/compliance/controls/{id}/mappings/agents/{agent_id}/initiatives` (not governance-gated, like agent mappings).
+  UI: agent target (registry picker) in `InitiativeControlMappingEditor`, agent rows by name, and the
+  "Remediation:" line on agent rows in `ControlMappingsEditor`. 944's guard `test_initiative_agent_excluded.py` is
+  replaced by `test_initiative_agent_mapping.py` (dispatch covers every MappingTargetType). Contract fixture
+  gotcha: import `adp.strategy.initiatives` before `sstore._metadata.create_all`, and create sstore LAST (it
+  mirrors cstore's `control_agent_mapping`). 2743 backend, 841 frontend.
 - 944-agent-traceability: Implemented (ADP-12x, Agentic P3 of `docs/agentic-solutions-plan.md`; clarify
   2026-11-16: capability links L3 only, the FR-013 risk rule as written, agent and solution compliance kept
   separate). Three additions to the 933 agent registry, all derived data computed on read.

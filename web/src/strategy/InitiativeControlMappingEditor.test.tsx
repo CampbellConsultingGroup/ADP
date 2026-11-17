@@ -12,6 +12,10 @@ import * as strategyApi from "../api/strategy";
 import type { StrategyInitiative } from "../api/strategy";
 
 vi.mock("../api/strategy");
+// ADP-321: the agent target is picked from the registry and agent rows show the agent's name.
+vi.mock("../api/agentic", () => ({
+  useAgents: () => ({ data: { items: [{ id: "ag-1", name: "Chat assistant" }] }, isLoading: false }),
+}));
 
 const mockedStrategyApi = vi.mocked(strategyApi);
 
@@ -162,5 +166,39 @@ describe("InitiativeControlMappingEditor", () => {
     await user.click(screen.getByText("Link"));
 
     expect(screen.getByText(/Linked "Application compliance gap"/)).toBeTruthy();
+  });
+
+  it("links an agent's mapping, picking the agent from the registry (ADP-321)", async () => {
+    const mutate = vi.fn();
+    mockedStrategyApi.useLinkInitiativeControlMapping.mockReturnValue({
+      mutate,
+      isPending: false,
+    } as unknown as ReturnType<typeof strategyApi.useLinkInitiativeControlMapping>);
+
+    const user = userEvent.setup();
+    render(<InitiativeControlMappingEditor initiative={{ ...INITIATIVE, control_mappings: [] }} />);
+
+    await user.type(screen.getByPlaceholderText("Control id"), "CTRL-9");
+    await user.selectOptions(screen.getByLabelText("Target type"), "agent");
+    expect(screen.queryByPlaceholderText("Agent id")).toBeNull();
+    await user.selectOptions(screen.getByLabelText("Agent"), "ag-1");
+    await user.click(screen.getByText("Link"));
+
+    expect(mutate).toHaveBeenCalledWith(
+      { controlId: "CTRL-9", targetType: "agent", targetId: "ag-1" },
+      expect.anything(),
+    );
+  });
+
+  it("shows a linked agent mapping by agent name", () => {
+    render(
+      <InitiativeControlMappingEditor
+        initiative={{
+          ...INITIATIVE,
+          control_mappings: [{ ...INITIATIVE.control_mappings[0], target_type: "agent", target_id: "ag-1" }],
+        }}
+      />,
+    );
+    expect(screen.getByText("CTRL-1 → Agent: Chat assistant")).toBeTruthy();
   });
 });

@@ -236,6 +236,17 @@ _control_pattern_mapping_mirror = sa.Table(
     sa.Column("assessed_at", sa.Date(), nullable=True),
 )
 
+# ADP-321: 944's sixth mapping target, mirrored so an initiative can link to an agent mapping.
+_control_agent_mapping_mirror = sa.Table(
+    "control_agent_mapping",
+    _metadata,
+    sa.Column("control_id", sa.String(36), primary_key=True),
+    sa.Column("agent_id", sa.String(36), primary_key=True),
+    sa.Column("compliance_status", sa.Text(), nullable=False),
+    sa.Column("evidence_ref", sa.Text(), nullable=True),
+    sa.Column("assessed_at", sa.Date(), nullable=True),
+)
+
 _control_organization_mapping_mirror = sa.Table(
     "control_organization_mapping",
     _metadata,
