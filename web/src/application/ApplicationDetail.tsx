@@ -80,7 +80,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
     // 933-agent-registry: only agentic solutions have agents (Clarification Q1).
     ...(app.application_type === "agentic" ? [{ id: "agents" as Section, label: "Agents" }] : []),
     { id: "capabilities", label: "Capabilities" },
-    { id: "tech-caps", label: "Tech Caps" },
+    { id: "tech-caps", label: "Technical Capabilities" },
     { id: "stages", label: "Stages" },
     { id: "integrations", label: "Integrations" },
     { id: "designs", label: "Designs" },

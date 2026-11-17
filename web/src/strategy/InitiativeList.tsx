@@ -297,8 +297,8 @@ export default function InitiativeList({ focusInitiativeId, onNavigateToObjectiv
               )}
             </div>
             <div style={{ display: "flex", gap: 6 }}>
-              <Button size="sm" data-edit-for={i.id} onClick={() => setEditingId(i.id)}>Edit</Button>
-              <Button size="sm" variant="danger" onClick={() => handleDelete(i)}>Delete</Button>
+              <Button size="sm" data-edit-for={i.id} disabled={!canWrite.allowed} title={canWrite.reason} onClick={() => setEditingId(i.id)}>Edit</Button>
+              <Button size="sm" variant="danger" disabled={!canWrite.allowed} title={canWrite.reason} onClick={() => handleDelete(i)}>Delete</Button>
             </div>
           </div>
         ),

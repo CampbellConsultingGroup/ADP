@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import type { AppView } from "../shell";
 import DesignStatusTab from "./DesignStatusTab";
 import ComplianceTab from "./ComplianceTab";
@@ -6,6 +6,7 @@ import ActivityFeedTab from "./ActivityFeedTab";
 import ArchitectureHealthTab from "./ArchitectureHealthTab";
 import { Tabs } from "../ui/Tabs";
 import { PageHeader } from "../ui/primitives";
+import { useHashParam } from "../shell/routing";
 
 type TabId = "status" | "compliance" | "activity" | "health";
 
@@ -31,7 +32,12 @@ export default function GovernancePage({
   onSelectDesign,
   onOpenAdoption,
 }: GovernancePageProps): React.ReactElement {
-  const [activeTab, setActiveTab] = useState<TabId>("status");
+  // ADP-blp.68: the tab is in the URL (?tab=...).
+  const [activeTab, setActiveTab] = useHashParam<TabId>(
+    "tab",
+    ["status", "compliance", "activity", "health"],
+    "status",
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>

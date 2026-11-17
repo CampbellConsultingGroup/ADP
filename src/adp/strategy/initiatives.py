@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.compliance.models import ComplianceStatus, MappingTargetType
+from adp.db import is_unique_violation
 from adp.strategy.store import (
     DuplicateLinkError,
     LinkNotFoundError,
@@ -422,7 +423,7 @@ async def link_initiative_objective(
             )
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateLinkError(
                 f"Initiative {initiative_id!r} is already linked to objective {objective_id!r}"
             ) from exc
@@ -494,7 +495,7 @@ async def link_initiative_control_mapping(
     try:
         await session.execute(link_table.insert().values(**values))
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateLinkError(
                 f"Initiative {initiative_id!r} is already linked to control mapping "
                 f"(control_id={control_id!r}, target_type={target_type!r}, target_id={target_id!r})"
@@ -681,7 +682,7 @@ async def add_objective_dependency(
             )
         )
     except Exception as exc:
-        if "unique" in str(exc).lower() or "duplicate" in str(exc).lower() or "23505" in str(exc):
+        if is_unique_violation(exc):
             raise DuplicateLinkError(
                 f"Objective {objective_id!r} already depends on "
                 f"{depends_on_objective_id!r}"

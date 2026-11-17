@@ -251,8 +251,8 @@ export default function ThemeList({ focusThemeId, onNavigateToObjectives }: Them
               </div>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
-              <Button size="sm" data-edit-for={t.id} onClick={() => setEditingId(t.id)}>Edit</Button>
-              <Button size="sm" variant="danger" onClick={() => handleDelete(t)}>Delete</Button>
+              <Button size="sm" data-edit-for={t.id} disabled={!canWrite.allowed} title={canWrite.reason} onClick={() => setEditingId(t.id)}>Edit</Button>
+              <Button size="sm" variant="danger" disabled={!canWrite.allowed} title={canWrite.reason} onClick={() => handleDelete(t)}>Delete</Button>
             </div>
           </div>
         ),

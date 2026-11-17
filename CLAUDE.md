@@ -172,6 +172,24 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P3 batch 3 (epic ADP-blp: .50 .66, parts of .27 .34 .65 .68):
+  - `docs/ui-glossary.md`: the words the UI uses (Link vs Map vs Realized by; Add / Delete / Remove; names
+    written in full; what each status colour means). "Tech Caps" -> "Technical Capabilities", "APM
+    Analysis" -> "Portfolio Analysis".
+  - Tabs in the URL: `useHashParam(name, allowed, initial)` in `shell/routing.ts` keeps one named value in
+    the hash query (`#/business?tab=heatmap`) with `replaceState`; used by the Business, Strategy,
+    Governance and Applications tabs. App's route sync now leaves the URL alone when the route itself is
+    unchanged, so page parameters survive a reload. Filters are still not in the URL.
+  - `PageHeader compact` on Agents, Patterns, Compliance and Applications.
+  - Permissions: `useCan(action, fallback)`; `useCanWriteApplications` now asks the server and uses the old
+    role list only until the answer loads. Edit/Delete on agents, frameworks, themes, initiatives and
+    objectives are disabled with a reason for roles that cannot write.
+  - Pickers: the design and application pickers' query keys are under `["designs", ...]` /
+    `["applications", ...]`, so creating one refreshes them; the design picker asks for 200, not 100.
+  - `adp.db.is_unique_violation(exc)` replaces seventeen copies of a text test in the stores.
+  - Deferred with reasons on the beads: .25 (snapshot cache) and .67 (export change marker).
+  - Gotcha: Vite can serve a stale transform of a file edited twice in quick succession (the browser saw
+    `useState is not defined` while tsc and vitest passed). `touch` the file.
 - Fable review P3 batch 2 (epic ADP-blp: .47 .61 .69, part of .28):
   - `ui/confirm.tsx`: `confirmAction(message)` returns a promise; `<ConfirmHost />` (mounted in AppShell)
     draws a themed dialog, with a fallback to `window.confirm` when no host is mounted -- so component tests

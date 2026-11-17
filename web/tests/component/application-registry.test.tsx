@@ -333,7 +333,7 @@ describe("DesignLinkEditor (application)", () => {
   it("links a design to the application", async () => {
     const calls = mockFetch({
       "GET /api/v1/applications/app-1/design-links": { items: [], total: 0 },
-      "GET /api/v1/designs?page=1&page_size=100": {
+      "GET /api/v1/designs?page=1&page_size=200": {
         designs: [{ id: "DSN-1", title: "Payments Design" }],
       },
       "POST /api/v1/applications/app-1/design-links": { app_id: "app-1", design_id: "DSN-1" },

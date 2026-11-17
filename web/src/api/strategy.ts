@@ -367,14 +367,14 @@ export interface ApplicationSummaryForLinking {
 
 export function useDesignsForLinking() {
   return useQuery<{ designs: DesignSummaryForLinking[]; total: number }>({
-    queryKey: ["designs-for-linking"],
+    queryKey: ["designs", "for-linking"],
     queryFn: () => apiGet("/api/v1/designs?page=1&page_size=200"),
   });
 }
 
 export function useApplicationsForLinking() {
   return useQuery<{ items: ApplicationSummaryForLinking[]; total: number }>({
-    queryKey: ["applications-for-linking"],
+    queryKey: ["applications", "for-linking"],
     queryFn: () => apiGet("/api/v1/applications"),
   });
 }

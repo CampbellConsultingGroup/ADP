@@ -210,7 +210,10 @@ export default function App(): React.ReactElement {
     const hash = formatRoute(route);
     const first = firstSync.current;
     firstSync.current = false;
-    if (window.location.hash === hash) return;
+    // Already at this route: leave the URL alone. It may carry a page's own parameters
+    // (?tab=...), which are not part of the route and must survive a reload (ADP-blp.68).
+    const current = parseRoute(window.location.hash);
+    if (current && formatRoute(current) === hash) return;
     // The first sync only fills in the address of the screen already showing.
     if (first) window.history.replaceState(null, "", hash);
     else window.history.pushState(null, "", hash);

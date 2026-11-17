@@ -6,6 +6,7 @@ import InitiativeList from "./InitiativeList";
 import StrategyHeatMap from "./StrategyHeatMap";
 import { Tabs } from "../ui/Tabs";
 import { PageHeader } from "../ui/primitives";
+import { useHashParam } from "../shell/routing";
 
 type StrategyTab = "themes" | "objectives" | "initiatives" | "heatmap";
 
@@ -17,7 +18,12 @@ const STRATEGY_TABS: { id: StrategyTab; label: string }[] = [
 ];
 
 export default function StrategyPage(): React.ReactElement {
-  const [tab, setTab] = useState<StrategyTab>("themes");
+  // ADP-blp.68: the tab is in the URL (?tab=...).
+  const [tab, setTab] = useHashParam<StrategyTab>(
+    "tab",
+    ["themes", "objectives", "initiatives", "heatmap"],
+    "themes",
+  );
   const [selectedObjectiveId, setSelectedObjectiveId] = useState<string | null>(null);
   // Cross-entity navigation (theme <-> objective <-> initiative), added in
   // direct response to "we need a method of navigation on the strategy

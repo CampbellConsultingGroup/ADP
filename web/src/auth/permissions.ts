@@ -20,10 +20,13 @@ let cache: Promise<MyPermissions | null> | null = null;
 
 function load(): Promise<MyPermissions | null> {
   if (cache === null) {
-    cache = apiGet<MyPermissions>("/api/v1/auth/permissions").catch(() => {
-      cache = null; // try again next time
-      return null;
-    });
+    cache = apiGet<MyPermissions>("/api/v1/auth/permissions")
+      // Anything that is not a list of actions counts as "could not be loaded".
+      .then((result) => (result && Array.isArray(result.actions) ? result : null))
+      .catch(() => {
+        cache = null; // try again next time
+        return null;
+      });
   }
   return cache;
 }
@@ -39,7 +42,11 @@ export interface Permission {
   reason?: string;
 }
 
-export function useCan(action: string): Permission {
+/**
+ * `fallback` is the answer to use until the server's has loaded (or if it cannot be loaded).
+ * Default: allowed. Pass a role-based guess to avoid a control flashing enabled for a reader.
+ */
+export function useCan(action: string, fallback = true): Permission {
   const { user } = useAuth();
   const [permissions, setPermissions] = useState<MyPermissions | null>(null);
 
@@ -53,8 +60,9 @@ export function useCan(action: string): Permission {
     };
   }, [user?.role]);
 
-  if (permissions === null || permissions.actions.includes(action)) return { allowed: true };
-  const role = user?.roleLabel ?? permissions.role.replace(/_/g, " ");
+  const allowed = permissions === null ? fallback : permissions.actions.includes(action);
+  if (allowed) return { allowed: true };
+  const role = user?.roleLabel ?? (permissions?.role ?? user?.role ?? "your role").replace(/_/g, " ");
   return {
     allowed: false,
     reason: `Your role (${role}) cannot do this. Ask an administrator if you need access.`,

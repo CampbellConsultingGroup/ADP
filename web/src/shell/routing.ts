@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { AppView } from "./index";
 
 /**
@@ -78,4 +79,71 @@ export function parseRoute(hash: string): AppRoute | null {
   }
   const designId = new URLSearchParams(queryPart).get("design");
   return { view, entity, designId: designId || null };
+}
+
+// ── Page state in the URL (ADP-blp.68) ─────────────────────────────────────────
+// A page's own choices -- which tab is showing -- live in the hash query string beside the
+// route (`#/business?tab=capabilities`), so a reload or a shared link opens the same tab.
+// The route itself is still written by App; these helpers only touch one named parameter.
+
+const PARAM_EVENT = "adp:hashparam";
+
+function splitHash(): { path: string; params: URLSearchParams } {
+  const raw = window.location.hash;
+  const at = raw.indexOf("?");
+  return {
+    path: at === -1 ? raw : raw.slice(0, at),
+    params: new URLSearchParams(at === -1 ? "" : raw.slice(at + 1)),
+  };
+}
+
+export function readHashParam(name: string): string | null {
+  return splitHash().params.get(name);
+}
+
+/** Set (or with null, remove) one hash query parameter without adding a history entry. */
+export function writeHashParam(name: string, value: string | null): void {
+  const { path, params } = splitHash();
+  if (!path.startsWith("#/")) return; // no route in the URL yet: nothing to attach to
+  if (value === null) params.delete(name);
+  else params.set(name, value);
+  const query = params.toString();
+  window.history.replaceState(null, "", query ? `${path}?${query}` : path);
+  window.dispatchEvent(new Event(PARAM_EVENT));
+}
+
+/**
+ * A piece of page state kept in the URL. `allowed` lists the valid values; anything else in
+ * the URL falls back to `initial`, as does a missing parameter.
+ */
+export function useHashParam<T extends string>(
+  name: string,
+  allowed: readonly T[],
+  initial: T,
+): [T, (value: T) => void] {
+  const read = (): T => {
+    const value = readHashParam(name);
+    return value !== null && (allowed as readonly string[]).includes(value) ? (value as T) : initial;
+  };
+  const [value, setValue] = useState<T>(read);
+
+  useEffect(() => {
+    const sync = () => setValue(read());
+    window.addEventListener("popstate", sync);
+    window.addEventListener("hashchange", sync);
+    window.addEventListener(PARAM_EVENT, sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("hashchange", sync);
+      window.removeEventListener(PARAM_EVENT, sync);
+    };
+    // `read` only depends on the arguments, which are constants at every call site.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [name]);
+
+  const set = (next: T) => {
+    setValue(next);
+    writeHashParam(name, next === initial ? null : next);
+  };
+  return [value, set];
 }

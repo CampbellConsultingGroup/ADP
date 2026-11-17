@@ -23,6 +23,7 @@ import { Button, StatusBadge, type BadgeTone } from "../ui";
 import NavLinkButton from "./NavLinkButton";
 import EditFrame, { useReturnFocus } from "./EditFrame";
 import { confirmAction } from "../ui/confirm";
+import { useCan } from "../auth/permissions";
 
 interface ObjectiveDetailProps {
   objectiveId: string;
@@ -75,6 +76,7 @@ export default function ObjectiveDetail({ objectiveId, onBack, backLabel = "Back
   const deleteMutation = useDeleteObjective();
   const abandonMutation = useAbandonObjective(objectiveId);
   const [editing, setEditing] = useState(false);
+  const canWrite = useCan("write_business_arch"); // ADP-blp.65
 
   const [owner, setOwner] = useState("");
   const [statement, setStatement] = useState("");
@@ -240,7 +242,7 @@ export default function ObjectiveDetail({ objectiveId, onBack, backLabel = "Back
               {objective.status !== "abandoned" && (
                 <Button size="sm" variant="danger" onClick={handleAbandon}>Abandon</Button>
               )}
-              <Button size="sm" variant="danger" onClick={handleDelete}>Delete</Button>
+              <Button size="sm" variant="danger" disabled={!canWrite.allowed} title={canWrite.reason} onClick={handleDelete}>Delete</Button>
             </div>
           </div>
           {/* Labeled data card: the objective's own fields, made clearly legible

@@ -178,6 +178,13 @@ describe("URL hash routing (ADP-blp.53)", () => {
     expect(await screen.findByText("GovernancePage-stub")).toBeTruthy();
   });
 
+  it("keeps a page's own URL parameters when the route is unchanged (ADP-blp.68)", async () => {
+    window.history.replaceState(null, "", "#/governance?tab=activity");
+    render(<App />);
+    expect(await screen.findByText("GovernancePage-stub")).toBeTruthy();
+    expect(window.location.hash).toBe("#/governance?tab=activity");
+  });
+
   it("starts on Overview and writes its address when the hash is empty or unknown", async () => {
     window.history.replaceState(null, "", "#/nowhere");
     render(<App />);
