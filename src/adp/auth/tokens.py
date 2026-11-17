@@ -86,6 +86,7 @@ def _token_is_for_client(claims: dict[str, Any], client_id: str) -> bool:
 # ── JWKS cache ────────────────────────────────────────────────────────────────
 
 _JWKS_TTL_SECONDS = 300  # 5 minutes
+_JWKS_MIN_REFRESH_SECONDS = 30  # floor between early refreshes for an unknown key id
 
 
 class JwksCache:
@@ -102,6 +103,31 @@ class JwksCache:
         async with self._lock:
             now = time.monotonic()
             if self._keys is None or (now - self._fetched_at) > _JWKS_TTL_SECONDS:
+                await self._refresh()
+            return self._keys  # type: ignore[return-value]
+
+    @staticmethod
+    def _has_kid(jwks: dict[str, Any] | None, kid: str) -> bool:
+        keys = (jwks or {}).get("keys", [])
+        return any(isinstance(k, dict) and k.get("kid") == kid for k in keys)
+
+    async def get_keys_for(self, kid: str | None) -> dict[str, Any]:
+        """Keys for a token signed with ``kid`` (ADP-blp.13).
+
+        When Keycloak rotates its signing key, tokens signed with the new key arrive before the
+        cached key set expires, and every one of them was rejected for up to five minutes. A
+        token naming a key we do not hold now triggers one early refresh -- at most once every
+        _JWKS_MIN_REFRESH_SECONDS, so a stream of tokens with made-up key ids cannot be used to
+        make this service hammer Keycloak.
+        """
+        keys = await self.get_keys()
+        if not kid or self._has_kid(keys, kid):
+            return keys
+        async with self._lock:
+            if not self._has_kid(self._keys, kid) and (
+                time.monotonic() - self._fetched_at
+            ) > _JWKS_MIN_REFRESH_SECONDS:
+                _logger.info("token signed with unknown key id %r: refreshing JWKS", kid)
                 await self._refresh()
             return self._keys  # type: ignore[return-value]
 
@@ -176,7 +202,11 @@ async def decode_token(
     client_id = os.environ.get("ADP_KEYCLOAK_CLIENT_ID", "adp-frontend")
 
     try:
-        jwks = await cache.get_keys()
+        try:
+            kid = jwt.get_unverified_header(token).get("kid")
+        except JWTError:
+            kid = None  # malformed header: jwt.decode below reports it
+        jwks = await cache.get_keys_for(kid)
         claims = jwt.decode(
             token,
             jwks,

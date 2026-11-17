@@ -23,7 +23,8 @@ export const LIFECYCLE_TONES: Record<PatternLifecycle, BadgeTone> = {
   proposed: "info",
   current: "good",
   deprecated: "warn",
-  decommissioned: "crit",
+  // ADP-blp.49: an ended state, not a failure -- red is kept for things that need attention.
+  decommissioned: "neutral",
 };
 
 /** Verb shown on the button that moves a version to the given state. */

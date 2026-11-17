@@ -19,6 +19,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from adp.background import spawn
 from adp.telemetry.context import get_trace_id
 
 logger = logging.getLogger(__name__)
@@ -701,8 +702,7 @@ async def accept_option(
         f"{pe.name} ({pe.kind.value if hasattr(pe.kind, 'value') else pe.kind})"
         for pe in (option.proposed_elements or [])
     )
-    import asyncio
-    asyncio.create_task(_write_knowledge_item(
+    spawn(_write_knowledge_item(
         item_id=f"rec-accept-{option_id}",
         title=f"[Accepted] {option.title}",
         full_text=(
@@ -817,8 +817,7 @@ async def reject_option(
     )
 
     # ADP-SPEC-019 FR-006: write rejected option as anti-pattern to knowledge base (fire-and-forget)
-    import asyncio
-    asyncio.create_task(_write_knowledge_item(
+    spawn(_write_knowledge_item(
         item_id=f"rec-reject-{option_id}",
         title=f"[Rejected] {option.title}",
         full_text=f"{option.title}\n\nRejection reason: {request.rejection_reason}",

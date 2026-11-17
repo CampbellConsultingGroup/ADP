@@ -136,7 +136,7 @@ export default function RoadmapView() {
           />
           <button
             onClick={handleCreate}
-            style={{ fontSize: 13, padding: "6px 14px", background: "var(--accent, #2874A6)", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer" }}
+            style={{ fontSize: 13, padding: "6px 14px", background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 6, cursor: "pointer" }}
           >
             Add
           </button>

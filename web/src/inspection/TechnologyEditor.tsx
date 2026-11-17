@@ -146,7 +146,7 @@ export default function TechnologyEditor({
         <button
           onClick={handleSave}
           disabled={mutation.isPending}
-          style={{ flex: 1, padding: "6px 0", background: mutation.isPending ? "var(--border)" : "var(--accent)", color: "#fff", border: "none", borderRadius: 4, cursor: mutation.isPending ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 600 }}
+          style={{ flex: 1, padding: "6px 0", background: mutation.isPending ? "var(--border)" : "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 4, cursor: mutation.isPending ? "not-allowed" : "pointer", fontSize: 12, fontWeight: 600 }}
         >
           {mutation.isPending ? "Saving…" : "Save"}
         </button>

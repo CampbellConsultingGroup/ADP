@@ -193,6 +193,19 @@ async def get_compliance_exceptions(
     return ComplianceExceptionsResponse(exceptions=exceptions, total=len(exceptions))
 
 
+# ADP-blp.10: design titles, actors and summaries are written by users. A spreadsheet treats a
+# cell that starts with one of these characters as a formula, so a value such as
+# =HYPERLINK("http://evil","click") would run when the export is opened. A leading apostrophe
+# makes the spreadsheet show the text as text.
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _csv_cell(value: object) -> object:
+    if isinstance(value, str) and value.startswith(_FORMULA_PREFIXES):
+        return "'" + value
+    return value
+
+
 @router.get("/activity/export")
 async def export_activity_csv(
     from_date: date = Query(...),
@@ -234,10 +247,13 @@ async def export_activity_csv(
     )
     for r in rows:
         writer.writerow([
-            r.id, r.design_id, r.design_title, r.actor, r.action,
-            r.affected_entity, r.summary,
-            r.timestamp.isoformat() if r.timestamp else "",
-            r.origin,
+            _csv_cell(value)
+            for value in (
+                r.id, r.design_id, r.design_title, r.actor, r.action,
+                r.affected_entity, r.summary,
+                r.timestamp.isoformat() if r.timestamp else "",
+                r.origin,
+            )
         ])
 
     filename = f"adp-audit-{from_date}-{to_date}.csv"

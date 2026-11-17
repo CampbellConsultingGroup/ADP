@@ -28,13 +28,16 @@ const PRIMARY: NavDef[] = [
   // sibling to Overview, deliberately not folded into ARCHITECTURE below
   // (that group is entirely architect-facing domain editors).
   { view: "insights", label: "Insights", icon: "target" },
+  // ADP-blp.55: an analysis view over the whole estate, so it sits with Overview and Insights
+  // rather than under Oversight. (ADP-blp.54: was "APM".)
+  { view: "portfolio", label: "Application Portfolio", icon: "chart", hue: "ent" },
 ];
 const ARCHITECTURE: NavDef[] = [
   // ADP-d8u.1: strategic objectives are a distinct entity with their own
   // lifecycle (plan.md's Structure Decision) -- a new top-level section,
   // not nested under Business Architecture. Placed first, ahead of
   // Business, per explicit nav-ordering request.
-  { view: "strategy", label: "Strategy", icon: "spark", hue: "biz" },
+  { view: "strategy", label: "Strategy", icon: "go", hue: "biz" },
   { view: "business", label: "Business", icon: "biz", hue: "biz" },
   { view: "applications", label: "Applications", icon: "ent", hue: "ent" },
   // ADP-61l: mirrors Business's own top-level structure (a new top-level
@@ -44,29 +47,23 @@ const ARCHITECTURE: NavDef[] = [
   // 933-agent-registry: the estate-wide AI agent registry, beside the application registry
   // its agentic solutions live in.
   { view: "agents", label: "Agents", icon: "spark", hue: "ent" },
-  // ADP-SPEC-046 / ADP-914.5: standalone diagrams (flowchart/sequence/ERD/
-  // UML/architecture) have no relationship to a Design (FR-011), so they sit
-  // here alongside Business/Applications rather than under DESIGN_SCOPED.
-  { view: "diagrams", label: "Diagrams", icon: "layers", hue: "tec" },
 ];
 const OVERSIGHT: NavDef[] = [
-  // ADP-blp.54: was "APM", which a new user could not tell apart from "Applications".
-  { view: "portfolio", label: "Application Portfolio", icon: "chart", hue: "ent" },
   { view: "governance", label: "Governance", icon: "shield" },
   // COMPLY-01: placed beside Governance, per the source doc's own framing of
   // Compliance as governance-adjacent (plan.md Project Structure).
-  { view: "compliance", label: "Compliance", icon: "shield", hue: "biz" },
+  { view: "compliance", label: "Compliance", icon: "check", hue: "biz" },
   // 935-pattern-registry: governed EA patterns, beside the Knowledge base they project into.
-  { view: "patterns", label: "Patterns", icon: "sol", hue: "ent" },
+  { view: "patterns", label: "Patterns", icon: "tags", hue: "ent" },
   { view: "knowledge", label: "Knowledge", icon: "book", hue: "tec" },
 ];
 // ADP-SPEC-042: gated at the route/nav level on the distinct platform_admin
 // role, not folded into ARCHITECTURE — this surface has its own permission
 // (MANAGE_AGENT_PROMPTS), not implied by any architect role.
 const ADMIN: NavDef[] = [
-  { view: "admin", label: "Agent Prompts", icon: "shield" },
+  { view: "admin", label: "Agent Prompts", icon: "doc" },
   // ADP-68z: sibling admin surface, same platform_admin-only gate.
-  { view: "scoring-rubrics", label: "Scoring Rubrics", icon: "shield" },
+  { view: "scoring-rubrics", label: "Scoring Rubrics", icon: "cycle" },
 ];
 
 // ADP-blp.54: the top-bar title is the nav label itself. A separate hand-written map had
@@ -76,6 +73,7 @@ const DESIGN_LABELS: Partial<Record<AppView, string>> = {
   designs: "Designs",
   intake: "New Design",
   "canvas-v2": "C4 Design",
+  diagrams: "Diagrams",
 };
 
 function titleFor(view: AppView): string {
@@ -147,11 +145,14 @@ export function AppShell({ currentView, onNavigate, designId, onStartNewDesign, 
   const DESIGN_SCOPED: NavDef[] = [
     { view: "designs", label: DESIGN_LABELS.designs!, icon: "sol" },
     // ADP-blp.54: was "Intake". Clicking it always starts a new design, so it says so.
-    { view: "intake", label: DESIGN_LABELS.intake!, icon: "inbox", onClick: onStartNewDesign },
+    { view: "intake", label: DESIGN_LABELS.intake!, icon: "plus", onClick: onStartNewDesign },
     // ADP-914.13: the legacy "Canvas" item (C4Canvas/Workspace, ADP-SPEC-054's research.md
     // Decision 8 called it "canvas") is retired -- this is now the sole design-editing entry
     // point, so it drops the "(Preview)" qualifier that distinguished it from the alternative.
-    { view: "canvas-v2", label: DESIGN_LABELS["canvas-v2"]!, icon: "sol" },
+    { view: "canvas-v2", label: DESIGN_LABELS["canvas-v2"]!, icon: "layers" },
+    // ADP-blp.55: a drawing tool, not an architecture domain, so it sits with the design tools.
+    // Standalone diagrams are not tied to the selected design (ADP-SPEC-046, FR-011).
+    { view: "diagrams", label: "Diagrams", icon: "image", hue: "tec" },
   ];
 
   return (

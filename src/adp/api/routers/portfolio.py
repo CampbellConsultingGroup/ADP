@@ -72,7 +72,44 @@ class ApplicationCapabilityGroupsResponse(BaseModel):
     items: list[ApplicationCapabilityLink]
 
 
+class EstateCountsResponse(BaseModel):
+    capabilities: int
+    value_streams: int
+    domains: int
+    technical_capabilities: int
+    knowledge_items: int
+    integrations: int
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
+
+# One row of counts. Plain COUNT(*) subqueries, so it runs on any backend.
+_ESTATE_COUNTS_SQL = sa.text(
+    """
+    SELECT
+      (SELECT COUNT(*) FROM business_capabilities) AS capabilities,
+      (SELECT COUNT(*) FROM value_streams) AS value_streams,
+      (SELECT COUNT(*) FROM business_domains) AS domains,
+      (SELECT COUNT(*) FROM technical_capabilities) AS technical_capabilities,
+      (SELECT COUNT(*) FROM knowledge_items WHERE active) AS knowledge_items,
+      (SELECT COUNT(*) FROM application_integrations) AS integrations
+    """
+)
+
+
+@router.get("/counts", response_model=EstateCountsResponse)
+async def get_estate_counts(
+    session: AsyncSession = Depends(get_kb_session),
+) -> EstateCountsResponse:
+    """How many of each thing exist, for the Overview page (ADP-blp.39).
+
+    Overview used to download six whole collections -- every capability, value stream, domain,
+    technical capability, knowledge item and integration -- only to read each one's total.
+    """
+    row = (await session.execute(_ESTATE_COUNTS_SQL)).mappings().one()
+    fields = EstateCountsResponse.model_fields
+    return EstateCountsResponse(**{key: int(row[key] or 0) for key in fields})
+
 
 @router.get("/summary", response_model=PortfolioSummaryResponse)
 async def get_portfolio_summary(

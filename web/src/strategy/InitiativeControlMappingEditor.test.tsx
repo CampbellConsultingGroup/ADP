@@ -12,6 +12,25 @@ import * as strategyApi from "../api/strategy";
 import type { StrategyInitiative } from "../api/strategy";
 
 vi.mock("../api/strategy");
+// ADP-blp.58: the control is picked from its framework's controls, not typed as an id.
+const CONTROLS = ["CTRL-1", "CTRL-2", "CTRL-9"].map((id) => ({
+  id, framework_id: "fw1", framework_name: "GDPR", code: id, title: `Title ${id}`, depth: 0,
+}));
+vi.mock("../api/compliance", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../api/compliance")>()),
+  useFrameworks: () => ({ data: { items: [{ id: "fw1", name: "GDPR" }], total: 1 } }),
+  useFramework: (id: string | null) => ({
+    data: id
+      ? { id: "fw1", name: "GDPR", controls: CONTROLS.map((c) => ({ ...c, children: [] })) }
+      : undefined,
+  }),
+  useAllControls: () => ({ byId: new Map(CONTROLS.map((c) => [c.id, c])), isLoading: false }),
+}));
+
+async function pickControl(user: ReturnType<typeof userEvent.setup>, controlId: string) {
+  await user.selectOptions(screen.getByLabelText("Framework"), "fw1");
+  await user.selectOptions(screen.getByLabelText("Control"), controlId);
+}
 // ADP-321: the agent target is picked from the registry and agent rows show the agent's name.
 vi.mock("../api/agentic", () => ({
   useAgents: () => ({ data: { items: [{ id: "ag-1", name: "Chat assistant" }] }, isLoading: false }),
@@ -72,11 +91,11 @@ describe("InitiativeControlMappingEditor", () => {
     render(<InitiativeControlMappingEditor initiative={{ ...INITIATIVE, control_mappings: [] }} />);
 
     expect(screen.getByPlaceholderText("Application id")).toBeTruthy();
-    await user.selectOptions(screen.getByRole("combobox"), "organization");
+    await user.selectOptions(screen.getByLabelText("Target type"), "organization");
     expect(screen.queryByPlaceholderText("Application id")).toBeNull();
     expect(screen.queryByPlaceholderText("Estate-wide (organization) id")).toBeNull();
-    // The control-id input is unaffected -- only the target-id input disappears.
-    expect(screen.getByPlaceholderText("Control id")).toBeTruthy();
+    // The control pickers are unaffected -- only the target-id input disappears.
+    expect(screen.getByLabelText("Control")).toBeTruthy();
   });
 
   it("calls the link hook with control id, target type, and target id", async () => {
@@ -89,7 +108,7 @@ describe("InitiativeControlMappingEditor", () => {
     const user = userEvent.setup();
     render(<InitiativeControlMappingEditor initiative={{ ...INITIATIVE, control_mappings: [] }} />);
 
-    await user.type(screen.getByPlaceholderText("Control id"), "CTRL-2");
+    await pickControl(user, "CTRL-2");
     await user.type(screen.getByPlaceholderText("Application id"), "APP-2");
     await user.click(screen.getByText("Link"));
 
@@ -127,7 +146,7 @@ describe("InitiativeControlMappingEditor", () => {
     const user = userEvent.setup();
     render(<InitiativeControlMappingEditor initiative={{ ...INITIATIVE, control_mappings: [] }} />);
 
-    await user.type(screen.getByPlaceholderText("Control id"), "CTRL-2");
+    await pickControl(user, "CTRL-2");
     await user.type(screen.getByPlaceholderText("Application id"), "APP-2");
     await user.click(screen.getByText("Link"));
 
@@ -144,7 +163,7 @@ describe("InitiativeControlMappingEditor", () => {
     const user = userEvent.setup();
     render(<InitiativeControlMappingEditor initiative={{ ...INITIATIVE, control_mappings: [] }} />);
 
-    await user.type(screen.getByPlaceholderText("Control id"), "CTRL-1");
+    await pickControl(user, "CTRL-1");
     await user.type(screen.getByPlaceholderText("Application id"), "APP-1");
     await user.click(screen.getByText("Link"));
 
@@ -161,7 +180,7 @@ describe("InitiativeControlMappingEditor", () => {
     const user = userEvent.setup();
     render(<InitiativeControlMappingEditor initiative={{ ...INITIATIVE, control_mappings: [] }} />);
 
-    await user.type(screen.getByPlaceholderText("Control id"), "CTRL-2");
+    await pickControl(user, "CTRL-2");
     await user.type(screen.getByPlaceholderText("Application id"), "APP-2");
     await user.click(screen.getByText("Link"));
 
@@ -178,7 +197,7 @@ describe("InitiativeControlMappingEditor", () => {
     const user = userEvent.setup();
     render(<InitiativeControlMappingEditor initiative={{ ...INITIATIVE, control_mappings: [] }} />);
 
-    await user.type(screen.getByPlaceholderText("Control id"), "CTRL-9");
+    await pickControl(user, "CTRL-9");
     await user.selectOptions(screen.getByLabelText("Target type"), "agent");
     expect(screen.queryByPlaceholderText("Agent id")).toBeNull();
     await user.selectOptions(screen.getByLabelText("Agent"), "ag-1");

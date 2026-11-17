@@ -12,7 +12,13 @@ import {
   type ControlMappingRef,
   type StrategyInitiative,
 } from "../api/strategy";
-import type { MappingTargetType } from "../api/compliance";
+import {
+  flattenControls,
+  useAllControls,
+  useFramework,
+  useFrameworks,
+  type MappingTargetType,
+} from "../api/compliance";
 import {
   AgentName,
   AgentPicker,
@@ -30,13 +36,33 @@ const TARGET_TYPES: MappingTargetType[] = [
   "capability", "application", "design", "pattern", "organization", "agent",
 ];
 
-function refLabel(ref: ControlMappingRef): string {
+function refLabel(ref: ControlMappingRef, controlName: string): string {
   const target = ref.target_id ? `${TARGET_TYPE_LABEL[ref.target_type]}: ${ref.target_id}` : TARGET_TYPE_LABEL[ref.target_type];
-  return `${ref.control_id} → ${target}`;
+  return `${controlName} → ${target}`;
 }
 
+const INDENT = "\u00A0\u00A0"; // non-breaking spaces: <option> text ignores ordinary indentation
+
+const selectStyle: React.CSSProperties = {
+  padding: "0.3rem 0.5rem",
+  fontSize: "0.85rem",
+  border: "1px solid var(--border)",
+  borderRadius: "4px",
+  background: "var(--bg)",
+  color: "var(--text)",
+  maxWidth: 260,
+};
+
 export default function InitiativeControlMappingEditor({ initiative }: Props): React.ReactElement {
+  // ADP-blp.58: the control is picked (framework, then control) rather than typed as an id --
+  // nobody knows a control's internal id, and a typo only surfaced as "No such mapping".
+  const [frameworkId, setFrameworkId] = useState("");
   const [controlId, setControlId] = useState("");
+  const frameworks = useFrameworks();
+  const framework = useFramework(frameworkId || null);
+  const allControls = useAllControls();
+  const controlOptions = framework.data ? flattenControls(framework.data) : [];
+  const controlName = (id: string): string => allControls.byId.get(id)?.code ?? id;
   const [targetType, setTargetType] = useState<MappingTargetType>("application");
   const [targetId, setTargetId] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
@@ -78,7 +104,7 @@ export default function InitiativeControlMappingEditor({ initiative }: Props): R
   function handleRemove(ref: ControlMappingRef) {
     unlink.mutate(
       { controlId: ref.control_id, targetType: ref.target_type, targetId: ref.target_id },
-      { onSuccess: () => feedback.showRemoved(refLabel(ref)) },
+      { onSuccess: () => feedback.showRemoved(refLabel(ref, controlName(ref.control_id))) },
     );
   }
 
@@ -104,10 +130,10 @@ export default function InitiativeControlMappingEditor({ initiative }: Props): R
             <span style={{ flex: 1, fontSize: "0.85rem" }}>
               {ref.target_type === "agent" && ref.target_id ? (
                 <>
-                  {ref.control_id} → {TARGET_TYPE_LABEL.agent}: <AgentName agentId={ref.target_id} />
+                  {controlName(ref.control_id)} → {TARGET_TYPE_LABEL.agent}: <AgentName agentId={ref.target_id} />
                 </>
               ) : (
-                refLabel(ref)
+                refLabel(ref, controlName(ref.control_id))
               )}
             </span>
             <span style={{ fontSize: "0.75rem", fontWeight: 600, color: STATUS_COLOR[ref.compliance_status] }}>
@@ -133,23 +159,41 @@ export default function InitiativeControlMappingEditor({ initiative }: Props): R
       </div>
 
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-        <input
+        <select
+          value={frameworkId}
+          onChange={(e) => {
+            setFrameworkId(e.target.value);
+            setControlId("");
+            setLinkError(null);
+          }}
+          aria-label="Framework"
+          style={selectStyle}
+        >
+          <option value="">Framework…</option>
+          {(frameworks.data?.items ?? []).map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+        <select
           value={controlId}
           onChange={(e) => {
             setControlId(e.target.value);
             setLinkError(null);
           }}
-          placeholder="Control id"
-          style={{
-            width: "140px",
-            padding: "0.3rem 0.5rem",
-            fontSize: "0.85rem",
-            border: "1px solid var(--border)",
-            borderRadius: "4px",
-            background: "var(--bg)",
-            color: "var(--text)",
-          }}
-        />
+          aria-label="Control"
+          disabled={!frameworkId}
+          style={selectStyle}
+        >
+          <option value="">{frameworkId ? "Control…" : "Choose a framework first"}</option>
+          {controlOptions.map((c) => (
+            <option key={c.id} value={c.id}>
+              {INDENT.repeat(c.depth)}
+              {c.code} — {c.title}
+            </option>
+          ))}
+        </select>
         <select
           value={targetType}
           onChange={(e) => {

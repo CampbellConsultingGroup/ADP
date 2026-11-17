@@ -206,10 +206,13 @@ async def list_knowledge_items(
     session: AsyncSession = Depends(get_kb_session),
 ) -> KnowledgeItemListResponse:
     """FR-001: List all active knowledge items (summary, no full_text)."""
+    # ADP-blp.23: only the summary columns. Selecting whole rows also pulled every item's
+    # full_text and its 384-number embedding, none of which the list returns.
+    c = knowledge_items.c
     rows = (await session.execute(
-        sa.select(knowledge_items)
-        .where(knowledge_items.c.active.is_(True))
-        .order_by(knowledge_items.c.kind, knowledge_items.c.title)
+        sa.select(c.id, c.version, c.kind, c.title, c.source_ref, c.metadata, c.indexed_at)
+        .where(c.active.is_(True))
+        .order_by(c.kind, c.title)
     )).fetchall()
     items = [_row_to_summary(r) for r in rows]
     return KnowledgeItemListResponse(items=items, total=len(items))

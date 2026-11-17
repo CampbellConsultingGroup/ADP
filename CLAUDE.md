@@ -172,6 +172,28 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P3 batch 1 (epic ADP-blp: .8 .10 .11 .21 .23 .24 .39 .51 .52 .55 .58, parts of .13 .49):
+  - Docker: three stages (frontend, `python-build` with gcc, runtime without); the venv is at
+    `/opt/venv` (editable install pointing at `/app/src`); the image runs as user `adp` (uid 10001).
+  - Headers: HSTS and a Content-Security-Policy on every response except the relayed `/auth/` pages
+    (`ADP_CONTENT_SECURITY_POLICY` overrides it; empty string sends none). Default allows inline styles,
+    not inline scripts. `/openapi.json` is still public (the CI ZAP scan reads it).
+  - Audit CSV export prefixes formula-like cells with an apostrophe (`_csv_cell`). The export is still
+    open to every role.
+  - `JwksCache.get_keys_for(kid)`: a token naming an unknown key id triggers one early JWKS refresh, at
+    most every 30 s. Tests that mock `get_keys` keep working (the kid is checked against its result).
+  - `adp.background.spawn()` replaces bare `asyncio.create_task` for reasoning-log and knowledge writes
+    (strong reference, failures logged); `drain()` runs at shutdown.
+  - Pattern adoptions: `_to_models` loads any number in six queries; parsed definitions are cached by
+    digest (`_parsed_definition`).
+  - Lists: knowledge and diagram lists select only summary columns; the roadmap loads all initiative
+    links in one query. No pagination was added.
+  - `GET /api/v1/portfolio/counts` + `useEstateCounts`: Overview no longer downloads six collections.
+  - UI: `--ink-3` darkened (light) / lightened (dark) to reach 4.5:1; text on accent backgrounds uses
+    `--accent-ink`; dead `var(--accent, #2874A6)` fallbacks removed. Nav: Application Portfolio moved to
+    Workspace, Diagrams to the Design group, every item has its own icon. Decommissioned / abandoned show
+    as neutral, not red (the seven tone maps are still separate). The initiative control-mapping editor
+    picks a control by framework, then control, instead of a typed id.
 - Fable review P2 batch 5 (epic ADP-blp: .48, .53, .62) -- the last P2s:
   - Routing: the app's location is mirrored into the URL hash (`web/src/shell/routing.ts`:
     `#/<view>[/<entity id>][?design=DSN-x]`, plus `#/applications/capabilities/<id>` and

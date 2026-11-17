@@ -9,6 +9,7 @@ Child rows are deleted explicitly so SQLite (no FK enforcement) behaves like Pos
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from typing import Any
 
 import sqlalchemy as sa
@@ -143,47 +144,107 @@ def scope_of(adoption: Adoption) -> Scope:
     return Scope(adoption.scope_type, adoption.scope_ref, frozenset(adoption.member_ids))
 
 
+async def _to_models(rows: Sequence[Any], session: AsyncSession) -> list[Adoption]:
+    """Adoption models for several rows in a fixed number of queries (ADP-blp.21).
+
+    Building them one at a time cost four to six queries per adoption (family, members, pins,
+    version, domain name), and the Governance Architecture Health tab lists every adoption on
+    each load. Versions are read without their `definition` document, which this needs nothing
+    from.
+    """
+    if not rows:
+        return []
+    ids = [row.id for row in rows]
+    keys = sorted({row.pattern_key for row in rows})
+
+    families = {
+        r.pattern_key: r
+        for r in await session.execute(
+            sa.select(_patterns.c.pattern_key, _patterns.c.kind).where(
+                _patterns.c.pattern_key.in_(keys)
+            )
+        )
+    }
+    members: dict[str, list[str]] = {}
+    for r in await session.execute(
+        sa.select(_members.c.adoption_id, _members.c.application_id).where(
+            _members.c.adoption_id.in_(ids)
+        )
+    ):
+        members.setdefault(r.adoption_id, []).append(r.application_id)
+    pins: dict[str, list[PinIn]] = {}
+    for r in await session.execute(
+        sa.select(_pins)
+        .where(_pins.c.adoption_id.in_(ids))
+        .order_by(_pins.c.role_key, _pins.c.element_type, _pins.c.element_id)
+    ):
+        pins.setdefault(r.adoption_id, []).append(
+            PinIn(role_key=r.role_key, element_type=r.element_type, element_id=r.element_id)
+        )
+
+    version_cols = (
+        _versions.c.id, _versions.c.pattern_key, _versions.c.version, _versions.c.name,
+        _versions.c.lifecycle,
+    )
+    pinned_ids = sorted({row.pinned_version_id for row in rows if row.pinned_version_id})
+    pinned_by_id: dict[str, Any] = {}
+    if pinned_ids:
+        pinned_by_id = {
+            r.id: r
+            for r in await session.execute(
+                sa.select(*version_cols).where(_versions.c.id.in_(pinned_ids))
+            )
+        }
+    current_by_key = {
+        r.pattern_key: r
+        for r in await session.execute(
+            sa.select(*version_cols).where(
+                _versions.c.pattern_key.in_(keys),
+                _versions.c.lifecycle == PatternLifecycle.CURRENT.value,
+            )
+        )
+    }
+    scope_refs = sorted({row.scope_ref for row in rows if row.scope_ref})
+    domain_names: dict[str, str] = {}
+    if scope_refs:
+        domain_names = {
+            r.id: r.name
+            for r in await session.execute(
+                sa.select(_domains.c.id, _domains.c.name).where(_domains.c.id.in_(scope_refs))
+            )
+        }
+
+    out: list[Adoption] = []
+    for row in rows:
+        family = families.get(row.pattern_key)
+        if family is None:
+            raise PatternNotFoundError(row.pattern_key)
+        pinned = pinned_by_id.get(row.pinned_version_id) if row.pinned_version_id else None
+        resolved = pinned or current_by_key.get(row.pattern_key)
+        out.append(
+            Adoption(
+                id=row.id,
+                pattern_key=row.pattern_key,
+                pattern_name=resolved.name if resolved else None,
+                kind=PatternKind(family.kind),
+                name=row.name,
+                scope_type=ScopeType(row.scope_type),
+                scope_ref=row.scope_ref,
+                scope_name=domain_names.get(row.scope_ref) if row.scope_ref else None,
+                member_ids=sorted(members.get(row.id, [])),
+                pinned_version=pinned.version if pinned else None,
+                resolved_version=resolved.version if resolved else None,
+                pins=pins.get(row.id, []),
+                created_at=row.created_at,
+                created_by=row.created_by,
+                updated_at=row.updated_at,
+            )
+        )
+    return out
+
+
 async def _to_model(row: Any, session: AsyncSession) -> Adoption:
-    family = await _family(row.pattern_key, session)
-    members = sorted(
-        r.application_id
-        for r in await session.execute(
-            sa.select(_members.c.application_id).where(_members.c.adoption_id == row.id)
-        )
-    )
-    pins = [
-        PinIn(role_key=r.role_key, element_type=r.element_type, element_id=r.element_id)
-        for r in await session.execute(
-            sa.select(_pins)
-            .where(_pins.c.adoption_id == row.id)
-            .order_by(_pins.c.role_key, _pins.c.element_type, _pins.c.element_id)
-        )
-    ]
-    pinned = await _version_by_id(row.pinned_version_id, session) if row.pinned_version_id else None
-    resolved = pinned or await _current(row.pattern_key, session)
-    scope_name = None
-    if row.scope_ref:
-        dom = (
-            await session.execute(sa.select(_domains.c.name).where(_domains.c.id == row.scope_ref))
-        ).first()
-        scope_name = dom.name if dom else None
-    return Adoption(
-        id=row.id,
-        pattern_key=row.pattern_key,
-        pattern_name=resolved.name if resolved else None,
-        kind=PatternKind(family.kind),
-        name=row.name,
-        scope_type=ScopeType(row.scope_type),
-        scope_ref=row.scope_ref,
-        scope_name=scope_name,
-        member_ids=members,
-        pinned_version=pinned.version if pinned else None,
-        resolved_version=resolved.version if resolved else None,
-        pins=pins,
-        created_at=row.created_at,
-        created_by=row.created_by,
-        updated_at=row.updated_at,
-    )
+    return (await _to_models([row], session))[0]
 
 
 async def get_adoption(adoption_id: str, session: AsyncSession) -> Adoption:
@@ -201,8 +262,24 @@ async def list_adoptions(
         stmt = stmt.where(_adoptions.c.pattern_key == pattern_key)
     if scope_type:
         stmt = stmt.where(_adoptions.c.scope_type == scope_type.value)
-    items = [await _to_model(r, session) for r in (await session.execute(stmt)).all()]
+    items = await _to_models((await session.execute(stmt)).all(), session)
     return AdoptionListResponse(items=items, total=len(items))
+
+
+# Parsed definitions by content digest (ADP-blp.21). A version's definition is immutable once it
+# leaves draft and the digest is computed from it, so the same digest always means the same
+# definition; listing adoptions with their status used to re-parse it for every adoption.
+_definitions: dict[str, PatternDefinition] = {}
+_DEFINITIONS_MAX = 256
+
+
+def _parsed_definition(digest: str, stored: Any) -> PatternDefinition:
+    cached = _definitions.get(digest)
+    if cached is None:
+        if len(_definitions) >= _DEFINITIONS_MAX:
+            _definitions.clear()
+        cached = _definitions[digest] = definition_from_db(stored)
+    return cached
 
 
 async def resolve_definition(
@@ -214,7 +291,8 @@ async def resolve_definition(
     version = await _resolved_row(row, session)
     if version is None:
         return None
-    return definition_from_db(version.definition), str(version.digest)
+    digest = str(version.digest)
+    return _parsed_definition(digest, version.definition), digest
 
 
 # ── Validation ─────────────────────────────────────────────────────────────────────────

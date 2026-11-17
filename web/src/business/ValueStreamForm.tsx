@@ -69,7 +69,7 @@ export default function ValueStreamForm({ existing, onDone, onCancel }: ValueStr
         <button
           type="submit"
           disabled={!name.trim() || isPending}
-          style={{ padding: "6px 14px", fontSize: 13, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, cursor: name.trim() ? "pointer" : "not-allowed", opacity: name.trim() ? 1 : 0.5 }}
+          style={{ padding: "6px 14px", fontSize: 13, background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 4, cursor: name.trim() ? "pointer" : "not-allowed", opacity: name.trim() ? 1 : 0.5 }}
         >
           {isPending ? "Saving…" : existing ? "Save Changes" : "Create"}
         </button>

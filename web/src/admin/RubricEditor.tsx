@@ -180,7 +180,7 @@ export default function RubricEditor({ rubric, onDirtyChange }: RubricEditorProp
           style={{
             padding: "8px 18px", borderRadius: 4, border: "none", fontSize: 14, fontWeight: 600,
             cursor: !isDirty || !sumValid ? "not-allowed" : "pointer",
-            background: !isDirty || !sumValid ? "var(--border)" : "var(--ent, #2874A6)",
+            background: !isDirty || !sumValid ? "var(--border)" : "var(--ent)",
             color: "#fff",
           }}
         >
@@ -208,7 +208,7 @@ export default function RubricEditor({ rubric, onDirtyChange }: RubricEditorProp
               <button
                 onClick={handleConfirm}
                 disabled={confirmEdit.isPending}
-                style={{ padding: "8px 18px", background: "var(--ent, #2874A6)", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 14, fontWeight: 600 }}
+                style={{ padding: "8px 18px", background: "var(--ent)", color: "var(--accent-ink)", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 14, fontWeight: 600 }}
               >
                 {confirmEdit.isPending ? "Saving..." : "Confirm & Save"}
               </button>

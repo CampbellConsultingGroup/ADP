@@ -26,6 +26,10 @@ const OK_ROUTES: Record<string, unknown> = {
   "GET /api/v1/business/capabilities": { items: [], total: 23 },
   "GET /api/v1/business/value-streams": { items: [], total: 5 },
   "GET /api/v1/business/domains": { items: [], total: 3 },
+  "GET /api/v1/portfolio/counts": {
+    capabilities: 23, value_streams: 5, domains: 3, technical_capabilities: 6,
+    knowledge_items: 8, integrations: 11,
+  },
   "GET /api/v1/portfolio/summary": { by_status: { current: 2, proposed: 1, draft: 1 }, total_designs: 17 },
   "GET /api/v1/knowledge": { items: [], total: 8 },
   "GET /api/v1/strategy/summary": {

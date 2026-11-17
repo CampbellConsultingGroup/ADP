@@ -8,10 +8,8 @@
  */
 import React from "react";
 import type { AppView } from "../shell";
-import { useApplications, useTechCaps, useIntegrations } from "../api/application";
-import { useCapabilities, useValueStreams, useDomains } from "../api/business";
-import { usePortfolioSummary } from "../api/portfolio";
-import { useKnowledgeItems } from "../api/knowledge";
+import { useApplications } from "../api/application";
+import { useEstateCounts, usePortfolioSummary } from "../api/portfolio";
 import { useStrategySummary } from "../api/strategy";
 import { useComplianceSummary } from "../api/compliance";
 import "./overview.css";
@@ -80,12 +78,8 @@ interface Domain {
 
 export default function OverviewPage({ onNavigate }: OverviewPageProps): React.ReactElement {
   const apps = useApplications();
-  const caps = useCapabilities();
-  const streams = useValueStreams();
-  const domains = useDomains();
-  const techCaps = useTechCaps();
-  const knowledge = useKnowledgeItems();
-  const integrations = useIntegrations();
+  // ADP-blp.39: one counts request instead of downloading six whole collections for their totals.
+  const counts = useEstateCounts();
   const summary = usePortfolioSummary();
   const strategySummary = useStrategySummary();
   const complianceSummary = useComplianceSummary();
@@ -108,14 +102,14 @@ export default function OverviewPage({ onNavigate }: OverviewPageProps): React.R
   };
   const lcTotal = Math.max(1, lc.current + lc.proposed + lc.draft);
 
-  const capCount = caps.data?.total;
-  const vsCount = streams.data?.total;
-  const domainCount = domains.data?.total;
-  const techCount = techCaps.data?.total;
-  const knowledgeCount = knowledge.data?.total;
-  const integrationCount = integrations.data?.total;
+  const capCount = counts.data?.capabilities;
+  const vsCount = counts.data?.value_streams;
+  const domainCount = counts.data?.domains;
+  const techCount = counts.data?.technical_capabilities;
+  const knowledgeCount = counts.data?.knowledge_items;
+  const integrationCount = counts.data?.integrations;
 
-  const anyError = [apps, caps, streams, domains, techCaps, knowledge, integrations, summary, strategySummary, complianceSummary].some((q) => q.isError);
+  const anyError = [apps, counts, summary, strategySummary, complianceSummary].some((q) => q.isError);
 
   // 924-compliance-rollup-reporting: coverage_percent is null (not 0) when the estate has no
   // mapped entities at all yet (spec.md FR-009) -- rendered as "—", never a misleading "0%".

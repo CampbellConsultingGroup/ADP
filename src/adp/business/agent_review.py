@@ -19,7 +19,6 @@ produce.
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
 import uuid
@@ -32,6 +31,7 @@ from adp.agents.grounding import verify_references
 from adp.agents.models import GroundingCitation
 from adp.agents.provenance import write_suggestion_reasoning
 from adp.application import store as astore
+from adp.background import spawn
 from adp.business import store as bstore
 from adp.business.models import (
     MATURITY_LEVEL_LABELS,
@@ -740,7 +740,7 @@ async def run_portfolio_review(
 
             model_id = getattr(llm_client, "_model", "unknown")
             for suggestion in suggestions:
-                asyncio.create_task(
+                spawn(
                     write_suggestion_reasoning(
                         operation_id=operation_id,
                         suggestion_id=suggestion.suggestion_id,
@@ -829,7 +829,7 @@ async def run_review(
             # concern. Fire-and-forget: never blocks the operation from completing.
             model_id = getattr(llm_client, "_model", "unknown")
             for suggestion in suggestions:
-                asyncio.create_task(
+                spawn(
                     write_suggestion_reasoning(
                         operation_id=operation_id,
                         suggestion_id=suggestion.suggestion_id,

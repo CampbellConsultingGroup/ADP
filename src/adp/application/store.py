@@ -1431,19 +1431,45 @@ async def get_roadmap(session: AsyncSession) -> RoadmapResponse:
     )
     rows = (await session.execute(stmt)).mappings().all()
 
-    items = []
-    for row in rows:
-        links = await list_app_initiative_links(row["id"], session)
-        items.append(
-            RoadmapEntry(
-                app_id=row["id"],
-                name=row["name"],
-                time_classification=row["time_classification"],
-                lifecycle_status=row["lifecycle_status"],
-                end_of_life_date=row["end_of_life_date"],
-                initiative_links=links.items,
+    # ADP-blp.23: one query for every application's initiative links (was one per application).
+    links_by_app: dict[str, list[ApplicationInitiativeLink]] = {}
+    app_ids = [row["id"] for row in rows]
+    if app_ids:
+        link_rows = await session.execute(
+            sa.select(
+                _app_initiative_links.c.app_id,
+                _app_initiative_links.c.initiative_id,
+                _transformation_initiatives.c.name.label("initiative_name"),
+                _app_initiative_links.c.planned_disposition,
             )
+            .join(
+                _transformation_initiatives,
+                _transformation_initiatives.c.id == _app_initiative_links.c.initiative_id,
+            )
+            .where(_app_initiative_links.c.app_id.in_(app_ids))
+            .order_by(_transformation_initiatives.c.name)
         )
+        for link in link_rows.mappings().all():
+            links_by_app.setdefault(link["app_id"], []).append(
+                ApplicationInitiativeLink(
+                    app_id=link["app_id"],
+                    initiative_id=link["initiative_id"],
+                    initiative_name=link["initiative_name"],
+                    planned_disposition=link["planned_disposition"],
+                )
+            )
+
+    items = [
+        RoadmapEntry(
+            app_id=row["id"],
+            name=row["name"],
+            time_classification=row["time_classification"],
+            lifecycle_status=row["lifecycle_status"],
+            end_of_life_date=row["end_of_life_date"],
+            initiative_links=links_by_app.get(row["id"], []),
+        )
+        for row in rows
+    ]
     return RoadmapResponse(items=items, total=len(items))
 
 

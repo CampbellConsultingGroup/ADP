@@ -55,7 +55,8 @@ const STATUS_TONE: Record<ObjectiveStatus, BadgeTone> = {
   active: "info",
   at_risk: "warn",
   achieved: "good",
-  abandoned: "crit",
+  // ADP-blp.49: an ended state, not a failure -- red is kept for things that need attention.
+  abandoned: "neutral",
 };
 const STATUS_LABEL: Record<ObjectiveStatus, string> = {
   proposed: "Not yet started",

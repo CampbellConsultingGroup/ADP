@@ -40,7 +40,7 @@ export default function OptionCard({ option, designId, operationId, onAcceptSucc
     <div style={{ border: "1px solid var(--border)", borderRadius: 8, marginBottom: 16, overflow: "hidden", opacity: isSettled ? 0.7 : 1 }}>
       {/* Header */}
       <div style={{ padding: "12px 16px", background: isAccepted ? "var(--good-wash)" : isRejected ? "var(--crit-wash)" : "var(--surface-2)", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12 }}>
-        <span style={{ background: "var(--accent)", color: "#fff", fontWeight: 700, fontSize: 13, padding: "3px 10px", borderRadius: 4 }}>#{option.rank}</span>
+        <span style={{ background: "var(--accent)", color: "var(--accent-ink)", fontWeight: 700, fontSize: 13, padding: "3px 10px", borderRadius: 4 }}>#{option.rank}</span>
         <span style={{ fontWeight: 600, fontSize: 15, flex: 1 }}>{option.title}</span>
         <span style={{ fontSize: 12, color: "var(--ink-3)" }}>score: {Math.round(option.ranking_score * 100)}%</span>
         {option.advisory && !isRequirementsOnly && (

@@ -50,7 +50,7 @@ export default function CapabilityForm({ parentId, level, onDone, onCancel }: Ca
         <button
           type="submit"
           disabled={!name.trim() || create.isPending}
-          style={{ padding: "5px 12px", fontSize: 13, background: "var(--accent)", color: "#fff", border: "none", borderRadius: 4, cursor: name.trim() ? "pointer" : "not-allowed", opacity: name.trim() ? 1 : 0.5 }}
+          style={{ padding: "5px 12px", fontSize: 13, background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 4, cursor: name.trim() ? "pointer" : "not-allowed", opacity: name.trim() ? 1 : 0.5 }}
         >
           {create.isPending ? "Adding…" : "Add"}
         </button>
