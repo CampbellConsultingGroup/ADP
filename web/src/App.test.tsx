@@ -107,7 +107,7 @@ describe("App: onStartNewDesign (nav 'Intake' click == New Design)", () => {
     expect(screen.getByText(/IntakePage-stub designId=DSN-1/)).toBeTruthy();
 
     // Clicking the nav bar's "Intake" (not "Open a design") resets to blank.
-    await user.click(screen.getByRole("button", { name: "Intake" }));
+    await user.click(screen.getByRole("button", { name: "New Design" }));
 
     expect(screen.getByText(/IntakePage-stub designId=null/)).toBeTruthy();
     expect(screen.getByText("Design")).toBeTruthy();
@@ -154,7 +154,7 @@ describe("App: DESIGN_ONLY_VIEWS redirect (C4 Design with no design selected)", 
     const user = userEvent.setup();
     render(<App />);
 
-    await user.click(screen.getByRole("button", { name: "Intake" }));
+    await user.click(screen.getByRole("button", { name: "New Design" }));
 
     expect(screen.getByText(/IntakePage-stub designId=null/)).toBeTruthy();
     expect(screen.queryByText("DesignsPage-stub")).toBeNull();

@@ -7,6 +7,7 @@ import React from "react";
 import type { AppView } from "../shell";
 import { useAuth } from "../auth/AuthProvider";
 import { Icon } from "./Icon";
+import { SearchLauncher, type SearchHit } from "./SearchPalette";
 import { useTheme } from "./theme";
 
 interface NavDef {
@@ -48,7 +49,8 @@ const ARCHITECTURE: NavDef[] = [
   { view: "diagrams", label: "Diagrams", icon: "layers", hue: "tec" },
 ];
 const OVERSIGHT: NavDef[] = [
-  { view: "portfolio", label: "APM", icon: "chart", hue: "ent" },
+  // ADP-blp.54: was "APM", which a new user could not tell apart from "Applications".
+  { view: "portfolio", label: "Application Portfolio", icon: "chart", hue: "ent" },
   { view: "governance", label: "Governance", icon: "shield" },
   // COMPLY-01: placed beside Governance, per the source doc's own framing of
   // Compliance as governance-adjacent (plan.md Project Structure).
@@ -66,26 +68,19 @@ const ADMIN: NavDef[] = [
   { view: "scoring-rubrics", label: "Scoring Rubrics", icon: "shield" },
 ];
 
-const TITLES: Record<AppView, string> = {
-  overview: "Overview",
-  insights: "Insights",
+// ADP-blp.54: the top-bar title is the nav label itself. A separate hand-written map had
+// drifted from it ("Agents" opened "Agent Registry", "Patterns" opened "EA Patterns"), so a
+// user who clicked one name landed on a page called something else.
+const DESIGN_LABELS: Partial<Record<AppView, string>> = {
   designs: "Designs",
-  business: "Business Architecture",
-  applications: "Application Registry",
-  technical: "Technical Architecture",
-  portfolio: "APM",
-  governance: "Governance",
-  knowledge: "Knowledge",
-  intake: "Requirements Intake",
+  intake: "New Design",
   "canvas-v2": "C4 Design",
-  diagrams: "Diagrams",
-  strategy: "Strategy",
-  compliance: "Compliance",
-  agents: "Agent Registry",
-  patterns: "EA Patterns",
-  admin: "Agent Prompt Management",
-  "scoring-rubrics": "Scoring Rubric Management",
 };
+
+function titleFor(view: AppView): string {
+  const def = [...PRIMARY, ...ARCHITECTURE, ...OVERSIGHT, ...ADMIN].find((d) => d.view === view);
+  return def?.label ?? DESIGN_LABELS[view] ?? view;
+}
 
 const HUE_VARS: Record<string, string> = {
   biz: "var(--biz)",
@@ -106,7 +101,11 @@ function NavItem({
   const active = current === def.view;
   const cls = `shell-navitem${active ? " active" : ""}${active && def.hue ? ` hue-${def.hue}` : ""}`;
   return (
-    <button className={cls} onClick={def.onClick ?? (() => onNavigate(def.view))}>
+    <button
+      className={cls}
+      aria-current={active ? "page" : undefined}
+      onClick={def.onClick ?? (() => onNavigate(def.view))}
+    >
       <Icon name={def.icon} size={18} />
       {def.label}
       {def.hue && <span className="dot" style={{ background: HUE_VARS[def.hue] }} />}
@@ -122,10 +121,15 @@ interface AppShellProps {
   // a design is currently selected. Optional -- falls back to plain
   // onNavigate("intake") if omitted (e.g. in tests that don't wire it up).
   onStartNewDesign?: () => void;
+  // ADP-blp.56: where a global search result opens. The shell only shows the palette.
+  onOpenSearchResult?: (hit: SearchHit) => void;
+  // Extra controls for the top bar, supplied by the app (e.g. the "Ask AI" launcher), so the
+  // shell itself does not import feature code.
+  topActions?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function AppShell({ currentView, onNavigate, designId, onStartNewDesign, children }: AppShellProps): React.ReactElement {
+export function AppShell({ currentView, onNavigate, designId, onStartNewDesign, onOpenSearchResult, topActions, children }: AppShellProps): React.ReactElement {
   const { user, logout } = useAuth();
   const { cycle } = useTheme();
   const inDesign = !!designId;
@@ -140,12 +144,13 @@ export function AppShell({ currentView, onNavigate, designId, onStartNewDesign, 
   // flow). See the render logic below for how the section label adapts to
   // whether a design is currently selected.
   const DESIGN_SCOPED: NavDef[] = [
-    { view: "designs", label: "Designs", icon: "sol" },
-    { view: "intake", label: "Intake", icon: "inbox", onClick: onStartNewDesign },
+    { view: "designs", label: DESIGN_LABELS.designs!, icon: "sol" },
+    // ADP-blp.54: was "Intake". Clicking it always starts a new design, so it says so.
+    { view: "intake", label: DESIGN_LABELS.intake!, icon: "inbox", onClick: onStartNewDesign },
     // ADP-914.13: the legacy "Canvas" item (C4Canvas/Workspace, ADP-SPEC-054's research.md
     // Decision 8 called it "canvas") is retired -- this is now the sole design-editing entry
     // point, so it drops the "(Preview)" qualifier that distinguished it from the alternative.
-    { view: "canvas-v2", label: "C4 Design", icon: "sol" },
+    { view: "canvas-v2", label: DESIGN_LABELS["canvas-v2"]!, icon: "sol" },
   ];
 
   return (
@@ -193,12 +198,12 @@ export function AppShell({ currentView, onNavigate, designId, onStartNewDesign, 
 
       <div className="shell-main">
         <header className="shell-topbar">
-          <div className="shell-crumb"><span>ADP</span><span>/</span><b>{TITLES[currentView]}</b></div>
-          <div className="shell-search"><Icon name="search" size={15} /> Search… <span className="k">⌘K</span></div>
+          <div className="shell-crumb"><span>ADP</span><span>/</span><b>{titleFor(currentView)}</b></div>
+          <SearchLauncher onOpenResult={onOpenSearchResult} />
           <div className="shell-topactions">
+            {topActions}
             <span className="shell-envpill"><span className="led" /> Retail demo</span>
             <button className="shell-iconbtn" onClick={cycle} title="Toggle light / dark"><Icon name="moon" size={18} /></button>
-            <button className="shell-iconbtn" title="Notifications"><Icon name="bell" size={18} /></button>
           </div>
         </header>
         <div className="shell-content">{children}</div>

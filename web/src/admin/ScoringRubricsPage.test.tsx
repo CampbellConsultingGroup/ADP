@@ -66,8 +66,8 @@ describe("ScoringRubricsPage", () => {
 
     await user.click(screen.getByText("Business Value Assessment"));
 
-    expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "History" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Edit" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "History" })).toBeTruthy();
     // The Edit tab's own content (a numeric input) renders by default.
     expect(screen.getByRole("spinbutton")).toBeTruthy();
   });
@@ -77,7 +77,7 @@ describe("ScoringRubricsPage", () => {
     render(<ScoringRubricsPage />);
 
     await user.click(screen.getByText("Business Value Assessment"));
-    await user.click(screen.getByRole("button", { name: "History" }));
+    await user.click(screen.getByRole("tab", { name: "History" }));
 
     expect(screen.getByText("No changes recorded yet.")).toBeTruthy();
   });

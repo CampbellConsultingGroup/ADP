@@ -24,7 +24,7 @@ export default function RecommendationPage({ designId, onNavigate }: Recommendat
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
 
       {/* Main content */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 900, width: "100%", margin: "0 auto" }}>

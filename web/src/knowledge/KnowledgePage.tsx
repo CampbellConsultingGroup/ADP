@@ -5,6 +5,7 @@ import type { AppView } from "../shell";
 import { Button } from "../ui";
 import KnowledgeItemForm from "./KnowledgeItemForm";
 import KnowledgeItemRow from "./KnowledgeItemRow";
+import { PageHeader } from "../ui/primitives";
 
 interface KnowledgePageProps {
   onNavigate: (view: AppView) => void;
@@ -49,17 +50,15 @@ export default function KnowledgePage(_props: KnowledgePageProps): React.ReactEl
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", fontFamily: "Arial, sans-serif" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
 
       {/* Content */}
       <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 900, width: "100%", margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: "var(--ink)", margin: "0 0 4px" }}>Knowledge Base</h2>
-            <p style={{ fontSize: 13, color: "var(--ink-3)", margin: 0 }}>
-              {data?.total ?? 0} active item{(data?.total ?? 0) !== 1 ? "s" : ""} — these ground AI recommendations
-            </p>
-          </div>
+          <PageHeader
+            title="Knowledge Base"
+            lede={`${data?.total ?? 0} active item${(data?.total ?? 0) !== 1 ? "s" : ""} — these ground AI recommendations`}
+          />
           {mode === "idle" && (
             <div style={{ display: "flex", gap: 8 }}>
               <Button icon="doc" onClick={() => setMode("import-calm")}>Import CALM</Button>

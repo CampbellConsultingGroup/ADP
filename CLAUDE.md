@@ -172,6 +172,23 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P2 batch 4, UI shell (epic ADP-blp: .44, .45, .54, .56, .60); frontend only:
+  - Search: `ui/SearchPalette` (`SearchLauncher` in the top bar, Ctrl/Cmd+K) over `GET /api/v1/search`;
+    `App.onOpenSearchResult` opens capabilities, applications, application capabilities, technical
+    capabilities and agents on their own screens, other kinds on Business. Rendered in a portal: the top bar's
+    `backdrop-filter` makes it the containing block for `position: fixed`. The dead notifications bell is gone.
+  - Renames: nav "APM" -> "Application Portfolio", "Intake" -> "New Design"; Governance tab "Compliance" ->
+    "Design Validation"; application tabs "Risk & Compliance" -> "Risk Profile", "Regulatory Compliance" ->
+    "Regulatory Mappings"; Governance's "<- APM" button removed. The top-bar title is the nav label
+    (`titleFor`), no separate TITLES map. Active nav item has `aria-current="page"`.
+  - `ui/Tabs` (role=tablist, arrow/Home/End keys, roving tabindex; `variant="pill"`) replaces eight inline tab
+    bars (Business, Governance, Strategy, Intake, Applications, Application detail, both Admin screens).
+    Tests find tabs with `getByRole("tab", ...)`, not "button".
+  - `PageHeader` on Business, Strategy, Insights, Knowledge, Technical Architecture, Governance and
+    Application Portfolio; seven pages no longer force Arial. The split-layout registries (Applications,
+    Agents, Patterns, Compliance) still rely on the top-bar title.
+  - `chat/AskAiLauncher`: "Ask AI" in the top bar opens the chat assistant in a side drawer on any screen
+    (passed to the shell as `topActions`, so `ui/` imports no feature code).
 - Fable review P2 batch 3, frontend code (epic ADP-blp: .31, .32, .33, .35, .40):
   - Code splitting: every page except Overview is `React.lazy` in `App.tsx` (PageBoundary's Suspense shows
     the loading state). First load 195 kB (57 kB gzip), was 1,782 kB; the diagram editor chunk (626 kB) loads

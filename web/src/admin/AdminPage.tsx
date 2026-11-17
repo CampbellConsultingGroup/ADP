@@ -3,6 +3,7 @@ import { useAgentPrompts } from "../api/adminPrompts";
 import PromptEditor from "./PromptEditor";
 import PromptHistory from "./PromptHistory";
 import { clickableRow } from "../ui/clickableRow";
+import { Tabs } from "../ui/Tabs";
 
 const CARD: React.CSSProperties = {
   border: "1px solid var(--border)",
@@ -92,28 +93,13 @@ export default function AdminPage(): React.ReactElement {
                 {selected.is_override ? "Custom (saved override)" : "Default (built-in fallback)"}
               </span>
             </div>
-            <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--border)" }}>
-              <button
-                onClick={() => setActiveTab("edit")}
-                style={{
-                  padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer",
-                  background: "none", border: "none",
-                  borderBottom: activeTab === "edit" ? "2px solid var(--ent, #2874A6)" : "2px solid transparent",
-                }}
-              >
-                Edit
-              </button>
-              <button
-                onClick={() => setActiveTab("history")}
-                style={{
-                  padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer",
-                  background: "none", border: "none",
-                  borderBottom: activeTab === "history" ? "2px solid var(--ent, #2874A6)" : "2px solid transparent",
-                }}
-              >
-                History
-              </button>
-            </div>
+            <Tabs
+              label="Edit or history"
+              tabs={[{ id: "edit", label: "Edit" }, { id: "history", label: "History" }]}
+              active={activeTab}
+              onChange={setActiveTab}
+              style={{ marginBottom: 16 }}
+            />
             {activeTab === "edit" && (
               <PromptEditor key={selected.agent_id} agent={selected} onDirtyChange={setIsDirty} />
             )}
