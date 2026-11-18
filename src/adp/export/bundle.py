@@ -277,7 +277,13 @@ class ExportOrchestrator:
                     else:
                         result = loop.run_until_complete(_coro)
                 except RuntimeError:
-                    result = _asyncio.run(_coro)
+                    # No current loop. Use a private one: asyncio.run() would leave the thread
+                    # with no loop at all, breaking later callers of get_event_loop().
+                    _private = _asyncio.new_event_loop()
+                    try:
+                        result = _private.run_until_complete(_coro)
+                    finally:
+                        _private.close()
             except Exception as exc:
                 raise RuntimeError(f"Render failed for level {level!r}: {exc}") from exc
             (level_dir / "diagram.dsl").write_text(result.dsl, encoding="utf-8")

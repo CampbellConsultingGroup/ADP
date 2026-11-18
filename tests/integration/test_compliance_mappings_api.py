@@ -93,14 +93,7 @@ async def _mk_application(client, name="Test App") -> dict:
 async def _mk_design(client) -> dict:
     resp = await client.post(
         "/api/v1/designs",
-        json={
-            "schema_version": "1.0.0",
-            "id": "COMPLY-DSN-001",
-            "title": "Test Design",
-            "created_at": "2026-08-18T00:00:00Z",
-            "updated_at": "2026-08-18T00:00:00Z",
-            "elements": [], "relationships": [], "requirements": [],
-        },
+        json={"title": "Test Design"},
     )
     assert resp.status_code == 201, resp.text
     return resp.json()

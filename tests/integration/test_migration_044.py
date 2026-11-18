@@ -41,21 +41,8 @@ def _run_alembic(db_url: str, *args: str) -> None:
 
 @pytest.fixture(autouse=True)
 def _clean_tables():
-    """Override conftest.py's autouse table truncation: this file uses its own container."""
+    """Override conftest.py's autouse table truncation: this file uses its own database."""
     yield
-
-
-@pytest.fixture()
-def migration_db_url():
-    if not _docker_available():
-        pytest.skip("Docker not available — integration tests require Docker")
-    from testcontainers.postgres import PostgresContainer
-
-    with PostgresContainer("pgvector/pgvector:pg15") as pg:
-        raw = pg.get_connection_url()
-        yield raw.replace("postgresql+psycopg2://", "postgresql+asyncpg://").replace(
-            "postgresql://", "postgresql+asyncpg://"
-        )
 
 
 _FAMILY = (

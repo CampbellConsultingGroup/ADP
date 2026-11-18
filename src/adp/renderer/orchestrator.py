@@ -38,8 +38,13 @@ class RenderOrchestrator:
 
     def render(self, design_id: str, level: C4Level) -> RenderResult:
         """Sync render — only works when store.get() is synchronous (tests/mocks)."""
-        import asyncio
-        return asyncio.get_event_loop().run_until_complete(self.arender(design_id, level))
+        # A loop of its own: asyncio.get_event_loop() fails once anything has cleared the
+        # thread's current loop (asyncio.run does), and asyncio.run would clear it for others.
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(self.arender(design_id, level))
+        finally:
+            loop.close()
 
     async def arender(self, design_id: str, level: C4Level) -> RenderResult:
         """Async render — preferred path when store.get() is a coroutine (DesignStore)."""

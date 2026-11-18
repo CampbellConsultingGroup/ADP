@@ -19,6 +19,8 @@ import uuid
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
+import sqlalchemy as sa
+
 from adp.business import store as bstore
 from adp.compliance import store as cstore
 from adp.export import business_arch
@@ -73,6 +75,11 @@ async def test_first_cycle_bootstraps_full_strategy_export(tmp_path, db_session)
     await db_session.execute(sstore._objective_capabilities.insert().values(
         objective_id=obj_id, capability_id=cap_id, created_at=_NOW,
     ))
+    # The link's foreign keys are real in PostgreSQL: the design must exist.
+    await db_session.execute(sa.text(
+        "INSERT INTO designs (id, current_version, title, schema_version_at_creation,"
+        " created_at, updated_at) VALUES (:id, 1, 'Strategy export test', '1.0.0', now(), now())"
+    ), {"id": design_id})
     await db_session.execute(bstore._cap_design_links.insert().values(
         capability_id=cap_id, design_id=design_id, created_at=_NOW,
     ))
@@ -91,8 +98,13 @@ async def test_first_cycle_bootstraps_full_strategy_export(tmp_path, db_session)
         title="Security of processing", description=None, position=0,
         created_at=_NOW, updated_at=_NOW,
     ))
+    app_id = str(uuid.uuid4())
+    await db_session.execute(sa.text(
+        "INSERT INTO applications (id, name, lifecycle_status, created_at, updated_at)"
+        " VALUES (:id, 'Strategy export app', 'active', now(), now())"
+    ), {"id": app_id})
     await db_session.execute(cstore._control_application_mapping.insert().values(
-        control_id=control_id, application_id=str(uuid.uuid4()),
+        control_id=control_id, application_id=app_id,
         compliance_status="non_compliant", evidence_ref=None, assessed_at=None,
         assessed_by=None, created_at=_NOW,
     ))
@@ -120,7 +132,8 @@ async def test_first_cycle_bootstraps_full_strategy_export(tmp_path, db_session)
     assert obj["depends_on_objective_ids"] == [obj2_id]
     assert obj["initiative_ids"] == [init_id]
     assert obj["progress"] == [
-        {"as_of_date": "2026-02-01", "actual_value": "6", "note": None, "recorded_by": "alice"}
+        # NUMERIC(.., 2) comes back from PostgreSQL with its scale.
+        {"as_of_date": "2026-02-01", "actual_value": "6.00", "note": None, "recorded_by": "alice"}
     ]
 
     obj2 = json.loads((export_root / "strategy" / "objectives" / f"{obj2_id}.json").read_text())

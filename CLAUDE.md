@@ -184,10 +184,20 @@ Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conve
     Guard: `tests/unit/test_shared_app.py`.
   - `pyproject.toml` silences one warning only: aiosqlite's worker thread failing to report back when
     an undisposed test engine is collected after its event loop closed.
-  - NOT done: one shared Postgres container for the migration tests. `tests/integration` needs
-    Docker, which this machine does not have, and CI does NOT run it either
-    (`pytest tests/ --ignore=tests/integration`), so earlier notes here saying an integration test
-    "will run in CI" are wrong: those tests currently run nowhere.
+  - Integration tests now run in CI: `.github/workflows/integration-tests.yml` runs
+    `pytest tests/integration --no-cov` (testcontainers, PostgreSQL 16 with pgvector; 225 tests,
+    about 2 minutes). Before this they ran NOWHERE: the quality-gates run skips the folder and this
+    machine has no Docker, so older notes here saying an integration test "will run in CI" were
+    wrong. The first run found 14 failures, all stale tests (designs created with a body the API no
+    longer accepts, seed rows missing NOT NULL columns or foreign-key parents, mocks of `render`
+    where the code awaits `arender`, an old error message, `6` vs `6.00` from NUMERIC).
+  - The 13 migration tests share the session's container: `migration_db_url` (integration conftest)
+    gives each an empty database of its own and drops it afterwards.
+  - Source: `RenderOrchestrator.render` and the export's no-loop fallback run on a private event
+    loop. They used `asyncio.get_event_loop()` / `asyncio.run()`, which fails after, or causes, the
+    thread having no current loop.
+  - Seed data for an integration test must satisfy the real schema: insert through the owning
+    table (or plain SQL), not a narrow mirror, and create foreign-key parents first.
 - Fable review ADP-blp.57, .68 and .65, closing increments (frontend only):
   - The open entity is owned by the page, in the URL. `useRouteEntity(kind, initial)` in
     `shell/routing.ts` reads it from the hash and writes it back with `openEntity(kind, id)`: a

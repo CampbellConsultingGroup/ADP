@@ -94,7 +94,7 @@ async def _create_domain(client, name: str = "Customer") -> str:
 async def _create_design(client) -> str:
     r = await client.post(
         "/api/v1/designs",
-        json={"title": "Test Design", "content": {"elements": [], "relationships": []}},
+        json={"title": "Test Design"},
     )
     assert r.status_code == 201, r.text
     return r.json()["id"]
