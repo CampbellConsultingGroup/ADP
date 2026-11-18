@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -52,6 +52,8 @@ def mock_setup():
     mock_store.get = MagicMock(return_value=design)
 
     mock_render = MagicMock()
+    # export() awaits arender(); render() is only its fallback inside a running loop.
+    mock_render.arender = AsyncMock(side_effect=lambda did, level: _mock_render_result(level))
     mock_render.render = MagicMock(side_effect=lambda did, level: _mock_render_result(level))
 
     return mock_store, mock_render, design
@@ -83,6 +85,7 @@ def test_export_is_atomic_on_failure(tmp_path, mock_setup):
     from adp.export.bundle import ExportOrchestrator
 
     mock_store, mock_render, _ = mock_setup
+    mock_render.arender = AsyncMock(side_effect=RuntimeError("render failed"))
     mock_render.render = MagicMock(side_effect=RuntimeError("render failed"))
 
     orch = ExportOrchestrator(design_store=mock_store, render_orchestrator=mock_render)
@@ -118,7 +121,7 @@ def test_export_rejects_design_id_escaping_root(tmp_path, mock_setup, malicious_
 
     mock_store, mock_render, _ = mock_setup
     orch = ExportOrchestrator(design_store=mock_store, render_orchestrator=mock_render)
-    with pytest.raises(ValueError, match="resolves outside export root"):
+    with pytest.raises(ValueError, match="Invalid design_id"):
         orch.export(malicious_design_id, str(tmp_path), confirmation_id="CONF-TEST", actor="t")
 
     # Nothing written anywhere under or above tmp_path.

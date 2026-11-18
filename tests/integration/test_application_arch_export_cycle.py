@@ -13,6 +13,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 
+import sqlalchemy as sa
+
 from adp.application import store as astore
 from adp.business import store as bstore
 from adp.export import application_arch
@@ -44,8 +46,12 @@ async def test_first_cycle_bootstraps_full_export(tmp_path, db_session) -> None:
     ))
     # 932-regulatory-framework-tags (ADP-bkg): regulatory_tags is now a link table, not a column --
     # seed a real framework plus the tag directly (this test never goes through the Compliance API).
-    await db_session.execute(astore._regulatory_frameworks.insert().values(
-        id="FRM-pci-dss", name="PCI DSS", status="in_force",
+    # Through the owning (compliance) table: the application store's mirror declares only the
+    # columns it reads, and the real table has more that are NOT NULL.
+    await db_session.execute(sa.text(
+        "INSERT INTO regulatory_frameworks"
+        " (id, name, jurisdiction, authority, version, status, created_at, updated_at)"
+        " VALUES ('FRM-pci-dss', 'PCI DSS', 'Global', 'PCI SSC', '4.0', 'in_force', now(), now())"
     ))
     await db_session.execute(astore._application_framework_tags.insert().values(
         application_id="app-1", framework_id="FRM-pci-dss", created_at=_NOW,
