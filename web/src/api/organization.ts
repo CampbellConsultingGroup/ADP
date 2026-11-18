@@ -3,9 +3,10 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import { QK } from "./queryKeys";
 
 const BASE = "/api/v1/business";
-export const ORG_KEY = ["organization"] as const;
+export const ORG_KEY = [QK.organization] as const;
 
 export type OrgUnitKind = "enterprise" | "division" | "function";
 export type GeographyKind = "global" | "region" | "country";
@@ -108,7 +109,7 @@ function useOrgMutation<V, R>(fn: (v: V) => Promise<R>) {
     mutationFn: fn,
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ORG_KEY });
-      void qc.invalidateQueries({ queryKey: ["applications"] });
+      void qc.invalidateQueries({ queryKey: [QK.applications] });
     },
   });
 }

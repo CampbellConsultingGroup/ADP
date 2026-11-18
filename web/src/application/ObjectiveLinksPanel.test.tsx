@@ -57,20 +57,19 @@ describe("ObjectiveLinksPanel", () => {
   });
 
   it("calls the link mutation with the selected objective id", async () => {
-    const mutateAsync = vi.fn(async () => ["app-1"]);
+    const mutate = vi.fn();
     mockedStrategyApi.useLinkApplicationToObjective.mockReturnValue({
-      mutate: vi.fn(),
-      mutateAsync,
+      mutate,
       isPending: false,
     } as unknown as ReturnType<typeof strategyApi.useLinkApplicationToObjective>);
 
     const user = userEvent.setup();
     render(<ObjectiveLinksPanel appId="app-1" />);
 
+    // Choosing an objective links it: there is no separate Link button (ADP-blp.36).
     await user.selectOptions(screen.getByRole("combobox"), "obj-2");
-    await user.click(screen.getByText("Link"));
 
-    expect(mutateAsync).toHaveBeenCalledWith("obj-2");
+    expect(mutate.mock.calls[0][0]).toBe("obj-2");
   });
 
   it("calls the unlink mutation when the remove control is clicked", async () => {
@@ -83,8 +82,8 @@ describe("ObjectiveLinksPanel", () => {
     const user = userEvent.setup();
     render(<ObjectiveLinksPanel appId="app-1" />);
 
-    await user.click(screen.getByText("✕"));
+    await user.click(screen.getByRole("button", { name: "Remove" }));
 
-    expect(mutate).toHaveBeenCalledWith("obj-1");
+    expect(mutate.mock.calls[0][0]).toBe("obj-1");
   });
 });

@@ -14,11 +14,12 @@ import type {
   Relationship,
   SaveLayoutInput,
 } from "../types";
+import { QK } from "./queryKeys";
 
 // ── Query keys ──────────────────────────────────────────────────────────────
 
-const designKey = (id: string) => ["design", id] as const;
-const layoutKey = (id: string, level: string) => ["layout", id, level] as const;
+const designKey = (id: string) => [QK.design, id] as const;
+const layoutKey = (id: string, level: string) => [QK.layout, id, level] as const;
 
 // ── Queries ──────────────────────────────────────────────────────────────────
 
@@ -94,7 +95,7 @@ export interface CreateDesignRequest {
 // T024: status filter parameter
 export function useDesignList(page: number = 1, status?: string) {
   return useQuery<DesignListResponse>({
-    queryKey: ["designs", page, status],
+    queryKey: [QK.designs, page, status],
     queryFn: () => {
       const statusParam = status ? `&status=${encodeURIComponent(status)}` : "";
       return apiGet<DesignListResponse>(`/api/v1/designs?page=${page}&page_size=50${statusParam}`);
@@ -108,7 +109,7 @@ export function useCreateDesign() {
     mutationFn: (body) =>
       apiMutation<ArchitectureDescription, CreateDesignRequest>("POST", "/api/v1/designs", body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["designs"] });
+      void qc.invalidateQueries({ queryKey: [QK.designs] });
     },
   });
 }
@@ -146,7 +147,7 @@ export function useUpdateElementTags(designId: string, elementId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["design", designId] });
+      void qc.invalidateQueries({ queryKey: [QK.design, designId] });
     },
   });
 }
@@ -182,7 +183,7 @@ export function useTransitionLifecycle(designId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["designs"] });
+      void qc.invalidateQueries({ queryKey: [QK.designs] });
     },
   });
 }

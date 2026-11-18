@@ -1,53 +1,58 @@
 import { useState } from "react";
-import { useValueStreams } from "../api/business";
+import { useValueStream, useValueStreams } from "../api/business";
 import { useAppStageLinks, useCreateAppStageLink, useDeleteAppStageLink } from "../api/application";
+import LinkEditor from "../links/LinkEditor";
 
 interface Props { appId: string; }
 
+/**
+ * The value stream stages an application supports. A wrapper over the shared LinkEditor
+ * (ADP-blp.36). Stages belong to a value stream, so you choose the stream first and then one of
+ * its stages. (The old picker listed the streams as empty groups and offered no stage at all.)
+ */
 export default function StageLinkEditor({ appId }: Props) {
-  const { data: links } = useAppStageLinks(appId);
+  const { data: links, isLoading } = useAppStageLinks(appId);
   const { data: streams } = useValueStreams();
+  const [streamId, setStreamId] = useState("");
+  const stream = useValueStream(streamId || null);
   const createLink = useCreateAppStageLink(appId);
   const deleteLink = useDeleteAppStageLink(appId);
-  const [selectedStageId, setSelectedStageId] = useState("");
-  const [toast, setToast] = useState<string | null>(null);
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000); };
-
-  const handleLink = async () => {
-    if (!selectedStageId) return;
-    try {
-      await createLink.mutateAsync(selectedStageId);
-      setSelectedStageId("");
-    } catch {
-      showToast("Already linked or failed");
-    }
-  };
+  const linked = (links?.items ?? []).map((l) => ({ id: l.stage_id, label: l.stage_name }));
+  const stages = (stream.data?.stages ?? []).map((s) => ({ id: s.id, label: s.name }));
+  const unlinkedCount = stages.filter((s) => !linked.some((l) => l.id === s.id)).length;
 
   return (
-    <div>
-      <h4 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Value Stream Stages</h4>
-      {toast && <div style={{ fontSize: 11, color: "var(--crit)", marginBottom: 6 }}>{toast}</div>}
-      {links?.items.length === 0 && <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 8 }}>No stages linked.</div>}
-      {links?.items.map(link => (
-        <div key={link.stage_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
-          <span style={{ flex: 1, fontSize: 13 }}>{link.stage_name}</span>
-          <button onClick={() => deleteLink.mutate(link.stage_id)} className="ui-btn-link danger">✕</button>
-        </div>
-      ))}
-      {(streams?.items.length ?? 0) > 0 && (
-        <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
-          <select value={selectedStageId} onChange={e => setSelectedStageId(e.target.value)} style={{ flex: 1, fontSize: 12, padding: "4px 6px", border: "1px solid var(--border)", borderRadius: 4 }}>
-            <option value="">— Select stage —</option>
-            {streams?.items.map(vs => (
-              <optgroup key={vs.id} label={vs.name}>
-                {/* Stages need to be fetched per-VS — using stage links as the available source */}
-              </optgroup>
-            ))}
-          </select>
-          <button onClick={handleLink} disabled={!selectedStageId} className="ui-btn ui-btn-primary ui-btn-sm">Link</button>
-        </div>
-      )}
-    </div>
+    <LinkEditor
+      title="Value Stream Stages"
+      action="write_application"
+      noun="stage"
+      plural="stages"
+      isLoading={isLoading}
+      options={stages}
+      linkedIds={linked.map((s) => s.id)}
+      linkedItems={linked}
+      pickerLabel="Stage"
+      hidePicker={!streamId}
+      pickerPrefix={
+        <select
+          aria-label="Value stream"
+          className="ui-select"
+          style={{ flex: 1, minWidth: 160 }}
+          value={streamId}
+          onChange={(e) => setStreamId(e.target.value)}
+        >
+          <option value="">Choose a value stream…</option>
+          {(streams?.items ?? []).map((vs) => <option key={vs.id} value={vs.id}>{vs.name}</option>)}
+        </select>
+      }
+      hint={
+        streamId && stream.data && unlinkedCount === 0
+          ? stages.length === 0 ? "This value stream has no stages yet." : "Every stage of this value stream is already linked."
+          : undefined
+      }
+      link={createLink}
+      unlink={deleteLink}
+    />
   );
 }

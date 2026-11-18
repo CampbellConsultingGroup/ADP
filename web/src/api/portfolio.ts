@@ -1,5 +1,6 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { apiGet } from "./client";
+import { QK } from "./queryKeys";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -40,9 +41,9 @@ export interface ApplicationCapabilityGroupsResponse {
 
 // ── Query keys ────────────────────────────────────────────────────────────────
 
-const SUMMARY_KEY = ["portfolio", "summary"] as const;
-const APPLICATIONS_HEATMAP_KEY = ["portfolio", "applications-heatmap"] as const;
-const CAPABILITY_GROUPS_KEY = ["portfolio", "application-capability-groups"] as const;
+const SUMMARY_KEY = [QK.portfolio, "summary"] as const;
+const APPLICATIONS_HEATMAP_KEY = [QK.portfolio, "applications-heatmap"] as const;
+const CAPABILITY_GROUPS_KEY = [QK.portfolio, "application-capability-groups"] as const;
 
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ export interface EstateCounts {
 
 export function useEstateCounts(): UseQueryResult<EstateCounts> {
   return useQuery<EstateCounts>({
-    queryKey: ["portfolio", "counts"],
+    queryKey: [QK.portfolio, "counts"],
     queryFn: () => apiGet<EstateCounts>("/api/v1/portfolio/counts"),
     staleTime: 60_000,
   });

@@ -1,6 +1,7 @@
 /** LLM configuration hooks (ADP-SPEC-015). */
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import { QK } from "./queryKeys";
 
 export interface ModelInfo {
   id: string;
@@ -34,7 +35,7 @@ export interface LLMConfigUpdate {
 
 export function useAvailableModels() {
   return useQuery<ModelsResponse>({
-    queryKey: ["config", "models"],
+    queryKey: [QK.config, "models"],
     queryFn: () => apiGet<ModelsResponse>("/api/v1/config/models"),
     staleTime: 60_000,
   });
@@ -42,7 +43,7 @@ export function useAvailableModels() {
 
 export function useLLMConfig() {
   return useQuery<LLMConfig>({
-    queryKey: ["config", "llm"],
+    queryKey: [QK.config, "llm"],
     queryFn: () => apiGet<LLMConfig>("/api/v1/config/llm"),
     staleTime: 30_000,
   });
@@ -54,7 +55,7 @@ export function useUpdateLLMConfig() {
     mutationFn: (update) =>
       apiMutation<LLMConfig, LLMConfigUpdate>("PUT", "/api/v1/config/llm", update),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["config", "llm"] });
+      void qc.invalidateQueries({ queryKey: [QK.config, "llm"] });
     },
   });
 }

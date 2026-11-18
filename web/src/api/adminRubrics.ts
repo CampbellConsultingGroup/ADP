@@ -7,6 +7,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import { QK } from "./queryKeys";
 
 const BASE_PATH = "/api/v1/admin/scoring-rubrics";
 
@@ -45,14 +46,14 @@ export interface RubricChangeResult {
 
 export function useRubrics() {
   return useQuery<RubricListResponse>({
-    queryKey: ["admin-scoring-rubrics"],
+    queryKey: [QK.adminScoringRubrics],
     queryFn: () => apiGet<RubricListResponse>(BASE_PATH),
   });
 }
 
 export function useRubricHistory(rubricId: string | null) {
   return useQuery<RubricHistoryResponse>({
-    queryKey: ["admin-scoring-rubric-history", rubricId],
+    queryKey: [QK.adminScoringRubricHistory, rubricId],
     queryFn: () => apiGet<RubricHistoryResponse>(`${BASE_PATH}/${rubricId}/history`),
     enabled: !!rubricId,
   });
@@ -72,8 +73,8 @@ export function useConfirmRubricEdit(rubricId: string) {
         confirmation_id: confirmationId,
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["admin-scoring-rubrics"] });
-      void qc.invalidateQueries({ queryKey: ["admin-scoring-rubric-history", rubricId] });
+      void qc.invalidateQueries({ queryKey: [QK.adminScoringRubrics] });
+      void qc.invalidateQueries({ queryKey: [QK.adminScoringRubricHistory, rubricId] });
     },
   });
 }
@@ -92,8 +93,8 @@ export function useRestoreRubricVersion(rubricId: string) {
         { expected_version: expectedVersion, confirmation_id: confirmationId },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["admin-scoring-rubrics"] });
-      void qc.invalidateQueries({ queryKey: ["admin-scoring-rubric-history", rubricId] });
+      void qc.invalidateQueries({ queryKey: [QK.adminScoringRubrics] });
+      void qc.invalidateQueries({ queryKey: [QK.adminScoringRubricHistory, rubricId] });
     },
   });
 }

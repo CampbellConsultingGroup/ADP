@@ -10,6 +10,7 @@ import AgentReviewButton from "../agent-review/AgentReviewButton";
 import { renderCapabilitySuggestionDetail } from "./agentReviewDetail";
 import ChatButton from "../chat/ChatButton";
 import ChatPanel from "../chat/ChatPanel";
+import { QK } from "../api/queryKeys";
 
 export interface CapabilityTreeNode extends BusinessCapability {
   children: CapabilityTreeNode[];
@@ -223,7 +224,7 @@ export default function CapabilityTree({ onGenerateDiagram, focusCapabilityId }:
             basePath="/api/v1/business/capabilities/agent-review"
             label="Ask the business architecture expert to review the portfolio"
             renderDetail={renderCapabilitySuggestionDetail}
-            onAccepted={() => queryClient.invalidateQueries({ queryKey: ["business-capabilities"] })}
+            onAccepted={() => queryClient.invalidateQueries({ queryKey: [QK.businessCapabilities] })}
           />
         </div>
       )}

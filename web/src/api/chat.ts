@@ -9,6 +9,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState, useCallback, useRef } from "react";
 import { apiGet, apiMutation, getAuthHeader } from "./client";
+import { QK } from "./queryKeys";
 
 export interface ChatCitation {
   entity_type: string;
@@ -43,14 +44,14 @@ export function useCreateConversation(basePath: string) {
   return useMutation<ChatConversationSummary, Error, void>({
     mutationFn: () => apiMutation<ChatConversationSummary>("POST", `${basePath}/conversations`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["chat-conversations", basePath] });
+      void qc.invalidateQueries({ queryKey: [QK.chatConversations, basePath] });
     },
   });
 }
 
 export function useConversations(basePath: string, enabled: boolean) {
   return useQuery<ChatConversationSummary[]>({
-    queryKey: ["chat-conversations", basePath],
+    queryKey: [QK.chatConversations, basePath],
     queryFn: () => apiGet<ChatConversationSummary[]>(`${basePath}/conversations`),
     enabled,
   });
@@ -58,7 +59,7 @@ export function useConversations(basePath: string, enabled: boolean) {
 
 export function useConversation(basePath: string, conversationId: string | null) {
   return useQuery<ChatConversationDetail>({
-    queryKey: ["chat-conversation", basePath, conversationId],
+    queryKey: [QK.chatConversation, basePath, conversationId],
     queryFn: () => apiGet<ChatConversationDetail>(`${basePath}/conversations/${conversationId}`),
     enabled: !!conversationId,
   });
@@ -140,7 +141,7 @@ export function useSendMessage(basePath: string) {
       } finally {
         setIsStreaming(false);
         setStreamedText("");
-        void qc.invalidateQueries({ queryKey: ["chat-conversation", basePath, conversationId] });
+        void qc.invalidateQueries({ queryKey: [QK.chatConversation, basePath, conversationId] });
         if (!hadError) onComplete?.(fullText);
       }
     },

@@ -7,6 +7,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "../api/client";
+import { QK } from "../api/queryKeys";
 
 export type DiagramType = "flowchart" | "sequence" | "erd" | "uml" | "architecture" | "c4";
 
@@ -73,7 +74,7 @@ export function deleteDiagram(id: string): Promise<void> {
 
 export function useDiagrams() {
   return useQuery<DiagramListResponse>({
-    queryKey: ["diagrams"],
+    queryKey: [QK.diagrams],
     queryFn: () => listDiagrams(),
   });
 }
@@ -83,7 +84,7 @@ export function useDeleteDiagram() {
   return useMutation<void, Error, string>({
     mutationFn: (id) => deleteDiagram(id),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["diagrams"] });
+      void qc.invalidateQueries({ queryKey: [QK.diagrams] });
     },
   });
 }

@@ -63,13 +63,34 @@ interface LinkEditorProps {
    * picker and Remove are disabled, with the reason as a tooltip, instead of failing on use.
    */
   action?: string;
+  /** A heading above the list, e.g. "Linked Designs". */
+  title?: string;
+  /**
+   * Shown before the picker, for a choice that narrows its options: a framework before its
+   * controls, a value stream before its stages.
+   */
+  pickerPrefix?: React.ReactNode;
+  /**
+   * More inputs that belong to the link (a fit score). With these the link is not saved on
+   * choosing a value: a Link button appears, and the caller's `link` reads its own fields.
+   */
+  addFields?: React.ReactNode;
+  /** The picker's accessible name when it should differ from `prompt`, e.g. "Control". */
+  pickerLabel?: string;
+  /** Hide the picker until `pickerPrefix` has a choice. */
+  hidePicker?: boolean;
+  /** A line under the picker, e.g. why it has nothing to offer. */
+  hint?: React.ReactNode;
+  /** With `addFields`: a message to show instead of linking, or null when the fields are valid. */
+  validate?: () => string | null;
 }
 
 const muted: React.CSSProperties = { fontSize: "0.85rem", color: "var(--ink-2)" };
 
 export default function LinkEditor({
   options, linkedIds, linkedItems, isLoading, noun, plural, prompt, link, unlink, entityKind, onOpen,
-  openTitle, action,
+  openTitle, action, title, pickerPrefix, addFields, validate, pickerLabel,
+  hidePicker, hint,
 }: LinkEditorProps): React.ReactElement {
   const permission = useCan(action ?? "");
   const canEdit = !action || permission.allowed;
@@ -86,6 +107,11 @@ export default function LinkEditor({
     if (!chosenId) return;
     setSelectedId(chosenId);
     setLinkError(null);
+    const invalid = validate?.() ?? null;
+    if (invalid) {
+      setLinkError(invalid);
+      return;
+    }
     const label = available.find((o) => o.id === chosenId)?.label ?? chosenId;
     link.mutate(chosenId, {
       onSuccess: () => {
@@ -94,7 +120,13 @@ export default function LinkEditor({
       },
       onError: (err) => {
         setSelectedId("");
-        setLinkError(err.status === 409 ? "Already linked" : err.message || `Failed to link ${noun}`);
+        setLinkError(
+          err.status === 409
+            ? "Already linked"
+            : err.status === 404
+              ? `No such ${noun}`
+              : err.message || `Failed to link ${noun}`,
+        );
       },
     });
   }
@@ -102,7 +134,10 @@ export default function LinkEditor({
   if (isLoading) return <p style={muted}>Loading {plural}…</p>;
 
   return (
-    <div style={{ marginTop: "0.75rem" }}>
+    <div style={{ marginTop: title ? 0 : "0.75rem" }}>
+      {title && (
+        <h4 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>{title}</h4>
+      )}
       <div style={{ marginBottom: "0.5rem" }}>
         {linked.length === 0 && <p style={{ ...muted, margin: "0 0 0.5rem" }}>No {plural} linked yet.</p>}
         {linked.map((o) => (
@@ -136,15 +171,7 @@ export default function LinkEditor({
               onClick={() => unlink.mutate(o.id, { onSuccess: () => feedback.showRemoved(o.label) })}
               disabled={unlink.isPending || !canEdit}
               title={why}
-              style={{
-                background: "none",
-                border: "1px solid var(--border)",
-                borderRadius: "4px",
-                cursor: "pointer",
-                padding: "2px 8px",
-                fontSize: "0.75rem",
-                color: "var(--ink-2)",
-              }}
+              className="ui-btn ui-btn-xs"
             >
               Remove
             </button>
@@ -153,31 +180,47 @@ export default function LinkEditor({
       </div>
 
       <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-        <select
-          value={selectedId}
-          onChange={(e) => handleAdd(e.target.value)}
-          disabled={link.isPending || !canEdit}
-          title={why}
-          aria-label={prompt ?? `Link a ${noun}`}
-          style={{
-            flex: 1,
-            minWidth: "160px",
-            padding: "0.3rem 0.5rem",
-            fontSize: "0.85rem",
-            border: "1px solid var(--border)",
-            borderRadius: "4px",
-            background: "var(--bg)",
-            color: "var(--ink)",
-          }}
-        >
-          <option value="">{prompt ?? `Link a ${noun}…`}</option>
-          {available.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        {pickerPrefix}
+        {!hidePicker && (
+          <select
+            value={selectedId}
+            onChange={(e) => (addFields ? setSelectedId(e.target.value) : handleAdd(e.target.value))}
+            disabled={link.isPending || !canEdit}
+            title={why}
+            aria-label={pickerLabel ?? prompt ?? `Link a ${noun}`}
+            style={{
+              flex: 1,
+              minWidth: "160px",
+              padding: "0.3rem 0.5rem",
+              fontSize: "0.85rem",
+              border: "1px solid var(--border)",
+              borderRadius: "4px",
+              background: "var(--bg)",
+              color: "var(--ink)",
+            }}
+          >
+            <option value="">{prompt ?? `Link a ${noun}…`}</option>
+            {available.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        )}
+        {addFields}
+        {addFields && (
+          <button
+            type="button"
+            className="ui-btn ui-btn-primary ui-btn-sm"
+            disabled={!selectedId || link.isPending || !canEdit}
+            title={why}
+            onClick={() => handleAdd(selectedId)}
+          >
+            Link
+          </button>
+        )}
       </div>
+      {hint && <p style={{ ...muted, fontSize: "0.8rem", margin: "0.35rem 0 0" }}>{hint}</p>}
       {linkError && (
         <p style={{ color: "var(--crit)", fontSize: "0.8rem", margin: "0.35rem 0 0" }}>{linkError}</p>
       )}

@@ -4,6 +4,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation, errorDetail } from "./client";
+import { QK } from "./queryKeys";
 
 const API = "/api/v1/agentic";
 
@@ -165,19 +166,19 @@ export { errorDetail };
 // ── Query keys ────────────────────────────────────────────────────────────────
 
 const keys = {
-  agents: ["agentic-agents"] as const,
-  agent: (id: string) => ["agentic-agent", id] as const,
-  solution: (appId: string) => ["agentic-solution", appId] as const,
-  automates: (id: string) => ["agentic-automates", id] as const,
-  automatedBy: (kind: AutomatesKind, id: string) => ["agentic-automated-by", kind, id] as const,
+  agents: [QK.agenticAgents] as const,
+  agent: (id: string) => [QK.agenticAgent, id] as const,
+  solution: (appId: string) => [QK.agenticSolution, appId] as const,
+  automates: (id: string) => [QK.agenticAutomates, id] as const,
+  automatedBy: (kind: AutomatesKind, id: string) => [QK.agenticAutomatedBy, kind, id] as const,
 };
 
 function useInvalidateAll() {
   const qc = useQueryClient();
   return () => {
     void qc.invalidateQueries({ queryKey: keys.agents });
-    void qc.invalidateQueries({ queryKey: ["agentic-agent"] });
-    void qc.invalidateQueries({ queryKey: ["agentic-solution"] });
+    void qc.invalidateQueries({ queryKey: [QK.agenticAgent] });
+    void qc.invalidateQueries({ queryKey: [QK.agenticSolution] });
   };
 }
 
@@ -290,7 +291,7 @@ function useInvalidateAutomates(agentId: string) {
   const qc = useQueryClient();
   return () => {
     void qc.invalidateQueries({ queryKey: keys.automates(agentId) });
-    void qc.invalidateQueries({ queryKey: ["agentic-automated-by"] });
+    void qc.invalidateQueries({ queryKey: [QK.agenticAutomatedBy] });
   };
 }
 

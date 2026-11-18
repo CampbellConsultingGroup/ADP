@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import { QK } from "./queryKeys";
 
 export type KnowledgeKind =
   | "principle"
@@ -54,14 +55,14 @@ export interface KnowledgeItemUpdateRequest {
 
 export function useKnowledgeItems() {
   return useQuery<{ items: KnowledgeItemSummary[]; total: number }>({
-    queryKey: ["knowledge-items"],
+    queryKey: [QK.knowledgeItems],
     queryFn: () => apiGet("/api/v1/knowledge"),
   });
 }
 
 export function useKnowledgeItem(id: string | null) {
   return useQuery<KnowledgeItemDetail>({
-    queryKey: ["knowledge-item", id],
+    queryKey: [QK.knowledgeItem, id],
     queryFn: () => apiGet(`/api/v1/knowledge/${id}`),
     enabled: !!id,
   });
@@ -73,7 +74,7 @@ export function useCreateKnowledgeItem() {
     mutationFn: (body) =>
       apiMutation<KnowledgeItemSummary, KnowledgeItemCreateRequest>("POST", "/api/v1/knowledge", body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["knowledge-items"] });
+      void qc.invalidateQueries({ queryKey: [QK.knowledgeItems] });
     },
   });
 }
@@ -88,8 +89,8 @@ export function useUpdateKnowledgeItem(itemId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["knowledge-items"] });
-      void qc.invalidateQueries({ queryKey: ["knowledge-item", itemId] });
+      void qc.invalidateQueries({ queryKey: [QK.knowledgeItems] });
+      void qc.invalidateQueries({ queryKey: [QK.knowledgeItem, itemId] });
     },
   });
 }
@@ -99,7 +100,7 @@ export function useDeleteKnowledgeItem() {
   return useMutation<void, Error, string>({
     mutationFn: (itemId) => apiMutation<void>("DELETE", `/api/v1/knowledge/${itemId}`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["knowledge-items"] });
+      void qc.invalidateQueries({ queryKey: [QK.knowledgeItems] });
     },
   });
 }
@@ -125,7 +126,7 @@ export function useImportCalmPattern() {
       return apiMutation<CALMImportResult, unknown>("POST", "/api/v1/knowledge/import/calm", parsed);
     },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["knowledge-items"] });
+      void qc.invalidateQueries({ queryKey: [QK.knowledgeItems] });
     },
   });
 }

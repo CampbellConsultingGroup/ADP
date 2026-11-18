@@ -173,6 +173,23 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.34 and .36, closing increments (frontend only):
+  - .34: `web/src/api/queryKeys.ts` `QK` holds the first element of every query key (74 names, 289
+    uses); `tests/unit/query-keys.test.ts` fails if a key starts with a string literal. Write
+    `[QK.applications, id]`, never `["applications", id]`. Application create / update / delete call
+    `invalidateApplicationViews` (applications, rationalization, portfolio, capability analysis,
+    organization, agentic solution); delete used to refresh only the list.
+  - .36: `LinkEditor` gained `title`, `pickerPrefix` + `hidePicker` (a choice that narrows the picker:
+    framework before control, value stream before stage), `pickerLabel`, `hint`, and `addFields` +
+    `validate` (a link with fields of its own keeps a Link button). Now wrappers over it: the
+    application's design, capability (fit score), stage and objective editors and the objective's
+    control editor. Plain application links save on choosing, with no Link button.
+  - Bug fixed on the way: the application Stages tab could not link a stage at all (its picker listed
+    value streams as empty groups). It now asks for the value stream, then the stage.
+  - Still separate, on purpose: `TechCapLinkEditor` (the same capability can be linked twice, as
+    provides and as consumes, so an id is not a unique row), `InitiativeLinkEditor` and
+    `DomainIntegrationEditor` (they create a record with several fields), and
+    `InitiativeControlMappingEditor` (target type, framework, control and target).
 - Fable review ADP-blp.28 (backend test speed; tests only, no source change):
   - `tests/conftest.py` replaces `adp.api.app.create_app` with a version that returns ONE shared app
     per configuration (the `ADP_*` environment), with `dependency_overrides` and `app.state` cleared on

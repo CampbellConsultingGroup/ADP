@@ -1,5 +1,6 @@
-import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useSuspenseQuery, type QueryClient } from "@tanstack/react-query";
 import { apiRequest } from "./client";
+import { QK } from "./queryKeys";
 
 const API = "/api/v1";
 
@@ -457,14 +458,14 @@ const apiFetch = apiRequest;
 
 export function useApplications() {
   return useSuspenseQuery<ApplicationListResponse>({
-    queryKey: ["applications"],
+    queryKey: [QK.applications],
     queryFn: () => apiFetch(`${API}/applications`),
   });
 }
 
 export function useApplication(id: string) {
   return useQuery<Application>({
-    queryKey: ["applications", id],
+    queryKey: [QK.applications, id],
     queryFn: () => apiFetch(`${API}/applications/${id}`),
     enabled: !!id,
   });
@@ -472,7 +473,7 @@ export function useApplication(id: string) {
 
 export function useHealthAssessment(appId: string | null) {
   return useQuery<HealthAssessmentResponse>({
-    queryKey: ["applications", appId, "health-assessment"],
+    queryKey: [QK.applications, appId, "health-assessment"],
     queryFn: () => apiFetch(`${API}/applications/${appId}/health-assessment`),
     enabled: !!appId,
   });
@@ -487,17 +488,17 @@ export function useSaveHealthAssessment(appId: string) {
         body: JSON.stringify(body),
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["applications", appId, "health-assessment"] });
+      void qc.invalidateQueries({ queryKey: [QK.applications, appId, "health-assessment"] });
       // Broad invalidate (not just [.., appId]) -- health_score also shows
       // on the applications list/rationalization/heat-map views.
-      void qc.invalidateQueries({ queryKey: ["applications"] });
+      void qc.invalidateQueries({ queryKey: [QK.applications] });
     },
   });
 }
 
 export function useBusinessValueAssessment(appId: string | null) {
   return useQuery<BusinessValueAssessmentResponse>({
-    queryKey: ["applications", appId, "business-value-assessment"],
+    queryKey: [QK.applications, appId, "business-value-assessment"],
     queryFn: () => apiFetch(`${API}/applications/${appId}/business-value-assessment`),
     enabled: !!appId,
   });
@@ -513,25 +514,25 @@ export function useSaveBusinessValueAssessment(appId: string) {
       ),
     onSuccess: () => {
       void qc.invalidateQueries({
-        queryKey: ["applications", appId, "business-value-assessment"],
+        queryKey: [QK.applications, appId, "business-value-assessment"],
       });
       // Broad invalidate -- business_value also shows on the applications
       // list/rationalization/heat-map views.
-      void qc.invalidateQueries({ queryKey: ["applications"] });
+      void qc.invalidateQueries({ queryKey: [QK.applications] });
     },
   });
 }
 
 export function useRationalization() {
   return useQuery<RationalizationResponse>({
-    queryKey: ["rationalization"],
+    queryKey: [QK.rationalization],
     queryFn: () => apiFetch(`${API}/applications/rationalization`),
   });
 }
 
 export function useApplicationRisk(appId: string) {
   return useQuery<ApplicationRisk>({
-    queryKey: ["applications", appId, "risk"],
+    queryKey: [QK.applications, appId, "risk"],
     queryFn: () => apiFetch(`${API}/applications/${appId}/risk`),
     enabled: !!appId,
     // Sensitive data: don't cache/refetch aggressively for a reader who lacks access.
@@ -547,13 +548,13 @@ export function useUpdateApplicationRisk(appId: string) {
         method: "PUT",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "risk"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.applications, appId, "risk"] }),
   });
 }
 
 export function useOutOfSupport() {
   return useQuery<OutOfSupportResponse>({
-    queryKey: ["applications", "risk", "out-of-support"],
+    queryKey: [QK.applications, "risk", "out-of-support"],
     queryFn: () => apiFetch(`${API}/applications/risk/out-of-support`),
     retry: false,
   });
@@ -561,7 +562,7 @@ export function useOutOfSupport() {
 
 export function useApplicationCost(appId: string) {
   return useQuery<ApplicationCost>({
-    queryKey: ["applications", appId, "cost"],
+    queryKey: [QK.applications, appId, "cost"],
     queryFn: () => apiFetch(`${API}/applications/${appId}/cost`),
     enabled: !!appId,
     retry: false, // sensitive data: don't hammer a reader who lacks access
@@ -577,15 +578,15 @@ export function useUpdateApplicationCost(appId: string) {
         body: JSON.stringify(body),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["applications", appId, "cost"] });
-      qc.invalidateQueries({ queryKey: ["applications", "cost", "rollup"] });
+      qc.invalidateQueries({ queryKey: [QK.applications, appId, "cost"] });
+      qc.invalidateQueries({ queryKey: [QK.applications, "cost", "rollup"] });
     },
   });
 }
 
 export function useCostRollup() {
   return useQuery<CostRollupResponse>({
-    queryKey: ["applications", "cost", "rollup"],
+    queryKey: [QK.applications, "cost", "rollup"],
     queryFn: () => apiFetch(`${API}/applications/cost/rollup`),
     retry: false,
   });
@@ -593,7 +594,7 @@ export function useCostRollup() {
 
 export function useApplicationGovernance(appId: string) {
   return useQuery<ApplicationGovernance>({
-    queryKey: ["applications", appId, "governance"],
+    queryKey: [QK.applications, appId, "governance"],
     queryFn: () => apiFetch(`${API}/applications/${appId}/governance`),
     enabled: !!appId,
     retry: false, // sensitive data: don't hammer a reader who lacks access
@@ -609,15 +610,15 @@ export function useUpdateApplicationGovernance(appId: string) {
         body: JSON.stringify(body),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["applications", appId, "governance"] });
-      qc.invalidateQueries({ queryKey: ["applications", "governance", "renewals-soon"] });
+      qc.invalidateQueries({ queryKey: [QK.applications, appId, "governance"] });
+      qc.invalidateQueries({ queryKey: [QK.applications, "governance", "renewals-soon"] });
     },
   });
 }
 
 export function useRenewalsSoon(withinDays?: number) {
   return useQuery<RenewalsSoonResponse>({
-    queryKey: ["applications", "governance", "renewals-soon", withinDays ?? 90],
+    queryKey: [QK.applications, "governance", "renewals-soon", withinDays ?? 90],
     queryFn: () =>
       apiFetch(
         `${API}/applications/governance/renewals-soon${withinDays ? `?within_days=${withinDays}` : ""}`,
@@ -628,7 +629,7 @@ export function useRenewalsSoon(withinDays?: number) {
 
 export function useApplicationQuality(appId: string) {
   return useQuery<ApplicationQualityMetric>({
-    queryKey: ["applications", appId, "quality"],
+    queryKey: [QK.applications, appId, "quality"],
     queryFn: () => apiFetch(`${API}/applications/${appId}/quality`),
     enabled: !!appId,
   });
@@ -642,8 +643,24 @@ export function useUpdateApplicationQuality(appId: string) {
         method: "PUT",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "quality"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.applications, appId, "quality"] }),
   });
+}
+
+/**
+ * Everything derived from the application list (ADP-blp.34). Creating, changing or deleting an
+ * application changes the Portfolio groupings and counts, the rationalization view, the
+ * capability roll-ups (health, risk and cost come from applications), the organization
+ * tab's unmatched-owner queue and an agentic solution's panel. Each write used to invalidate
+ * only the names its author thought of; delete missed even the rationalization view.
+ */
+function invalidateApplicationViews(qc: QueryClient): void {
+  void qc.invalidateQueries({ queryKey: [QK.applications] });
+  void qc.invalidateQueries({ queryKey: [QK.rationalization] });
+  void qc.invalidateQueries({ queryKey: [QK.portfolio] });
+  void qc.invalidateQueries({ queryKey: [QK.capAnalysis] });
+  void qc.invalidateQueries({ queryKey: [QK.organization] });
+  void qc.invalidateQueries({ queryKey: [QK.agenticSolution] });
 }
 
 export function useCreateApplication() {
@@ -651,10 +668,7 @@ export function useCreateApplication() {
   return useMutation({
     mutationFn: (body: ApplicationCreate) =>
       apiFetch<Application>(`${API}/applications`, { method: "POST", body: JSON.stringify(body) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["applications"] });
-      qc.invalidateQueries({ queryKey: ["rationalization"] });
-    },
+    onSuccess: () => invalidateApplicationViews(qc),
   });
 }
 
@@ -663,11 +677,7 @@ export function useUpdateApplication(id: string) {
   return useMutation({
     mutationFn: (body: ApplicationUpdate) =>
       apiFetch<Application>(`${API}/applications/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["applications"] });
-      qc.invalidateQueries({ queryKey: ["applications", id] });
-      qc.invalidateQueries({ queryKey: ["rationalization"] });
-    },
+    onSuccess: () => invalidateApplicationViews(qc),
   });
 }
 
@@ -675,15 +685,13 @@ export function useDeleteApplication() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiFetch<void>(`${API}/applications/${id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications"] }),
+    onSuccess: () => invalidateApplicationViews(qc),
   });
 }
 
-// ── Technical Capability hooks ────────────────────────────────────────────────
-
 export function useTechCaps() {
   return useQuery<TechCapListResponse>({
-    queryKey: ["tech-caps"],
+    queryKey: [QK.techCaps],
     queryFn: () => apiFetch(`${API}/technical-capabilities`),
   });
 }
@@ -694,8 +702,8 @@ export function useCreateTechCap() {
     mutationFn: (body: TechnicalCapabilityCreate) =>
       apiFetch<TechnicalCapability>(`${API}/technical-capabilities`, { method: "POST", body: JSON.stringify(body) }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["tech-caps"] });
-      void qc.invalidateQueries({ queryKey: ["cap-analysis"] });
+      void qc.invalidateQueries({ queryKey: [QK.techCaps] });
+      void qc.invalidateQueries({ queryKey: [QK.capAnalysis] });
     },
   });
 }
@@ -709,8 +717,8 @@ export function useUpdateTechCap() {
         body: JSON.stringify(body),
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["tech-caps"] });
-      void qc.invalidateQueries({ queryKey: ["cap-analysis"] });
+      void qc.invalidateQueries({ queryKey: [QK.techCaps] });
+      void qc.invalidateQueries({ queryKey: [QK.capAnalysis] });
     },
   });
 }
@@ -721,8 +729,8 @@ export function useDeleteTechCap() {
     mutationFn: (id: string) =>
       apiFetch<void>(`${API}/technical-capabilities/${id}`, { method: "DELETE" }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["tech-caps"] });
-      void qc.invalidateQueries({ queryKey: ["cap-analysis"] });
+      void qc.invalidateQueries({ queryKey: [QK.techCaps] });
+      void qc.invalidateQueries({ queryKey: [QK.capAnalysis] });
     },
   });
 }
@@ -731,7 +739,7 @@ export function useDeleteTechCap() {
 
 export function useAppCapLinks(appId: string) {
   return useQuery<{ items: ApplicationCapabilityLink[] }>({
-    queryKey: ["applications", appId, "capability-links"],
+    queryKey: [QK.applications, appId, "capability-links"],
     queryFn: () => apiFetch(`${API}/applications/${appId}/capability-links`),
     enabled: !!appId,
   });
@@ -745,7 +753,7 @@ export function useCreateAppCapLink(appId: string) {
         `${API}/applications/${appId}/capability-links`,
         { method: "POST", body: JSON.stringify(body) },
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "capability-links"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.applications, appId, "capability-links"] }),
   });
 }
 
@@ -754,7 +762,7 @@ export function useDeleteAppCapLink(appId: string) {
   return useMutation({
     mutationFn: (capId: string) =>
       apiFetch<void>(`${API}/applications/${appId}/capability-links/${capId}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "capability-links"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.applications, appId, "capability-links"] }),
   });
 }
 
@@ -762,14 +770,14 @@ export function useDeleteAppCapLink(appId: string) {
 
 export function useInitiatives() {
   return useQuery<TransformationInitiativeListResponse>({
-    queryKey: ["transformation-initiatives"],
+    queryKey: [QK.transformationInitiatives],
     queryFn: () => apiFetch(`${API}/transformation-initiatives`),
   });
 }
 
 export function useInitiative(id: string) {
   return useQuery<TransformationInitiativeDetail>({
-    queryKey: ["transformation-initiatives", id],
+    queryKey: [QK.transformationInitiatives, id],
     queryFn: () => apiFetch(`${API}/transformation-initiatives/${id}`),
     enabled: !!id,
   });
@@ -783,7 +791,7 @@ export function useCreateInitiative() {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["transformation-initiatives"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.transformationInitiatives] }),
   });
 }
 
@@ -792,20 +800,20 @@ export function useDeleteInitiative() {
   return useMutation({
     mutationFn: (id: string) =>
       apiFetch<void>(`${API}/transformation-initiatives/${id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["transformation-initiatives"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.transformationInitiatives] }),
   });
 }
 
 export function useRoadmap() {
   return useQuery<RoadmapResponse>({
-    queryKey: ["applications", "roadmap"],
+    queryKey: [QK.applications, "roadmap"],
     queryFn: () => apiFetch(`${API}/applications/roadmap`),
   });
 }
 
 export function useAppInitiativeLinks(appId: string) {
   return useQuery<ApplicationInitiativeLinksResponse>({
-    queryKey: ["applications", appId, "initiative-links"],
+    queryKey: [QK.applications, appId, "initiative-links"],
     queryFn: () => apiFetch(`${API}/applications/${appId}/initiative-links`),
     enabled: !!appId,
   });
@@ -820,9 +828,9 @@ export function useCreateInitiativeLink(appId: string) {
         body: JSON.stringify(body),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["applications", appId, "initiative-links"] });
-      qc.invalidateQueries({ queryKey: ["applications", "roadmap"] });
-      qc.invalidateQueries({ queryKey: ["transformation-initiatives"] });
+      qc.invalidateQueries({ queryKey: [QK.applications, appId, "initiative-links"] });
+      qc.invalidateQueries({ queryKey: [QK.applications, "roadmap"] });
+      qc.invalidateQueries({ queryKey: [QK.transformationInitiatives] });
     },
   });
 }
@@ -835,9 +843,9 @@ export function useDeleteInitiativeLink(appId: string) {
         method: "DELETE",
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["applications", appId, "initiative-links"] });
-      qc.invalidateQueries({ queryKey: ["applications", "roadmap"] });
-      qc.invalidateQueries({ queryKey: ["transformation-initiatives"] });
+      qc.invalidateQueries({ queryKey: [QK.applications, appId, "initiative-links"] });
+      qc.invalidateQueries({ queryKey: [QK.applications, "roadmap"] });
+      qc.invalidateQueries({ queryKey: [QK.transformationInitiatives] });
     },
   });
 }
@@ -846,7 +854,7 @@ export function useDeleteInitiativeLink(appId: string) {
 
 export function useAppTechCapLinks(appId: string) {
   return useQuery<{ items: ApplicationTechCapLink[] }>({
-    queryKey: ["applications", appId, "tech-cap-links"],
+    queryKey: [QK.applications, appId, "tech-cap-links"],
     queryFn: () => apiFetch(`${API}/applications/${appId}/technical-capability-links`),
     enabled: !!appId,
   });
@@ -860,7 +868,7 @@ export function useCreateAppTechCapLink(appId: string) {
         `${API}/applications/${appId}/technical-capability-links`,
         { method: "POST", body: JSON.stringify(body) },
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "tech-cap-links"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.applications, appId, "tech-cap-links"] }),
   });
 }
 
@@ -872,7 +880,7 @@ export function useDeleteAppTechCapLink(appId: string) {
         `${API}/applications/${appId}/technical-capability-links/${tcId}/${usageType}`,
         { method: "DELETE" },
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "tech-cap-links"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.applications, appId, "tech-cap-links"] }),
   });
 }
 
@@ -880,7 +888,7 @@ export function useDeleteAppTechCapLink(appId: string) {
 
 export function useAppStageLinks(appId: string) {
   return useQuery<{ items: ApplicationStageLink[] }>({
-    queryKey: ["applications", appId, "stage-links"],
+    queryKey: [QK.applications, appId, "stage-links"],
     queryFn: () => apiFetch(`${API}/applications/${appId}/stage-links`),
     enabled: !!appId,
   });
@@ -894,7 +902,7 @@ export function useCreateAppStageLink(appId: string) {
         `${API}/applications/${appId}/stage-links`,
         { method: "POST", body: JSON.stringify({ stage_id: stageId }) },
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "stage-links"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.applications, appId, "stage-links"] }),
   });
 }
 
@@ -903,7 +911,7 @@ export function useDeleteAppStageLink(appId: string) {
   return useMutation({
     mutationFn: (stageId: string) =>
       apiFetch<void>(`${API}/applications/${appId}/stage-links/${stageId}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "stage-links"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.applications, appId, "stage-links"] }),
   });
 }
 
@@ -911,7 +919,7 @@ export function useDeleteAppStageLink(appId: string) {
 
 export function useAppDomainIntegrations(appId: string) {
   return useQuery<{ items: ApplicationDomainIntegration[] }>({
-    queryKey: ["applications", appId, "domain-integrations"],
+    queryKey: [QK.applications, appId, "domain-integrations"],
     queryFn: () => apiFetch(`${API}/applications/${appId}/domain-integrations`),
     enabled: !!appId,
   });
@@ -925,7 +933,7 @@ export function useCreateAppDomainIntegration(appId: string) {
         `${API}/applications/${appId}/domain-integrations`,
         { method: "POST", body: JSON.stringify(body) },
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "domain-integrations"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.applications, appId, "domain-integrations"] }),
   });
 }
 
@@ -934,7 +942,7 @@ export function useDeleteAppDomainIntegration(appId: string) {
   return useMutation({
     mutationFn: (linkId: string) =>
       apiFetch<void>(`${API}/applications/${appId}/domain-integrations/${linkId}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "domain-integrations"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.applications, appId, "domain-integrations"] }),
   });
 }
 
@@ -942,7 +950,7 @@ export function useDeleteAppDomainIntegration(appId: string) {
 
 export function useIntegrations(appId?: string) {
   return useQuery<{ items: ApplicationIntegration[]; total: number }>({
-    queryKey: ["integrations", appId ?? "all"],
+    queryKey: [QK.integrations, appId ?? "all"],
     queryFn: () => apiFetch(`${API}/integrations${appId ? `?app_id=${appId}` : ""}`),
   });
 }
@@ -955,7 +963,7 @@ export function useCreateIntegration() {
         method: "POST",
         body: JSON.stringify(body),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["integrations"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.integrations] }),
   });
 }
 
@@ -963,7 +971,7 @@ export function useDeleteIntegration() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiFetch<void>(`${API}/integrations/${id}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["integrations"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.integrations] }),
   });
 }
 
@@ -971,7 +979,7 @@ export function useDeleteIntegration() {
 
 export function useAppDesignLinks(appId: string) {
   return useQuery<{ items: ApplicationDesignLink[] }>({
-    queryKey: ["applications", appId, "design-links"],
+    queryKey: [QK.applications, appId, "design-links"],
     queryFn: () => apiFetch(`${API}/applications/${appId}/design-links`),
     enabled: !!appId,
   });
@@ -985,7 +993,7 @@ export function useCreateAppDesignLink(appId: string) {
         `${API}/applications/${appId}/design-links`,
         { method: "POST", body: JSON.stringify({ design_id: designId }) },
       ),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "design-links"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.applications, appId, "design-links"] }),
   });
 }
 
@@ -994,6 +1002,6 @@ export function useDeleteAppDesignLink(appId: string) {
   return useMutation({
     mutationFn: (designId: string) =>
       apiFetch<void>(`${API}/applications/${appId}/design-links/${designId}`, { method: "DELETE" }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["applications", appId, "design-links"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: [QK.applications, appId, "design-links"] }),
   });
 }

@@ -3,6 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import { QK } from "./queryKeys";
 
 export type ValidationStatus = "pending" | "running" | "completed" | "failed";
 export type VerdictStatusValue = "pass" | "fail" | "indeterminate" | "overridden";
@@ -60,7 +61,7 @@ export function useStartValidation(designId: string) {
 
 export function useValidationStatus(designId: string, operationId: string | null) {
   return useQuery<ValidateStatusResponse>({
-    queryKey: ["validate-status", designId, operationId],
+    queryKey: [QK.validateStatus, designId, operationId],
     queryFn: () =>
       apiGet<ValidateStatusResponse>(
         `/api/v1/designs/${designId}/validate/${operationId}`,
@@ -83,7 +84,7 @@ export function useOverrideVerdict(designId: string, operationId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["validate-status", designId, operationId] });
+      void qc.invalidateQueries({ queryKey: [QK.validateStatus, designId, operationId] });
     },
   });
 }

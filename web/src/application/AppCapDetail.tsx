@@ -24,6 +24,7 @@ import { MissingTechBadge } from "./AppCapTree";
 import RealizationList from "./RealizationList";
 import { confirmAction } from "../ui/confirm";
 import { Loading } from "../ui/primitives";
+import { QK } from "../api/queryKeys";
 
 export function pathLabel(path: CapRef[], name?: string): string {
   return [...path.map((p) => p.name), ...(name ? [name] : [])].join(" › ");
@@ -171,11 +172,11 @@ export default function AppCapDetail({
   const { data: ac, isLoading, error } = useAppCapability(acId);
   const { data: bizCaps } = useCapabilities();
   const { data: techCaps } = useQuery<TechCapListResponse>({
-    queryKey: ["tech-caps"],
+    queryKey: [QK.techCaps],
     queryFn: () => apiGet("/api/v1/technical-capabilities"),
   });
   const { data: apps } = useQuery<ApplicationListResponse>({
-    queryKey: ["applications"],
+    queryKey: [QK.applications],
     queryFn: () => apiGet("/api/v1/applications"),
   });
   const update = useUpdateAppCapability();
