@@ -12,8 +12,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import type React from "react";
 import { Button } from "../ui";
 import { confirmAction } from "../ui/confirm";
+import { DISCARD_PROMPT, useUnsavedChanges } from "../ui/unsaved";
 
-export const DISCARD_PROMPT = "Discard your unsaved changes?";
+export { DISCARD_PROMPT };
 
 interface EditFrameProps {
   /** e.g. "Edit initiative" */
@@ -52,6 +53,8 @@ export default function EditFrame({
 }: EditFrameProps): React.ReactElement {
   const headingId = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  // ADP-blp.63: the nav rail, tab bars and a page reload ask too, not only this frame's own Back.
+  useUnsavedChanges(dirty);
 
   useEffect(() => {
     headingRef.current?.focus();

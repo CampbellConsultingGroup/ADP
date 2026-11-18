@@ -5,6 +5,7 @@ import { TCO_BUCKET_KEYS } from "../api/application";
 import { hasStatus } from "../api/client";
 import { useCan } from "../auth/permissions";
 import { Loading, Button, Restricted, Field, Table } from "../ui/primitives";
+import { useUnsavedChanges } from "../ui/unsaved";
 
 /** APM US4 — Total Cost of Ownership (ADP-9x6, sensitive: gated server-side). */
 
@@ -42,9 +43,13 @@ export default function CostPanel({ appId }: Props) {
     () => Object.fromEntries(TCO_BUCKET_KEYS.map((k) => [k, zeroBucket()])) as Record<TcoBucketKey, CostBucket>,
   );
   const [toast, setToast] = useState<string | null>(null);
+  // ADP-blp.63: any edit in the panel counts as unsaved until it is saved or reloaded.
+  const [touched, setTouched] = useState(false);
+  useUnsavedChanges(touched);
 
   useEffect(() => {
     if (!cost) return;
+    setTouched(false);
     setCurrency(cost.currency);
     setHorizon(String(cost.horizon_years));
     setBuckets(
@@ -74,6 +79,7 @@ export default function CostPanel({ appId }: Props) {
     const body = { currency, horizon_years: horizonNum, ...buckets } as ApplicationCostUpdate;
     try {
       await updateCost.mutateAsync(body);
+      setTouched(false);
       showToast("Saved");
     } catch (e) {
       const forbidden = hasStatus(e, 403);
@@ -82,7 +88,7 @@ export default function CostPanel({ appId }: Props) {
   };
 
   return (
-    <div className="ui-form-stack" style={{ maxWidth: 560 }}>
+    <div className="ui-form-stack" style={{ maxWidth: 560 }} onChange={() => setTouched(true)}>
       <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Total Cost of Ownership</h4>
       {toast && <div style={{ fontSize: 11, color: toast === "Saved" ? "var(--ink-2)" : "var(--crit)" }}>{toast}</div>}
 

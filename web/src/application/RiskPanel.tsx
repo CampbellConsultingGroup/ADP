@@ -11,6 +11,7 @@ import { useFrameworks } from "../api/compliance";
 import { hasStatus } from "../api/client";
 import { useCan } from "../auth/permissions";
 import { Loading, Button, Restricted, Field } from "../ui/primitives";
+import { useUnsavedChanges } from "../ui/unsaved";
 
 /** APM US3 — application risk & compliance register (sensitive: gated server-side).
  *
@@ -43,9 +44,13 @@ export default function RiskPanel({ appId }: Props) {
   const [eolDate, setEolDate] = useState<string>("");
   const [eosDate, setEosDate] = useState<string>("");
   const [toast, setToast] = useState<string | null>(null);
+  // ADP-blp.63: any edit in the panel counts as unsaved until it is saved or reloaded.
+  const [touched, setTouched] = useState(false);
+  useUnsavedChanges(touched);
 
   useEffect(() => {
     if (!risk) return;
+    setTouched(false);
     setSecurityPosture(risk.security_posture ?? "");
     setVulnStatus(risk.vulnerability_status ?? "");
     setClassification(risk.data_classification ?? "");
@@ -103,6 +108,7 @@ export default function RiskPanel({ appId }: Props) {
     };
     try {
       await updateRisk.mutateAsync(body);
+      setTouched(false);
       showToast("Saved");
     } catch (e) {
       const forbidden = hasStatus(e, 403);
@@ -113,7 +119,7 @@ export default function RiskPanel({ appId }: Props) {
   const eosInPast = eosDate !== "" && new Date(eosDate) < new Date();
 
   return (
-    <div className="ui-form-stack" style={{ maxWidth: 420 }}>
+    <div className="ui-form-stack" style={{ maxWidth: 420 }} onChange={() => setTouched(true)}>
       <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Risk &amp; Compliance</h4>
       {toast && <div style={{ fontSize: 11, color: toast === "Saved" ? "var(--ink-2)" : "var(--crit)" }}>{toast}</div>}
 

@@ -34,6 +34,8 @@ import type { SearchHit } from "./ui/SearchPalette";
 import type { AppView } from "./shell";
 import { ROUTE_EVENT, entityHref, formatRoute, parseRoute, type AppRoute, type EntityKind } from "./shell/routing";
 import DesignFlowSteps from "./designs/DesignFlowSteps";
+import DesignName from "./designs/DesignName";
+import { leaveIfSafe } from "./ui/unsaved";
 
 // C4 Design has no meaning without a design (it operates on elements that only
 // exist once one does) -- clicking it from the always-visible Design nav group
@@ -89,7 +91,12 @@ export default function App(): React.ReactElement {
     else onNavigate("business"); // value streams, stages, value chains, domains, org units
   };
 
+  // ADP-blp.63: leaving a screen that holds unsaved edits asks first.
   function onNavigate(nextView: AppView) {
+    leaveIfSafe(() => navigateTo(nextView));
+  }
+
+  function navigateTo(nextView: AppView) {
     if (!currentDesignId && DESIGN_ONLY_VIEWS.includes(nextView)) {
       setPendingView(nextView);
       setView("designs");
@@ -281,6 +288,7 @@ export default function App(): React.ReactElement {
       currentView={view}
       onNavigate={onNavigate}
       designId={currentDesignId}
+      designLabel={currentDesignId ? <DesignName designId={currentDesignId} /> : undefined}
       onStartNewDesign={onStartNewDesign}
       onOpenSearchResult={onOpenSearchResult}
       topActions={<AskAiLauncher />}

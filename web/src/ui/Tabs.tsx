@@ -1,4 +1,5 @@
 import React, { useRef } from "react";
+import { leaveIfSafe } from "./unsaved";
 
 /**
  * The one tab bar (ADP-blp.45). Six screens each had their own copy of an underline tab bar and
@@ -39,7 +40,8 @@ export function Tabs<T extends string>({
     else if (event.key === "End") next = tabs.length - 1;
     else return;
     event.preventDefault();
-    onChange(tabs[next].id);
+    // ADP-blp.63: ask before leaving a tab that holds unsaved edits.
+    leaveIfSafe(() => onChange(tabs[next].id));
     ref.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
 
@@ -61,7 +63,7 @@ export function Tabs<T extends string>({
             aria-selected={selected}
             tabIndex={selected ? 0 : -1}
             className={`ui-tab${selected ? " active" : ""}`}
-            onClick={() => onChange(tab.id)}
+            onClick={() => leaveIfSafe(() => onChange(tab.id))}
             onKeyDown={onKeyDown}
           >
             {tab.label}

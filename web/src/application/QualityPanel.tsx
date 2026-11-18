@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useApplicationQuality, useUpdateApplicationQuality } from "../api/application";
 import type { ApplicationQualityMetricUpdate } from "../api/application";
 import { Loading, Button, Field } from "../ui/primitives";
+import { useUnsavedChanges } from "../ui/unsaved";
 
 /** APM US8 — quality & performance signals. Manual/advisory: never overrides health_score. */
 
@@ -18,9 +19,13 @@ export default function QualityPanel({ appId }: Props) {
   const [perfNote, setPerfNote] = useState("");
   const [ticketVolume30d, setTicketVolume30d] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  // ADP-blp.63: any edit in the panel counts as unsaved until it is saved or reloaded.
+  const [touched, setTouched] = useState(false);
+  useUnsavedChanges(touched);
 
   useEffect(() => {
     if (!quality) return;
+    setTouched(false);
     setUptimePct(quality.uptime_pct ?? "");
     setIncidentsYtd(quality.incidents_ytd?.toString() ?? "");
     setSatisfactionScore(quality.satisfaction_score?.toString() ?? "");
@@ -46,6 +51,7 @@ export default function QualityPanel({ appId }: Props) {
     };
     try {
       await updateQuality.mutateAsync(body);
+      setTouched(false);
       showToast("Saved");
     } catch {
       showToast("Save failed");
@@ -53,7 +59,7 @@ export default function QualityPanel({ appId }: Props) {
   };
 
   return (
-    <div className="ui-form-stack" style={{ maxWidth: 460 }}>
+    <div className="ui-form-stack" style={{ maxWidth: 460 }} onChange={() => setTouched(true)}>
       <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Quality &amp; Performance</h4>
       <div style={{ fontSize: 11, color: "var(--ink-3)" }}>
         Manual signals — advisory only, never overrides Health score.

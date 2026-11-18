@@ -173,6 +173,27 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review P4 batch (ADP-blp.29 .38 .41 .42 .63):
+  - .29: migration `054` indexes `audit_entries.timestamp` (the Governance activity feed and audit
+    CSV filter and sort on it). `tiktoken` removed: nothing imported it. `langchain-core` stays
+    until ADP-c5t.
+  - .41: `web/src/store` (never imported), `zustand`, `tsd` and four unused files
+    (`api/index.ts`, `api/theme.ts`, `inspection/index.ts`, `patterns/index.ts`) are gone. knip was
+    run once; its "unused exports" list was not acted on (many are used only by tests).
+  - .38: `CapabilityTree` builds the tree, orphan set and a subtree index with `useMemo`;
+    `CapabilityNode` is `React.memo` keyed on a `revision` string the tree sets from the selection
+    and focus inside that row's subtree, because `children` is a new array every render and cannot
+    be compared. `capabilityOrgView` looks up a Map built once per response.
+  - .42: `web/tests/support/apiTestUtils.tsx` (`mockFetch`, `renderWithQuery`, `lastCall`). Prefer
+    it to `vi.mock("../api/<module>")` in new tests: the real hooks, query keys and error mapping
+    run, and only the network is replaced. The ~150 existing module mocks are unchanged.
+  - .63: `ui/unsaved.ts`. A form calls `useUnsavedChanges(dirty)`; `leaveIfSafe(fn)` runs `fn` at
+    once when nothing is unsaved, else after "Discard your unsaved changes?". `Tabs` and App's
+    `onNavigate` go through it, and closing or reloading the page warns. Registered: the Strategy
+    `EditFrame` and the application Risk, Cost, Governance and Quality panels (any change inside
+    the panel marks it; a save or reload clears it). NOT covered: following an entity link and the
+    browser's Back button (no router to hold them), `ApplicationForm`, and the admin editors,
+    which keep their own guard. The rail shows the open design's name (`designs/DesignName`).
 - Fable review ADP-blp.34 and .36, closing increments (frontend only):
   - .34: `web/src/api/queryKeys.ts` `QK` holds the first element of every query key (74 names, 289
     uses); `tests/unit/query-keys.test.ts` fails if a key starts with a string literal. Write

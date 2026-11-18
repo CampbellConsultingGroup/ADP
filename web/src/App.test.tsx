@@ -66,6 +66,10 @@ vi.mock("./governance/GovernancePage", () => ({
 vi.mock("./business/BusinessPage", () => ({
   default: () => <div>BusinessPage-stub</div>,
 }));
+// The rail shows the open design's name, which it fetches (ADP-blp.63).
+vi.mock("./designs/DesignName", () => ({
+  default: ({ designId }: { designId: string }) => <>{`name-of-${designId}`}</>,
+}));
 vi.mock("./application/ApplicationPage", () => ({
   default: () => <div>ApplicationPage-stub</div>,
 }));
@@ -93,7 +97,8 @@ describe("App: onSelectDesign (regression -- opening a design lands on a populat
     await user.click(screen.getByRole("button", { name: "Open DSN-1" }));
 
     expect(await screen.findByText(/IntakePage-stub designId=DSN-1/)).toBeTruthy();
-    expect(screen.getByText("Design · DSN-1")).toBeTruthy();
+    // The rail names the design, not just its id (ADP-blp.63).
+    expect(screen.getByText("Design · name-of-DSN-1")).toBeTruthy();
   });
 });
 
