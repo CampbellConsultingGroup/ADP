@@ -173,6 +173,21 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.28 (backend test speed; tests only, no source change):
+  - `tests/conftest.py` replaces `adp.api.app.create_app` with a version that returns ONE shared app
+    per configuration (the `ADP_*` environment), with `dependency_overrides` and `app.state` cleared on
+    every call. FastAPI analyses every route's dependencies on an app's first request (about half a
+    second for 370 routes) and nearly every contract test built its own app. Suite without coverage
+    224 s -> 69 s; with coverage 525 s -> 155 s.
+  - A test that adds a route, middleware or exception handler to the app is fine: an app whose shape
+    changed is discarded after the test. A test that needs its own app calls `create_app.__wrapped__()`.
+    Guard: `tests/unit/test_shared_app.py`.
+  - `pyproject.toml` silences one warning only: aiosqlite's worker thread failing to report back when
+    an undisposed test engine is collected after its event loop closed.
+  - NOT done: one shared Postgres container for the migration tests. `tests/integration` needs
+    Docker, which this machine does not have, and CI does NOT run it either
+    (`pytest tests/ --ignore=tests/integration`), so earlier notes here saying an integration test
+    "will run in CI" are wrong: those tests currently run nowhere.
 - Fable review ADP-blp.57, .68 and .65, closing increments (frontend only):
   - The open entity is owned by the page, in the URL. `useRouteEntity(kind, initial)` in
     `shell/routing.ts` reads it from the hash and writes it back with `openEntity(kind, id)`: a
