@@ -14,6 +14,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.api.common import session_dependency
 from adp.organization import cap_mappings, regional
 from adp.organization import store as ostore
 from adp.organization.models import (
@@ -79,10 +80,7 @@ def _http(exc: OrganizationError) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))  # pragma: no cover
 
 
-async def _get_session():  # type: ignore[no-untyped-def]
-    factory = ostore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_session = session_dependency("adp.organization.store")
 
 
 def _actor(request: Request) -> str:

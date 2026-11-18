@@ -28,6 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.api.common import session_dependency
 from adp.auth.actor import actor_of
 from adp.patterns import store as pstore
 from adp.patterns.models import PatternKind
@@ -86,10 +87,7 @@ def _get_actor(request: Request) -> str:
     return actor_of(request)
 
 
-async def _get_session():  # type: ignore[no-untyped-def]
-    factory = pstore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_session = session_dependency("adp.patterns.store")
 
 
 def _get_embed() -> EmbedFn:

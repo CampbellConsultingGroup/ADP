@@ -19,6 +19,7 @@ from adp.admin.models import (
     PromptHistoryResponse,
     PromptRestoreRequest,
 )
+from adp.api.common import session_dependency
 from adp.auth.actor import actor_of
 from adp.authz.enforcement import require_action_dep
 from adp.authz.roles import ActionType
@@ -33,10 +34,7 @@ router = APIRouter(prefix="/api/v1/admin/agent-prompts", tags=["admin"])
 _require_manage_prompts = require_action_dep(ActionType.MANAGE_AGENT_PROMPTS)
 
 
-async def _get_session():
-    factory = admin_service._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_session = session_dependency("adp.admin.service")
 
 
 def _get_actor(request: Request) -> str:

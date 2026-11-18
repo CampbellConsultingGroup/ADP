@@ -44,6 +44,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.api.common import named_path_param, session_dependency
 from adp.auth.actor import actor_of
 from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
@@ -96,21 +97,12 @@ def _get_actor(request: Request) -> str:
     return actor_of(request)
 
 
-async def _get_session():
-    factory = sstore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_session = session_dependency("adp.strategy.store")
 
 
-async def _get_business_session():
-    """A second, adp.business-scoped session for link-target existence
-    checks (research.md Decision 2). Mirrors adp.business.router's own
-    `_get_application_session`."""
-    from adp.business import store as bstore
-
-    factory = bstore._get_session_factory()
-    async with factory() as session:
-        yield session
+# A second, adp.business-scoped session for link-target existence checks (research.md Decision 2).
+# Mirrors adp.business.router's own `_get_application_session`.
+_get_business_session = session_dependency("adp.business.store")
 
 
 # ── Themes ────────────────────────────────────────────────────────────────────
@@ -760,116 +752,58 @@ async def _unlink_initiative_control_mapping(
     )
 
 
-@router.post(
-    "/initiatives/{initiative_id}/control-mappings/capabilities/{control_id}/{capability_id}",
-    response_model=StrategyInitiative,
-    status_code=status.HTTP_201_CREATED,
-)
-async def link_initiative_capability_mapping(
-    initiative_id: str, control_id: str, capability_id: str,
-    session: AsyncSession = Depends(_get_session),
-    redact: InitiativeRedactor = Depends(_initiative_redactor),
-):
-    return redact(await _link_initiative_control_mapping(
-        initiative_id, control_id, MappingTargetType.CAPABILITY, capability_id, session
-    ))
+# ADP-blp.27: the five entity targets share one pair of handlers, registered from a table
+# (the same shape as adp.compliance.router's own). Each route keeps its name and its own path
+# parameter name, so the API is unchanged. The estate-wide (organization) pair below stays
+# separate: it has no target id.
 
+def _register_initiative_mapping_routes(
+    target_type: MappingTargetType, segment: str, param: str, link_description: str | None
+) -> None:
+    noun = target_type.value
+    path = f"/initiatives/{{initiative_id}}/control-mappings/{segment}/{{control_id}}/{{{param}}}"
 
-@router.delete(
-    "/initiatives/{initiative_id}/control-mappings/capabilities/{control_id}/{capability_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def unlink_initiative_capability_mapping(
-    initiative_id: str, control_id: str, capability_id: str,
-    session: AsyncSession = Depends(_get_session),
-):
-    await _unlink_initiative_control_mapping(
-        initiative_id, control_id, MappingTargetType.CAPABILITY, capability_id, session
+    async def link_mapping(
+        initiative_id: str, control_id: str, target_id: str,
+        session: AsyncSession = Depends(_get_session),
+        redact: InitiativeRedactor = Depends(_initiative_redactor),
+    ):
+        return redact(await _link_initiative_control_mapping(
+            initiative_id, control_id, target_type, target_id, session
+        ))
+
+    async def unlink_mapping(
+        initiative_id: str, control_id: str, target_id: str,
+        session: AsyncSession = Depends(_get_session),
+    ):
+        await _unlink_initiative_control_mapping(
+            initiative_id, control_id, target_type, target_id, session
+        )
+
+    router.add_api_route(
+        path, named_path_param(link_mapping, "target_id", param), methods=["POST"],
+        response_model=StrategyInitiative, status_code=status.HTTP_201_CREATED,
+        name=f"link_initiative_{noun}_mapping", description=link_description,
+    )
+    router.add_api_route(
+        path, named_path_param(unlink_mapping, "target_id", param), methods=["DELETE"],
+        status_code=status.HTTP_204_NO_CONTENT, name=f"unlink_initiative_{noun}_mapping",
     )
 
 
-@router.post(
-    "/initiatives/{initiative_id}/control-mappings/applications/{control_id}/{application_id}",
-    response_model=StrategyInitiative,
-    status_code=status.HTTP_201_CREATED,
+_INITIATIVE_MAPPING_ROUTES: tuple[tuple[MappingTargetType, str, str, str | None], ...] = (
+    (MappingTargetType.CAPABILITY, "capabilities", "capability_id", None),
+    (MappingTargetType.APPLICATION, "applications", "application_id", None),
+    (MappingTargetType.DESIGN, "designs", "design_id", None),
+    (MappingTargetType.PATTERN, "patterns", "pattern_id", None),
+    (
+        MappingTargetType.AGENT, "agents", "agent_id",
+        "ADP-321: link an initiative to an agent's control mapping (944's sixth target).",
+    ),
 )
-async def link_initiative_application_mapping(
-    initiative_id: str, control_id: str, application_id: str,
-    session: AsyncSession = Depends(_get_session),
-    redact: InitiativeRedactor = Depends(_initiative_redactor),
-):
-    return redact(await _link_initiative_control_mapping(
-        initiative_id, control_id, MappingTargetType.APPLICATION, application_id, session
-    ))
 
-
-@router.delete(
-    "/initiatives/{initiative_id}/control-mappings/applications/{control_id}/{application_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def unlink_initiative_application_mapping(
-    initiative_id: str, control_id: str, application_id: str,
-    session: AsyncSession = Depends(_get_session),
-):
-    await _unlink_initiative_control_mapping(
-        initiative_id, control_id, MappingTargetType.APPLICATION, application_id, session
-    )
-
-
-@router.post(
-    "/initiatives/{initiative_id}/control-mappings/designs/{control_id}/{design_id}",
-    response_model=StrategyInitiative,
-    status_code=status.HTTP_201_CREATED,
-)
-async def link_initiative_design_mapping(
-    initiative_id: str, control_id: str, design_id: str,
-    session: AsyncSession = Depends(_get_session),
-    redact: InitiativeRedactor = Depends(_initiative_redactor),
-):
-    return redact(await _link_initiative_control_mapping(
-        initiative_id, control_id, MappingTargetType.DESIGN, design_id, session
-    ))
-
-
-@router.delete(
-    "/initiatives/{initiative_id}/control-mappings/designs/{control_id}/{design_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def unlink_initiative_design_mapping(
-    initiative_id: str, control_id: str, design_id: str,
-    session: AsyncSession = Depends(_get_session),
-):
-    await _unlink_initiative_control_mapping(
-        initiative_id, control_id, MappingTargetType.DESIGN, design_id, session
-    )
-
-
-@router.post(
-    "/initiatives/{initiative_id}/control-mappings/patterns/{control_id}/{pattern_id}",
-    response_model=StrategyInitiative,
-    status_code=status.HTTP_201_CREATED,
-)
-async def link_initiative_pattern_mapping(
-    initiative_id: str, control_id: str, pattern_id: str,
-    session: AsyncSession = Depends(_get_session),
-    redact: InitiativeRedactor = Depends(_initiative_redactor),
-):
-    return redact(await _link_initiative_control_mapping(
-        initiative_id, control_id, MappingTargetType.PATTERN, pattern_id, session
-    ))
-
-
-@router.delete(
-    "/initiatives/{initiative_id}/control-mappings/patterns/{control_id}/{pattern_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def unlink_initiative_pattern_mapping(
-    initiative_id: str, control_id: str, pattern_id: str,
-    session: AsyncSession = Depends(_get_session),
-):
-    await _unlink_initiative_control_mapping(
-        initiative_id, control_id, MappingTargetType.PATTERN, pattern_id, session
-    )
+for _route in _INITIATIVE_MAPPING_ROUTES:
+    _register_initiative_mapping_routes(*_route)
 
 
 @router.post(
@@ -897,35 +831,6 @@ async def unlink_initiative_organization_mapping(
 ):
     await _unlink_initiative_control_mapping(
         initiative_id, control_id, MappingTargetType.ORGANIZATION, None, session
-    )
-
-
-@router.post(
-    "/initiatives/{initiative_id}/control-mappings/agents/{control_id}/{agent_id}",
-    response_model=StrategyInitiative,
-    status_code=status.HTTP_201_CREATED,
-)
-async def link_initiative_agent_mapping(
-    initiative_id: str, control_id: str, agent_id: str,
-    session: AsyncSession = Depends(_get_session),
-    redact: InitiativeRedactor = Depends(_initiative_redactor),
-):
-    """ADP-321: link an initiative to an agent's control mapping (944's sixth target)."""
-    return redact(await _link_initiative_control_mapping(
-        initiative_id, control_id, MappingTargetType.AGENT, agent_id, session
-    ))
-
-
-@router.delete(
-    "/initiatives/{initiative_id}/control-mappings/agents/{control_id}/{agent_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-)
-async def unlink_initiative_agent_mapping(
-    initiative_id: str, control_id: str, agent_id: str,
-    session: AsyncSession = Depends(_get_session),
-):
-    await _unlink_initiative_control_mapping(
-        initiative_id, control_id, MappingTargetType.AGENT, agent_id, session
     )
 
 

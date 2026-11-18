@@ -29,9 +29,7 @@ ART-IX: created_at recorded on every mapping (no updated_at -- spec.md 922 User 
 
 from __future__ import annotations
 
-import inspect
 import logging
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -39,6 +37,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.api.common import named_path_param, session_dependency
 from adp.auth.actor import actor_of
 from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
@@ -96,21 +95,13 @@ def _get_actor(request: Request) -> str:
     return actor_of(request)
 
 
-async def _get_session():
-    factory = cstore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_session = session_dependency("adp.compliance.store")
 
 
-async def _get_strategy_session():
-    """A strategy-scoped session (925-strategy-compliance-linkage, COMPLY-05 research.md D2),
-    used only by the reverse-lookup GET .../objectives and GET .../initiatives routes below --
-    mirrors adp/api/routers/designs.py's own _get_strategy_session() verbatim (ADP-d8u.2)."""
-    from adp.strategy import store as sstore
-
-    factory = sstore._get_session_factory()
-    async with factory() as session:
-        yield session
+# A strategy-scoped session (925-strategy-compliance-linkage, COMPLY-05 research.md D2), used only
+# by the reverse-lookup GET .../objectives and GET .../initiatives routes below -- mirrors
+# adp/api/routers/designs.py's own _get_strategy_session() verbatim (ADP-d8u.2).
+_get_strategy_session = session_dependency("adp.strategy.store")
 
 
 # ── Regulatory Frameworks ─────────────────────────────────────────────────────
@@ -450,25 +441,6 @@ class _EntityMappingRoute:
     """Extra dependencies on the reverse "initiatives" route (application: governance read)."""
 
 
-def _named_target(handler: Callable[..., Awaitable[Any]], param: str) -> Callable[..., Any]:
-    """`handler` takes the target as `target_id`; the published API names it per target
-    ("capability_id", "agent_id", ...). This returns the same handler under that name, so the
-    paths and the OpenAPI document are exactly what the hand-written routes produced."""
-    signature = inspect.signature(handler)
-    renamed = [
-        p.replace(name=param) if p.name == "target_id" else p
-        for p in signature.parameters.values()
-    ]
-
-    async def endpoint(**kwargs: Any) -> Any:
-        kwargs["target_id"] = kwargs.pop(param)
-        return await handler(**kwargs)
-
-    endpoint.__signature__ = signature.replace(parameters=renamed)  # type: ignore[attr-defined]
-    endpoint.__doc__ = handler.__doc__
-    return endpoint
-
-
 def _register_entity_mapping_writes(spec: _EntityMappingRoute) -> None:
     noun = spec.target_type.value
     path = f"/controls/{{control_id}}/mappings/{spec.segment}/{{{spec.param}}}"
@@ -506,12 +478,12 @@ def _register_entity_mapping_writes(spec: _EntityMappingRoute) -> None:
         )
 
     router.add_api_route(
-        path, _named_target(upsert_mapping, spec.param), methods=["PUT"],
+        path, named_path_param(upsert_mapping, "target_id", spec.param), methods=["PUT"],
         response_model=ControlMapping,
         name=f"upsert_{noun}_mapping",
     )
     router.add_api_route(
-        path, _named_target(delete_mapping, spec.param), methods=["DELETE"],
+        path, named_path_param(delete_mapping, "target_id", spec.param), methods=["DELETE"],
         status_code=status.HTTP_204_NO_CONTENT,
         name=f"delete_{noun}_mapping",
     )
@@ -746,7 +718,7 @@ def _register_entity_mapping_initiatives(spec: _EntityMappingRoute) -> None:
 
     router.add_api_route(
         f"/controls/{{control_id}}/mappings/{spec.segment}/{{{spec.param}}}/initiatives",
-        _named_target(list_mapping_initiatives, spec.param),
+        named_path_param(list_mapping_initiatives, "target_id", spec.param),
         methods=["GET"],
         description=spec.initiatives_description,
         response_model=StrategyInitiativeListResponse,

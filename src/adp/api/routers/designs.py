@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import exc as sa_exc
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.api.common import session_dependency
 from adp.audit.writer import next_audit_id
 from adp.auth.actor import actor_of
 from adp.compliance.models import ControlMappingListResponse
@@ -34,24 +35,14 @@ async def _get_design_store():  # type: ignore[return]
     return await get_design_store()
 
 
-async def _get_strategy_session():
-    """A strategy-scoped session (ADP-d8u.2), used only by the reverse-lookup
-    GET /designs/{id}/objectives endpoint below."""
-    from adp.strategy import store as sstore
-
-    factory = sstore._get_session_factory()
-    async with factory() as session:
-        yield session
+# A strategy-scoped session (ADP-d8u.2), used only by the reverse-lookup GET
+# /designs/{id}/objectives endpoint below.
+_get_strategy_session = session_dependency("adp.strategy.store")
 
 
-async def _get_compliance_session():
-    """A compliance-scoped session (COMPLY-02 research.md D7), used only by the
-    reverse-lookup GET /designs/{id}/compliance-mappings endpoint below."""
-    from adp.compliance import store as cstore
-
-    factory = cstore._get_session_factory()
-    async with factory() as session:
-        yield session
+# A compliance-scoped session (COMPLY-02 research.md D7), used only by the reverse-lookup GET
+# /designs/{id}/compliance-mappings endpoint below.
+_get_compliance_session = session_dependency("adp.compliance.store")
 
 
 def _get_actor(request: Request) -> str:

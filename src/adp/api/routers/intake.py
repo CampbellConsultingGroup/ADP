@@ -17,6 +17,7 @@ from typing import Literal
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
+from adp.api.common import session_dependency
 from adp.auth.actor import actor_of
 from adp.intake.models import (
     IntakeSubmission,
@@ -194,18 +195,10 @@ async def _get_op_store():  # type: ignore[return]
     return await get_operation_store()
 
 
-async def _get_business_session():
-    from adp.business import store as bstore
-    factory = bstore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_business_session = session_dependency("adp.business.store")
 
 
-async def _get_application_session():
-    from adp.application import store as astore
-    factory = astore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_application_session = session_dependency("adp.application.store")
 
 
 def _resolve_extraction_model(model: str | None = None) -> str:

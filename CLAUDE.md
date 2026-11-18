@@ -173,6 +173,18 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.27, second part (no API change; `generated/openapi.json` unchanged):
+  - New `adp.api.common`: `session_dependency("adp.<domain>.store")` replaces the four-line
+    `_get_session` / `_get_<other>_session` functions in 24 places (the module is named and imported on
+    first use, so cross-domain reverse lookups create no import cycle; each call returns a distinct
+    function, so `app.dependency_overrides[router._get_session]` works as before). `named_path_param`
+    (moved from the compliance router) lets one handler serve routes with differently named path
+    parameters.
+  - `adp.strategy.router._INITIATIVE_MAPPING_ROUTES`: the initiative control-mapping link/unlink routes
+    for the five entity targets are registered from a table, like the compliance router's.
+  - Not changed: the `_get_*_session_factory` dependencies (chat, business) and the per-target
+    "compliance-mappings" reverse-lookup route on each target's own router (one small route each; the
+    agentic router may not import other domains).
 - Fable review ADP-blp.27 (compliance mappings driven from one table; no API change):
   - `adp.compliance.store._ENTITY_TARGETS` describes each entity mapping target (table, key column,
     existence rule). `upsert_entity_mapping` / `list_mappings_for_entity` / `delete_entity_mapping` take a
