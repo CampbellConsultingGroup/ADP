@@ -140,11 +140,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
               <button
                 type="button"
                 onClick={() => setShowHealthModal(true)}
-                style={{
-                  fontSize: 11, padding: "1px 8px", borderRadius: 4,
-                  border: "1px solid var(--accent)", background: "none", color: "var(--accent)",
-                  cursor: "pointer",
-                }}
+                className="ui-btn ui-btn-xs"
               >
                 Assess Health
               </button>
@@ -161,11 +157,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
               <button
                 type="button"
                 onClick={() => setShowBusinessValueModal(true)}
-                style={{
-                  fontSize: 11, padding: "1px 8px", borderRadius: 4,
-                  border: "1px solid var(--accent)", background: "none", color: "var(--accent)",
-                  cursor: "pointer",
-                }}
+                className="ui-btn ui-btn-xs"
               >
                 Assess Business Value
               </button>

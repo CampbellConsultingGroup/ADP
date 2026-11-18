@@ -71,8 +71,6 @@ export function technicalOptions(caps: { id: string; name: string; level: number
 }
 
 const sectionHead: React.CSSProperties = { fontSize: 12, fontWeight: 600, color: "var(--ink-2)", margin: "14px 0 6px" };
-const removeBtn: React.CSSProperties = { background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "var(--crit)" };
-
 function LinkSection({
   title,
   hint,
@@ -119,7 +117,7 @@ function LinkSection({
             <span style={{ flex: 1 }}>{l.label}</span>
             {canWrite && (
               <button
-                style={removeBtn}
+                className="ui-btn-link danger"
                 aria-label={`Remove ${l.label}`}
                 onClick={() => run(() => remove.mutateAsync({ id: acId, kind, targetId: l.id }))}
               >

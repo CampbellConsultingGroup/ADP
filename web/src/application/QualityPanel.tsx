@@ -1,16 +1,12 @@
 import { useEffect, useState } from "react";
 import { useApplicationQuality, useUpdateApplicationQuality } from "../api/application";
 import type { ApplicationQualityMetricUpdate } from "../api/application";
-import { Loading, Button } from "../ui/primitives";
+import { Loading, Button, Field } from "../ui/primitives";
 
 /** APM US8 — quality & performance signals. Manual/advisory: never overrides health_score. */
 
 interface Props { appId: string; }
 
-const field: React.CSSProperties = {
-  width: "100%", padding: "6px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 4,
-};
-const label: React.CSSProperties = { fontSize: 12, color: "var(--ink-2)" };
 
 export default function QualityPanel({ appId }: Props) {
   const { data: quality, isLoading, error } = useApplicationQuality(appId);
@@ -57,32 +53,42 @@ export default function QualityPanel({ appId }: Props) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 460 }}>
+    <div className="ui-form-stack" style={{ maxWidth: 460 }}>
       <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Quality &amp; Performance</h4>
       <div style={{ fontSize: 11, color: "var(--ink-3)" }}>
         Manual signals — advisory only, never overrides Health score.
       </div>
       {toast && <div style={{ fontSize: 11, color: toast === "Saved" ? "var(--ink-2)" : "var(--crit)" }}>{toast}</div>}
 
-      <label style={label}>Uptime %
-        <input style={field} type="number" min={0} max={100} step={0.01} value={uptimePct} onChange={(e) => setUptimePct(e.target.value)} placeholder="e.g. 99.95" />
-      </label>
+      <Field label="Uptime %">
+        {(c) => (
+          <input className="ui-input" {...c} type="number" min={0} max={100} step={0.01} value={uptimePct} onChange={(e) => setUptimePct(e.target.value)} placeholder="e.g. 99.95" />
+        )}
+      </Field>
 
-      <label style={label}>Incidents (YTD)
-        <input style={field} type="number" min={0} step={1} value={incidentsYtd} onChange={(e) => setIncidentsYtd(e.target.value)} />
-      </label>
+      <Field label="Incidents (YTD)">
+        {(c) => (
+          <input className="ui-input" {...c} type="number" min={0} step={1} value={incidentsYtd} onChange={(e) => setIncidentsYtd(e.target.value)} />
+        )}
+      </Field>
 
-      <label style={label}>Satisfaction Score (1–5)
-        <input style={field} type="number" min={1} max={5} step={1} value={satisfactionScore} onChange={(e) => setSatisfactionScore(e.target.value)} />
-      </label>
+      <Field label="Satisfaction Score (1–5)">
+        {(c) => (
+          <input className="ui-input" {...c} type="number" min={1} max={5} step={1} value={satisfactionScore} onChange={(e) => setSatisfactionScore(e.target.value)} />
+        )}
+      </Field>
 
-      <label style={label}>Performance Note
-        <textarea style={{ ...field, height: 60 }} value={perfNote} onChange={(e) => setPerfNote(e.target.value)} />
-      </label>
+      <Field label="Performance Note">
+        {(c) => (
+          <textarea className="ui-textarea" {...c} style={{ height: 60 }} value={perfNote} onChange={(e) => setPerfNote(e.target.value)} />
+        )}
+      </Field>
 
-      <label style={label}>Ticket Volume (30d)
-        <input style={field} type="number" min={0} step={1} value={ticketVolume30d} onChange={(e) => setTicketVolume30d(e.target.value)} />
-      </label>
+      <Field label="Ticket Volume (30d)">
+        {(c) => (
+          <input className="ui-input" {...c} type="number" min={0} step={1} value={ticketVolume30d} onChange={(e) => setTicketVolume30d(e.target.value)} />
+        )}
+      </Field>
 
       <div>
         <Button variant="primary" onClick={handleSave} disabled={updateQuality.isPending}>

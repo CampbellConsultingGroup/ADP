@@ -141,11 +141,7 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
             onClick={() => setShowHealthModal(true)}
             disabled={!initial}
             title={initial ? undefined : "Save the application first, then assess health"}
-            style={{
-              fontSize: 12, padding: "3px 10px", borderRadius: 4,
-              border: "1px solid var(--accent)", background: "none", color: "var(--accent)",
-              cursor: initial ? "pointer" : "not-allowed", opacity: initial ? 1 : 0.5,
-            }}
+            className="ui-btn ui-btn-xs"
           >
             Assess Health
           </button>
@@ -174,11 +170,7 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
             onClick={() => setShowBusinessValueModal(true)}
             disabled={!initial}
             title={initial ? undefined : "Save the application first, then assess business value"}
-            style={{
-              fontSize: 12, padding: "3px 10px", borderRadius: 4,
-              border: "1px solid var(--accent)", background: "none", color: "var(--accent)",
-              cursor: initial ? "pointer" : "not-allowed", opacity: initial ? 1 : 0.5,
-            }}
+            className="ui-btn ui-btn-xs"
           >
             Assess Business Value
           </button>
@@ -246,10 +238,10 @@ export default function ApplicationForm({ initial, onSave, onCancel, saving }: P
       </label>
 
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="submit" disabled={saving} style={{ padding: "6px 16px", background: "var(--accent)", color: "var(--surface)", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 13 }}>
+        <button type="submit" disabled={saving} className="ui-btn ui-btn-primary ui-btn-sm">
           {saving ? "Saving…" : "Save"}
         </button>
-        <button type="button" onClick={onCancel} style={{ padding: "6px 14px", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", fontSize: 13 }}>
+        <button type="button" onClick={onCancel} className="ui-btn ui-btn-sm">
           Cancel
         </button>
       </div>

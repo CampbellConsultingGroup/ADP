@@ -62,10 +62,7 @@ export default function ObjectiveLinksPanel({ appId }: Props) {
           <span style={{ flex: 1, fontSize: 13 }}>{objective.statement}</span>
           <button
             onClick={() => unlink.mutate(objective.id)}
-            style={{
-              fontSize: 11, color: "var(--crit)", background: "none", border: "none",
-              cursor: "pointer",
-            }}
+            className="ui-btn-link danger"
           >
             ✕
           </button>
@@ -88,10 +85,7 @@ export default function ObjectiveLinksPanel({ appId }: Props) {
           </select>
           <button
             onClick={handleLink}
-            style={{
-              fontSize: 12, padding: "4px 10px", background: "var(--accent)",
-              color: "var(--surface)", border: "none", borderRadius: 4, cursor: "pointer",
-            }}
+            className="ui-btn ui-btn-primary ui-btn-sm"
           >
             Link
           </button>

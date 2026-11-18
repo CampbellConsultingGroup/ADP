@@ -47,7 +47,7 @@ export default function DomainIntegrationEditor({ appId }: Props) {
             onClick={async () => {
               if (await confirmAction("Delete this integration?")) deleteIntegration.mutate(item.id);
             }}
-            style={{ fontSize: 11, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+            className="ui-btn-link danger">✕</button>
         </div>
       ))}
       <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -59,7 +59,7 @@ export default function DomainIntegrationEditor({ appId }: Props) {
         <select value={direction} onChange={e => setDirection(e.target.value as IntegrationDir)} style={field}>
           {DIRECTIONS.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
-        <button onClick={handleCreate} style={{ fontSize: 12, padding: "4px 10px", background: "var(--accent)", color: "var(--surface)", border: "none", borderRadius: 4, cursor: "pointer" }}>Add</button>
+        <button onClick={handleCreate} className="ui-btn ui-btn-primary ui-btn-sm">Add</button>
       </div>
     </div>
   );

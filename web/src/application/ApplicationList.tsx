@@ -37,7 +37,7 @@ export default function ApplicationList({ apps, selectedId, onSelect, onAdd }: P
           <button
             key={app.id}
             onClick={() => onSelect(app.id)}
-            style={{
+            className="ui-btn-plain" style={{
               display: "flex", flexDirection: "column", alignItems: "flex-start",
               padding: "10px 14px", borderBottom: "1px solid var(--border)",
               background: active ? "var(--accent-wash)" : "transparent",

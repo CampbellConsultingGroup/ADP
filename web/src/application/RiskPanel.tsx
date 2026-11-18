@@ -10,7 +10,7 @@ import type {
 import { useFrameworks } from "../api/compliance";
 import { hasStatus } from "../api/client";
 import { useCan } from "../auth/permissions";
-import { Loading, Button, Restricted } from "../ui/primitives";
+import { Loading, Button, Restricted, Field } from "../ui/primitives";
 
 /** APM US3 — application risk & compliance register (sensitive: gated server-side).
  *
@@ -28,10 +28,6 @@ const VULN_OPTIONS: (VulnerabilityStatus | "")[] = ["", "none_known", "open_low"
 const CLASS_OPTIONS: (DataClassification | "")[] = ["", "public", "internal", "confidential", "restricted"];
 const DR_BC_OPTIONS: (DrBcStatus | "")[] = ["", "tested", "documented", "none"];
 
-const field: React.CSSProperties = {
-  width: "100%", padding: "6px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 4,
-};
-const label: React.CSSProperties = { fontSize: 12, color: "var(--ink-2)" };
 
 export default function RiskPanel({ appId }: Props) {
   const { data: risk, isLoading, error } = useApplicationRisk(appId);
@@ -117,29 +113,35 @@ export default function RiskPanel({ appId }: Props) {
   const eosInPast = eosDate !== "" && new Date(eosDate) < new Date();
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 420 }}>
+    <div className="ui-form-stack" style={{ maxWidth: 420 }}>
       <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Risk &amp; Compliance</h4>
       {toast && <div style={{ fontSize: 11, color: toast === "Saved" ? "var(--ink-2)" : "var(--crit)" }}>{toast}</div>}
 
-      <label style={label}>Security Posture
-        <select style={field} value={securityPosture} onChange={(e) => setSecurityPosture(e.target.value)}>
-          {SECURITY_OPTIONS.map((o) => <option key={o} value={o}>{o || "— none —"}</option>)}
-        </select>
-      </label>
+      <Field label="Security Posture">
+        {(c) => (
+          <select className="ui-select" {...c} value={securityPosture} onChange={(e) => setSecurityPosture(e.target.value)}>
+            {SECURITY_OPTIONS.map((o) => <option key={o} value={o}>{o || "— none —"}</option>)}
+          </select>
+        )}
+      </Field>
 
-      <label style={label}>Vulnerability Status
-        <select style={field} value={vulnStatus} onChange={(e) => setVulnStatus(e.target.value)}>
-          {VULN_OPTIONS.map((o) => <option key={o} value={o}>{o || "— none —"}</option>)}
-        </select>
-      </label>
+      <Field label="Vulnerability Status">
+        {(c) => (
+          <select className="ui-select" {...c} value={vulnStatus} onChange={(e) => setVulnStatus(e.target.value)}>
+            {VULN_OPTIONS.map((o) => <option key={o} value={o}>{o || "— none —"}</option>)}
+          </select>
+        )}
+      </Field>
 
-      <label style={label}>Data Classification
-        <select style={field} value={classification} onChange={(e) => setClassification(e.target.value)}>
-          {CLASS_OPTIONS.map((o) => <option key={o} value={o}>{o || "— none —"}</option>)}
-        </select>
-      </label>
+      <Field label="Data Classification">
+        {(c) => (
+          <select className="ui-select" {...c} value={classification} onChange={(e) => setClassification(e.target.value)}>
+            {CLASS_OPTIONS.map((o) => <option key={o} value={o}>{o || "— none —"}</option>)}
+          </select>
+        )}
+      </Field>
 
-      <div style={label}>
+      <div className="ui-label">
         Regulatory Frameworks
         <div style={{ marginTop: 4, display: "flex", flexDirection: "column", gap: 4 }}>
           {selectableFrameworks.length === 0 && (
@@ -172,20 +174,25 @@ export default function RiskPanel({ appId }: Props) {
         </div>
       </div>
 
-      <label style={label}>DR / BC Status
-        <select style={field} value={drBc} onChange={(e) => setDrBc(e.target.value)}>
-          {DR_BC_OPTIONS.map((o) => <option key={o} value={o}>{o || "— none —"}</option>)}
-        </select>
-      </label>
+      <Field label="DR / BC Status">
+        {(c) => (
+          <select className="ui-select" {...c} value={drBc} onChange={(e) => setDrBc(e.target.value)}>
+            {DR_BC_OPTIONS.map((o) => <option key={o} value={o}>{o || "— none —"}</option>)}
+          </select>
+        )}
+      </Field>
 
-      <label style={label}>End-of-Life Date
-        <input style={field} type="date" value={eolDate} onChange={(e) => setEolDate(e.target.value)} />
-      </label>
+      <Field label="End-of-Life Date">
+        {(c) => (
+          <input className="ui-input" {...c} type="date" value={eolDate} onChange={(e) => setEolDate(e.target.value)} />
+        )}
+      </Field>
 
-      <label style={label}>
-        End-of-Support Date
-        <input style={field} type="date" value={eosDate} onChange={(e) => setEosDate(e.target.value)} />
-      </label>
+      <Field label="End-of-Support Date">
+        {(c) => (
+          <input className="ui-input" {...c} type="date" value={eosDate} onChange={(e) => setEosDate(e.target.value)} />
+        )}
+      </Field>
       {eosInPast && (
         <div style={{ fontSize: 12, color: "var(--crit)" }}>⚠ Out of support — this date is in the past.</div>
       )}

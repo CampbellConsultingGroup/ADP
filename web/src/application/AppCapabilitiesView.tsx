@@ -10,6 +10,7 @@ import AppCapDetail from "./AppCapDetail";
 import AppCapTree from "./AppCapTree";
 import CapFindingsViews, { type FindingsMode } from "./CapFindingsViews";
 import { AppCapNavContext, useCanWriteApplications } from "./appCapNav";
+import { Tabs } from "../ui/Tabs";
 
 /** Gaps list: every L3 with no technical capability, labelled with its L1/L2 path. */
 export function missingTechGaps(items: ApplicationCapability[]): { id: string; name: string; path: string }[] {
@@ -44,16 +45,6 @@ function Guidance(): React.ReactElement {
   );
 }
 
-const tab = (active: boolean): React.CSSProperties => ({
-  fontSize: 12,
-  padding: "3px 10px",
-  border: "1px solid var(--border)",
-  borderRadius: 4,
-  background: active ? "var(--accent)" : "var(--surface)",
-  color: active ? "#fff" : "var(--ink-2)",
-  cursor: "pointer",
-});
-
 export default function AppCapabilitiesView({ initialId = null }: { initialId?: string | null }): React.ReactElement {
   const { data, isLoading, error } = useAppCapabilities();
   const canWrite = useCanWriteApplications();
@@ -71,20 +62,22 @@ export default function AppCapabilitiesView({ initialId = null }: { initialId?: 
     <div style={{ display: "flex", height: "100%", overflow: "hidden" }}>
       <div style={{ width: 420, borderRight: "1px solid var(--border)", overflow: "auto", padding: 14, flexShrink: 0 }}>
         <Guidance />
-        <div role="tablist" aria-label="Application capability views" style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
-          <button role="tab" aria-selected={mode === "tree"} style={tab(mode === "tree")} onClick={() => setMode("tree")}>
-            Catalog
-          </button>
-          <button role="tab" aria-selected={mode === "missing"} style={tab(mode === "missing")} onClick={() => setMode("missing")}>
-            Missing technical capability ({gaps.length})
-          </button>
-          {/* 938-capability-model-analysis US5 */}
-          {([["overlaps", "Overlaps"], ["gaps", "Gaps"], ["shared", "Shared"], ["redundant", "Redundant"]] as [FindingsMode, string][]).map(([m, label]) => (
-            <button key={m} role="tab" aria-selected={mode === m} style={tab(mode === m)} onClick={() => setMode(m)}>
-              {label}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          variant="pill"
+          label="Application capability views"
+          active={mode}
+          onChange={setMode}
+          style={{ marginBottom: 10 }}
+          tabs={[
+            { id: "tree", label: "Catalog" },
+            { id: "missing", label: `Missing technical capability (${gaps.length})` },
+            // 938-capability-model-analysis US5
+            { id: "overlaps", label: "Overlaps" },
+            { id: "gaps", label: "Gaps" },
+            { id: "shared", label: "Shared" },
+            { id: "redundant", label: "Redundant" },
+          ]}
+        />
         {mode === "tree" && <AppCapTree items={items} selectedId={selected} onSelect={setSelectedId} canWrite={canWrite} />}
         {mode === "missing" && (
           <div aria-label="Missing technical capability">
@@ -96,7 +89,7 @@ export default function AppCapabilitiesView({ initialId = null }: { initialId?: 
                   <li key={g.id} style={{ padding: "4px 0" }}>
                     <button
                       onClick={() => setSelectedId(g.id)}
-                      style={{ background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
+                      className="ui-btn-plain" style={{ background: "none", border: "none", cursor: "pointer", textAlign: "left", padding: 0 }}
                     >
                       <div style={{ fontSize: 13, color: "var(--ink)" }}>{g.name}</div>
                       <div style={{ fontSize: 11, color: "var(--ink-3)" }}>{g.path}</div>

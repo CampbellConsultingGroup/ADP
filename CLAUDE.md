@@ -173,6 +173,19 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.61 and .46, closing increments (frontend only):
+  - .61: Agents and Patterns lists use `EmptyState`. An empty registry says what it is and what to do
+    next (or that the role cannot add); when filters hide everything it says so and offers Clear filters.
+  - .46: `Table` primitive (`columns`, `caption`, `dense`; rows are plain `<tr>/<td>`, `tr.clickable`)
+    on the Agents, Patterns and Cost tables. Button classes `ui-btn-xs`, `ui-btn-link` (`danger`,
+    `muted`: a text action in a row) and `ui-btn-plain` (a row, expander or name; keeps its own layout
+    `style`). `ui-form-stack` spaces a column of `Field`s. The Risk, Cost, Governance and Quality panels
+    use `Field` + `ui-input`; 63 hand-styled buttons in `application/` and `admin/` use the classes;
+    the application capability views use `Tabs`.
+  - Lint: a `<button>` with `style` and no `className` is an error. 55 files outside `application/`
+    and `admin/` (147 buttons) are listed as a baseline in `web/eslint.config.js`: convert a file and
+    remove it from the list, never add to it. Most forms and tables elsewhere are still hand-styled.
+  - ADP-blp.26 closed without unifying the table declarations: the drift guard covers the risk.
 - Fable review ADP-blp.27, third part: the two largest backend files split (no API change;
   `generated/openapi.json` unchanged).
   - `adp.application.store` (2,317 lines -> 479) keeps the session factory, application CRUD and

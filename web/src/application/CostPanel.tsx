@@ -4,7 +4,7 @@ import type { ApplicationCostUpdate, CostBucket, TcoBucketKey } from "../api/app
 import { TCO_BUCKET_KEYS } from "../api/application";
 import { hasStatus } from "../api/client";
 import { useCan } from "../auth/permissions";
-import { Loading, Button, Restricted } from "../ui/primitives";
+import { Loading, Button, Restricted, Field, Table } from "../ui/primitives";
 
 /** APM US4 — Total Cost of Ownership (ADP-9x6, sensitive: gated server-side). */
 
@@ -23,10 +23,6 @@ const BUCKET_LABELS: Record<TcoBucketKey, string> = {
 
 const zeroBucket = (): CostBucket => ({ one_time: "0", annual: "0" });
 
-const field: React.CSSProperties = {
-  width: "100%", padding: "5px 7px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 4,
-};
-const label: React.CSSProperties = { fontSize: 12, color: "var(--ink-2)" };
 
 function formatMoney(value: string): string {
   const n = Number(value);
@@ -86,7 +82,7 @@ export default function CostPanel({ appId }: Props) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, maxWidth: 560 }}>
+    <div className="ui-form-stack" style={{ maxWidth: 560 }}>
       <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Total Cost of Ownership</h4>
       {toast && <div style={{ fontSize: 11, color: toast === "Saved" ? "var(--ink-2)" : "var(--crit)" }}>{toast}</div>}
 
@@ -103,39 +99,36 @@ export default function CostPanel({ appId }: Props) {
       )}
 
       <div style={{ display: "flex", gap: 10 }}>
-        <label style={{ ...label, flex: 1 }}>Currency
-          <input style={field} value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} />
-        </label>
-        <label style={{ ...label, flex: 1 }}>Horizon (years)
-          <input style={field} type="number" min={1} value={horizon} onChange={(e) => setHorizon(e.target.value)} />
-        </label>
+        <div style={{ flex: 1 }}>
+          <Field label="Currency">
+            {(c) => <input className="ui-input" {...c} value={currency} onChange={(e) => setCurrency(e.target.value.toUpperCase())} maxLength={3} />}
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Horizon (years)">
+            {(c) => <input className="ui-input" {...c} type="number" min={1} value={horizon} onChange={(e) => setHorizon(e.target.value)} />}
+          </Field>
+        </div>
       </div>
 
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 12 }}>
-          <thead>
-            <tr style={{ textAlign: "left", color: "var(--ink-3)" }}>
-              <th style={{ padding: "4px 6px", fontWeight: 500 }}>Bucket</th>
-              <th style={{ padding: "4px 6px", fontWeight: 500 }}>One-Time</th>
-              <th style={{ padding: "4px 6px", fontWeight: 500 }}>Annual</th>
-            </tr>
-          </thead>
-          <tbody>
+      <Table dense caption="Cost buckets" columns={["Bucket", "One-Time", "Annual"]}>
             {TCO_BUCKET_KEYS.map((key) => (
               <tr key={key}>
-                <td style={{ padding: "4px 6px", color: "var(--ink-2)", whiteSpace: "nowrap" }}>{BUCKET_LABELS[key]}</td>
-                <td style={{ padding: "4px 6px" }}>
+                <td style={{ color: "var(--ink-2)", whiteSpace: "nowrap" }}>{BUCKET_LABELS[key]}</td>
+                <td>
                   <input
-                    style={field}
+                    className="ui-input"
+                    aria-label={`${BUCKET_LABELS[key]} one-time cost`}
                     type="number"
                     step="0.01"
                     value={buckets[key]?.one_time ?? "0"}
                     onChange={(e) => setBucketField(key, "one_time", e.target.value)}
                   />
                 </td>
-                <td style={{ padding: "4px 6px" }}>
+                <td>
                   <input
-                    style={field}
+                    className="ui-input"
+                    aria-label={`${BUCKET_LABELS[key]} annual cost`}
                     type="number"
                     step="0.01"
                     value={buckets[key]?.annual ?? "0"}
@@ -144,9 +137,7 @@ export default function CostPanel({ appId }: Props) {
                 </td>
               </tr>
             ))}
-          </tbody>
-        </table>
-      </div>
+      </Table>
 
       <div>
         <Button variant="primary" onClick={handleSave} disabled={updateCost.isPending || !canWrite.allowed} title={canWrite.reason}>

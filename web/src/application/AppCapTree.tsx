@@ -46,15 +46,6 @@ export function MissingTechBadge(): React.ReactElement {
   );
 }
 
-const linkBtn: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  fontSize: 11,
-  color: "var(--accent)",
-  padding: "1px 4px",
-};
-
 export function NewAppCapForm({
   parentId,
   onDone,
@@ -88,8 +79,8 @@ export function NewAppCapForm({
         placeholder={parentId ? "Child capability name" : "Level 1 capability name"}
         style={{ flex: 1, fontSize: 13, padding: "3px 6px", border: "1px solid var(--border)", borderRadius: 3 }}
       />
-      <button type="submit" disabled={create.isPending || !name.trim()} style={linkBtn}>Add</button>
-      <button type="button" onClick={() => onDone()} style={{ ...linkBtn, color: "var(--ink-3)" }}>Cancel</button>
+      <button type="submit" disabled={create.isPending || !name.trim()} className="ui-btn-link">Add</button>
+      <button type="button" onClick={() => onDone()} className="ui-btn-link muted">Cancel</button>
       {error && <span role="alert" style={{ fontSize: 11, color: "var(--crit)" }}>{error}</span>}
     </form>
   );
@@ -127,7 +118,7 @@ function Node({
           <button
             onClick={() => setExpanded((e) => !e)}
             aria-label={expanded ? `Collapse ${node.name}` : `Expand ${node.name}`}
-            style={{ fontSize: 10, background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: 0, minWidth: 12 }}
+            className="ui-btn-plain" style={{ fontSize: 10, background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: 0, minWidth: 12 }}
           >
             {expanded ? "▾" : "▸"}
           </button>
@@ -137,7 +128,7 @@ function Node({
         <button
           onClick={() => onSelect(node.id)}
           aria-current={selected ? "true" : undefined}
-          style={{ flex: 1, textAlign: "left", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--ink)", padding: 0, fontWeight: selected ? 600 : 400 }}
+          className="ui-btn-plain" style={{ flex: 1, textAlign: "left", fontSize: 13, background: "none", border: "none", cursor: "pointer", color: "var(--ink)", padding: 0, fontWeight: selected ? 600 : 400 }}
         >
           {node.name}
         </button>
@@ -149,7 +140,7 @@ function Node({
         )}
         <span style={{ fontSize: 10, color: "var(--ink-3)" }}>L{node.level}</span>
         {canWrite && node.level < 3 && (
-          <button onClick={() => setAdding((a) => !a)} style={{ ...linkBtn, fontSize: 10 }} aria-label={`Add child to ${node.name}`}>
+          <button onClick={() => setAdding((a) => !a)} className="ui-btn-link" aria-label={`Add child to ${node.name}`}>
             + child
           </button>
         )}
@@ -189,7 +180,7 @@ export default function AppCapTree({
         {canWrite && (
           <button
             onClick={() => setAddingRoot((a) => !a)}
-            style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "1px solid var(--accent)", borderRadius: 4, padding: "2px 8px", cursor: "pointer" }}
+            className="ui-btn ui-btn-xs"
           >
             + Root
           </button>

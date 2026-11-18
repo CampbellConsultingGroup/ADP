@@ -72,7 +72,7 @@ export default function TechCapImpactPanel({ tcId }: { tcId: string }): React.Re
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11, color: "var(--ink-3)" }}
+        className="ui-btn-plain" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11, color: "var(--ink-3)" }}
       >
         {open ? "▾" : "▸"} Impact
       </button>

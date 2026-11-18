@@ -62,10 +62,10 @@ export default function IntegrationForm({ apps, defaultSourceId, onSave, onCance
       </label>
 
       <div style={{ display: "flex", gap: 8 }}>
-        <button type="submit" disabled={saving} style={{ fontSize: 12, padding: "5px 14px", background: "var(--accent)", color: "var(--surface)", border: "none", borderRadius: 4, cursor: "pointer" }}>
+        <button type="submit" disabled={saving} className="ui-btn ui-btn-primary ui-btn-sm">
           {saving ? "Saving…" : "Save"}
         </button>
-        <button type="button" onClick={onCancel} style={{ fontSize: 12, padding: "5px 12px", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer" }}>
+        <button type="button" onClick={onCancel} className="ui-btn ui-btn-sm">
           Cancel
         </button>
       </div>

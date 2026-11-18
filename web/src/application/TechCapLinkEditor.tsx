@@ -43,7 +43,7 @@ export default function TechCapLinkEditor({ appId }: Props) {
             {group.map(link => (
               <div key={`${link.tech_cap_id}-${link.usage_type}`} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
                 <span style={{ flex: 1, fontSize: 13 }}>{link.tech_cap_name}</span>
-                <button onClick={() => deleteLink.mutate({ tcId: link.tech_cap_id, usageType: link.usage_type })} style={{ fontSize: 11, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                <button onClick={() => deleteLink.mutate({ tcId: link.tech_cap_id, usageType: link.usage_type })} className="ui-btn-link danger">✕</button>
               </div>
             ))}
           </div>
@@ -58,7 +58,7 @@ export default function TechCapLinkEditor({ appId }: Props) {
           <select value={usageType} onChange={e => setUsageType(e.target.value as UsageType)} style={{ fontSize: 12, padding: "4px 6px", border: "1px solid var(--border)", borderRadius: 4 }}>
             {USAGE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
-          <button onClick={handleLink} style={{ fontSize: 12, padding: "4px 10px", background: "var(--accent)", color: "var(--surface)", border: "none", borderRadius: 4, cursor: "pointer" }}>Link</button>
+          <button onClick={handleLink} className="ui-btn ui-btn-primary ui-btn-sm">Link</button>
         </div>
       )}
     </div>

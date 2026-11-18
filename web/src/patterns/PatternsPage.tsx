@@ -1,7 +1,7 @@
 /** EA pattern catalog (935-pattern-registry US1): every pattern version, filterable by kind,
  * lifecycle, tag and text; opens a version, or imports a new one. */
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { PATTERN_KINDS, PATTERN_LIFECYCLES, usePatterns } from "../api/patterns";
 import type { PatternFilters, PatternKind, PatternLifecycle } from "../api/patterns";
 import { StatusBadge } from "../ui";
@@ -11,9 +11,7 @@ import { KIND_LABELS, LIFECYCLE_LABELS, LIFECYCLE_TONES } from "./labels";
 import PatternVersion from "./PatternVersion";
 import { useCanManagePatterns } from "./permissions";
 import type { DiagramSeed } from "../diagrams/generators";
-import { PageHeader, Loading } from "../ui/primitives";
-
-const cell: React.CSSProperties = { padding: "7px 10px", borderBottom: "1px solid var(--border)", fontSize: 12.5, textAlign: "left" };
+import { PageHeader, Loading, EmptyState, Table } from "../ui/primitives";
 
 type Mode = { kind: "list" } | { kind: "import"; yaml: string } | { kind: "version"; key: string; version: string };
 
@@ -79,6 +77,7 @@ function PatternCatalog() {
   }
 
   const items = data?.items ?? [];
+  const filtered = Object.values(filters).some((v) => v !== undefined);
   return (
     <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12, overflow: "auto", height: "100%" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -116,7 +115,7 @@ function PatternCatalog() {
           {PATTERN_LIFECYCLES.map((l) => <option key={l} value={l}>{LIFECYCLE_LABELS[l]}</option>)}
         </select>
         <input aria-label="Tag" placeholder="Tag" value={filters.tag ?? ""} onChange={(e) => set({ tag: e.target.value || undefined })} />
-        {Object.values(filters).some((v) => v !== undefined) && (
+        {filtered && (
           <button type="button" className="ui-btn ui-btn-sm" onClick={() => setFilters({})}>Clear filters</button>
         )}
       </div>
@@ -124,20 +123,29 @@ function PatternCatalog() {
       {isLoading ? (
         <Loading />
       ) : items.length === 0 ? (
-        <div style={{ fontSize: 13, color: "var(--ink-3)" }}>No patterns match.</div>
+        filtered ? (
+          <EmptyState compact title="No patterns match these filters" action={
+            <button type="button" className="ui-btn ui-btn-sm" onClick={() => setFilters({})}>Clear filters</button>
+          }>
+            Change or clear the filters to see more patterns.
+          </EmptyState>
+        ) : (
+          <EmptyState
+            compact
+            icon="tags"
+            title="No patterns yet"
+            why="A pattern is a governed, versioned rule or reference architecture written as YAML. Adopting one checks a domain or set of applications against it."
+          >
+            {canManage
+              ? "Use Import pattern to add the first one."
+              : "Your role can view patterns but not import them."}
+          </EmptyState>
+        )
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
-          <thead>
-            <tr>
-              {["Pattern", "Key", "Version", "Kind", "Lifecycle", "Tags"].map((h) => (
-                <th key={h} style={{ ...cell, color: "var(--ink-3)", fontWeight: 600 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
+        <Table caption="Patterns" columns={["Pattern", "Key", "Version", "Kind", "Lifecycle", "Tags"]}>
             {items.map((v) => (
-              <tr key={v.id} onClick={() => open(v.pattern_key, v.version)} style={{ cursor: "pointer" }}>
-                <td style={cell}>
+              <tr key={v.id} onClick={() => open(v.pattern_key, v.version)} className="clickable">
+                <td>
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); open(v.pattern_key, v.version); }}
@@ -146,15 +154,14 @@ function PatternCatalog() {
                     {v.name}
                   </button>
                 </td>
-                <td style={{ ...cell, fontFamily: "var(--mono, monospace)" }}>{v.pattern_key}</td>
-                <td style={cell}>{v.version}</td>
-                <td style={cell}>{KIND_LABELS[v.kind]}</td>
-                <td style={cell}><StatusBadge tone={LIFECYCLE_TONES[v.lifecycle]}>{LIFECYCLE_LABELS[v.lifecycle]}</StatusBadge></td>
-                <td style={cell}>{v.tags.join(", ") || "—"}</td>
+                <td style={{ fontFamily: "var(--mono, monospace)" }}>{v.pattern_key}</td>
+                <td>{v.version}</td>
+                <td>{KIND_LABELS[v.kind]}</td>
+                <td><StatusBadge tone={LIFECYCLE_TONES[v.lifecycle]}>{LIFECYCLE_LABELS[v.lifecycle]}</StatusBadge></td>
+                <td>{v.tags.join(", ") || "—"}</td>
               </tr>
             ))}
-          </tbody>
-        </table>
+        </Table>
       )}
     </div>
   );
