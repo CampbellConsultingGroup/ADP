@@ -5,29 +5,17 @@
 import { useState } from "react";
 import type React from "react";
 import { useAutomatedBy, type AgentSummary, type AutomatesKind } from "../api/agentic";
-import { useCapabilityNav } from "../application/appCapNav";
+import { EntityLink } from "../shell/EntityLink";
 import { RiskBadge } from "./agenticRisk";
 import { Loading } from "../ui/primitives";
 
 export function AutomatedByItems({ items }: { items: AgentSummary[] }): React.ReactElement {
-  const open = useCapabilityNav()?.openAgent;
   if (items.length === 0) return <div style={{ fontSize: 12, color: "var(--ink-3)" }}>No agents.</div>;
   return (
     <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
       {items.map((a) => (
         <li key={a.id} style={{ fontSize: 12, padding: "1px 0", display: "flex", gap: 6, alignItems: "center" }}>
-          {open ? (
-            <button
-              type="button"
-              onClick={() => open(a.id)}
-              title="Open in Agents"
-              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--accent)", fontSize: 12 }}
-            >
-              {a.name}
-            </button>
-          ) : (
-            <span>{a.name}</span>
-          )}
+          <EntityLink kind="agent" id={a.id} title="Open in Agents">{a.name}</EntityLink>
           <span style={{ color: "var(--ink-3)", fontSize: 11 }}>L{a.autonomy_level}</span>
           <RiskBadge band={a.agentic_risk.band} />
         </li>

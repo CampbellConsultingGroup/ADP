@@ -41,6 +41,7 @@ export default function DesignLinkEditor({ entityType, entityId }: Props): React
 
   return (
     <LinkEditor
+      action="write_business_arch"
       noun="design"
       plural="designs"
       isLoading={linkedQuery.isLoading}

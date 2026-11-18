@@ -20,6 +20,7 @@ import {
   type BusinessCapability,
 } from "../api/business";
 import { Loading } from "../ui/primitives";
+import { useCan } from "../auth/permissions";
 
 const SELECT: React.CSSProperties = { fontSize: 12.5, padding: "3px 6px", minWidth: 180 };
 const MUTED: React.CSSProperties = { color: "var(--ink-3)" };
@@ -77,6 +78,8 @@ function Group({ title, empty, children }: { title: string; empty: boolean; chil
 }
 
 export default function AgentAutomates({ agentId }: { agentId: string }) {
+  const canWrite = useCan("write_application"); // ADP-blp.65
+  const locked = !canWrite.allowed;
   const { data, isLoading } = useAgentAutomates(agentId);
   const add = useAddAutomates(agentId);
   const remove = useRemoveAutomates(agentId);
@@ -136,7 +139,7 @@ export default function AgentAutomates({ agentId }: { agentId: string }) {
               prefix={c.path.length ? `${c.path.join(" › ")} ›` : ""}
               name={c.name}
               onRemove={() => removeLink("capability", c.id)}
-              disabled={remove.isPending}
+              disabled={locked || remove.isPending}
             />
           ))}
         </ul>
@@ -144,7 +147,8 @@ export default function AgentAutomates({ agentId }: { agentId: string }) {
           aria-label="Link a business capability"
           value={chosen("capability")}
           onChange={(e) => handleAdd("capability", e.target.value)}
-          disabled={add.isPending}
+          disabled={locked || add.isPending}
+              title={canWrite.reason}
           style={SELECT}
         >
           <option value="">Link an L3 capability…</option>
@@ -162,7 +166,7 @@ export default function AgentAutomates({ agentId }: { agentId: string }) {
               prefix={`${s.value_stream_name} ›`}
               name={s.name}
               onRemove={() => removeLink("stage", s.id)}
-              disabled={remove.isPending}
+              disabled={locked || remove.isPending}
             />
           ))}
         </ul>
@@ -178,7 +182,8 @@ export default function AgentAutomates({ agentId }: { agentId: string }) {
               aria-label="Link a value stream stage"
               value={chosen("stage")}
               onChange={(e) => handleAdd("stage", e.target.value)}
-              disabled={add.isPending}
+              disabled={locked || add.isPending}
+              title={canWrite.reason}
               style={SELECT}
             >
               <option value="">Link a stage…</option>
@@ -199,7 +204,7 @@ export default function AgentAutomates({ agentId }: { agentId: string }) {
               name={a.name}
               suffix={`(${a.category})`}
               onRemove={() => removeLink("activity", a.id)}
-              disabled={remove.isPending}
+              disabled={locked || remove.isPending}
             />
           ))}
         </ul>
@@ -215,7 +220,8 @@ export default function AgentAutomates({ agentId }: { agentId: string }) {
               aria-label="Link a value chain activity"
               value={chosen("activity")}
               onChange={(e) => handleAdd("activity", e.target.value)}
-              disabled={add.isPending}
+              disabled={locked || add.isPending}
+              title={canWrite.reason}
               style={SELECT}
             >
               <option value="">Link an activity…</option>

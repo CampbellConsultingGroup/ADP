@@ -1,5 +1,6 @@
 /** EA pattern catalog (935-pattern-registry US1): every pattern version, filterable by kind,
  * lifecycle, tag and text; opens a version, or imports a new one. */
+import { openEntity, useRouteEntity } from "../shell/routing";
 
 import { useState } from "react";
 import { PATTERN_KINDS, PATTERN_LIFECYCLES, usePatterns } from "../api/patterns";
@@ -23,7 +24,14 @@ export default function PatternsPage({
   /** 939-governance-architecture-health: open this adoption (in the Adoptions section) on arrival. */
   initialAdoptionId?: string | null;
 } = {}) {
-  const [section, setSection] = useState<"patterns" | "adoptions">(initialAdoptionId ? "adoptions" : "patterns");
+  // ADP-blp.68: an adoption open in the URL shows the Adoptions section.
+  const [adoptionId] = useRouteEntity("adoption", initialAdoptionId);
+  const [chosen, setChosen] = useState<"patterns" | "adoptions">(initialAdoptionId ? "adoptions" : "patterns");
+  const section = adoptionId ? "adoptions" : chosen;
+  const setSection = (next: "patterns" | "adoptions") => {
+    if (next !== "adoptions") openEntity("adoption", null);
+    setChosen(next);
+  };
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div role="tablist" aria-label="Patterns sections" style={{ display: "flex", gap: 4, padding: "10px 20px 0" }}>
@@ -41,7 +49,7 @@ export default function PatternsPage({
         ))}
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>
-        {section === "patterns" ? <PatternCatalog /> : <AdoptionsList onGenerateDiagram={onGenerateDiagram} initialSelected={initialAdoptionId} />}
+        {section === "patterns" ? <PatternCatalog /> : <AdoptionsList onGenerateDiagram={onGenerateDiagram} initialSelected={adoptionId} />}
       </div>
     </div>
   );

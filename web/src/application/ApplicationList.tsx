@@ -2,6 +2,7 @@ import type { Application, TimeClassification } from "../api/application";
 import { Button, StatusBadge, type BadgeTone } from "../ui";
 import { EmptyState } from "../ui/primitives";
 import { TIME_TONES } from "../ui/tones";
+import { useApplicationWrite } from "./appCapNav";
 
 export const TIME_TONE: Record<TimeClassification, BadgeTone> = TIME_TONES; // ADP-blp.49
 
@@ -13,11 +14,12 @@ interface Props {
 }
 
 export default function ApplicationList({ apps, selectedId, onSelect, onAdd }: Props) {
+  const canWrite = useApplicationWrite(); // ADP-blp.65
   return (
     <div style={{ display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border)" }}>
         <span style={{ fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Applications ({apps.length})</span>
-        <Button variant="primary" size="sm" icon="plus" onClick={onAdd}>Add</Button>
+        <Button variant="primary" size="sm" icon="plus" onClick={onAdd} disabled={!canWrite.allowed} title={canWrite.reason}>Add</Button>
       </div>
       {apps.length === 0 && (
         <div style={{ padding: 12 }}>

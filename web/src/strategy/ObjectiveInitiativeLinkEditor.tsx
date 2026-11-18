@@ -32,6 +32,7 @@ export default function ObjectiveInitiativeLinkEditor({ objectiveId, onNavigateT
   ];
   return (
     <LinkEditor
+      action="write_business_arch"
       noun="initiative"
       plural="initiatives"
       prompt="Link an initiative…"

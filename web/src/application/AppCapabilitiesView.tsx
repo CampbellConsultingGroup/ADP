@@ -9,7 +9,8 @@ import { MISSING_TECHNICAL_CAPABILITY, useAppCapabilities } from "../api/appCapa
 import AppCapDetail from "./AppCapDetail";
 import AppCapTree from "./AppCapTree";
 import CapFindingsViews, { type FindingsMode } from "./CapFindingsViews";
-import { AppCapNavContext, useCanWriteApplications } from "./appCapNav";
+import { useCanWriteApplications } from "./appCapNav";
+import { useRouteEntity } from "../shell/routing";
 import { Tabs } from "../ui/Tabs";
 
 /** Gaps list: every L3 with no technical capability, labelled with its L1/L2 path. */
@@ -48,7 +49,7 @@ function Guidance(): React.ReactElement {
 export default function AppCapabilitiesView({ initialId = null }: { initialId?: string | null }): React.ReactElement {
   const { data, isLoading, error } = useAppCapabilities();
   const canWrite = useCanWriteApplications();
-  const [selectedId, setSelectedId] = useState<string | null>(initialId);
+  const [selectedId, setSelectedId] = useRouteEntity("application_capability", initialId);
   const [mode, setMode] = useState<"tree" | "missing" | FindingsMode>("tree");
 
   if (isLoading) return <div style={{ padding: 20, color: "var(--ink-3)", fontSize: 14 }}>Loading application capabilities…</div>;
@@ -102,9 +103,7 @@ export default function AppCapabilitiesView({ initialId = null }: { initialId?: 
         )}
         {(mode === "overlaps" || mode === "gaps" || mode === "shared" || mode === "redundant") && (
           // Application capabilities picked from a finding open here, in the detail pane.
-          <AppCapNavContext.Provider value={setSelectedId}>
-            <CapFindingsViews mode={mode} />
-          </AppCapNavContext.Provider>
+          <CapFindingsViews mode={mode} />
         )}
       </div>
       <div style={{ flex: 1, overflow: "auto", padding: 18 }}>

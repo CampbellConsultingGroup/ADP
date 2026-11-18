@@ -17,6 +17,7 @@ export default function ObjectiveValueStreamLinkEditor({ objective }: Props): Re
   const all = useValueStreams();
   return (
     <LinkEditor
+      action="write_business_arch"
       noun="value stream"
       plural="value streams"
       isLoading={all.isLoading}
