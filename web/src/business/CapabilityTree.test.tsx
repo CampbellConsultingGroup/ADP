@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactElement } from "react";
 import CapabilityTree, { buildTree } from "./CapabilityTree";
 import * as businessApi from "../api/business";
 import type { BusinessCapability } from "../api/business";
+import { renderWithQuery as renderWithQueryClient } from "../../tests/support/apiTestUtils";
 
 vi.mock("../api/business");
 
@@ -14,11 +13,6 @@ const mockedBusinessApi = vi.mocked(businessApi);
 // CapabilityTree.tsx calls useQueryClient() directly (for the portfolio-
 // review invalidate callback) -- a real QueryClientProvider is needed,
 // unlike this session's usual vi.mock(hooks-module)-only convention.
-function renderWithQueryClient(ui: ReactElement) {
-  const qc = new QueryClient();
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
-}
-
 function cap(partial: Partial<BusinessCapability> & { id: string; name: string; level: 1 | 2 | 3 }): BusinessCapability {
   return {
     parent_id: null,

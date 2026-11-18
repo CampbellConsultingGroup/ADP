@@ -6,7 +6,7 @@ import { screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 import PromptHistory from "../../src/admin/PromptHistory";
 import type { AgentPromptView, PromptHistoryResponse } from "../../src/api/adminPrompts";
 
-import { mockFetch, renderWithQuery } from "./registry-test-utils";
+import { mockFetch, renderWithQuery } from "../support/apiTestUtils";
 
 afterEach(() => {
   cleanup();

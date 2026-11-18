@@ -6,7 +6,7 @@ import { screen, cleanup } from "@testing-library/react";
 
 import OptionCard from "../../src/recommend/OptionCard";
 import type { SolutionOption } from "../../src/api/recommend";
-import { mockFetch, renderWithQuery } from "./registry-test-utils";
+import { mockFetch, renderWithQuery } from "../support/apiTestUtils";
 
 afterEach(() => {
   cleanup();

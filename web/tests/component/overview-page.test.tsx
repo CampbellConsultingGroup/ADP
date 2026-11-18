@@ -10,7 +10,7 @@ import { screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 
 import App from "../../src/App";
 import OverviewPage from "../../src/overview/OverviewPage";
-import { mockFetch, renderWithQuery } from "./registry-test-utils";
+import { mockFetch, renderWithQuery } from "../support/apiTestUtils";
 
 afterEach(() => {
   cleanup();

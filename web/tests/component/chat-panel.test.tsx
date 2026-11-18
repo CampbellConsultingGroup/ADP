@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 
 import ChatPanel from "../../src/chat/ChatPanel";
-import { renderWithQuery } from "./registry-test-utils";
+import { renderWithQuery } from "../support/apiTestUtils";
 
 const BASE_PATH = "/api/v1/chat";
 

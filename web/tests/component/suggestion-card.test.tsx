@@ -7,7 +7,7 @@ import AgentReviewButton from "../../src/agent-review/AgentReviewButton";
 import SuggestionCard from "../../src/agent-review/SuggestionCard";
 import CapabilityTree from "../../src/business/CapabilityTree";
 import { renderCapabilitySuggestionDetail } from "../../src/business/agentReviewDetail";
-import { mockFetch, renderWithQuery, lastCall } from "./registry-test-utils";
+import { mockFetch, renderWithQuery, lastCall } from "../support/apiTestUtils";
 
 const BASE_PATH = "/api/v1/business/capabilities/CAP-1/agent-review";
 const PORTFOLIO_BASE_PATH = "/api/v1/business/capabilities/agent-review";

@@ -1,8 +1,16 @@
-/** Shared utilities for business/application registry component tests.
+/**
+ * Shared helpers for component tests (ADP-blp.42).
  *
- * Components call the API through global fetch with relative paths
- * (src/api/client.ts), so tests stub fetch with a route table keyed by
- * "METHOD /path" and record calls for interaction assertions.
+ * Prefer these to `vi.mock("../api/<module>")`. Mocking a whole hook module replaces the real
+ * query keys, invalidation and error mapping with a stub, so a test passes even when a mutation
+ * refreshes the wrong cache entry or the server's reason is dropped. With `mockFetch` the real
+ * hooks run; only the network is replaced: components call the API through global fetch with
+ * relative paths (src/api/client.ts), so a test supplies a route table keyed by "METHOD /path"
+ * and reads back the recorded calls.
+ *
+ *   const calls = mockFetch({ "GET /api/v1/applications": { items: [], total: 0 } });
+ *   renderWithQuery(<ApplicationList ... />);
+ *   expect(lastCall(calls, "POST")?.body).toEqual({ ... });
  */
 
 import React from "react";
@@ -56,7 +64,7 @@ export function renderWithQuery(ui: React.ReactElement): RenderResult {
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
 }
 
-/** Wait until a fetch call matching method+url prefix was made. */
+/** The most recent recorded call with this method. */
 export function lastCall(calls: FetchCall[], method: string): FetchCall | undefined {
   return [...calls].reverse().find((c) => c.method === method);
 }
