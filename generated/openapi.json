@@ -10390,17 +10390,6 @@
    "LLMConfigUpdate": {
     "additionalProperties": false,
     "properties": {
-     "api_key": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Api Key"
-     },
      "extraction_model": {
       "anyOf": [
        {
@@ -29268,7 +29257,7 @@
     ]
    },
    "put": {
-    "description": "Update active model selection and/or API key for extraction and/or recommendations.",
+    "description": "Choose the model for extraction, recommendations and/or validation. Applies to every\nworker and survives a restart. (The API key is set at deploy time, not here.)",
     "operationId": "update_llm_config_api_v1_config_llm_put",
     "requestBody": {
      "content": {

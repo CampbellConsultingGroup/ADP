@@ -13,7 +13,11 @@ from fastapi import Depends, FastAPI, Request, Response
 
 from adp.agentic import router as agentic_router_module
 from adp.agentic import store as agstore
-from adp.api.limits import BodySizeLimitMiddleware, enforce_llm_rate_limit
+from adp.api.limits import (
+    BodySizeLimitMiddleware,
+    enforce_llm_rate_limit,
+    refresh_llm_settings,
+)
 from adp.api.routers import (
     admin_prompts_router,
     admin_rubrics_router,
@@ -285,7 +289,11 @@ def create_app() -> FastAPI:
         lifespan=_lifespan,
         # Action-based authorization for every mutating route (ADP-SPEC-004).
         # ADP-blp.5: plus a per-user rate limit on the routes that call the model.
-        dependencies=[Depends(enforce_route_permission), Depends(enforce_llm_rate_limit)],
+        dependencies=[
+            Depends(enforce_route_permission),
+            Depends(enforce_llm_rate_limit),
+            Depends(refresh_llm_settings),
+        ],
     )
 
     # Auth middleware — validates Bearer tokens for all /api/v1/ routes (ADP-SPEC-026)

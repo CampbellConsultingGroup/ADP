@@ -2,16 +2,25 @@
 
 GET /api/v1/config/models   — list all available Anthropic models
 GET /api/v1/config/llm      — get current LLM configuration
-PUT /api/v1/config/llm      — update active model(s) for extraction and recommendations
+PUT /api/v1/config/llm      — choose the model for extraction, recommendations, validation
+
+The model choices are stored in the database (ADP-blp.13); the API key is deploy-time only.
 """
 
 from __future__ import annotations
 
-import os
+import logging
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, ConfigDict
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from adp.api.common import session_dependency
+from adp.auth.actor import actor_of
+from adp.llm import settings as llm_settings
+
+_logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/config", tags=["config"])
 
@@ -52,18 +61,11 @@ ANTHROPIC_MODELS = [
     },
 ]
 
-# ── In-process LLM config store ───────────────────────────────────────────────
-# Defaults read from environment; overridable via PUT /api/v1/config/llm.
-# The API key is held only in process memory and is NEVER logged or returned
-# in GET responses — only api_key_configured (bool) is exposed.
+# ── Where the settings live (ADP-blp.13) ──────────────────────────────────────
+# The model choices are in the database (adp.llm.settings), so every worker agrees and a restart
+# keeps them. The API key comes from the environment only and cannot be set through this API.
 
-_llm_config: dict[str, str] = {
-    "endpoint": os.environ.get("ADP_LLM_ENDPOINT", "https://api.anthropic.com"),
-    "extraction_model": os.environ.get("ADP_LLM_MODEL", "claude-sonnet-4-6"),
-    "recommendation_model": os.environ.get("ADP_LLM_RECOMMENDATION_MODEL", "claude-sonnet-4-6"),
-    "validation_model": os.environ.get("ADP_LLM_VALIDATION_MODEL", "claude-sonnet-4-6"),
-    "api_key": os.environ.get("ADP_LLM_API_KEY", ""),
-}
+_get_session = session_dependency("adp.llm.settings")
 
 
 # ── Pydantic models ───────────────────────────────────────────────────────────
@@ -101,102 +103,88 @@ class LLMConfigUpdate(BaseModel):
     extraction_model: str | None = None
     recommendation_model: str | None = None
     validation_model: str | None = None
-    api_key: str | None = None  # NEVER logged; stored only in process memory
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+def _provider(endpoint: str, api_key_configured: bool) -> Literal[
+    "anthropic", "openai_compatible", "not_configured"
+]:
+    if not endpoint or not api_key_configured:
+        return "not_configured"
+    return "anthropic" if "anthropic.com" in endpoint.lower() else "openai_compatible"
+
+
+def _response(models: dict[str, str]) -> LLMConfigResponse:
+    endpoint = llm_settings.endpoint()
+    configured = bool(llm_settings.api_key())
+    return LLMConfigResponse(
+        endpoint=endpoint,
+        extraction_model=models["extraction_model"],
+        recommendation_model=models["recommendation_model"],
+        validation_model=models["validation_model"],
+        api_key_configured=configured,
+        provider=_provider(endpoint, configured),
+    )
+
+
 @router.get("/models", response_model=ModelsResponse)
 async def get_available_models() -> ModelsResponse:
     """Return available Anthropic models for extraction and recommendations."""
-    endpoint = _llm_config["endpoint"]
-    api_key_configured = bool(_llm_config.get("api_key", ""))
     return ModelsResponse(
         models=[ModelInfo(**m) for m in ANTHROPIC_MODELS],  # type: ignore[arg-type]
         provider="Anthropic",
-        endpoint=endpoint,
-        api_key_configured=api_key_configured,
+        endpoint=llm_settings.endpoint(),
+        api_key_configured=bool(llm_settings.api_key()),
     )
 
 
 @router.get("/llm", response_model=LLMConfigResponse)
 async def get_llm_config() -> LLMConfigResponse:
     """Return current LLM configuration (active models and connection status)."""
-    endpoint = _llm_config["endpoint"]
-    api_key_configured = bool(_llm_config.get("api_key", ""))
-
-    if not endpoint or not api_key_configured:
-        provider: Literal["anthropic", "openai_compatible", "not_configured"] = "not_configured"
-    elif "anthropic.com" in endpoint.lower():
-        provider = "anthropic"
-    else:
-        provider = "openai_compatible"
-
-    return LLMConfigResponse(
-        endpoint=endpoint,
-        extraction_model=_llm_config["extraction_model"],
-        recommendation_model=_llm_config["recommendation_model"],
-        validation_model=_llm_config["validation_model"],
-        api_key_configured=api_key_configured,
-        provider=provider,
-    )
+    await llm_settings.refresh()
+    return _response(llm_settings.current())
 
 
 @router.put("/llm", response_model=LLMConfigResponse)
-async def update_llm_config(update: LLMConfigUpdate) -> LLMConfigResponse:
-    """Update active model selection and/or API key for extraction and/or recommendations."""
-    if update.extraction_model is not None:
-        valid_ids = {m["id"] for m in ANTHROPIC_MODELS}
-        if update.extraction_model not in valid_ids:
-            from fastapi import HTTPException, status
+async def update_llm_config(
+    update: LLMConfigUpdate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+) -> LLMConfigResponse:
+    """Choose the model for extraction, recommendations and/or validation. Applies to every
+    worker and survives a restart. (The API key is set at deploy time, not here.)"""
+    changes = update.model_dump(exclude_none=True)
+    valid_ids = sorted(m["id"] for m in ANTHROPIC_MODELS)  # type: ignore[type-var]
+    for setting, model_id in changes.items():
+        if model_id not in valid_ids:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Unknown model '{update.extraction_model}'. Valid: {sorted(valid_ids)}",  # type: ignore[type-var]
+                detail=f"Unknown model '{model_id}'. Valid: {valid_ids}",
             )
-        _llm_config["extraction_model"] = update.extraction_model
-
-    if update.recommendation_model is not None:
-        valid_ids = {m["id"] for m in ANTHROPIC_MODELS}
-        if update.recommendation_model not in valid_ids:
-            from fastapi import HTTPException, status
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Unknown model '{update.recommendation_model}'. Valid: {sorted(valid_ids)}",  # type: ignore[type-var]
-            )
-        _llm_config["recommendation_model"] = update.recommendation_model
-
-    if update.validation_model is not None:
-        valid_ids = {m["id"] for m in ANTHROPIC_MODELS}
-        if update.validation_model not in valid_ids:
-            from fastapi import HTTPException, status
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Unknown model '{update.validation_model}'. Valid: {sorted(valid_ids)}",  # type: ignore[type-var]
-            )
-        _llm_config["validation_model"] = update.validation_model
-
-    if update.api_key is not None:
-        # Store only; never log this value
-        _llm_config["api_key"] = update.api_key
-
-    return await get_llm_config()
+    actor = actor_of(request)
+    models = await llm_settings.save(session, changes, actor)
+    await session.commit()
+    if changes:
+        _logger.info("config.llm.update actor=%s changes=%s", actor, changes)
+    return _response(models)
 
 
 def get_extraction_model() -> str:
     """Return the currently configured extraction model ID."""
-    return _llm_config["extraction_model"]
+    return llm_settings.model_for("extraction_model")
 
 
 def get_recommendation_model() -> str:
     """Return the currently configured recommendation model ID."""
-    return _llm_config["recommendation_model"]
+    return llm_settings.model_for("recommendation_model")
 
 
 def get_validation_model() -> str:
     """Return the currently configured LLM-as-Judge validation model ID."""
-    return _llm_config["validation_model"]
+    return llm_settings.model_for("validation_model")
 
 
 def get_api_key() -> str:
-    """Return the current LLM API key. NEVER log the return value."""
-    return _llm_config.get("api_key", "")
+    """Return the LLM API key from the environment. NEVER log the return value."""
+    return llm_settings.api_key()

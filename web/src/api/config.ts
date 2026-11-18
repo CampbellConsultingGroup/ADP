@@ -23,6 +23,7 @@ export interface LLMConfig {
   endpoint: string;
   extraction_model: string;
   recommendation_model: string;
+  validation_model: string;
   api_key_configured: boolean;
   provider: "anthropic" | "openai_compatible" | "not_configured";
 }
@@ -30,7 +31,7 @@ export interface LLMConfig {
 export interface LLMConfigUpdate {
   extraction_model?: string;
   recommendation_model?: string;
-  api_key?: string;
+  validation_model?: string;
 }
 
 export function useAvailableModels() {

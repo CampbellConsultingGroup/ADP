@@ -16,11 +16,16 @@
 // (confirmed by AppShell.test.tsx's own header comment), and exercising the
 // real nav is the point of these tests.
 import { describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, configure, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import App from "./App";
 import { openEntity } from "./shell/routing";
+
+// Every page but Overview is loaded lazily, and a test may be the first to import several of
+// them. On a busy CI runner that has taken longer than the default one second, failing a
+// findBy* at random (seen on PR #184). Wait longer; a passing test is no slower.
+configure({ asyncUtilTimeout: 5000 });
 
 vi.mock("./overview/OverviewPage", () => ({
   default: () => <div>OverviewPage-stub</div>,

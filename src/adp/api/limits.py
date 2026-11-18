@@ -176,3 +176,12 @@ async def enforce_llm_rate_limit(request: Request) -> None:
             ),
             headers={"Retry-After": str(int(retry_after) + 1)},
         )
+
+
+async def refresh_llm_settings(request: Request) -> None:
+    """App-level dependency (ADP-blp.13): before a request that calls a model, read the model
+    choices from the database, so a change made through another worker applies here too."""
+    if is_llm_route(request.method, request.url.path):
+        from adp.llm import settings as llm_settings
+
+        await llm_settings.refresh()
