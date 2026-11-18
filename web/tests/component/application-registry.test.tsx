@@ -20,6 +20,13 @@ import type { Application, TechnicalCapability } from "../../src/api/application
 
 import { mockFetch, renderWithQuery, lastCall } from "./registry-test-utils";
 
+// These tests are about the registry, not roles: every write is allowed. (Without this the
+// answer depends on VITE_AUTH_ENABLED, which is off locally and on in CI.)
+vi.mock("../../src/auth/permissions", () => ({
+  useCan: () => ({ allowed: true }),
+  resetPermissionsCache: () => {},
+}));
+
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
