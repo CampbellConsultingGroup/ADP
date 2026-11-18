@@ -157,7 +157,8 @@ describe("App: DESIGN_ONLY_VIEWS redirect (C4 Design with no design selected)", 
     await user.click(screen.getByRole("button", { name: "C4 Design" }));
     await user.click(screen.getByRole("button", { name: "Open DSN-1" }));
 
-    expect(screen.getByText(/C4DesignView-stub designId=DSN-1/)).toBeTruthy();
+    // findBy, not getBy: the page is loaded lazily, so it is not there synchronously.
+    expect(await screen.findByText(/C4DesignView-stub designId=DSN-1/)).toBeTruthy();
     expect(screen.queryByText(/IntakePage-stub/)).toBeNull();
   });
 
