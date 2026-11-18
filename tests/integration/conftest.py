@@ -32,6 +32,10 @@ if not _docker_available():
     collect_ignore_glob = ["test_*.py"]
 
 
+# The same major version as production (PostgreSQL 16), with pgvector.
+_PG_IMAGE = "pgvector/pgvector:pg16"
+
+
 @pytest.fixture(scope="session")
 def postgres_container():
     """Start a PostgreSQL container for the test session."""
@@ -40,8 +44,34 @@ def postgres_container():
 
     from testcontainers.postgres import PostgresContainer
 
-    with PostgresContainer("pgvector/pgvector:pg15") as pg:
+    with PostgresContainer(_PG_IMAGE) as pg:
         yield pg
+
+
+@pytest.fixture()
+def migration_db_url(postgres_container):  # type: ignore[no-untyped-def]
+    """An empty database of its own in the session's container, for a test that runs migrations
+    up and down (ADP-blp.28). Thirteen migration tests each used to start a container."""
+    import uuid
+
+    import sqlalchemy as sa
+    from sqlalchemy.engine import make_url
+
+    name = f"mig_{uuid.uuid4().hex[:12]}"
+    admin_url = make_url(postgres_container.get_connection_url()).set(
+        drivername="postgresql+psycopg2"
+    )
+    admin = sa.create_engine(admin_url, isolation_level="AUTOCOMMIT")
+    with admin.connect() as conn:
+        conn.execute(sa.text(f'CREATE DATABASE "{name}"'))
+    try:
+        yield admin_url.set(drivername="postgresql+asyncpg", database=name).render_as_string(
+            hide_password=False
+        )
+    finally:
+        with admin.connect() as conn:
+            conn.execute(sa.text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
+        admin.dispose()
 
 
 @pytest.fixture(scope="session")

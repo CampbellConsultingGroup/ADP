@@ -47,20 +47,6 @@ def _clean_tables():
     yield
 
 
-@pytest.fixture()
-def migration_db_url():
-    if not _docker_available():
-        pytest.skip("Docker not available — integration tests require Docker")
-
-    from testcontainers.postgres import PostgresContainer
-
-    with PostgresContainer("pgvector/pgvector:pg15") as pg:
-        raw = pg.get_connection_url()
-        yield raw.replace("postgresql+psycopg2://", "postgresql+asyncpg://").replace(
-            "postgresql://", "postgresql+asyncpg://"
-        )
-
-
 async def test_migration_022_upgrade_creates_tables_with_cascade(migration_db_url):
     _run_alembic(migration_db_url, "upgrade", "021")
 

@@ -132,7 +132,8 @@ async def test_first_cycle_bootstraps_full_strategy_export(tmp_path, db_session)
     assert obj["depends_on_objective_ids"] == [obj2_id]
     assert obj["initiative_ids"] == [init_id]
     assert obj["progress"] == [
-        {"as_of_date": "2026-02-01", "actual_value": "6", "note": None, "recorded_by": "alice"}
+        # NUMERIC(.., 2) comes back from PostgreSQL with its scale.
+        {"as_of_date": "2026-02-01", "actual_value": "6.00", "note": None, "recorded_by": "alice"}
     ]
 
     obj2 = json.loads((export_root / "strategy" / "objectives" / f"{obj2_id}.json").read_text())
