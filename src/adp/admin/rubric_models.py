@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from adp.authz.confirmation import CONFIRMATION_ID_DESCRIPTION
 
 
 class RubricView(BaseModel):
@@ -46,7 +48,7 @@ class RubricEditRequest(BaseModel):
 
     weights: dict[str, float]
     expected_version: int
-    confirmation_id: str
+    confirmation_id: str = Field(description=CONFIRMATION_ID_DESCRIPTION)
 
     @field_validator("confirmation_id")
     @classmethod
@@ -74,7 +76,7 @@ class RubricRestoreRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     expected_version: int
-    confirmation_id: str
+    confirmation_id: str = Field(description=CONFIRMATION_ID_DESCRIPTION)
 
     @field_validator("confirmation_id")
     @classmethod

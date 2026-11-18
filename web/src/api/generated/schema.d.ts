@@ -5038,7 +5038,10 @@ export interface components {
              * @default false
              */
             advisory_acknowledged: boolean;
-            /** Confirmation Id */
+            /**
+             * Confirmation Id
+             * @description Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.
+             */
             confirmation_id: string;
         };
         /** AcceptOptionResponse */
@@ -7825,7 +7828,10 @@ export interface components {
          *     of those accepts a client-supplied root either.
          */
         ExportRequest: {
-            /** Confirmation Id */
+            /**
+             * Confirmation Id
+             * @description Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.
+             */
             confirmation_id: string;
         };
         /** ExportResult */
@@ -9366,7 +9372,10 @@ export interface components {
          *     REQUIRES_CONFIRMATION.
          */
         PromptEditRequest: {
-            /** Confirmation Id */
+            /**
+             * Confirmation Id
+             * @description Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.
+             */
             confirmation_id: string;
             /** Expected Version */
             expected_version: number;
@@ -9408,7 +9417,10 @@ export interface components {
          *     path).
          */
         PromptRestoreRequest: {
-            /** Confirmation Id */
+            /**
+             * Confirmation Id
+             * @description Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.
+             */
             confirmation_id: string;
             /** Expected Version */
             expected_version: number;
@@ -10241,7 +10253,10 @@ export interface components {
          *     a path parameter, not a body field).
          */
         RubricEditRequest: {
-            /** Confirmation Id */
+            /**
+             * Confirmation Id
+             * @description Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.
+             */
             confirmation_id: string;
             /** Expected Version */
             expected_version: number;
@@ -10294,7 +10309,10 @@ export interface components {
          *     Session 2026-07-24: restore is not a lower-friction path).
          */
         RubricRestoreRequest: {
-            /** Confirmation Id */
+            /**
+             * Confirmation Id
+             * @description Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.
+             */
             confirmation_id: string;
             /** Expected Version */
             expected_version: number;
@@ -10922,7 +10940,10 @@ export interface components {
              * @default false
              */
             advisory_acknowledged: boolean;
-            /** Confirmation Id */
+            /**
+             * Confirmation Id
+             * @description Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.
+             */
             confirmation_id: string;
         };
         /** TagsRequest */
@@ -11810,7 +11831,10 @@ export interface components {
          * @description ART-VIII: every transition carries a reason and a non-empty confirmation id (Q3).
          */
         adp__patterns__registry_models__LifecycleTransitionRequest: {
-            /** Confirmation Id */
+            /**
+             * Confirmation Id
+             * @description Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.
+             */
             confirmation_id: string;
             /** Reason */
             reason: string;

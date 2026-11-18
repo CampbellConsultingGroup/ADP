@@ -138,6 +138,8 @@ PERMISSION_GRANTS: dict[PersonaRole, frozenset[ActionType]] = {
 # Actions that require a per-action confirmation payload (ART-VIII / QG-14).
 # One approval MUST NOT generalize to any subsequent action.
 
+# The confirmation these actions carry is an audit annotation, not a server-verified control:
+# see adp.authz.confirmation (ADP-blp.12).
 REQUIRES_CONFIRMATION: frozenset[ActionType] = frozenset({
     ActionType.CONFIRM_RECOMMENDATION,
     ActionType.OVERRIDE_VERDICT,

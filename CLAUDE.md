@@ -173,6 +173,13 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.12 (decision, 2026-11-18): `confirmation_id` is an AUDIT ANNOTATION, not a
+  control. The client makes it up after the user confirms; the server checks only that it is
+  non-empty and stores it. It is not issued or verified by the server. `adp.authz.confirmation`
+  records the decision and why a server-issued challenge was not built;
+  `CONFIRMATION_ID_DESCRIPTION` is the `Field(description=...)` on every request model that takes
+  one (eight, in `generated/openapi.json`). A new governed action must use it: guard
+  `tests/unit/test_confirmation_id_documented.py`. No behaviour change.
 - Fable review P4 batch (ADP-blp.29 .38 .41 .42 .63):
   - .29: migration `054` indexes `audit_entries.timestamp` (the Governance activity feed and audit
     CSV filter and sort on it). `tiktoken` removed: nothing imported it. `langchain-core` stays

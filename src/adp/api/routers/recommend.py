@@ -17,9 +17,10 @@ from datetime import datetime, timezone
 from typing import Any, Literal
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from adp.auth.actor import actor_of
+from adp.authz.confirmation import CONFIRMATION_ID_DESCRIPTION
 from adp.background import spawn
 from adp.telemetry.context import get_trace_id
 
@@ -239,7 +240,7 @@ class RecommendStatusResponse(BaseModel):
 class AcceptOptionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    confirmation_id: str
+    confirmation_id: str = Field(description=CONFIRMATION_ID_DESCRIPTION)
     advisory_acknowledged: bool = False
     # ADP-SPEC-019: optional reason stored in knowledge base
     acceptance_reason: str | None = None

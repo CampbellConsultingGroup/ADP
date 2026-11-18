@@ -8,13 +8,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationInfo, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator, model_validator
 
 from adp.agents.models import (
     AgentReviewOperationStatus,
     AgentSuggestionStatus,
     GroundingCitation,
 )
+from adp.authz.confirmation import CONFIRMATION_ID_DESCRIPTION
 
 # ── Strategic relevance (ADP-33v) ─────────────────────────────────────────────
 # Applies to BOTH business_capabilities and technical_capabilities. Distinct
@@ -685,7 +686,7 @@ class SuggestionAcceptRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    confirmation_id: str
+    confirmation_id: str = Field(description=CONFIRMATION_ID_DESCRIPTION)
     advisory_acknowledged: bool = False
 
     @field_validator("confirmation_id")

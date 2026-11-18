@@ -12,6 +12,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
+from adp.authz.confirmation import CONFIRMATION_ID_DESCRIPTION
 from adp.patterns.models import PatternDefinition, PatternIssue, PatternKind, PatternRelationType
 
 _FROZEN = ConfigDict(extra="forbid", frozen=True)
@@ -158,7 +159,9 @@ class LifecycleTransitionRequest(BaseModel):
 
     to: PatternLifecycle
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
-    confirmation_id: Annotated[str, StringConstraints(max_length=200)]
+    confirmation_id: Annotated[str, StringConstraints(max_length=200)] = Field(
+        description=CONFIRMATION_ID_DESCRIPTION
+    )
 
     @field_validator("confirmation_id")
     @classmethod
