@@ -1,5 +1,6 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { apiGet } from "./client";
+import { QK } from "./queryKeys";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -56,15 +57,15 @@ export interface ActivityFeedResponse {
 
 // ── Query keys ────────────────────────────────────────────────────────────────
 
-const STATUS_KEY = ["governance", "status"] as const;
-const EXCEPTIONS_KEY = ["governance", "exceptions"] as const;
+const STATUS_KEY = [QK.governance, "status"] as const;
+const EXCEPTIONS_KEY = [QK.governance, "exceptions"] as const;
 const activityKey = (
   fromDate: string,
   toDate: string,
   action?: string,
   actor?: string,
   page?: number,
-) => ["governance", "activity", fromDate, toDate, action ?? null, actor ?? null, page ?? 1] as const;
+) => [QK.governance, "activity", fromDate, toDate, action ?? null, actor ?? null, page ?? 1] as const;
 
 // ── Hooks ─────────────────────────────────────────────────────────────────────
 

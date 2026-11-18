@@ -5,6 +5,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import { QK } from "./queryKeys";
 
 const BASE_PATH = "/api/v1/admin/agent-prompts";
 
@@ -42,14 +43,14 @@ export interface PromptChangeResult {
 
 export function useAgentPrompts() {
   return useQuery<AgentPromptListResponse>({
-    queryKey: ["admin-agent-prompts"],
+    queryKey: [QK.adminAgentPrompts],
     queryFn: () => apiGet<AgentPromptListResponse>(BASE_PATH),
   });
 }
 
 export function useAgentPromptHistory(agentId: string | null) {
   return useQuery<PromptHistoryResponse>({
-    queryKey: ["admin-agent-prompt-history", agentId],
+    queryKey: [QK.adminAgentPromptHistory, agentId],
     queryFn: () => apiGet<PromptHistoryResponse>(`${BASE_PATH}/${agentId}/history`),
     enabled: !!agentId,
   });
@@ -69,8 +70,8 @@ export function useConfirmPromptEdit(agentId: string) {
         confirmation_id: confirmationId,
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["admin-agent-prompts"] });
-      void qc.invalidateQueries({ queryKey: ["admin-agent-prompt-history", agentId] });
+      void qc.invalidateQueries({ queryKey: [QK.adminAgentPrompts] });
+      void qc.invalidateQueries({ queryKey: [QK.adminAgentPromptHistory, agentId] });
     },
   });
 }
@@ -89,8 +90,8 @@ export function useRestorePromptVersion(agentId: string) {
         { expected_version: expectedVersion, confirmation_id: confirmationId },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["admin-agent-prompts"] });
-      void qc.invalidateQueries({ queryKey: ["admin-agent-prompt-history", agentId] });
+      void qc.invalidateQueries({ queryKey: [QK.adminAgentPrompts] });
+      void qc.invalidateQueries({ queryKey: [QK.adminAgentPromptHistory, agentId] });
     },
   });
 }

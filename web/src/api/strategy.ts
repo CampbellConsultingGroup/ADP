@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
 import { MAPPING_PATH_SEGMENT, type ComplianceStatus, type MappingTargetType } from "./compliance";
 import type { components } from "./generated/schema";
+import { QK } from "./queryKeys";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -94,7 +95,7 @@ export interface StrategicObjectiveUpdate {
 
 export function useThemes() {
   return useQuery<{ items: StrategicTheme[]; total: number }>({
-    queryKey: ["strategy-themes"],
+    queryKey: [QK.strategyThemes],
     queryFn: () => apiGet("/api/v1/strategy/themes"),
   });
 }
@@ -105,7 +106,7 @@ export function useCreateTheme() {
     mutationFn: (body) =>
       apiMutation<StrategicTheme, StrategicThemeCreate>("POST", "/api/v1/strategy/themes", body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-themes"] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyThemes] });
     },
   });
 }
@@ -120,7 +121,7 @@ export function useUpdateTheme(themeId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-themes"] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyThemes] });
     },
   });
 }
@@ -130,7 +131,7 @@ export function useDeleteTheme() {
   return useMutation<void, Error & { status?: number }, string>({
     mutationFn: (themeId) => apiMutation<void>("DELETE", `/api/v1/strategy/themes/${themeId}`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-themes"] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyThemes] });
     },
   });
 }
@@ -139,14 +140,14 @@ export function useDeleteTheme() {
 
 export function useObjectives() {
   return useQuery<{ items: StrategicObjectiveSummary[]; total: number }>({
-    queryKey: ["strategy-objectives"],
+    queryKey: [QK.strategyObjectives],
     queryFn: () => apiGet("/api/v1/strategy/objectives"),
   });
 }
 
 export function useObjective(id: string | null) {
   return useQuery<StrategicObjective>({
-    queryKey: ["strategy-objective", id],
+    queryKey: [QK.strategyObjective, id],
     queryFn: () => apiGet(`/api/v1/strategy/objectives/${id}`),
     enabled: !!id,
   });
@@ -162,7 +163,7 @@ export function useCreateObjective() {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objectives"] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectives] });
     },
   });
 }
@@ -177,8 +178,8 @@ export function useUpdateObjective(objectiveId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objectives"] });
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectives] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
     },
   });
 }
@@ -189,7 +190,7 @@ export function useDeleteObjective() {
     mutationFn: (objectiveId) =>
       apiMutation<void>("DELETE", `/api/v1/strategy/objectives/${objectiveId}`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objectives"] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectives] });
     },
   });
 }
@@ -218,7 +219,7 @@ export interface ObjectiveProgressUpdate {
 
 export function useObjectiveProgress(objectiveId: string | null) {
   return useQuery<{ items: ObjectiveProgressEntry[]; total: number }>({
-    queryKey: ["strategy-objective-progress", objectiveId],
+    queryKey: [QK.strategyObjectiveProgress, objectiveId],
     queryFn: () => apiGet(`/api/v1/strategy/objectives/${objectiveId}/progress`),
     enabled: !!objectiveId,
   });
@@ -234,9 +235,9 @@ export function useCreateProgress(objectiveId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective-progress", objectiveId] });
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
-      void qc.invalidateQueries({ queryKey: ["strategy-objectives"] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectiveProgress, objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectives] });
     },
   });
 }
@@ -255,9 +256,9 @@ export function useUpdateProgress(objectiveId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective-progress", objectiveId] });
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
-      void qc.invalidateQueries({ queryKey: ["strategy-objectives"] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectiveProgress, objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectives] });
     },
   });
 }
@@ -276,8 +277,8 @@ export function useAbandonObjective(objectiveId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
-      void qc.invalidateQueries({ queryKey: ["strategy-objectives"] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectives] });
     },
   });
 }
@@ -294,7 +295,7 @@ export function useLinkObjectiveCapability(objectiveId: string) {
         { capability_id: capabilityId },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
     },
   });
 }
@@ -308,7 +309,7 @@ export function useUnlinkObjectiveCapability(objectiveId: string) {
         `/api/v1/strategy/objectives/${objectiveId}/capabilities/${capabilityId}`,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
     },
   });
 }
@@ -325,7 +326,7 @@ export function useLinkObjectiveValueStream(objectiveId: string) {
         { value_stream_id: valueStreamId },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
     },
   });
 }
@@ -339,7 +340,7 @@ export function useUnlinkObjectiveValueStream(objectiveId: string) {
         `/api/v1/strategy/objectives/${objectiveId}/value-streams/${valueStreamId}`,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
     },
   });
 }
@@ -364,14 +365,14 @@ export interface ApplicationSummaryForLinking {
 
 export function useDesignsForLinking() {
   return useQuery<{ designs: DesignSummaryForLinking[]; total: number }>({
-    queryKey: ["designs", "for-linking"],
+    queryKey: [QK.designs, "for-linking"],
     queryFn: () => apiGet("/api/v1/designs?page=1&page_size=200"),
   });
 }
 
 export function useApplicationsForLinking() {
   return useQuery<{ items: ApplicationSummaryForLinking[]; total: number }>({
-    queryKey: ["applications", "for-linking"],
+    queryKey: [QK.applications, "for-linking"],
     queryFn: () => apiGet("/api/v1/applications"),
   });
 }
@@ -386,7 +387,7 @@ export function useLinkObjectiveDesign(objectiveId: string) {
         { design_id: designId },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
     },
   });
 }
@@ -400,14 +401,14 @@ export function useUnlinkObjectiveDesign(objectiveId: string) {
         `/api/v1/strategy/objectives/${objectiveId}/designs/${designId}`,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
     },
   });
 }
 
 export function useDesignObjectives(designId: string | null) {
   return useQuery<{ items: StrategicObjectiveSummary[]; total: number }>({
-    queryKey: ["design-objectives", designId],
+    queryKey: [QK.designObjectives, designId],
     queryFn: () => apiGet(`/api/v1/designs/${designId}/objectives`),
     enabled: !!designId,
   });
@@ -425,7 +426,7 @@ export function useLinkObjectiveApplication(objectiveId: string) {
         { application_id: applicationId },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
     },
   });
 }
@@ -439,14 +440,14 @@ export function useUnlinkObjectiveApplication(objectiveId: string) {
         `/api/v1/strategy/objectives/${objectiveId}/applications/${applicationId}`,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
     },
   });
 }
 
 export function useApplicationObjectives(applicationId: string | null) {
   return useQuery<{ items: StrategicObjectiveSummary[]; total: number }>({
-    queryKey: ["application-objectives", applicationId],
+    queryKey: [QK.applicationObjectives, applicationId],
     queryFn: () => apiGet(`/api/v1/applications/${applicationId}/objectives`),
     enabled: !!applicationId,
   });
@@ -464,9 +465,9 @@ export function useLinkObjectiveControl(objectiveId: string) {
         { control_id: controlId },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
       // The Compliance control tree shows these links too.
-      void qc.invalidateQueries({ queryKey: ["control-objectives"] });
+      void qc.invalidateQueries({ queryKey: [QK.controlObjectives] });
     },
   });
 }
@@ -480,9 +481,9 @@ export function useUnlinkObjectiveControl(objectiveId: string) {
         `/api/v1/strategy/objectives/${objectiveId}/controls/${controlId}`,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
       // The Compliance control tree shows these links too.
-      void qc.invalidateQueries({ queryKey: ["control-objectives"] });
+      void qc.invalidateQueries({ queryKey: [QK.controlObjectives] });
     },
   });
 }
@@ -503,8 +504,8 @@ export function useLinkApplicationToObjective(applicationId: string) {
         { application_id: applicationId },
       ),
     onSuccess: (_data, objectiveId) => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
-      void qc.invalidateQueries({ queryKey: ["application-objectives", applicationId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.applicationObjectives, applicationId] });
     },
   });
 }
@@ -518,8 +519,8 @@ export function useUnlinkApplicationFromObjective(applicationId: string) {
         `/api/v1/strategy/objectives/${objectiveId}/applications/${applicationId}`,
       ),
     onSuccess: (_data, objectiveId) => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective", objectiveId] });
-      void qc.invalidateQueries({ queryKey: ["application-objectives", applicationId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjective, objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.applicationObjectives, applicationId] });
     },
   });
 }
@@ -568,14 +569,14 @@ export interface StrategyInitiativeUpdate {
 
 export function useInitiatives() {
   return useQuery<{ items: StrategyInitiative[]; total: number }>({
-    queryKey: ["strategy-initiatives"],
+    queryKey: [QK.strategyInitiatives],
     queryFn: () => apiGet("/api/v1/strategy/initiatives"),
   });
 }
 
 export function useInitiative(id: string | null) {
   return useQuery<StrategyInitiative>({
-    queryKey: ["strategy-initiative", id],
+    queryKey: [QK.strategyInitiative, id],
     queryFn: () => apiGet(`/api/v1/strategy/initiatives/${id}`),
     enabled: !!id,
   });
@@ -591,7 +592,7 @@ export function useCreateInitiative() {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiatives] });
     },
   });
 }
@@ -606,8 +607,8 @@ export function useUpdateInitiative(initiativeId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
-      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiatives] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiative, initiativeId] });
     },
   });
 }
@@ -618,7 +619,7 @@ export function useDeleteInitiative() {
     mutationFn: (initiativeId) =>
       apiMutation<void>("DELETE", `/api/v1/strategy/initiatives/${initiativeId}`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiatives] });
     },
   });
 }
@@ -632,9 +633,9 @@ export function useLinkInitiativeObjective(initiativeId: string) {
         `/api/v1/strategy/initiatives/${initiativeId}/objectives/${objectiveId}`,
       ),
     onSuccess: (_data, objectiveId) => {
-      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
-      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
-      void qc.invalidateQueries({ queryKey: ["strategy-objective-initiatives", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiatives] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiative, initiativeId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectiveInitiatives, objectiveId] });
     },
   });
 }
@@ -648,16 +649,16 @@ export function useUnlinkInitiativeObjective(initiativeId: string) {
         `/api/v1/strategy/initiatives/${initiativeId}/objectives/${objectiveId}`,
       ),
     onSuccess: (_data, objectiveId) => {
-      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
-      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
-      void qc.invalidateQueries({ queryKey: ["strategy-objective-initiatives", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiatives] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiative, initiativeId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectiveInitiatives, objectiveId] });
     },
   });
 }
 
 export function useObjectiveInitiatives(objectiveId: string | null) {
   return useQuery<{ items: StrategyInitiative[]; total: number }>({
-    queryKey: ["strategy-objective-initiatives", objectiveId],
+    queryKey: [QK.strategyObjectiveInitiatives, objectiveId],
     queryFn: () => apiGet(`/api/v1/strategy/objectives/${objectiveId}/initiatives`),
     enabled: !!objectiveId,
   });
@@ -697,8 +698,8 @@ export function useLinkInitiativeControlMapping(initiativeId: string) {
         initiativeControlMappingUrl(initiativeId, controlId, targetType, targetId),
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
-      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiatives] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiative, initiativeId] });
     },
   });
 }
@@ -712,8 +713,8 @@ export function useUnlinkInitiativeControlMapping(initiativeId: string) {
         initiativeControlMappingUrl(initiativeId, controlId, targetType, targetId),
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
-      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiatives] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiative, initiativeId] });
     },
   });
 }
@@ -733,9 +734,9 @@ export function useLinkObjectiveToInitiative(objectiveId: string) {
         `/api/v1/strategy/initiatives/${initiativeId}/objectives/${objectiveId}`,
       ),
     onSuccess: (_data, initiativeId) => {
-      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
-      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
-      void qc.invalidateQueries({ queryKey: ["strategy-objective-initiatives", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiatives] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiative, initiativeId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectiveInitiatives, objectiveId] });
     },
   });
 }
@@ -749,9 +750,9 @@ export function useUnlinkObjectiveFromInitiative(objectiveId: string) {
         `/api/v1/strategy/initiatives/${initiativeId}/objectives/${objectiveId}`,
       ),
     onSuccess: (_data, initiativeId) => {
-      void qc.invalidateQueries({ queryKey: ["strategy-initiatives"] });
-      void qc.invalidateQueries({ queryKey: ["strategy-initiative", initiativeId] });
-      void qc.invalidateQueries({ queryKey: ["strategy-objective-initiatives", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiatives] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyInitiative, initiativeId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectiveInitiatives, objectiveId] });
     },
   });
 }
@@ -765,7 +766,7 @@ export interface ObjectiveDependenciesResponse {
 
 export function useObjectiveDependencies(objectiveId: string | null) {
   return useQuery<ObjectiveDependenciesResponse>({
-    queryKey: ["strategy-objective-dependencies", objectiveId],
+    queryKey: [QK.strategyObjectiveDependencies, objectiveId],
     queryFn: () => apiGet(`/api/v1/strategy/objectives/${objectiveId}/dependencies`),
     enabled: !!objectiveId,
   });
@@ -781,9 +782,9 @@ export function useAddObjectiveDependency(objectiveId: string) {
         { depends_on_objective_id: dependsOnObjectiveId },
       ),
     onSuccess: (_data, dependsOnObjectiveId) => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective-dependencies", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectiveDependencies, objectiveId] });
       void qc.invalidateQueries({
-        queryKey: ["strategy-objective-dependencies", dependsOnObjectiveId],
+        queryKey: [QK.strategyObjectiveDependencies, dependsOnObjectiveId],
       });
     },
   });
@@ -798,9 +799,9 @@ export function useRemoveObjectiveDependency(objectiveId: string) {
         `/api/v1/strategy/objectives/${objectiveId}/depends-on/${dependsOnObjectiveId}`,
       ),
     onSuccess: (_data, dependsOnObjectiveId) => {
-      void qc.invalidateQueries({ queryKey: ["strategy-objective-dependencies", objectiveId] });
+      void qc.invalidateQueries({ queryKey: [QK.strategyObjectiveDependencies, objectiveId] });
       void qc.invalidateQueries({
-        queryKey: ["strategy-objective-dependencies", dependsOnObjectiveId],
+        queryKey: [QK.strategyObjectiveDependencies, dependsOnObjectiveId],
       });
     },
   });
@@ -827,7 +828,7 @@ export interface StrategicSummary {
 
 export function useStrategySummary() {
   return useQuery<StrategicSummary>({
-    queryKey: ["strategy-summary"],
+    queryKey: [QK.strategySummary],
     queryFn: () => apiGet("/api/v1/strategy/summary"),
     staleTime: 60_000,
   });
@@ -852,7 +853,7 @@ export interface StrategyHeatMapResponse {
 
 export function useStrategyHeatMap(themeId?: string) {
   return useQuery<StrategyHeatMapResponse>({
-    queryKey: ["strategy-heatmap", themeId ?? null],
+    queryKey: [QK.strategyHeatmap, themeId ?? null],
     queryFn: () =>
       apiGet(
         themeId

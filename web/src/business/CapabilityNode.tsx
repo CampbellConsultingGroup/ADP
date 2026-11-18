@@ -16,6 +16,7 @@ import { RegionalAssessmentsPanel } from "./RegionalAssessmentEditor";
 import { useCanWriteApplications } from "../application/appCapNav";
 import { confirmAction } from "../ui/confirm";
 import { Tabs } from "../ui/Tabs";
+import { QK } from "../api/queryKeys";
 
 interface CapabilityNodeProps {
   // ADP-914.7: widened from BusinessCapability to CapabilityTreeNode (a
@@ -338,7 +339,7 @@ export default function CapabilityNode({ capability, children, isOrphan, focused
             basePath={`/api/v1/business/capabilities/${capability.id}/agent-review`}
             label="Ask the business architecture expert"
             renderDetail={renderCapabilitySuggestionDetail}
-            onAccepted={() => queryClient.invalidateQueries({ queryKey: ["business-capabilities"] })}
+            onAccepted={() => queryClient.invalidateQueries({ queryKey: [QK.businessCapabilities] })}
           />
         </div>
       )}

@@ -8,6 +8,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import { QK } from "./queryKeys";
 
 export interface GroundingCitation {
   entity_type: string;
@@ -41,7 +42,7 @@ export function useSubmitAgentReview(basePath: string) {
   return useMutation<SubmitAgentReviewResponse, Error, void>({
     mutationFn: () => apiMutation<SubmitAgentReviewResponse>("POST", basePath),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agent-review-status", basePath] });
+      void qc.invalidateQueries({ queryKey: [QK.agentReviewStatus, basePath] });
     },
   });
 }
@@ -51,7 +52,7 @@ export function useAgentReviewStatus<S extends AgentSuggestionBase = AgentSugges
   operationId: string | null,
 ) {
   return useQuery<AgentReviewStatusResponse<S>>({
-    queryKey: ["agent-review-status", basePath, operationId],
+    queryKey: [QK.agentReviewStatus, basePath, operationId],
     queryFn: () => apiGet<AgentReviewStatusResponse<S>>(`${basePath}/${operationId}`),
     enabled: !!operationId,
     // Mirrors useIntakeStatus's polling idiom: keep polling while pending/running,
@@ -79,7 +80,7 @@ export function useAcceptSuggestion(basePath: string, operationId: string) {
         advisory_acknowledged: advisoryAcknowledged ?? false,
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agent-review-status", basePath, operationId] });
+      void qc.invalidateQueries({ queryKey: [QK.agentReviewStatus, basePath, operationId] });
     },
   });
 }
@@ -90,7 +91,7 @@ export function useRejectSuggestion(basePath: string, operationId: string) {
     mutationFn: ({ suggestionId }) =>
       apiMutation("POST", `${basePath}/${operationId}/suggestions/${suggestionId}/reject`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["agent-review-status", basePath, operationId] });
+      void qc.invalidateQueries({ queryKey: [QK.agentReviewStatus, basePath, operationId] });
     },
   });
 }

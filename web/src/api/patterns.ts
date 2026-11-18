@@ -3,6 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiGet, apiMutation, errorDetail, getAuthHeader } from "./client";
+import { QK } from "./queryKeys";
 
 const API = "/api/v1/patterns";
 
@@ -209,10 +210,10 @@ export function yamlDownloadUrl(key: string, version: string): string {
 // ── Query keys ────────────────────────────────────────────────────────────────
 
 const keys = {
-  all: ["patterns"] as const,
-  list: (filters: PatternFilters) => ["patterns", "list", filters] as const,
-  family: (key: string) => ["patterns", "family", key] as const,
-  version: (key: string, version: string) => ["patterns", "version", key, version] as const,
+  all: [QK.patterns] as const,
+  list: (filters: PatternFilters) => [QK.patterns, "list", filters] as const,
+  family: (key: string) => [QK.patterns, "family", key] as const,
+  version: (key: string, version: string) => [QK.patterns, "version", key, version] as const,
   view: (key: string, version: string, view: PatternViewKind, depth: number) =>
     ["patterns", "view", key, version, view, depth] as const,
 };
@@ -221,7 +222,7 @@ function useInvalidatePatterns() {
   const qc = useQueryClient();
   return (alsoKnowledge = false) => {
     void qc.invalidateQueries({ queryKey: keys.all });
-    if (alsoKnowledge) void qc.invalidateQueries({ queryKey: ["knowledge"] });
+    if (alsoKnowledge) void qc.invalidateQueries({ queryKey: [QK.knowledge] });
   };
 }
 
@@ -336,7 +337,7 @@ export function useDeleteDraft(key: string, version: string) {
 /** The canonical YAML of a version, as text (same bytes as the download and export). */
 export function usePatternYaml(key: string | null, version: string | null) {
   return useQuery<string>({
-    queryKey: ["patterns", "yaml", key ?? "", version ?? ""],
+    queryKey: [QK.patterns, "yaml", key ?? "", version ?? ""],
     queryFn: async () => {
       const authHeader = await getAuthHeader();
       const path = yamlDownloadUrl(key ?? "", version ?? "");
@@ -419,12 +420,12 @@ export interface EvaluateRequest {
 export type AdoptionViewKind = "conformance" | "transition";
 
 const adoptionKeys = {
-  all: ["patterns", "adoptions"] as const,
-  list: (withStatus: boolean) => ["patterns", "adoptions", "list", withStatus] as const,
-  one: (id: string) => ["patterns", "adoptions", "one", id] as const,
-  conformance: (id: string) => ["patterns", "adoptions", "conformance", id] as const,
-  view: (id: string, view: AdoptionViewKind) => ["patterns", "adoptions", "view", id, view] as const,
-  candidates: (id: string, role: string) => ["patterns", "adoptions", "candidates", id, role] as const,
+  all: [QK.patterns, "adoptions"] as const,
+  list: (withStatus: boolean) => [QK.patterns, "adoptions", "list", withStatus] as const,
+  one: (id: string) => [QK.patterns, "adoptions", "one", id] as const,
+  conformance: (id: string) => [QK.patterns, "adoptions", "conformance", id] as const,
+  view: (id: string, view: AdoptionViewKind) => [QK.patterns, "adoptions", "view", id, view] as const,
+  candidates: (id: string, role: string) => [QK.patterns, "adoptions", "candidates", id, role] as const,
 };
 
 function useInvalidateAdoptions() {
@@ -513,7 +514,7 @@ export function useDeleteAdoption(id: string) {
 
 export function useDiscovery(key: string, version: string, enabled = true) {
   return useQuery<DiscoveryReport>({
-    queryKey: ["patterns", "discovery", key, version],
+    queryKey: [QK.patterns, "discovery", key, version],
     queryFn: () => apiGet(`${versionPath(key, version)}/discover`),
     enabled,
   });
@@ -528,7 +529,7 @@ export function useEvaluate() {
 /** Applications for the application-set member picker (plain query, no Suspense). */
 export function useApplicationChoices() {
   return useQuery<ElementRef[]>({
-    queryKey: ["patterns", "application-choices"],
+    queryKey: [QK.patterns, "application-choices"],
     queryFn: async () => {
       const res = await apiGet<{ items: { id: string; name: string }[] }>("/api/v1/applications");
       return res.items

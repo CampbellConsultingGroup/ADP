@@ -2,6 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import { QK } from "./queryKeys";
 
 export type IntakeMode = "bulk_text" | "structured_form";
 export type OperationStatus = "pending" | "running" | "completed" | "failed";
@@ -96,7 +97,7 @@ export function useSubmitIntake() {
 
 export function useIntakeStatus(designId: string, operationId: string | null) {
   return useQuery<IntakeStatusResponse>({
-    queryKey: ["intake-status", designId, operationId],
+    queryKey: [QK.intakeStatus, designId, operationId],
     queryFn: () =>
       apiGet<IntakeStatusResponse>(`/api/v1/designs/${designId}/intake/${operationId}`),
     enabled: !!operationId,
@@ -118,8 +119,8 @@ export function useConfirmProposal(designId: string, operationId: string) {
       ),
     onSuccess: () => {
       // Refresh confirmed requirements sidebar AND the proposals list (FR-001)
-      void qc.invalidateQueries({ queryKey: ["requirements", designId] });
-      void qc.invalidateQueries({ queryKey: ["intake-status", designId, operationId] });
+      void qc.invalidateQueries({ queryKey: [QK.requirements, designId] });
+      void qc.invalidateQueries({ queryKey: [QK.intakeStatus, designId, operationId] });
     },
   });
 }
@@ -135,7 +136,7 @@ export function useRejectProposal(designId: string, operationId: string) {
       ),
     onSuccess: () => {
       // Refresh the proposals list so rejected proposal disappears (FR-001)
-      void qc.invalidateQueries({ queryKey: ["intake-status", designId, operationId] });
+      void qc.invalidateQueries({ queryKey: [QK.intakeStatus, designId, operationId] });
     },
   });
 }
@@ -154,14 +155,14 @@ export function useAddRequirement() {
         body,
       ),
     onSuccess: (_data, variables) => {
-      void qc.invalidateQueries({ queryKey: ["requirements", variables.designId] });
+      void qc.invalidateQueries({ queryKey: [QK.requirements, variables.designId] });
     },
   });
 }
 
 export function useRequirements(designId: string) {
   return useQuery<RequirementListResponse>({
-    queryKey: ["requirements", designId],
+    queryKey: [QK.requirements, designId],
     queryFn: () =>
       apiGet<RequirementListResponse>(`/api/v1/designs/${designId}/requirements`),
     staleTime: 0,
@@ -198,7 +199,7 @@ export interface CapabilityGapAnalysisResponse {
 
 export function useCapabilityGaps(designId: string) {
   return useQuery<CapabilityGapAnalysisResponse>({
-    queryKey: ["capability-gaps", designId],
+    queryKey: [QK.capabilityGaps, designId],
     queryFn: () =>
       apiGet<CapabilityGapAnalysisResponse>(`/api/v1/designs/${designId}/capability-gaps`),
     enabled: !!designId,

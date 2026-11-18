@@ -2,6 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import { QK } from "./queryKeys";
 
 export type RecommendStatus = "pending" | "running" | "completed" | "failed";
 export type OptionStatus = "pending" | "accepted" | "rejected";
@@ -98,7 +99,7 @@ export function useStartRecommendation(designId: string) {
 
 export function useRecommendStatus(designId: string, operationId: string | null) {
   return useQuery<RecommendStatusResponse>({
-    queryKey: ["recommend-status", designId, operationId],
+    queryKey: [QK.recommendStatus, designId, operationId],
     queryFn: () =>
       apiGet<RecommendStatusResponse>(
         `/api/v1/designs/${designId}/recommend/${operationId}`,
@@ -126,7 +127,7 @@ export function useAcceptOption(designId: string, operationId: string) {
       ),
     onSuccess: () => {
       // Refresh design so canvas shows the new elements
-      void qc.invalidateQueries({ queryKey: ["design", designId] });
+      void qc.invalidateQueries({ queryKey: [QK.design, designId] });
     },
   });
 }
@@ -145,7 +146,7 @@ export function useRejectOption(designId: string, operationId: string) {
         { rejection_reason },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["recommend-status", designId, operationId] });
+      void qc.invalidateQueries({ queryKey: [QK.recommendStatus, designId, operationId] });
     },
   });
 }
@@ -174,7 +175,7 @@ export function useOptionReasoning(
   enabled: boolean,
 ) {
   return useQuery<ReasoningResponse>({
-    queryKey: ["reasoning", operationId, optionId],
+    queryKey: [QK.reasoning, operationId, optionId],
     queryFn: () =>
       apiGet<ReasoningResponse>(
         `/api/v1/reasoning?operation_id=${encodeURIComponent(operationId)}&option_id=${encodeURIComponent(optionId)}`,

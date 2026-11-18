@@ -3,6 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation, errorDetail } from "./client";
+import { QK } from "./queryKeys";
 
 const BASE = "/api/v1/application-capabilities";
 
@@ -101,7 +102,7 @@ const LINK_BODY_KEY: Record<LinkKind, string> = {
 
 export { errorDetail };
 
-const KEY = ["app-capabilities"] as const;
+const KEY = [QK.appCapabilities] as const;
 
 export function useAppCapabilities() {
   return useQuery<{ items: ApplicationCapability[]; total: number }>({
@@ -151,7 +152,7 @@ function useInvalidating<V, R>(fn: (v: V) => Promise<R>) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: KEY });
       // 938-capability-model-analysis: roll-ups, impact and findings derive from these links.
-      void qc.invalidateQueries({ queryKey: ["cap-analysis"] });
+      void qc.invalidateQueries({ queryKey: [QK.capAnalysis] });
     },
   });
 }

@@ -7,9 +7,10 @@ import { useQuery } from "@tanstack/react-query";
 import type { AppRef, CapRef, GeoRef, LinkedCapRef, Rationale } from "./appCapabilities";
 import type { LifecycleStatus, TechCapLifecycle } from "./application";
 import { apiGet } from "./client";
+import { QK } from "./queryKeys";
 
 const BASE = "/api/v1/application-capabilities/analysis";
-export const CAP_ANALYSIS_KEY = ["cap-analysis"] as const;
+export const CAP_ANALYSIS_KEY = [QK.capAnalysis] as const;
 
 export type RiskBand = "high" | "medium" | "low" | "unknown";
 export type LifecycleBand = "past_end_of_life" | "retiring" | "contained" | "current" | "emerging";

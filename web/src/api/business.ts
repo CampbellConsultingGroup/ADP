@@ -5,6 +5,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { CAP_ANALYSIS_KEY } from "./capAnalysis";
 import { apiGet, apiMutation } from "./client";
 import { ORG_KEY } from "./organization";
+import { QK } from "./queryKeys";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -123,14 +124,14 @@ export interface ValueStreamStagesReorder {
 
 export function useCapabilities() {
   return useQuery<{ items: BusinessCapability[]; total: number }>({
-    queryKey: ["business-capabilities"],
+    queryKey: [QK.businessCapabilities],
     queryFn: () => apiGet("/api/v1/business/capabilities"),
   });
 }
 
 export function useCapability(id: string | null) {
   return useQuery<BusinessCapability>({
-    queryKey: ["business-capability", id],
+    queryKey: [QK.businessCapability, id],
     queryFn: () => apiGet(`/api/v1/business/capabilities/${id}`),
     enabled: !!id,
   });
@@ -143,11 +144,11 @@ export function useCapability(id: string | null) {
  * their own refetch.
  */
 function invalidateCapabilityViews(qc: QueryClient): void {
-  void qc.invalidateQueries({ queryKey: ["business-capabilities"] });
+  void qc.invalidateQueries({ queryKey: [QK.businessCapabilities] });
   void qc.invalidateQueries({ queryKey: CAP_ANALYSIS_KEY });
   void qc.invalidateQueries({ queryKey: ORG_KEY });
-  void qc.invalidateQueries({ queryKey: ["portfolio"] });
-  void qc.invalidateQueries({ queryKey: ["strategy-heatmap"] });
+  void qc.invalidateQueries({ queryKey: [QK.portfolio] });
+  void qc.invalidateQueries({ queryKey: [QK.strategyHeatmap] });
 }
 
 export function useCreateCapability() {
@@ -184,14 +185,14 @@ export function useDeleteCapability() {
 
 export function useValueStreams() {
   return useQuery<{ items: ValueStream[]; total: number }>({
-    queryKey: ["business-value-streams"],
+    queryKey: [QK.businessValueStreams],
     queryFn: () => apiGet("/api/v1/business/value-streams"),
   });
 }
 
 export function useValueStream(id: string | null) {
   return useQuery<ValueStreamDetail>({
-    queryKey: ["business-value-stream", id],
+    queryKey: [QK.businessValueStream, id],
     queryFn: () => apiGet(`/api/v1/business/value-streams/${id}`),
     enabled: !!id,
   });
@@ -224,14 +225,14 @@ export interface ValueChainDetail extends ValueChain {
 
 export function useValueChains() {
   return useQuery<{ items: ValueChain[]; total: number }>({
-    queryKey: ["business-value-chains"],
+    queryKey: [QK.businessValueChains],
     queryFn: () => apiGet("/api/v1/business/value-chains"),
   });
 }
 
 export function useValueChain(id: string | null) {
   return useQuery<ValueChainDetail>({
-    queryKey: ["business-value-chain", id],
+    queryKey: [QK.businessValueChain, id],
     queryFn: () => apiGet(`/api/v1/business/value-chains/${id}`),
     enabled: !!id,
   });
@@ -243,7 +244,7 @@ export function useCreateValueStream() {
     mutationFn: (body) =>
       apiMutation<ValueStream, ValueStreamCreate>("POST", "/api/v1/business/value-streams", body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["business-value-streams"] });
+      void qc.invalidateQueries({ queryKey: [QK.businessValueStreams] });
     },
   });
 }
@@ -254,8 +255,8 @@ export function useUpdateValueStream(vsId: string) {
     mutationFn: (body) =>
       apiMutation<ValueStream, ValueStreamUpdate>("PUT", `/api/v1/business/value-streams/${vsId}`, body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["business-value-streams"] });
-      void qc.invalidateQueries({ queryKey: ["business-value-stream", vsId] });
+      void qc.invalidateQueries({ queryKey: [QK.businessValueStreams] });
+      void qc.invalidateQueries({ queryKey: [QK.businessValueStream, vsId] });
     },
   });
 }
@@ -265,7 +266,7 @@ export function useDeleteValueStream() {
   return useMutation<void, Error, string>({
     mutationFn: (vsId) => apiMutation<void>("DELETE", `/api/v1/business/value-streams/${vsId}`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["business-value-streams"] });
+      void qc.invalidateQueries({ queryKey: [QK.businessValueStreams] });
     },
   });
 }
@@ -280,7 +281,7 @@ export function useAddStage(vsId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["business-value-stream", vsId] });
+      void qc.invalidateQueries({ queryKey: [QK.businessValueStream, vsId] });
     },
   });
 }
@@ -295,7 +296,7 @@ export function useUpdateStage(vsId: string, stageId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["business-value-stream", vsId] });
+      void qc.invalidateQueries({ queryKey: [QK.businessValueStream, vsId] });
     },
   });
 }
@@ -306,7 +307,7 @@ export function useDeleteStage(vsId: string) {
     mutationFn: (stageId) =>
       apiMutation<void>("DELETE", `/api/v1/business/value-streams/${vsId}/stages/${stageId}`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["business-value-stream", vsId] });
+      void qc.invalidateQueries({ queryKey: [QK.businessValueStream, vsId] });
     },
   });
 }
@@ -321,7 +322,7 @@ export function useReorderStages(vsId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["business-value-stream", vsId] });
+      void qc.invalidateQueries({ queryKey: [QK.businessValueStream, vsId] });
     },
   });
 }
@@ -366,7 +367,7 @@ export interface DesignPickerItem {
 
 export function useDesigns() {
   return useQuery<{ designs: DesignPickerItem[]; total: number }>({
-    queryKey: ["designs", "picker"],
+    queryKey: [QK.designs, "picker"],
     queryFn: () => apiGet("/api/v1/designs?page=1&page_size=200"),
     staleTime: 30_000,
   });
@@ -376,7 +377,7 @@ export function useDesigns() {
 
 export function useLinkedCapabilityDesigns(capabilityId: string | null) {
   return useQuery<LinkedDesignsResponse>({
-    queryKey: ["cap-designs", capabilityId],
+    queryKey: [QK.capDesigns, capabilityId],
     queryFn: () => apiGet(`/api/v1/business/capabilities/${capabilityId}/designs`),
     enabled: !!capabilityId,
   });
@@ -392,7 +393,7 @@ export function useLinkDesignToCapability(capabilityId: string) {
         { design_id: designId },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["cap-designs", capabilityId] });
+      void qc.invalidateQueries({ queryKey: [QK.capDesigns, capabilityId] });
     },
   });
 }
@@ -416,10 +417,10 @@ export function useLinkDesignToCapabilities() {
         { design_id: designId },
       ),
     onSuccess: (_data, variables) => {
-      void qc.invalidateQueries({ queryKey: ["cap-designs", variables.capabilityId] });
+      void qc.invalidateQueries({ queryKey: [QK.capDesigns, variables.capabilityId] });
       // So BusinessContextPanel (rendered right next to Intake) reflects the
       // new link without a manual refresh.
-      void qc.invalidateQueries({ queryKey: ["design-business-context", variables.designId] });
+      void qc.invalidateQueries({ queryKey: [QK.designBusinessContext, variables.designId] });
     },
   });
 }
@@ -430,7 +431,7 @@ export function useUnlinkDesignFromCapability(capabilityId: string) {
     mutationFn: (designId) =>
       apiMutation<void>("DELETE", `/api/v1/business/capabilities/${capabilityId}/designs/${designId}`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["cap-designs", capabilityId] });
+      void qc.invalidateQueries({ queryKey: [QK.capDesigns, capabilityId] });
     },
   });
 }
@@ -439,7 +440,7 @@ export function useUnlinkDesignFromCapability(capabilityId: string) {
 
 export function useLinkedValueStreamDesigns(valueStreamId: string | null) {
   return useQuery<LinkedDesignsResponse>({
-    queryKey: ["vs-designs", valueStreamId],
+    queryKey: [QK.vsDesigns, valueStreamId],
     queryFn: () => apiGet(`/api/v1/business/value-streams/${valueStreamId}/designs`),
     enabled: !!valueStreamId,
   });
@@ -455,7 +456,7 @@ export function useLinkDesignToValueStream(valueStreamId: string) {
         { design_id: designId },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["vs-designs", valueStreamId] });
+      void qc.invalidateQueries({ queryKey: [QK.vsDesigns, valueStreamId] });
     },
   });
 }
@@ -466,7 +467,7 @@ export function useUnlinkDesignFromValueStream(valueStreamId: string) {
     mutationFn: (designId) =>
       apiMutation<void>("DELETE", `/api/v1/business/value-streams/${valueStreamId}/designs/${designId}`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["vs-designs", valueStreamId] });
+      void qc.invalidateQueries({ queryKey: [QK.vsDesigns, valueStreamId] });
     },
   });
 }
@@ -475,7 +476,7 @@ export function useUnlinkDesignFromValueStream(valueStreamId: string) {
 
 export function useDesignBusinessContext(designId: string | null) {
   return useQuery<BusinessContextResponse>({
-    queryKey: ["design-business-context", designId],
+    queryKey: [QK.designBusinessContext, designId],
     queryFn: () => apiGet(`/api/v1/business/designs/${designId}/context`),
     enabled: !!designId,
   });
@@ -523,14 +524,14 @@ export interface StageCapabilitiesResponse {
 
 export function useDomains() {
   return useQuery<DomainListResponse>({
-    queryKey: ["domains"],
+    queryKey: [QK.domains],
     queryFn: () => apiGet("/api/v1/business/domains"),
   });
 }
 
 export function useDomain(domainId: string | null) {
   return useQuery<DomainDetail>({
-    queryKey: ["domain", domainId],
+    queryKey: [QK.domain, domainId],
     queryFn: () => apiGet(`/api/v1/business/domains/${domainId}`),
     enabled: !!domainId,
   });
@@ -542,7 +543,7 @@ export function useCreateDomain() {
     mutationFn: (body) =>
       apiMutation<BusinessDomain, Partial<BusinessDomain>>("POST", "/api/v1/business/domains", body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["domains"] });
+      void qc.invalidateQueries({ queryKey: [QK.domains] });
     },
   });
 }
@@ -557,8 +558,8 @@ export function useUpdateDomain(domainId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["domains"] });
-      void qc.invalidateQueries({ queryKey: ["domain", domainId] });
+      void qc.invalidateQueries({ queryKey: [QK.domains] });
+      void qc.invalidateQueries({ queryKey: [QK.domain, domainId] });
     },
   });
 }
@@ -568,7 +569,7 @@ export function useDeleteDomain() {
   return useMutation<void, Error, string>({
     mutationFn: (id) => apiMutation<void>("DELETE", `/api/v1/business/domains/${id}`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["domains"] });
+      void qc.invalidateQueries({ queryKey: [QK.domains] });
     },
   });
 }
@@ -592,13 +593,13 @@ export function useAssignCapabilityDomain(capabilityId: string) {
       // all, only the ["domains"] list -- so a currently-open domain's
       // Assigned/Unassigned lists never refreshed after Assign/Remove. Both
       // together made assignment look like it silently did nothing; the PATCH
-      // itself always worked. queryKey: ["domain"] prefix-matches every
+      // itself always worked. queryKey: [QK.domain] prefix-matches every
       // cached ["domain", id] query (default partial matching), covering
       // both the newly- and previously-assigned domain without needing to
       // track which ids are affected.
-      void qc.invalidateQueries({ queryKey: ["business-capabilities"] });
-      void qc.invalidateQueries({ queryKey: ["domains"] });
-      void qc.invalidateQueries({ queryKey: ["domain"] });
+      void qc.invalidateQueries({ queryKey: [QK.businessCapabilities] });
+      void qc.invalidateQueries({ queryKey: [QK.domains] });
+      void qc.invalidateQueries({ queryKey: [QK.domain] });
     },
   });
 }
@@ -607,7 +608,7 @@ export function useAssignCapabilityDomain(capabilityId: string) {
 
 export function useStageCapabilities(vsId: string | null, stageId: string | null) {
   return useQuery<StageCapabilitiesResponse>({
-    queryKey: ["stage-caps", vsId, stageId],
+    queryKey: [QK.stageCaps, vsId, stageId],
     queryFn: () =>
       apiGet(`/api/v1/business/value-streams/${vsId}/stages/${stageId}/capabilities`),
     enabled: !!(vsId && stageId),
@@ -624,7 +625,7 @@ export function useLinkCapabilityToStage(vsId: string, stageId: string) {
         { capability_id: capabilityId },
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["stage-caps", vsId, stageId] });
+      void qc.invalidateQueries({ queryKey: [QK.stageCaps, vsId, stageId] });
     },
   });
 }
@@ -638,7 +639,7 @@ export function useUnlinkCapabilityFromStage(vsId: string, stageId: string) {
         `/api/v1/business/value-streams/${vsId}/stages/${stageId}/capabilities/${capabilityId}`,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["stage-caps", vsId, stageId] });
+      void qc.invalidateQueries({ queryKey: [QK.stageCaps, vsId, stageId] });
     },
   });
 }
@@ -652,7 +653,7 @@ export interface OrphanReportResponse {
 
 export function useOrphanReport() {
   return useQuery<OrphanReportResponse>({
-    queryKey: ["business-orphans"],
+    queryKey: [QK.businessOrphans],
     queryFn: () => apiGet("/api/v1/business/orphans"),
   });
 }

@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "../api/client";
 import { Icon } from "./Icon";
 import { ModalOverlay } from "./ModalOverlay";
+import { QK } from "../api/queryKeys";
 
 /**
  * Global search (ADP-blp.56). The top bar showed a "Search… ⌘K" box that was only a picture of
@@ -63,7 +64,7 @@ export function SearchPalette({ onClose, onOpenResult }: PaletteProps): React.Re
   const types = useMemo(() => Object.keys(SEARCH_TYPE_LABELS).join(","), []);
 
   const { data, isFetching, isError } = useQuery<{ hits: SearchHit[] }>({
-    queryKey: ["global-search", query],
+    queryKey: [QK.globalSearch, query],
     queryFn: () =>
       apiGet(`/api/v1/search?q=${encodeURIComponent(query)}&limit=12&entity_types=${types}`),
     enabled,

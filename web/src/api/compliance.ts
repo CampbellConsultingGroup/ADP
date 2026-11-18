@@ -3,6 +3,7 @@
 
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import { QK } from "./queryKeys";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -89,14 +90,14 @@ export interface ControlUpdate {
 
 export function useFrameworks() {
   return useQuery<RegulatoryFrameworkListResponse>({
-    queryKey: ["compliance-frameworks"],
+    queryKey: [QK.complianceFrameworks],
     queryFn: () => apiGet("/api/v1/compliance/frameworks"),
   });
 }
 
 export function useFramework(id: string | null) {
   return useQuery<RegulatoryFrameworkDetail>({
-    queryKey: ["compliance-framework", id],
+    queryKey: [QK.complianceFramework, id],
     queryFn: () => apiGet(`/api/v1/compliance/frameworks/${id}`),
     enabled: !!id,
   });
@@ -131,7 +132,7 @@ export function useAllControls(): { byId: Map<string, ControlOption>; isLoading:
   const frameworks = useFrameworks();
   const details = useQueries({
     queries: (frameworks.data?.items ?? []).map((f) => ({
-      queryKey: ["compliance-framework", f.id],
+      queryKey: [QK.complianceFramework, f.id],
       queryFn: () => apiGet<RegulatoryFrameworkDetail>(`/api/v1/compliance/frameworks/${f.id}`),
     })),
   });
@@ -150,7 +151,7 @@ export function useCreateFramework() {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["compliance-frameworks"] });
+      void qc.invalidateQueries({ queryKey: [QK.complianceFrameworks] });
     },
   });
 }
@@ -165,8 +166,8 @@ export function useUpdateFramework(frameworkId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["compliance-frameworks"] });
-      void qc.invalidateQueries({ queryKey: ["compliance-framework", frameworkId] });
+      void qc.invalidateQueries({ queryKey: [QK.complianceFrameworks] });
+      void qc.invalidateQueries({ queryKey: [QK.complianceFramework, frameworkId] });
     },
   });
 }
@@ -177,7 +178,7 @@ export function useDeleteFramework() {
     mutationFn: (frameworkId) =>
       apiMutation<void>("DELETE", `/api/v1/compliance/frameworks/${frameworkId}`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["compliance-frameworks"] });
+      void qc.invalidateQueries({ queryKey: [QK.complianceFrameworks] });
     },
   });
 }
@@ -194,7 +195,7 @@ export function useCreateControl(frameworkId: string) {
         body,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["compliance-framework", frameworkId] });
+      void qc.invalidateQueries({ queryKey: [QK.complianceFramework, frameworkId] });
     },
   });
 }
@@ -205,7 +206,7 @@ export function useUpdateControl(controlId: string, frameworkId: string) {
     mutationFn: (body) =>
       apiMutation<Control, ControlUpdate>("PATCH", `/api/v1/compliance/controls/${controlId}`, body),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["compliance-framework", frameworkId] });
+      void qc.invalidateQueries({ queryKey: [QK.complianceFramework, frameworkId] });
     },
   });
 }
@@ -215,7 +216,7 @@ export function useDeleteControl(frameworkId: string) {
   return useMutation<void, Error & { status?: number }, string>({
     mutationFn: (controlId) => apiMutation<void>("DELETE", `/api/v1/compliance/controls/${controlId}`),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["compliance-framework", frameworkId] });
+      void qc.invalidateQueries({ queryKey: [QK.complianceFramework, frameworkId] });
     },
   });
 }
@@ -276,7 +277,7 @@ function mappingUrl(controlId: string, targetType: MappingTargetType, targetId?:
 
 export function useControlMappings(controlId: string | null) {
   return useQuery<ControlMappingListResponse>({
-    queryKey: ["control-mappings", controlId],
+    queryKey: [QK.controlMappings, controlId],
     queryFn: () => apiGet(`/api/v1/compliance/controls/${controlId}/mappings`),
     enabled: !!controlId,
   });
@@ -298,8 +299,8 @@ export function useUpsertMapping(controlId: string) {
         data,
       ),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["control-mappings", controlId] });
-      void qc.invalidateQueries({ queryKey: ["agent-compliance"] });
+      void qc.invalidateQueries({ queryKey: [QK.controlMappings, controlId] });
+      void qc.invalidateQueries({ queryKey: [QK.agentCompliance] });
     },
   });
 }
@@ -315,8 +316,8 @@ export function useDeleteMapping(controlId: string) {
     mutationFn: ({ targetType, targetId }) =>
       apiMutation<void>("DELETE", mappingUrl(controlId, targetType, targetId)),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["control-mappings", controlId] });
-      void qc.invalidateQueries({ queryKey: ["agent-compliance"] });
+      void qc.invalidateQueries({ queryKey: [QK.controlMappings, controlId] });
+      void qc.invalidateQueries({ queryKey: [QK.agentCompliance] });
     },
   });
 }
@@ -332,7 +333,7 @@ export interface AgentComplianceMappings {
 
 export function useAgentComplianceMappings(agentId: string | null) {
   return useQuery<AgentComplianceMappings>({
-    queryKey: ["agent-compliance", "mappings", agentId],
+    queryKey: [QK.agentCompliance, "mappings", agentId],
     queryFn: () => apiGet(`/api/v1/compliance/agents/${agentId}/mappings`),
     enabled: !!agentId,
   });
@@ -342,7 +343,7 @@ export function useAgentComplianceMappings(agentId: string | null) {
 export function useAgentComplianceStatuses(agentIds: string[]) {
   const ids = agentIds.join(",");
   return useQuery<{ items: { agent_id: string; status: ComplianceStatus }[] }>({
-    queryKey: ["agent-compliance", "statuses", ids],
+    queryKey: [QK.agentCompliance, "statuses", ids],
     queryFn: () => apiGet(`/api/v1/compliance/agents/statuses?ids=${encodeURIComponent(ids)}`),
     enabled: agentIds.length > 0,
   });
@@ -370,7 +371,7 @@ export interface InitiativeRefListResponse {
  */
 export function useFrameworkControlObjectives(frameworkId: string | null) {
   return useQuery<Map<string, { id: string; statement: string }[]>>({
-    queryKey: ["control-objectives", "framework", frameworkId],
+    queryKey: [QK.controlObjectives, "framework", frameworkId],
     queryFn: async () => {
       const data = await apiGet<{
         items: { control_id: string; objectives: { id: string; statement: string }[] }[];
@@ -392,7 +393,7 @@ export function useControlMappingInitiatives(
       ? `/api/v1/compliance/controls/${controlId}/mappings/organization/initiatives`
       : `/api/v1/compliance/controls/${controlId}/mappings/${segment}/${targetId}/initiatives`;
   return useQuery<InitiativeRefListResponse>({
-    queryKey: ["control-mapping-initiatives", controlId, targetType, targetId],
+    queryKey: [QK.controlMappingInitiatives, controlId, targetType, targetId],
     queryFn: () => apiGet(path),
     enabled: !!controlId && (targetType === "organization" || !!targetId),
   });
@@ -402,7 +403,7 @@ export function useControlMappingInitiatives(
 
 export function useCapabilityComplianceMappings(capabilityId: string | null) {
   return useQuery<ControlMappingListResponse>({
-    queryKey: ["capability-compliance-mappings", capabilityId],
+    queryKey: [QK.capabilityComplianceMappings, capabilityId],
     queryFn: () => apiGet(`/api/v1/business/capabilities/${capabilityId}/compliance-mappings`),
     enabled: !!capabilityId,
   });
@@ -410,7 +411,7 @@ export function useCapabilityComplianceMappings(capabilityId: string | null) {
 
 export function useApplicationComplianceMappings(applicationId: string | null) {
   return useQuery<ControlMappingListResponse>({
-    queryKey: ["application-compliance-mappings", applicationId],
+    queryKey: [QK.applicationComplianceMappings, applicationId],
     queryFn: () => apiGet(`/api/v1/applications/${applicationId}/compliance-mappings`),
     enabled: !!applicationId,
   });
@@ -434,7 +435,7 @@ export interface FrameworkCoverageRollup {
 
 export function useFrameworkRollup(frameworkId: string | null) {
   return useQuery<FrameworkCoverageRollup>({
-    queryKey: ["compliance-framework-rollup", frameworkId],
+    queryKey: [QK.complianceFrameworkRollup, frameworkId],
     queryFn: () => apiGet(`/api/v1/compliance/frameworks/${frameworkId}/rollup`),
     enabled: !!frameworkId,
   });
@@ -448,7 +449,7 @@ export interface ComplianceSummaryResponse {
 
 export function useComplianceSummary() {
   return useQuery<ComplianceSummaryResponse>({
-    queryKey: ["compliance-summary"],
+    queryKey: [QK.complianceSummary],
     queryFn: () => apiGet("/api/v1/compliance/summary"),
   });
 }
