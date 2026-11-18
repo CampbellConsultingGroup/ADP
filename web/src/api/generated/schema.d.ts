@@ -2722,7 +2722,8 @@ export interface paths {
         get: operations["get_llm_config_api_v1_config_llm_get"];
         /**
          * Update Llm Config
-         * @description Update active model selection and/or API key for extraction and/or recommendations.
+         * @description Choose the model for extraction, recommendations and/or validation. Applies to every
+         *     worker and survives a restart. (The API key is set at deploy time, not here.)
          */
         put: operations["update_llm_config_api_v1_config_llm_put"];
         post?: never;
@@ -8543,8 +8544,6 @@ export interface components {
         };
         /** LLMConfigUpdate */
         LLMConfigUpdate: {
-            /** Api Key */
-            api_key?: string | null;
             /** Extraction Model */
             extraction_model?: string | null;
             /** Recommendation Model */

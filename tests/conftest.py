@@ -117,3 +117,16 @@ def _discard_changed_apps():  # type: ignore[no-untyped-def]
     for key, app in list(_shared_apps.items()):
         if _app_shape(app) != _shape.get(id(app)):
             del _shared_apps[key]
+
+
+# ── ADP-blp.13: no model choice leaks from one test to the next ────────────────
+# A worker keeps the last model choices it read from the database (adp.llm.settings).
+
+
+@pytest.fixture(autouse=True)
+def _fresh_llm_settings():  # type: ignore[no-untyped-def]
+    from adp.llm import settings as llm_settings
+
+    llm_settings.reset_for_tests()
+    yield
+    llm_settings.reset_for_tests()

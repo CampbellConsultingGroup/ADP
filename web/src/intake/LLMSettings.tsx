@@ -1,33 +1,30 @@
-import React, { useState } from "react";
-import { useLLMConfig, useUpdateLLMConfig, useAvailableModels, type ModelInfo } from "../api/config";
+import React from "react";
+import { useLLMConfig, useUpdateLLMConfig, useAvailableModels, type LLMConfigUpdate } from "../api/config";
+import { useCan } from "../auth/permissions";
+import { Alert, Field, Loading } from "../ui/primitives";
+
+/**
+ * Which model each AI step uses (ADP-blp.13). A choice is stored on the server, so it applies to
+ * everyone at once and survives a restart. The API key is not set here: it is a deploy-time
+ * secret (Key Vault on Azure, the ADP_LLM_API_KEY entry in .env locally), and this screen only
+ * reports whether one is configured.
+ */
+const STEPS: { setting: keyof LLMConfigUpdate; label: string }[] = [
+  { setting: "extraction_model", label: "Extraction Model" },
+  { setting: "recommendation_model", label: "Recommendation Model" },
+  { setting: "validation_model", label: "Validation Model" },
+];
 
 export default function LLMSettings(): React.ReactElement {
   const { data: config, isLoading } = useLLMConfig();
   const { data: models } = useAvailableModels();
   const update = useUpdateLLMConfig();
+  const canChange = useCan("manage_config");
 
-  const [apiKeyDraft, setApiKeyDraft] = useState("");
-  const [keySaved, setKeySaved] = useState(false);
-
-  if (isLoading) return <div style={{ padding: 16, fontSize: 13 }}>Loading...</div>;
+  if (isLoading) return <Loading pad={16} />;
 
   const connected = config?.api_key_configured ?? false;
-  const statusColor = connected ? "var(--good)" : "var(--crit)";
-  const statusText = connected ? `Connected (${config?.provider})` : "API key not configured";
-
-  function handleSaveKey() {
-    if (!apiKeyDraft.trim()) return;
-    update.mutate(
-      { api_key: apiKeyDraft.trim() },
-      {
-        onSuccess: () => {
-          setApiKeyDraft("");
-          setKeySaved(true);
-          setTimeout(() => setKeySaved(false), 3000);
-        },
-      }
-    );
-  }
+  const options = models?.models ?? [];
 
   return (
     <div style={{ padding: 16 }}>
@@ -36,103 +33,45 @@ export default function LLMSettings(): React.ReactElement {
       <div style={{ marginBottom: 14, padding: 10, background: "var(--surface-2)", borderRadius: 6 }}>
         <div style={{ fontSize: 12, color: "var(--ink-2)", marginBottom: 4 }}>Provider</div>
         <div style={{ fontSize: 13, fontWeight: 600 }}>Anthropic</div>
-        <div style={{ fontSize: 12, color: statusColor, marginTop: 4 }}>
-          ● {statusText}
+        <div style={{ fontSize: 12, color: connected ? "var(--good)" : "var(--crit)", marginTop: 4 }}>
+          ● {connected ? `Connected (${config?.provider})` : "API key not configured"}
+        </div>
+        <div style={{ fontSize: 11.5, color: "var(--ink-2)", marginTop: 6 }}>
+          The API key is set when the platform is deployed, not on this screen.
+          {!connected && " Until one is configured, AI steps return placeholder results."}
         </div>
       </div>
 
-      <div style={{ marginBottom: 14 }}>
-        <label htmlFor="llm-settings-f0" style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
-          {connected ? "Update API Key" : "API Key"}
-        </label>
-        <div style={{ display: "flex", gap: 6 }}>
-          <input id="llm-settings-f0"
-            type="password"
-            value={apiKeyDraft}
-            onChange={(e) => setApiKeyDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSaveKey()}
-            placeholder={connected ? "Enter new key to replace…" : "sk-ant-…"}
-            style={{
-              flex: 1,
-              padding: "6px 8px",
-              fontSize: 13,
-              border: "1px solid var(--border)",
-              borderRadius: 4,
-              background: "var(--surface)",
-              color: "var(--ink)",
-              fontFamily: "var(--mono)",
-            }}
-          />
-          <button
-            onClick={handleSaveKey}
-            disabled={!apiKeyDraft.trim() || update.isPending}
-            style={{
-              padding: "6px 12px",
-              fontSize: 13,
-              background: "var(--accent)",
-              color: "var(--surface)",
-              border: "none",
-              borderRadius: 4,
-              cursor: apiKeyDraft.trim() ? "pointer" : "not-allowed",
-              opacity: apiKeyDraft.trim() ? 1 : 0.5,
-            }}
+      {STEPS.map(({ setting, label }) => {
+        const value = config?.[setting] ?? "claude-sonnet-4-6";
+        return (
+          <Field
+            key={setting}
+            label={label}
+            hint={options.find((m) => m.id === value)?.description}
           >
-            {update.isPending ? "Saving…" : "Save"}
-          </button>
-        </div>
-        {keySaved && (
-          <div style={{ fontSize: 12, color: "var(--good)", marginTop: 4 }}>✓ API key updated</div>
-        )}
-        {update.isError && (
-          <div style={{ fontSize: 12, color: "var(--crit)", marginTop: 4 }}>Failed to save key</div>
-        )}
-      </div>
+            {(control) => (
+              <select
+                {...control}
+                className="ui-select"
+                value={value}
+                disabled={!canChange.allowed || update.isPending}
+                title={canChange.reason}
+                onChange={(e) => update.mutate({ [setting]: e.target.value })}
+              >
+                {options.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} — {m.tier}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+        );
+      })}
 
-      <div style={{ marginBottom: 12 }}>
-        <label htmlFor="llm-settings-extraction-model" style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
-          Extraction Model
-        </label>
-        <select id="llm-settings-extraction-model"
-          value={config?.extraction_model ?? "claude-sonnet-4-6"}
-          onChange={(e) => update.mutate({ extraction_model: e.target.value })}
-          disabled={!connected}
-          style={{ width: "100%", padding: "6px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 4, background: "var(--surface)", color: "var(--ink)" }}
-        >
-          {(models?.models ?? []).map((m: ModelInfo) => (
-            <option key={m.id} value={m.id}>
-              {m.name} — {m.tier}
-            </option>
-          ))}
-        </select>
-        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 3 }}>
-          {models?.models.find((m: ModelInfo) => m.id === config?.extraction_model)?.description}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: 12 }}>
-        <label htmlFor="llm-settings-recommendation-model" style={{ fontSize: 12, fontWeight: 600, display: "block", marginBottom: 4 }}>
-          Recommendation Model
-        </label>
-        <select id="llm-settings-recommendation-model"
-          value={config?.recommendation_model ?? "claude-sonnet-4-6"}
-          onChange={(e) => update.mutate({ recommendation_model: e.target.value })}
-          disabled={!connected}
-          style={{ width: "100%", padding: "6px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 4, background: "var(--surface)", color: "var(--ink)" }}
-        >
-          {(models?.models ?? []).map((m: ModelInfo) => (
-            <option key={m.id} value={m.id}>
-              {m.name} — {m.tier}
-            </option>
-          ))}
-        </select>
-        <div style={{ fontSize: 11, color: "var(--ink-3)", marginTop: 3 }}>
-          {models?.models.find((m: ModelInfo) => m.id === config?.recommendation_model)?.description}
-        </div>
-      </div>
-
-      {update.isSuccess && !keySaved && (
-        <div style={{ fontSize: 12, color: "var(--good)", marginTop: 8 }}>✓ Model preferences saved</div>
-      )}
+      {update.isSuccess && <Alert tone="good">Saved. The choice applies to everyone.</Alert>}
+      {update.isError && <Alert tone="crit">Could not save: {update.error.message}</Alert>}
     </div>
   );
 }

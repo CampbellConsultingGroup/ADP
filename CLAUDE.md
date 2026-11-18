@@ -173,6 +173,24 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.13, last part (decision 2026-11-18: API key deploy-time only, model choices
+  in the database):
+  - `adp.llm.settings` + migration `055` (`llm_settings`: name, value, updated_at, updated_by). The
+    extraction, recommendation and validation model choices are rows there; no row means the
+    environment variable, then `claude-sonnet-4-6`. They used to live in one worker's memory, so
+    with two workers half the requests kept the old model and a restart lost the choice.
+  - A worker reads them before every request that calls a model (`refresh_llm_settings`, an
+    app-level dependency beside the rate limiter) and for `GET /config/llm`. `refresh()` never
+    raises: an unreadable database keeps the last known values and is retried after 30 s.
+  - `PUT /api/v1/config/llm` no longer accepts `api_key` (422). `get_api_key()` reads
+    `ADP_LLM_API_KEY` from the environment when called. Rotation is unchanged: Key Vault plus a
+    restart on Azure (`bd memories adp-llm-api-key`), `.env` locally.
+  - UI: LLM Settings has no key field, says where the key is set, offers all three models (it had
+    no validation model) and is read-only without `manage_config`.
+  - Tests: an autouse root fixture resets the worker's copy; `App.test.tsx` waits up to 5 s for
+    lazily loaded pages (a one-second wait failed at random on CI).
+  - DEPLOY: migrations `054` and `055` must run. The local database is still at `053`; until `055`
+    is applied locally, saving a model on the settings screen fails (reads fall back to defaults).
 - Fable review ADP-blp.12 (decision, 2026-11-18): `confirmation_id` is an AUDIT ANNOTATION, not a
   control. The client makes it up after the user confirms; the server checks only that it is
   non-empty and stores it. It is not issued or verified by the server. `adp.authz.confirmation`

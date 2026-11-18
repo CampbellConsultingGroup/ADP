@@ -65,6 +65,8 @@ cd /home/jmuir/projects/ADP
 export ADP_DATABASE_URL="postgresql+asyncpg://adp_user:adp_pass@127.0.0.1:5432/adp"
 export ADP_LLM_ENDPOINT="https://api.anthropic.com"
 export ADP_LLM_API_KEY="sk-..."   # Never logged; never in spans
+# The key is set here (or in Key Vault on Azure) only. It can no longer be set from the LLM Settings
+# screen (ADP-blp.13): that screen chooses models, which are stored in the database.
 export ADP_LLM_MODEL="claude-sonnet-4-6"   # Optional default model
 # Optional — enable Keycloak OIDC auth (ADP-SPEC-026):
 # export ADP_AUTH_ENABLED=true
