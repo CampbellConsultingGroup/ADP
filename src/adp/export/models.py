@@ -6,7 +6,9 @@ adp.docs and adp.export packages.
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from adp.authz.confirmation import CONFIRMATION_ID_DESCRIPTION
 
 
 class ExportRequest(BaseModel):
@@ -29,7 +31,7 @@ class ExportRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    confirmation_id: str
+    confirmation_id: str = Field(description=CONFIRMATION_ID_DESCRIPTION)
 
     @field_validator("confirmation_id")
     @classmethod

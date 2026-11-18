@@ -38,6 +38,7 @@
       "type": "boolean"
      },
      "confirmation_id": {
+      "description": "Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.",
       "title": "Confirmation Id",
       "type": "string"
      }
@@ -8361,6 +8362,7 @@
     "description": "Request body for POST /api/v1/designs/{id}/export.\n\nART-VIII: confirmation_id must be a non-empty string. An empty or absent\nconfirmation_id is rejected at the Pydantic validation layer \u2014 before\nthe export handler runs \u2014 making it impossible to skip the confirmation gate.\n\nexport_root is deliberately NOT a request field (ADP-izw): it used to be\na raw, unvalidated client-supplied string fed straight into a filesystem\npath with no containment check at all, letting any EXPORT_DESIGN-holding\ncaller write the export bundle to an arbitrary path on the server. The\ndestination is now a server-side operator setting (ADP_DESIGN_EXPORT_ROOT,\nread in adp.api.routers.export_router), matching the precedent already\nestablished by the sibling business/application-architecture export\nfeatures' ADP_BUSINESS_ARCH_EXPORT_ROOT env var (adp.api.app) \u2014 neither\nof those accepts a client-supplied root either.",
     "properties": {
      "confirmation_id": {
+      "description": "Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.",
       "title": "Confirmation Id",
       "type": "string"
      }
@@ -12558,6 +12560,7 @@
     "description": "Confirm body for a manual edit (FR-003, FR-004, FR-010, FR-012).\n\nMirrors SuggestionAcceptRequest (adp/business/models.py): confirmation_id\nis required and non-empty -- ART-VIII, MANAGE_AGENT_PROMPTS is in\nREQUIRES_CONFIRMATION.",
     "properties": {
      "confirmation_id": {
+      "description": "Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.",
       "title": "Confirmation Id",
       "type": "string"
      },
@@ -12646,6 +12649,7 @@
     "description": "Confirm body for a restore (FR-008) -- same confirmation gate as an\nedit (Clarification Session 2026-07-24: restore is not a lower-friction\npath).",
     "properties": {
      "confirmation_id": {
+      "description": "Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.",
       "title": "Confirmation Id",
       "type": "string"
      },
@@ -15217,6 +15221,7 @@
     "description": "Confirm body for a manual edit (FR-005, FR-012).\n\nMirrors PromptEditRequest: confirmation_id is required and non-empty --\nART-VIII, MANAGE_SCORING_RUBRICS is in REQUIRES_CONFIRMATION. Unlike a\nprompt's plain non-empty check, `weights` validity is rubric-specific\n(data-model.md \u00a72) and is NOT re-validated here -- the service layer\ncalls the rubric's own registered validate() before writing anything,\nsince this model has no way to know which rubric_id it's for (that's\na path parameter, not a body field).",
     "properties": {
      "confirmation_id": {
+      "description": "Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.",
       "title": "Confirmation Id",
       "type": "string"
      },
@@ -15331,6 +15336,7 @@
     "description": "Confirm body for a restore (FR-006) -- same confirmation gate as an\nedit (mirrors PromptRestoreRequest / ADP-SPEC-042's own Clarification\nSession 2026-07-24: restore is not a lower-friction path).",
     "properties": {
      "confirmation_id": {
+      "description": "Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.",
       "title": "Confirmation Id",
       "type": "string"
      },
@@ -17074,6 +17080,7 @@
       "type": "boolean"
      },
      "confirmation_id": {
+      "description": "Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.",
       "title": "Confirmation Id",
       "type": "string"
      }
@@ -19725,6 +19732,7 @@
     "description": "ART-VIII: every transition carries a reason and a non-empty confirmation id (Q3).",
     "properties": {
      "confirmation_id": {
+      "description": "Recorded with the action for audit: the client's own reference for the user having confirmed. Must be non-empty. It is not issued or verified by the server and does not authorise anything; the caller's role does.",
       "maxLength": 200,
       "title": "Confirmation Id",
       "type": "string"
