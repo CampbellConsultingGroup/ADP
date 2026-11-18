@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCapabilities, useOrphanReport } from "../api/business";
 import type { BusinessCapability } from "../api/business";
@@ -51,25 +51,44 @@ export function buildTree(items: BusinessCapability[]): CapabilityTreeNode[] {
   return roots;
 }
 
-function renderTree(
-  nodes: CapabilityTreeNode[],
-  orphanIds: Set<string>,
-  focusCapabilityId: string | null | undefined,
-  selectedIds: Set<string>,
-  onToggleSelect: (id: string) => void,
-): React.ReactElement[] {
-  return nodes.map((node) => (
-    <CapabilityNode
-      key={node.id}
-      capability={node}
-      isOrphan={orphanIds.has(node.id)}
-      focused={focusCapabilityId === node.id}
-      selected={selectedIds.has(node.id)}
-      onToggleSelect={onToggleSelect}
-    >
-      {renderTree(node.children, orphanIds, focusCapabilityId, selectedIds, onToggleSelect)}
-    </CapabilityNode>
-  ));
+/** Every id in a node's subtree, the node's own included. */
+function subtreeIds(node: CapabilityTreeNode, into: Map<string, string[]>): string[] {
+  const ids = [node.id, ...node.children.flatMap((c) => subtreeIds(c, into))];
+  into.set(node.id, ids);
+  return ids;
+}
+
+interface TreeContext {
+  orphanIds: Set<string>;
+  focusCapabilityId: string | null | undefined;
+  selectedIds: Set<string>;
+  onToggleSelect: (id: string) => void;
+  /** Subtree ids by node, and a number that changes when the tree or the orphan set does. */
+  subtree: Map<string, string[]>;
+  epoch: number;
+}
+
+// ADP-blp.38: a row is memoised on `revision`, which names everything in its subtree that
+// its rendered children depend on. Ticking one checkbox used to re-render every row.
+function renderTree(nodes: CapabilityTreeNode[], ctx: TreeContext): React.ReactElement[] {
+  return nodes.map((node) => {
+    const ids = ctx.subtree.get(node.id) ?? [node.id];
+    const selectedBelow = ids.filter((id) => ctx.selectedIds.has(id)).join(",");
+    const focusBelow = ctx.focusCapabilityId && ids.includes(ctx.focusCapabilityId) ? ctx.focusCapabilityId : "";
+    return (
+      <CapabilityNode
+        key={node.id}
+        capability={node}
+        isOrphan={ctx.orphanIds.has(node.id)}
+        focused={ctx.focusCapabilityId === node.id}
+        selected={ctx.selectedIds.has(node.id)}
+        onToggleSelect={ctx.onToggleSelect}
+        revision={`${ctx.epoch}|${focusBelow}|${selectedBelow}`}
+      >
+        {renderTree(node.children, ctx)}
+      </CapabilityNode>
+    );
+  });
 }
 
 export interface CapabilityTreeProps {
@@ -99,26 +118,38 @@ export default function CapabilityTree({ onGenerateDiagram, focusCapabilityId }:
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const queryClient = useQueryClient();
 
-  function toggleSelect(id: string) {
+  const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  }
+  }, []);
+
+  // ADP-blp.38: the tree, the orphan set and the subtree index are rebuilt only when the data
+  // changes, not on every render (a checkbox, a form opening).
+  const items = useMemo(() => data?.items ?? [], [data]);
+  const orphanIds = useMemo(
+    () => new Set((orphanData?.orphan_capabilities ?? []).map((c) => c.id)),
+    [orphanData],
+  );
+  const epoch = useRef(0);
+  const { tree, subtree, treeEpoch } = useMemo(() => {
+    // FR-006: filtering to orphans only prunes the tree to just orphaned
+    // nodes -- a capability whose only orphaned descendant is nested several
+    // levels down surfaces as its own root, rather than dragging its whole
+    // (non-orphaned) ancestor chain along just for context.
+    const visibleItems = orphansOnly ? items.filter((c) => orphanIds.has(c.id)) : items;
+    const built = buildTree(visibleItems);
+    const index = new Map<string, string[]>();
+    built.forEach((root) => subtreeIds(root, index));
+    epoch.current += 1;
+    return { tree: built, subtree: index, treeEpoch: epoch.current };
+  }, [items, orphanIds, orphansOnly]);
 
   if (isLoading) return <div style={{ padding: 20, color: "var(--ink-3)", fontSize: 14 }}>Loading capabilities…</div>;
   if (error) return <div style={{ padding: 14, background: "var(--crit-wash)", borderRadius: 6, fontSize: 13, color: "var(--crit)" }}>Failed to load capabilities: {error.message}</div>;
-
-  const items = data?.items ?? [];
-  const orphanIds = new Set((orphanData?.orphan_capabilities ?? []).map((c) => c.id));
-  // FR-006: filtering to orphans only prunes the tree to just orphaned
-  // nodes -- a capability whose only orphaned descendant is nested several
-  // levels down surfaces as its own root, rather than dragging its whole
-  // (non-orphaned) ancestor chain along just for context.
-  const visibleItems = orphansOnly ? items.filter((c) => orphanIds.has(c.id)) : items;
-  const tree = buildTree(visibleItems);
 
   function handleGenerateFromSelected() {
     const selected = items.filter((c) => selectedIds.has(c.id));
@@ -250,7 +281,9 @@ export default function CapabilityTree({ onGenerateDiagram, focusCapabilityId }:
         </div>
       )}
 
-      {renderTree(tree, orphanIds, focusCapabilityId, selectedIds, toggleSelect)}
+      {renderTree(tree, {
+        orphanIds, focusCapabilityId, selectedIds, onToggleSelect: toggleSelect, subtree, epoch: treeEpoch,
+      })}
     </div>
   );
 }

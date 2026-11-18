@@ -253,11 +253,21 @@ export function useCapabilityOrgMappings() {
   });
 }
 
+// ADP-blp.38: every capability row asks for its view, so the list is indexed once per response
+// instead of searched once per row.
+const viewIndex = new WeakMap<CapabilityOrgView[], Map<string, CapabilityOrgView>>();
+
 export function capabilityOrgView(
   data: { items: CapabilityOrgView[] } | undefined,
   capabilityId: string,
 ): CapabilityOrgView | undefined {
-  return data?.items.find((v) => v.capability_id === capabilityId);
+  if (!data) return undefined;
+  let index = viewIndex.get(data.items);
+  if (!index) {
+    index = new Map(data.items.map((v) => [v.capability_id, v]));
+    viewIndex.set(data.items, index);
+  }
+  return index.get(capabilityId);
 }
 
 export function useCapabilityOrgFindings(enabled = true) {
