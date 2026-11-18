@@ -131,7 +131,7 @@ ADP is itself a multi-agent solution. It makes the obvious seed and demo data:
 | Agent | Source |
 |---|---|
 | Intake extractor | 006 |
-| Recommendation engine | 007, LangGraph |
+| Recommendation engine | 007 |
 | LLM-as-judge critics | 008, fan-out |
 | Chat assistant | 041, tool-using |
 | Capability / portfolio Agent Review | 039/040 |

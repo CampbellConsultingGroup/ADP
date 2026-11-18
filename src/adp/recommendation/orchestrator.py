@@ -1,4 +1,4 @@
-"""RecommendationOrchestrator — LangGraph pipeline for ADP solution option generation."""
+"""RecommendationOrchestrator — async step pipeline for ADP solution option generation."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ _logger = logging.getLogger("adp.recommendation")
 
 
 class RecommendationOrchestrator:
-    """Coordinates the five-step LangGraph recommendation pipeline."""
+    """Coordinates the six-step recommendation pipeline (plain sequential awaits)."""
 
     def __init__(
         self,
@@ -53,56 +53,24 @@ class RecommendationOrchestrator:
         self._telemetry = telemetry or RecommendationTelemetry()
         self._reuse_provider = reuse_provider
         self._capture = capture_store
-        self._graph = self._build_graph()
 
-    def _build_graph(self) -> Any:
-        """Build the LangGraph StateGraph (4 nodes; analyze_tradeoffs added later)."""
-        from langgraph.graph import END, StateGraph
+    async def _run_pipeline(self, state: RecommendationState) -> RecommendationState:
+        """Run the six steps in order; each takes the state and returns an updated copy.
 
+        Every step after the first still runs when an earlier one recorded ``error``
+        (the steps themselves handle that).
+        """
         t = self._telemetry
-        kr = self._knowledge
-        llm = self._llm
-        oc = self._option_count
-        rw = self._ranking_weights
-        rp = self._reuse_provider
-
-        async def _retrieve(state: RecommendationState) -> RecommendationState:
-            return await retrieve_step(state, knowledge_retrieval=kr, telemetry=t)
-
-        async def _reuse(state: RecommendationState) -> RecommendationState:
-            return await reuse_step(state, reuse_provider=rp, telemetry=t)
-
-        async def _generate(state: RecommendationState) -> RecommendationState:
-            return await generate_step(state, llm=llm, telemetry=t, option_count=oc)
-
-        async def _tradeoffs(state: RecommendationState) -> RecommendationState:
-            return await analyze_tradeoffs_step(state, llm=llm, telemetry=t)
-
-        def _rank(state: RecommendationState) -> RecommendationState:
-            # Bind ranking_weights into state so rank_step can read them
-            state = {**state, "ranking_weights": rw}
-            return rank_step(state, telemetry=t)
-
-        async def _validate(state: RecommendationState) -> RecommendationState:
-            return await validate_citations_step(state, knowledge_retrieval=kr, telemetry=t)
-
-        graph = StateGraph(RecommendationState)
-        graph.add_node("retrieve", _retrieve)
-        graph.add_node("reuse", _reuse)
-        graph.add_node("generate", _generate)
-        graph.add_node("analyze_tradeoffs", _tradeoffs)
-        graph.add_node("rank", _rank)
-        graph.add_node("validate_citations", _validate)
-
-        graph.set_entry_point("retrieve")
-        graph.add_edge("retrieve", "reuse")
-        graph.add_edge("reuse", "generate")
-        graph.add_edge("generate", "analyze_tradeoffs")
-        graph.add_edge("analyze_tradeoffs", "rank")
-        graph.add_edge("rank", "validate_citations")
-        graph.add_edge("validate_citations", END)
-
-        return graph.compile()
+        state = await retrieve_step(state, knowledge_retrieval=self._knowledge, telemetry=t)
+        state = await reuse_step(state, reuse_provider=self._reuse_provider, telemetry=t)
+        state = await generate_step(
+            state, llm=self._llm, telemetry=t, option_count=self._option_count,
+        )
+        state = await analyze_tradeoffs_step(state, llm=self._llm, telemetry=t)
+        state = rank_step({**state, "ranking_weights": self._ranking_weights}, telemetry=t)
+        return await validate_citations_step(
+            state, knowledge_retrieval=self._knowledge, telemetry=t,
+        )
 
     async def run(
         self,
@@ -146,7 +114,7 @@ class RecommendationOrchestrator:
                 "ranking_weights": self._ranking_weights,
             }
 
-            final_state = await self._graph.ainvoke(initial_state)
+            final_state = await self._run_pipeline(initial_state)
             validated_options = final_state.get("validated_options", [])
             pipeline_error = final_state.get("error")
 

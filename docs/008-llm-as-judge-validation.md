@@ -48,7 +48,7 @@ Recommendation (ADP-SPEC-007); definition of the standards themselves (knowledge
 
 ## Dependencies
 
-ADP-SPEC-001, ADP-SPEC-005. External: configurable LLM endpoint; orchestration via LangGraph.
+ADP-SPEC-001, ADP-SPEC-005. External: configurable LLM endpoint; orchestration with plain asyncio (critics fan out with `asyncio.gather`).
 
 ## Constitutional Compliance
 

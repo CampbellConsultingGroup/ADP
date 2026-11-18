@@ -231,9 +231,6 @@ async def test_failure_span_emitted_on_step_error() -> None:
     mock_llm.chat = AsyncMock(side_effect=ConnectionError("LLM unreachable"))
     orch._llm = mock_llm
 
-    # Rebuild graph with sabotaged llm
-    orch._graph = orch._build_graph()
-
     operation_store = DictOperationStore({"op-001": {"status": "pending"}})
     await orch.run("op-001", "DESIGN-001", ["REQ-001"], operation_store)
 

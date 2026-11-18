@@ -1,6 +1,6 @@
-"""Five LangGraph step functions for the recommendation pipeline (ADP-SPEC-007).
+"""Step functions for the recommendation pipeline (ADP-SPEC-007).
 
-Step order: retrieve → generate → analyze_tradeoffs → rank → validate_citations
+Step order: retrieve → reuse → generate → analyze_tradeoffs → rank → validate_citations
 """
 
 from __future__ import annotations
