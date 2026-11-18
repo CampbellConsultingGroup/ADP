@@ -122,7 +122,7 @@ C4Context
 
 ## Container Architecture (C4 Level 2)
 
-ADP is a single deployed service — one FastAPI application hosting all capabilities as routers — backed by PostgreSQL and served with a React SPA. The original architecture anticipated separate intake, recommendation, and validation containers; the implemented architecture deliberately consolidates them into one process to minimize operational complexity while retaining logical separation through Python module boundaries and LangGraph workflow isolation.
+ADP is a single deployed service — one FastAPI application hosting all capabilities as routers — backed by PostgreSQL and served with a React SPA. The original architecture anticipated separate intake, recommendation, and validation containers; the implemented architecture deliberately consolidates them into one process to minimize operational complexity while retaining logical separation through Python module boundaries and separate step pipelines per workflow.
 
 ```mermaid
 C4Container
@@ -144,7 +144,7 @@ C4Container
   Rel(api, keycloak, "Fetches JWKS; validates RS256 JWT", "HTTPS / httpx")
 ```
 
-All AI orchestration (requirements intake, recommendation, LLM-as-judge) runs as in-process LangGraph workflows within the Platform API. Long-running workflows are tracked as `operations` records in PostgreSQL rather than in-memory, giving them crash recovery and cross-request status visibility.
+All AI orchestration (requirements intake, recommendation, LLM-as-judge) runs as in-process async step pipelines within the Platform API. Long-running workflows are tracked as `operations` records in PostgreSQL rather than in-memory, giving them crash recovery and cross-request status visibility.
 
 ## Web Application Shell and Design System
 
@@ -169,7 +169,7 @@ The Platform API exposes 23 FastAPI routers grouped by domain. All routes are pr
 | `/designs/{id}/export` | ADP-SPEC-011 | YAML/Markdown bundle export to VCS |
 | `/designs/{id}/calm` | ADP-SPEC-022 | CALM JSON export; CALM pattern import |
 | `/intake` | ADP-SPEC-006 | Requirements text intake and LLM normalization |
-| `/recommend` | ADP-SPEC-007 | Solution recommendation workflow (LangGraph) |
+| `/recommend` | ADP-SPEC-007 | Solution recommendation workflow |
 | `/knowledge` | ADP-SPEC-005/020 | Knowledge item CRUD with vector indexing |
 | `/portfolio` | ADP-SPEC-031 | Cross-portfolio technology + lifecycle aggregation |
 | `/governance` | ADP-SPEC-032 | Per-design governance status, compliance exceptions, activity feed, CSV export |
@@ -232,7 +232,7 @@ The `KnowledgePage` component provides full CRUD: architects can add, edit, and 
 
 ## AI Recommendation Engine
 
-The recommendation engine turns confirmed requirements into ranked, justified solution options. It runs as a LangGraph graph inside the Platform API, with individually inspectable steps: retrieve relevant knowledge, generate candidate options, score and rank them, and record reasoning. Every option carries explicit citations — the exact knowledge item IDs it draws on — so an architect can see precisely why a recommendation was made.
+The recommendation engine turns confirmed requirements into ranked, justified solution options. It runs as a linear async step pipeline inside the Platform API, with individually inspectable steps: retrieve relevant knowledge, generate candidate options, score and rank them, and record reasoning. Every option carries explicit citations — the exact knowledge item IDs it draws on — so an architect can see precisely why a recommendation was made.
 
 Accepting a recommendation is an explicit architect action that materializes the chosen option as `Element` and `Relationship` records in the canonical model, with provenance linking each element back to the recommendation ID and the knowledge it cites. Every LLM call within the workflow is recorded in `llm_reasoning_log` with token counts and cost estimates.
 
@@ -284,7 +284,7 @@ The container fill was updated from `#438DD5` to `#2874A6` (contrast ratio ≥ 4
 
 ## LLM-as-a-Judge Validation Subsystem
 
-Validation evaluates a design against the organization's standards, patterns, and prior approved solutions and produces a structured verdict. The judge runs as a LangGraph fan-out: independent critic nodes each scoped to one dimension (standards conformance, principles alignment, pattern fit, consistency with prior solutions) retrieve relevant knowledge and score the design against a fixed rubric. Each critic must cite the exact knowledge item it is judging against. An aggregation node combines critic verdicts into an overall result.
+Validation evaluates a design against the organization's standards, patterns, and prior approved solutions and produces a structured verdict. The judge runs as an `asyncio.gather` fan-out: independent critic nodes each scoped to one dimension (standards conformance, principles alignment, pattern fit, consistency with prior solutions) retrieve relevant knowledge and score the design against a fixed rubric. Each critic must cite the exact knowledge item it is judging against. An aggregation node combines critic verdicts into an overall result.
 
 Verdicts are machine-readable, not prose opinions. Each `Finding` identifies the design element at fault, the violated standard or principle, a severity, and a citation. Gating is deterministic on critic scores. A human reviewer can override any verdict with a recorded justification. Verdicts are written to the audit trail linked to the design version they evaluated.
 
@@ -377,7 +377,7 @@ Dynamic SQL clause building is used throughout the governance router to avoid th
 Every LLM call made anywhere in the platform — intake, recommendation, validation, judge — is recorded in `llm_reasoning_log` (migration 004). Each record carries:
 
 - `operation_id` — links to the async operation that triggered the call
-- `step_name` — the LangGraph node or pipeline step
+- `step_name` — the pipeline step
 - `model_id` — the model endpoint called
 - `prompt_tokens`, `completion_tokens`, `total_tokens` — for cost tracking
 - `latency_ms` — wall time of the LLM call
@@ -653,7 +653,7 @@ Observability is implemented in the `adp.telemetry` package (ADP-SPEC-012):
 - `adp_active_requests` (gauge)
 - `adp_errors_total` (counter, label: route)
 
-**AI step spans**: Each LangGraph step uses the `ai_step_span()` context manager to emit an OpenTelemetry span with canonical attribute names from `adp.telemetry.contract`. LLM call metadata (model ID, token counts, latency) is attached as span attributes and simultaneously persisted to `llm_reasoning_log`.
+**AI step spans**: Each AI pipeline step uses the `ai_step_span()` context manager to emit an OpenTelemetry span with canonical attribute names from `adp.telemetry.contract`. LLM call metadata (model ID, token counts, latency) is attached as span attributes and simultaneously persisted to `llm_reasoning_log`.
 
 **No-leak gate**: CI enforces `QG-08` — `ADP_LLM_API_KEY` must never appear in any log, span attribute, test output, or source file.
 
@@ -667,7 +667,7 @@ Outbound integrations:
 - **Knowledge sources** via Git: `gitpython` fetches Markdown/YAML from configured repos for knowledge indexing
 - **Version control** for export bundles: design YAML/Markdown pushed atomically to `ADP_VCS_ROOT`
 
-AI workflows are exposed as asynchronous operations with status polling (`GET /api/v1/recommend/{op_id}`, `GET /api/v1/intake/{op_id}`), so long-running LangGraph workflows do not block the interactive canvas.
+AI workflows are exposed as asynchronous operations with status polling (`GET /api/v1/recommend/{op_id}`, `GET /api/v1/intake/{op_id}`), so long-running AI workflows do not block the interactive canvas.
 
 ## Non-Functional Requirements
 
@@ -725,7 +725,7 @@ Environment variables drive all runtime configuration:
 | Database | PostgreSQL + pgvector | PostgreSQL 16, pgvector ≥ 0.3 |
 | Schema migration | Alembic | 19 migration files |
 | Schema validation | Pydantic v2 | Shared canonical model |
-| AI orchestration | LangGraph + LangChain Core | LangGraph ≥ 0.2 |
+| AI orchestration | Plain asyncio step pipelines (LangGraph removed, ADP-c5t) | — |
 | LLM client | httpx (async) | ≥ 0.27 |
 | Embeddings | sentence-transformers | ≥ 2.7 (self-hosted, model-agnostic) |
 | JWT validation | python-jose[cryptography] | ≥ 3.3 |

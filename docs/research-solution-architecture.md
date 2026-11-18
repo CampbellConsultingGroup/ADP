@@ -96,7 +96,7 @@ shape: `models.py` (Pydantic boundary types), `store.py` (async SQLAlchemy CRUD)
 | `business` | Capabilities, value streams, domains, capability-design traceability links |
 | `application` | Application registry, technical capabilities, integrations, transformation initiatives |
 | `store` | The canonical `DesignStore` — Architecture Description persistence, the platform's original core |
-| `intake` / `recommendation` | AI requirements extraction and design-option generation (LangGraph-orchestrated) |
+| `intake` / `recommendation` | AI requirements extraction and design-option generation (plain async step pipelines) |
 | `eval` | LLM-as-judge design review (multi-critic fan-out) |
 | `diagrams` | Standalone diagram types (flowchart/sequence/ER/UML/cloud-architecture) — deliberately independent of C4 |
 | `chat` | The AI chat assistant — streaming, multi-turn, read-only tool access into other domains |
@@ -166,7 +166,7 @@ rather than shipping silently open.
 
 ## 6. AI orchestration model
 
-Three distinct AI-assisted flows, each a small LangGraph-style step graph with
+Three distinct AI-assisted flows, each a small, linear async step pipeline with
 inspectable intermediate state — not a single opaque agent loop.
 
 1. **Requirements intake** — free text → typed, confirmable requirement
@@ -235,7 +235,7 @@ and metric-target values are always `NUMERIC`, never floating point.
   scale where independent deploy cadence starts to matter, or does the
   connected-graph value proposition keep favoring one service for the
   foreseeable future?
-- The AI orchestration layer runs three separate LangGraph-style step graphs
+- The AI orchestration layer runs three separate linear async step pipelines
   plus one streaming chat surface, all against a configurable
   Anthropic-compatible endpoint — what would a shared orchestration abstraction
   across all four look like without weakening the mechanically-enforced

@@ -471,8 +471,14 @@ def test_long_conversation_replies_coherently_and_full_history_is_still_returned
                 await chat_store.append_message(conv_id, role, f"message {n}", session)
             await session.commit()
 
+    # A private loop: asyncio.run() would clear the thread's current event loop and
+    # break later tests that call asyncio.get_event_loop().
     import asyncio
-    asyncio.run(_seed_long_history())
+    loop = asyncio.new_event_loop()
+    try:
+        loop.run_until_complete(_seed_long_history())
+    finally:
+        loop.close()
 
     llm = _RecordingLLMClient("Still a coherent reply.")
     with _mock_retrieval(), patch("adp.chat.router._make_chat_llm_client", return_value=llm):

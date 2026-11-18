@@ -11,7 +11,7 @@ The platform now spans the full enterprise-architecture stack: business capabili
 | Canonical data model | `adp.models.ArchitectureDescription` |
 | Requirements intake (LLM-assisted) | `POST /api/v1/designs/{id}/intake` → `adp.intake` |
 | Knowledge base management (hybrid search + pgvector) | `adp.knowledge`, `/api/v1/knowledge` |
-| AI architecture recommendations (LangGraph) | `POST /api/v1/designs/{id}/recommend` → `adp.recommendation` |
+| AI architecture recommendations | `POST /api/v1/designs/{id}/recommend` → `adp.recommendation` |
 | LLM-as-Judge validation (fan-out critics) | `adp.validation` (invoked within the recommendation pipeline) |
 | Immutable LLM reasoning store | `adp.llm`, `/api/v1/reasoning` |
 | C4 diagram workspace (React + React Flow v12) | `web/` → Canvas view |
@@ -49,7 +49,7 @@ src/adp/
   ├── audit/             # Append-only audit trail
   ├── knowledge/         # pgvector knowledge base + hybrid search
   ├── intake/            # Requirements extraction (LLM)
-  ├── recommendation/    # LangGraph recommendation pipeline
+  ├── recommendation/    # Recommendation pipeline (async step chain)
   ├── validation/        # LLM-as-Judge + deterministic gate
   ├── llm/               # LLM client + immutable reasoning store
   ├── renderer/          # DSL + SVG + PNG generation

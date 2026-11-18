@@ -103,7 +103,7 @@ class RecommendationStep:
 
 
 class RecommendationState(TypedDict, total=False):
-    """Shared state threaded through all LangGraph pipeline steps."""
+    """Shared state threaded through all recommendation pipeline steps."""
 
     operation_id: str
     design_id: str

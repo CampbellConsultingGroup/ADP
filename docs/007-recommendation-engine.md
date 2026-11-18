@@ -47,7 +47,7 @@ Validation of the resulting design (ADP-SPEC-008); the knowledge index itself (A
 
 ## Dependencies
 
-ADP-SPEC-001, ADP-SPEC-005, ADP-SPEC-006. External: configurable LLM endpoint; orchestration via LangGraph.
+ADP-SPEC-001, ADP-SPEC-005, ADP-SPEC-006. External: configurable LLM endpoint; orchestration as a linear async step pipeline (LangGraph was used originally and removed in ADP-c5t).
 
 ## Constitutional Compliance
 
