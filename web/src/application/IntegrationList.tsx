@@ -40,7 +40,7 @@ export default function IntegrationList({ apps, filterAppId }: Props) {
         <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>
           Integrations {data ? `(${data.total})` : ""}
         </h4>
-        <button onClick={() => setShowForm(s => !s)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "1px solid var(--accent)", borderRadius: 4, padding: "2px 8px", cursor: "pointer" }}>
+        <button onClick={() => setShowForm(s => !s)} className="ui-btn ui-btn-xs">
           + New
         </button>
       </div>
@@ -67,7 +67,7 @@ export default function IntegrationList({ apps, filterAppId }: Props) {
           <span style={{ fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: TYPE_COLORS[item.integration_type] ?? "var(--surface-2)", color: "var(--ink)" }}>
             {item.integration_type}
           </span>
-          <button onClick={() => handleDelete(item.id)} style={{ fontSize: 11, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+          <button onClick={() => handleDelete(item.id)} className="ui-btn-link danger">✕</button>
         </div>
       ))}
     </div>

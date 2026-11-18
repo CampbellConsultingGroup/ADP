@@ -36,7 +36,7 @@ export default function DesignLinkEditor({ appId }: Props) {
         return (
           <div key={link.design_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
             <span style={{ flex: 1, fontSize: 13 }}>{design?.title ?? link.design_id}</span>
-            <button onClick={() => deleteLink.mutate(link.design_id)} style={{ fontSize: 11, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+            <button onClick={() => deleteLink.mutate(link.design_id)} className="ui-btn-link danger">✕</button>
           </div>
         );
       })}
@@ -46,7 +46,7 @@ export default function DesignLinkEditor({ appId }: Props) {
             <option value="">— Select design —</option>
             {available.map(d => <option key={d.id} value={d.id}>{d.title}</option>)}
           </select>
-          <button onClick={handleLink} style={{ fontSize: 12, padding: "4px 10px", background: "var(--accent)", color: "var(--surface)", border: "none", borderRadius: 4, cursor: "pointer" }}>Link</button>
+          <button onClick={handleLink} className="ui-btn ui-btn-primary ui-btn-sm">Link</button>
         </div>
       )}
     </div>

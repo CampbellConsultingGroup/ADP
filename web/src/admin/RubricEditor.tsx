@@ -127,7 +127,7 @@ export default function RubricEditor({ rubric, onDirtyChange }: RubricEditorProp
           <div style={{ fontSize: 13, marginBottom: 8 }}>
             Someone else saved a newer version. Your edit was NOT applied.
           </div>
-          <button onClick={handleReloadLatest} style={{ fontSize: 13, padding: "4px 10px", cursor: "pointer" }}>
+          <button onClick={handleReloadLatest} className="ui-btn ui-btn-sm">
             Load latest version
           </button>
         </div>
@@ -177,12 +177,7 @@ export default function RubricEditor({ rubric, onDirtyChange }: RubricEditorProp
         <button
           onClick={() => setShowConfirm(true)}
           disabled={!isDirty || !sumValid}
-          style={{
-            padding: "8px 18px", borderRadius: 4, border: "none", fontSize: 14, fontWeight: 600,
-            cursor: !isDirty || !sumValid ? "not-allowed" : "pointer",
-            background: !isDirty || !sumValid ? "var(--border)" : "var(--ent)",
-            color: "#fff",
-          }}
+          className="ui-btn ui-btn-primary"
         >
           Save
         </button>
@@ -201,14 +196,14 @@ export default function RubricEditor({ rubric, onDirtyChange }: RubricEditorProp
               <button
                 onClick={() => setShowConfirm(false)}
                 disabled={confirmEdit.isPending}
-                style={{ padding: "8px 18px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", fontSize: 14 }}
+                className="ui-btn"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirm}
                 disabled={confirmEdit.isPending}
-                style={{ padding: "8px 18px", background: "var(--ent)", color: "var(--accent-ink)", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 14, fontWeight: 600 }}
+                className="ui-btn ui-btn-primary"
               >
                 {confirmEdit.isPending ? "Saving..." : "Confirm & Save"}
               </button>

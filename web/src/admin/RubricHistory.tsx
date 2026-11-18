@@ -90,7 +90,7 @@ export default function RubricHistory({ rubric }: RubricHistoryProps): React.Rea
           </pre>
           <button
             onClick={() => setPendingRestore(entry)}
-            style={{ fontSize: 12, padding: "4px 10px", cursor: "pointer" }}
+            className="ui-btn ui-btn-sm"
           >
             Restore this version
           </button>
@@ -110,14 +110,14 @@ export default function RubricHistory({ rubric }: RubricHistoryProps): React.Rea
               <button
                 onClick={() => setPendingRestore(null)}
                 disabled={restore.isPending}
-                style={{ padding: "8px 18px", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 4, cursor: "pointer", fontSize: 14 }}
+                className="ui-btn"
               >
                 Cancel
               </button>
               <button
                 onClick={handleConfirmRestore}
                 disabled={restore.isPending}
-                style={{ padding: "8px 18px", background: "var(--ent)", color: "var(--accent-ink)", border: "none", borderRadius: 4, cursor: "pointer", fontSize: 14, fontWeight: 600 }}
+                className="ui-btn ui-btn-primary"
               >
                 {restore.isPending ? "Restoring..." : "Confirm & Restore"}
               </button>

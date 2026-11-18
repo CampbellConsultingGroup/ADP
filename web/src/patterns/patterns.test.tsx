@@ -79,6 +79,14 @@ describe("PatternsPage", () => {
     expect(api.usePatterns).toHaveBeenLastCalledWith({ kind: "anti-pattern", lifecycle: "current" });
   });
 
+  it("explains the empty registry, and offers to clear filters when filters hide everything (ADP-blp.61)", async () => {
+    api.usePatterns.mockReturnValue({ data: { items: [], total: 0 }, isLoading: false } as never);
+    render(<PatternsPage />);
+    expect(screen.getByText("No patterns yet")).toBeTruthy();
+    await userEvent.selectOptions(screen.getByLabelText("Kind"), "anti-pattern");
+    expect(screen.getByText("No patterns match these filters")).toBeTruthy();
+  });
+
   it("hides Import for a reviewer", () => {
     asRole("reviewer");
     render(<PatternsPage />);

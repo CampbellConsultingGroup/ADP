@@ -61,7 +61,7 @@ export function AppCapSummaryItems({
               <button
                 onClick={() => open(s.id)}
                 title="Open in Applications → Capabilities"
-                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--accent)", textAlign: "left", fontSize: 12 }}
+                className="ui-btn-plain" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--accent)", textAlign: "left", fontSize: 12 }}
               >
                 {label}
               </button>
@@ -99,7 +99,7 @@ function Expander({
       <button
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11, color: "var(--ink-3)" }}
+        className="ui-btn-plain" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontSize: 11, color: "var(--ink-3)" }}
       >
         {open ? "▾" : "▸"} {label}
       </button>

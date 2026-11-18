@@ -44,7 +44,7 @@ export default function CapabilityLinksEditor({ appId }: Props) {
         <div key={link.capability_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <span style={{ flex: 1, fontSize: 13 }}>{link.capability_name}</span>
           <span style={{ fontSize: 11, background: "var(--accent-wash)", color: "var(--accent)", padding: "1px 7px", borderRadius: 10 }}>fit {link.fit_score}/5</span>
-          <button onClick={() => deleteLink.mutate(link.capability_id)} style={{ fontSize: 11, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+          <button onClick={() => deleteLink.mutate(link.capability_id)} className="ui-btn-link danger">✕</button>
         </div>
       ))}
       {available.length > 0 && (
@@ -54,7 +54,7 @@ export default function CapabilityLinksEditor({ appId }: Props) {
             {available.map(c => <option key={c.id} value={c.id}>{c.name} (L{c.level})</option>)}
           </select>
           <input type="number" min={1} max={5} value={fitScore} onChange={e => setFitScore(e.target.value)} style={{ width: 50, fontSize: 12, padding: "4px 6px", border: "1px solid var(--border)", borderRadius: 4 }} title="Fit score 1–5" />
-          <button onClick={handleLink} style={{ fontSize: 12, padding: "4px 10px", background: "var(--accent)", color: "var(--surface)", border: "none", borderRadius: 4, cursor: "pointer" }}>Link</button>
+          <button onClick={handleLink} className="ui-btn ui-btn-primary ui-btn-sm">Link</button>
         </div>
       )}
     </div>

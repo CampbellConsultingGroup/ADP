@@ -1,7 +1,7 @@
 /** Estate-wide agent registry (933-agent-registry, US2): every agent, filterable by autonomy,
  * model provider, owner and lifecycle, with its solution count; opens an agent's detail. */
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { errorDetail, useAgents, useCreateAgent } from "../api/agentic";
 import type { AgentFilters, AgentLifecycle, AgentWrite } from "../api/agentic";
 import { StatusBadge } from "../ui";
@@ -10,9 +10,7 @@ import AgentForm from "./AgentForm";
 import { RiskBadge } from "./agenticRisk";
 import { AUTONOMY_LEVELS, HUMAN_APPROVAL_LABELS, LIFECYCLE_LABELS, autonomyLabel } from "./autonomy";
 import { useCan } from "../auth/permissions";
-import { PageHeader, Loading } from "../ui/primitives";
-
-const cell: React.CSSProperties = { padding: "7px 10px", borderBottom: "1px solid var(--border)", fontSize: 12.5, textAlign: "left" };
+import { PageHeader, Loading, EmptyState, Table } from "../ui/primitives";
 
 export default function AgentsPage({
   onOpenSolution,
@@ -63,6 +61,7 @@ export default function AgentsPage({
 
   const set = (patch: Partial<AgentFilters>) => setFilters((f) => ({ ...f, ...patch }));
   const items = data?.items ?? [];
+  const filtered = Object.values(filters).some((v) => v !== undefined);
 
   return (
     <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 12, overflow: "auto", height: "100%" }}>
@@ -110,7 +109,7 @@ export default function AgentsPage({
           <option value="">Any lifecycle</option>
           {Object.entries(LIFECYCLE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
         </select>
-        {Object.values(filters).some((v) => v !== undefined) && (
+        {filtered && (
           <button type="button" className="ui-btn ui-btn-sm" onClick={() => setFilters({})}>Clear filters</button>
         )}
       </div>
@@ -118,20 +117,29 @@ export default function AgentsPage({
       {isLoading ? (
         <Loading />
       ) : items.length === 0 ? (
-        <div style={{ fontSize: 13, color: "var(--ink-3)" }}>No agents match.</div>
+        filtered ? (
+          <EmptyState compact title="No agents match these filters" action={
+            <button type="button" className="ui-btn ui-btn-sm" onClick={() => setFilters({})}>Clear filters</button>
+          }>
+            Change or clear the filters to see more agents.
+          </EmptyState>
+        ) : (
+          <EmptyState
+            compact
+            icon="spark"
+            title="No agents registered yet"
+            why="The registry lists each AI agent once, with its owner, model, autonomy level and approval rule, whichever agentic solutions use it."
+          >
+            {canWrite.allowed
+              ? "Use Register agent to add the first one, then add it to a solution from that application's Agents tab."
+              : "Your role can view agents but not register them."}
+          </EmptyState>
+        )
       ) : (
-        <table style={{ borderCollapse: "collapse", width: "100%" }}>
-          <thead>
-            <tr>
-              {["Agent", "Owner", "Model provider", "Autonomy", "Approval", "Risk", "Lifecycle", "Solutions"].map((h) => (
-                <th key={h} style={{ ...cell, color: "var(--ink-3)", fontWeight: 600 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
+        <Table caption="Agents" columns={["Agent", "Owner", "Model provider", "Autonomy", "Approval", "Risk", "Lifecycle", "Solutions"]}>
             {items.map((a) => (
-              <tr key={a.id} onClick={() => setSelectedId(a.id)} style={{ cursor: "pointer" }}>
-                <td style={cell}>
+              <tr key={a.id} onClick={() => setSelectedId(a.id)} className="clickable">
+                <td>
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); setSelectedId(a.id); }}
@@ -140,19 +148,18 @@ export default function AgentsPage({
                     {a.name}
                   </button>
                 </td>
-                <td style={cell}>{a.owner ?? "—"}</td>
-                <td style={cell}>{a.model_provider ?? "—"}</td>
-                <td style={cell}>{autonomyLabel(a.autonomy_level)}</td>
-                <td style={cell}>{HUMAN_APPROVAL_LABELS[a.human_approval]}</td>
-                <td style={cell}><RiskBadge band={a.agentic_risk.band} /></td>
-                <td style={cell}>{LIFECYCLE_LABELS[a.lifecycle_status]}</td>
-                <td style={cell}>
+                <td>{a.owner ?? "—"}</td>
+                <td>{a.model_provider ?? "—"}</td>
+                <td>{autonomyLabel(a.autonomy_level)}</td>
+                <td>{HUMAN_APPROVAL_LABELS[a.human_approval]}</td>
+                <td><RiskBadge band={a.agentic_risk.band} /></td>
+                <td>{LIFECYCLE_LABELS[a.lifecycle_status]}</td>
+                <td>
                   {a.solution_count === 0 ? <StatusBadge tone="warn">Unassigned</StatusBadge> : a.solution_count}
                 </td>
               </tr>
             ))}
-          </tbody>
-        </table>
+        </Table>
       )}
     </div>
   );

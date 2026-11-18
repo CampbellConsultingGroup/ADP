@@ -32,7 +32,7 @@ export default function StageLinkEditor({ appId }: Props) {
       {links?.items.map(link => (
         <div key={link.stage_id} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
           <span style={{ flex: 1, fontSize: 13 }}>{link.stage_name}</span>
-          <button onClick={() => deleteLink.mutate(link.stage_id)} style={{ fontSize: 11, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+          <button onClick={() => deleteLink.mutate(link.stage_id)} className="ui-btn-link danger">✕</button>
         </div>
       ))}
       {(streams?.items.length ?? 0) > 0 && (
@@ -45,7 +45,7 @@ export default function StageLinkEditor({ appId }: Props) {
               </optgroup>
             ))}
           </select>
-          <button onClick={handleLink} disabled={!selectedStageId} style={{ fontSize: 12, padding: "4px 10px", background: "var(--accent)", color: "var(--surface)", border: "none", borderRadius: 4, cursor: "pointer" }}>Link</button>
+          <button onClick={handleLink} disabled={!selectedStageId} className="ui-btn ui-btn-primary ui-btn-sm">Link</button>
         </div>
       )}
     </div>

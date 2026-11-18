@@ -56,15 +56,6 @@ export function buildTechCapTree(items: TechnicalCapability[]): TechCapTreeNode[
   return roots;
 }
 
-const actionBtn: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  cursor: "pointer",
-  fontSize: 11,
-  color: "var(--ink-3)",
-  padding: "1px 4px",
-};
-
 interface NodeProps {
   node: TechCapTreeNode;
   depth: number;
@@ -168,7 +159,7 @@ function TechCapNode({ node, depth, focusId }: NodeProps) {
         }}
       >
         {node.children.length > 0 && (
-          <button onClick={() => setExpanded(e => !e)} style={{ fontSize: 10, background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: 0, minWidth: 12 }}>
+          <button onClick={() => setExpanded(e => !e)} className="ui-btn-plain" style={{ fontSize: 10, background: "none", border: "none", cursor: "pointer", color: "var(--ink-3)", padding: 0, minWidth: 12 }}>
             {expanded ? "▾" : "▸"}
           </button>
         )}
@@ -190,8 +181,8 @@ function TechCapNode({ node, depth, focusId }: NodeProps) {
               onKeyDown={(e) => { if (e.key === "Enter") handleSaveEdit(); if (e.key === "Escape") handleCancelEdit(); }}
               style={{ flex: 1, fontSize: 12, padding: "2px 6px", border: "1px solid var(--border)", borderRadius: 3 }}
             />
-            <button onClick={handleSaveEdit} title="Save" style={actionBtn}>✓</button>
-            <button onClick={handleCancelEdit} title="Cancel" style={actionBtn}>×</button>
+            <button onClick={handleSaveEdit} title="Save" className="ui-btn-link muted">✓</button>
+            <button onClick={handleCancelEdit} title="Cancel" className="ui-btn-link muted">×</button>
           </>
         ) : (
           <>
@@ -209,11 +200,11 @@ function TechCapNode({ node, depth, focusId }: NodeProps) {
             </select>
             <LifecycleControls node={node} />
             <span style={{ fontSize: 10, color: "var(--ink-3)" }}>L{node.level}</span>
-            <button onClick={() => setEditing(true)} title="Edit" style={actionBtn}>✎</button>
+            <button onClick={() => setEditing(true)} title="Edit" className="ui-btn-link muted">✎</button>
             {node.level < 3 && (
-              <button onClick={() => setAdding(a => !a)} style={{ fontSize: 10, color: "var(--accent)", background: "none", border: "none", cursor: "pointer" }}>+ child</button>
+              <button onClick={() => setAdding(a => !a)} className="ui-btn-link">+ child</button>
             )}
-            <button onClick={handleDelete} style={{ fontSize: 10, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+            <button onClick={handleDelete} className="ui-btn-link danger">✕</button>
           </>
         )}
       </div>
@@ -262,7 +253,7 @@ export default function TechCapTree({ focusId = null }: { focusId?: string | nul
         <span style={{ fontSize: 13, color: "var(--ink-3)" }}>
           {items.length} technical capabilit{items.length !== 1 ? "ies" : "y"} across all levels
         </span>
-        <button onClick={() => setAddingRoot(a => !a)} style={{ fontSize: 11, color: "var(--accent)", background: "none", border: "1px solid var(--accent)", borderRadius: 4, padding: "2px 8px", cursor: "pointer" }}>
+        <button onClick={() => setAddingRoot(a => !a)} className="ui-btn ui-btn-xs">
           + Root
         </button>
       </div>

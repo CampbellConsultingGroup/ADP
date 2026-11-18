@@ -40,7 +40,7 @@ export function CapLink({ kind, id, children }: { kind: CapKind; id: string; chi
           : nav?.openApplication;
   if (!open) return <span>{children}</span>;
   return (
-    <button type="button" onClick={() => open(id)} title={OPEN_TITLE[kind]} style={linkStyle}>
+    <button type="button" onClick={() => open(id)} title={OPEN_TITLE[kind]} className="ui-btn-plain" style={linkStyle}>
       {children}
     </button>
   );

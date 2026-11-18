@@ -118,7 +118,7 @@ export default function RoadmapView() {
                 onClick={async () => {
                   if (await confirmAction(`Delete initiative "${i.name}"?`)) deleteInitiative.mutate(i.id);
                 }}
-                style={{ fontSize: 11, color: "var(--crit)", background: "none", border: "none", cursor: "pointer" }}
+                className="ui-btn-link danger"
               >
                 ✕
               </button>
@@ -140,7 +140,7 @@ export default function RoadmapView() {
           />
           <button
             onClick={handleCreate}
-            style={{ fontSize: 13, padding: "6px 14px", background: "var(--accent)", color: "var(--accent-ink)", border: "none", borderRadius: 6, cursor: "pointer" }}
+            className="ui-btn ui-btn-primary ui-btn-sm"
           >
             Add
           </button>

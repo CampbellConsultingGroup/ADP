@@ -245,6 +245,17 @@ describe("AgentsPage", () => {
     const providers = screen.getByLabelText("Model provider") as HTMLSelectElement;
     expect(Array.from(providers.options).map((o) => o.value)).toEqual(["", "Anthropic", "OpenAI"]);
   });
+
+  it("explains the empty registry, and offers to clear filters when filters hide everything (ADP-blp.61)", async () => {
+    api.useAgents.mockReturnValue({ data: { items: [], total: 0 }, isLoading: false } as never);
+    render(<AgentsPage />);
+    expect(screen.getByText("No agents registered yet")).toBeTruthy();
+
+    await userEvent.selectOptions(screen.getByLabelText("Minimum autonomy"), "3");
+    expect(screen.getByText("No agents match these filters")).toBeTruthy();
+    await userEvent.click(screen.getAllByRole("button", { name: "Clear filters" })[0]);
+    expect(screen.getByText("No agents registered yet")).toBeTruthy();
+  });
 });
 
 describe("AgentDetail", () => {

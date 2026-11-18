@@ -3,16 +3,12 @@ import { useApplicationGovernance, useUpdateApplicationGovernance } from "../api
 import type { ApplicationGovernanceUpdate } from "../api/application";
 import { hasStatus } from "../api/client";
 import { useCan } from "../auth/permissions";
-import { Loading, Button, Restricted } from "../ui/primitives";
+import { Loading, Button, Restricted, Field } from "../ui/primitives";
 
 /** APM US7 — application ownership & governance (sensitive: gated server-side). */
 
 interface Props { appId: string; }
 
-const field: React.CSSProperties = {
-  width: "100%", padding: "6px 8px", fontSize: 13, border: "1px solid var(--border)", borderRadius: 4,
-};
-const label: React.CSSProperties = { fontSize: 12, color: "var(--ink-2)" };
 
 export default function GovernancePanel({ appId }: Props) {
   const { data: governance, isLoading, error } = useApplicationGovernance(appId);
@@ -68,33 +64,45 @@ export default function GovernancePanel({ appId }: Props) {
   };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, maxWidth: 460 }}>
+    <div className="ui-form-stack" style={{ maxWidth: 460 }}>
       <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Ownership &amp; Governance</h4>
       {toast && <div style={{ fontSize: 11, color: toast === "Saved" ? "var(--ink-2)" : "var(--crit)" }}>{toast}</div>}
 
-      <label style={label}>Contract Terms
-        <textarea style={{ ...field, height: 60 }} value={contractTerms} onChange={(e) => setContractTerms(e.target.value)} />
-      </label>
+      <Field label="Contract Terms">
+        {(c) => (
+          <textarea className="ui-textarea" {...c} style={{ height: 60 }} value={contractTerms} onChange={(e) => setContractTerms(e.target.value)} />
+        )}
+      </Field>
 
-      <label style={label}>Renewal Date
-        <input style={field} type="date" value={renewalDate} onChange={(e) => setRenewalDate(e.target.value)} />
-      </label>
+      <Field label="Renewal Date">
+        {(c) => (
+          <input className="ui-input" {...c} type="date" value={renewalDate} onChange={(e) => setRenewalDate(e.target.value)} />
+        )}
+      </Field>
 
-      <label style={label}>SLA
-        <input style={field} value={sla} onChange={(e) => setSla(e.target.value)} placeholder="e.g. 99.9% uptime" />
-      </label>
+      <Field label="SLA">
+        {(c) => (
+          <input className="ui-input" {...c} value={sla} onChange={(e) => setSla(e.target.value)} placeholder="e.g. 99.9% uptime" />
+        )}
+      </Field>
 
-      <label style={label}>Business Sponsor
-        <input style={field} value={businessSponsor} onChange={(e) => setBusinessSponsor(e.target.value)} />
-      </label>
+      <Field label="Business Sponsor">
+        {(c) => (
+          <input className="ui-input" {...c} value={businessSponsor} onChange={(e) => setBusinessSponsor(e.target.value)} />
+        )}
+      </Field>
 
-      <label style={label}>IT Owner
-        <input style={field} value={itOwner} onChange={(e) => setItOwner(e.target.value)} />
-      </label>
+      <Field label="IT Owner">
+        {(c) => (
+          <input className="ui-input" {...c} value={itOwner} onChange={(e) => setItOwner(e.target.value)} />
+        )}
+      </Field>
 
-      <label style={label}>Decision Rights
-        <textarea style={{ ...field, height: 50 }} value={decisionRights} onChange={(e) => setDecisionRights(e.target.value)} />
-      </label>
+      <Field label="Decision Rights">
+        {(c) => (
+          <textarea className="ui-textarea" {...c} style={{ height: 50 }} value={decisionRights} onChange={(e) => setDecisionRights(e.target.value)} />
+        )}
+      </Field>
 
       <div>
         <Button variant="primary" onClick={handleSave} disabled={updateGovernance.isPending || !canWrite.allowed} title={canWrite.reason}>

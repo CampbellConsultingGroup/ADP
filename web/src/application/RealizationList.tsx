@@ -19,16 +19,6 @@ interface Option {
 }
 
 const select: React.CSSProperties = { fontSize: 12, padding: "2px 4px" };
-const removeBtn: React.CSSProperties = {
-  fontSize: 11,
-  background: "none",
-  border: "1px solid var(--border)",
-  borderRadius: 3,
-  cursor: "pointer",
-  padding: "0 6px",
-  color: "var(--ink-3)",
-};
-
 export function RationaleChip({ rationale }: { rationale: Rationale | null | undefined }): React.ReactElement {
   const [fg, bg] = rationaleColors(rationale);
   return (
@@ -140,7 +130,7 @@ export default function RealizationList({
               </span>
             )}
             {canWrite && (
-              <button style={removeBtn} aria-label={`Remove ${a.name}`} onClick={() => void run(() => remove.mutateAsync({ id: acId, kind: "application", targetId: a.id }))}>
+              <button className="ui-btn ui-btn-xs" aria-label={`Remove ${a.name}`} onClick={() => void run(() => remove.mutateAsync({ id: acId, kind: "application", targetId: a.id }))}>
                 Remove
               </button>
             )}

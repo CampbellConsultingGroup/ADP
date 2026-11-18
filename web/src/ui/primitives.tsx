@@ -141,6 +141,26 @@ export function Field({ label, required, hint, error, children }: {
   );
 }
 
+/**
+ * A data table with the shared header and cell style (ADP-blp.46). `columns` are the header
+ * labels; the children are ordinary <tr>/<td> rows. Scrolls sideways on its own when it is wider
+ * than its container. `caption` names the table for assistive technology.
+ */
+export function Table({ columns, caption, dense, children }: {
+  columns: ReadonlyArray<string>; caption?: string; dense?: boolean; children: React.ReactNode;
+}): React.ReactElement {
+  return (
+    <div className="ui-table-wrap">
+      <table className={`ui-table${dense ? " dense" : ""}`} aria-label={caption}>
+        <thead>
+          <tr>{columns.map((c) => <th key={c} scope="col">{c}</th>)}</tr>
+        </thead>
+        <tbody>{children}</tbody>
+      </table>
+    </div>
+  );
+}
+
 export function KpiTile({ label, icon, value, delta, alert }: {
   label: React.ReactNode; icon?: string; value: React.ReactNode; delta?: React.ReactNode; alert?: boolean;
 }): React.ReactElement {
