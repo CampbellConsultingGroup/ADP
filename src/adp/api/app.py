@@ -51,8 +51,10 @@ from adp.application.router import (
 )
 from adp.auth.middleware import AuthMiddleware, log_auth_mode
 from adp.authz.enforcement import enforce_route_permission
+from adp.business import agent_review_router as business_agent_review_router_module
 from adp.business import router as business_router_module
 from adp.business import store as bstore
+from adp.business import value_chains_router as business_value_chains_router_module
 from adp.chat import router as chat_router_module
 from adp.compliance import router as compliance_router_module
 from adp.diagrams import router as diagrams_router
@@ -393,6 +395,9 @@ def create_app() -> FastAPI:
     # 940-org-units-geography: before the business router (both under /api/v1/business).
     app.include_router(organization_router_module.router)
     app.include_router(business_router_module.router)
+    # Split out of the business router (ADP-blp.27); same prefix, registered straight after it.
+    app.include_router(business_agent_review_router_module.router)
+    app.include_router(business_value_chains_router_module.router)
     app.include_router(search.router)
     app.include_router(applications_router)
     app.include_router(tech_caps_router)

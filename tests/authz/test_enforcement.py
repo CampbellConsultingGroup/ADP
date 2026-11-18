@@ -72,6 +72,22 @@ def test_every_mutating_route_maps_to_an_action(app: FastAPI) -> None:
     assert not unmapped, f"Mutating routes with no ActionType mapped: {sorted(unmapped)}"
 
 
+def test_no_router_is_nested_in_another(app: FastAPI) -> None:
+    """A router included in another router (not in the app) reports its matched route without
+    the outer prefix: request.scope["route"].path is "/value-chains", not
+    "/api/v1/business/value-chains". The permission lookup and the metrics label both read that
+    path, so a nested mutating route would be allowed unmapped. Register every router on the
+    app, with its full prefix (ADP-blp.27)."""
+    nested = [
+        inner.original_router.prefix or "<no prefix>"
+        for outer in app.routes
+        if isinstance(outer, _IncludedRouter)
+        for inner in outer.original_router.routes
+        if isinstance(inner, _IncludedRouter)
+    ]
+    assert not nested, f"Routers nested inside another router: {nested}"
+
+
 # ── Enforcement behavior ─────────────────────────────────────────────────────
 
 def test_reviewer_denied_write_design(app: FastAPI) -> None:

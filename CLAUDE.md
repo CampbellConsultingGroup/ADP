@@ -173,6 +173,25 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.27, third part: the two largest backend files split (no API change;
+  `generated/openapi.json` unchanged).
+  - `adp.application.store` (2,317 lines -> 479) keeps the session factory, application CRUD and
+    technical capability CRUD. New siblings: `tables.py` (metadata and every table), `store_base.py`
+    (row converters, `get_application`, `get_technical_capability`), `assessments.py` (risk, health,
+    business value, cost, governance, quality), `roadmap.py` (initiatives), `links.py` (capability,
+    stage, domain, integration and design links). The store RE-EXPORTS every one of their names, so
+    `astore._applications`, `astore.upsert_application_risk` etc. and test fixtures are unchanged. The
+    siblings must not import `adp.application.store` (import cycle). Functions that call
+    `index_entity` stay in the store, because tests patch it there.
+  - `adp.business.router` (1,428 -> 667): `agent_review_router.py` and `value_chains_router.py` hold
+    those routes; `router_deps.py` holds the shared dependencies (re-exported by the router, so
+    `brouter._get_session` overrides work). Tests patch
+    `adp.business.agent_review_router._make_agent_review_llm_client` now.
+  - Gotcha: do NOT nest a router in another router (`router.include_router(sub)`). The matched route
+    then reports its path without the outer prefix, and the permission lookup and metrics label read
+    that path, so a nested mutating route is allowed unmapped. Both new routers carry the full
+    `/api/v1/business` prefix and are registered in `adp.api.app`. Guard:
+    `test_no_router_is_nested_in_another`.
 - Fable review ADP-blp.27, second part (no API change; `generated/openapi.json` unchanged):
   - New `adp.api.common`: `session_dependency("adp.<domain>.store")` replaces the four-line
     `_get_session` / `_get_<other>_session` functions in 24 places (the module is named and imported on

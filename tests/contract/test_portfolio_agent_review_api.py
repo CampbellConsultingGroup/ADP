@@ -133,7 +133,10 @@ async def test_llm_call_failure_marks_operation_failed(app_and_stores):
     failing_client = AsyncMock()
     failing_client.chat = AsyncMock(side_effect=RuntimeError("LLM provider timed out"))
 
-    with patch("adp.business.router._make_agent_review_llm_client", return_value=failing_client):
+    with patch(
+        "adp.business.agent_review_router._make_agent_review_llm_client",
+        return_value=failing_client,
+    ):
         resp = client.post("/api/v1/business/capabilities/agent-review")
         assert resp.status_code == 202
         operation_id = resp.json()["operation_id"]
