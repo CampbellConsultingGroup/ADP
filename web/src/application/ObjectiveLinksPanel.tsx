@@ -1,96 +1,39 @@
-/** ObjectiveLinksPanel — mirrors CapabilityLinksEditor.tsx's read+link
- * pattern (ADP-d8u.2), showing/linking/unlinking the strategic objectives
- * this application realizes. Uses the application-side hook variants
- * (useLinkApplicationToObjective/useUnlinkApplicationFromObjective) since
- * this panel lives on the application, not the objective. */
+/** The strategic objectives an application realizes (ADP-d8u.2), linked from the application's
+ * side. A wrapper over the shared LinkEditor (ADP-blp.36). */
 
-import { useState } from "react";
 import {
   useApplicationObjectives,
   useObjectives,
   useLinkApplicationToObjective,
   useUnlinkApplicationFromObjective,
 } from "../api/strategy";
-import { hasStatus } from "../api/client";
+import LinkEditor from "../links/LinkEditor";
 
 interface Props {
   appId: string;
 }
 
 export default function ObjectiveLinksPanel({ appId }: Props) {
-  const { data: linked } = useApplicationObjectives(appId);
+  const { data: linked, isLoading } = useApplicationObjectives(appId);
   const { data: allObjectives } = useObjectives();
   const link = useLinkApplicationToObjective(appId);
   const unlink = useUnlinkApplicationFromObjective(appId);
-  const [selectedObjectiveId, setSelectedObjectiveId] = useState("");
-  const [toast, setToast] = useState<string | null>(null);
 
-  const linkedIds = new Set(linked?.items.map((o) => o.id) ?? []);
-  const available = (allObjectives?.items ?? []).filter((o) => !linkedIds.has(o.id));
-
-  const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 3000);
-  };
-
-  const handleLink = async () => {
-    if (!selectedObjectiveId) return;
-    try {
-      await link.mutateAsync(selectedObjectiveId);
-      setSelectedObjectiveId("");
-    } catch (e) {
-      showToast(hasStatus(e, 409) ? "Already linked" : "Failed to link");
-    }
-  };
+  const linkedItems = (linked?.items ?? []).map((o) => ({ id: o.id, label: o.statement }));
 
   return (
-    <div>
-      <h4 style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>
-        Objectives Realized
-      </h4>
-      {toast && <div style={{ fontSize: 11, color: "var(--crit)", marginBottom: 6 }}>{toast}</div>}
-      {linked?.items.length === 0 && (
-        <div style={{ fontSize: 12, color: "var(--ink-3)", marginBottom: 8 }}>
-          No objectives linked.
-        </div>
-      )}
-      {linked?.items.map((objective) => (
-        <div
-          key={objective.id}
-          style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}
-        >
-          <span style={{ flex: 1, fontSize: 13 }}>{objective.statement}</span>
-          <button
-            onClick={() => unlink.mutate(objective.id)}
-            className="ui-btn-link danger"
-          >
-            ✕
-          </button>
-        </div>
-      ))}
-      {available.length > 0 && (
-        <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
-          <select
-            value={selectedObjectiveId}
-            onChange={(e) => setSelectedObjectiveId(e.target.value)}
-            style={{
-              flex: 1, fontSize: 12, padding: "4px 6px", border: "1px solid var(--border)",
-              borderRadius: 4,
-            }}
-          >
-            <option value="">— select objective —</option>
-            {available.map((o) => (
-              <option key={o.id} value={o.id}>{o.statement}</option>
-            ))}
-          </select>
-          <button
-            onClick={handleLink}
-            className="ui-btn ui-btn-primary ui-btn-sm"
-          >
-            Link
-          </button>
-        </div>
-      )}
-    </div>
+    <LinkEditor
+      title="Objectives Realized"
+      action="write_business_arch"
+      noun="objective"
+      plural="objectives"
+      prompt="Link an objective…"
+      isLoading={isLoading}
+      options={(allObjectives?.items ?? []).map((o) => ({ id: o.id, label: o.statement }))}
+      linkedIds={linkedItems.map((o) => o.id)}
+      linkedItems={linkedItems}
+      link={link}
+      unlink={unlink}
+    />
   );
 }

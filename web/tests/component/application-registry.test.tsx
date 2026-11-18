@@ -251,8 +251,9 @@ describe("CapabilityLinksEditor", () => {
     });
     renderWithQuery(<CapabilityLinksEditor appId="app-1" />);
 
-    expect(await screen.findByText("No linked capabilities.")).toBeDefined();
-    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "cap-1" } });
+    expect(await screen.findByText("No capabilities linked yet.")).toBeDefined();
+    await screen.findByRole("option", { name: "Billing (L1)" });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "cap-1" } });
     fireEvent.change(screen.getByTitle("Fit score 1–5"), { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "Link" }));
 
@@ -302,7 +303,7 @@ describe("StageLinkEditor", () => {
     renderWithQuery(<StageLinkEditor appId="app-1" />);
 
     expect(await screen.findByText("Quote")).toBeDefined();
-    fireEvent.click(screen.getByRole("button", { name: "✕" }));
+    fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(lastCall(calls, "DELETE")).toBeDefined());
   });
 });
@@ -347,9 +348,10 @@ describe("DesignLinkEditor (application)", () => {
     });
     renderWithQuery(<DesignLinkEditor appId="app-1" />);
 
-    expect(await screen.findByText("No designs linked.")).toBeDefined();
-    fireEvent.change(await screen.findByRole("combobox"), { target: { value: "DSN-1" } });
-    fireEvent.click(screen.getByRole("button", { name: "Link" }));
+    expect(await screen.findByText("No designs linked yet.")).toBeDefined();
+    // Choosing a design links it: there is no separate Link button (ADP-blp.36).
+    await screen.findByRole("option", { name: "Payments Design" });
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "DSN-1" } });
 
     await waitFor(() =>
       expect(lastCall(calls, "POST")?.body).toEqual({ design_id: "DSN-1" }),
