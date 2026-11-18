@@ -97,7 +97,7 @@ describe("App: onSelectDesign (regression -- opening a design lands on a populat
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Designs" }));
-    expect(screen.getByText("DesignsPage-stub")).toBeTruthy();
+    expect(await screen.findByText("DesignsPage-stub")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Open DSN-1" }));
 
@@ -146,7 +146,7 @@ describe("App: DESIGN_ONLY_VIEWS redirect (C4 Design with no design selected)", 
 
     await user.click(screen.getByRole("button", { name: "C4 Design" }));
 
-    expect(screen.getByText("DesignsPage-stub")).toBeTruthy();
+    expect(await screen.findByText("DesignsPage-stub")).toBeTruthy();
     expect(screen.getByText("continueTo:C4 Design")).toBeTruthy();
   });
 
