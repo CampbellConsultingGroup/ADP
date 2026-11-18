@@ -21,11 +21,11 @@ import {
 import { confirmAction } from "../ui/confirm";
 import { useCan } from "../auth/permissions";
 import { Loading } from "../ui/primitives";
+import { EntityLink } from "../shell/EntityLink";
 
 interface Props {
   agentId: string;
   onBack: () => void;
-  onOpenSolution?: (appId: string) => void;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -37,7 +37,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-export default function AgentDetail({ agentId, onBack, onOpenSolution }: Props) {
+export default function AgentDetail({ agentId, onBack }: Props) {
   const { data: agent, isLoading } = useAgent(agentId);
   const update = useUpdateAgent(agentId);
   const del = useDeleteAgent();
@@ -145,17 +145,7 @@ export default function AgentDetail({ agentId, onBack, onOpenSolution }: Props) 
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
             {agent.solutions.map((s) => (
               <li key={s.app_id}>
-                {onOpenSolution ? (
-                  <button
-                    type="button"
-                    onClick={() => onOpenSolution(s.app_id)}
-                    style={{ background: "none", border: "none", padding: 0, color: "var(--accent)", cursor: "pointer", fontSize: 13 }}
-                  >
-                    {s.app_name}
-                  </button>
-                ) : (
-                  s.app_name
-                )}
+                <EntityLink kind="application" id={s.app_id} title="Open the application">{s.app_name}</EntityLink>
                 <span style={{ color: "var(--ink-3)" }}> — {ROLE_LABELS[s.role]}</span>
               </li>
             ))}

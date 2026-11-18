@@ -9,7 +9,7 @@ import { errorDetail, errorIssues, useTransition } from "../api/patterns";
 import type { PatternIssue, PatternLifecycle, PatternVersionDetail } from "../api/patterns";
 import IssueList from "./IssueList";
 import { LIFECYCLE_LABELS, TRANSITION_VERBS } from "./labels";
-import { useCanManagePatterns } from "./permissions";
+import { useCanGovernPatterns } from "./permissions";
 
 function newConfirmationId(): string {
   const c = globalThis.crypto as Crypto | undefined;
@@ -27,7 +27,8 @@ const CONSEQUENCES: Partial<Record<PatternLifecycle, string>> = {
 };
 
 export default function LifecycleDialog({ detail }: { detail: PatternVersionDetail }) {
-  const canManage = useCanManagePatterns();
+  // ADP-blp.65: lifecycle changes need GOVERN_PATTERN, not the authoring permission.
+  const canManage = useCanGovernPatterns();
   const [target, setTarget] = useState<PatternLifecycle | null>(null);
   const [reason, setReason] = useState("");
   const [confirmed, setConfirmed] = useState(false);

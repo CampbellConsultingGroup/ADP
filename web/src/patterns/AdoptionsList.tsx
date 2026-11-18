@@ -1,6 +1,7 @@
 /** All adoptions with their derived status (936 US1/US2, FR-021). */
 
 import React, { useState } from "react";
+import { useRouteEntity } from "../shell/routing";
 import { useAdoptions } from "../api/patterns";
 import type { DiagramSeed } from "../diagrams/generators";
 import { StatusBadge } from "../ui";
@@ -21,7 +22,7 @@ export default function AdoptionsList({
 }) {
   const canManage = useCanManagePatterns();
   const { data, isLoading } = useAdoptions(true);
-  const [selected, setSelected] = useState<string | null>(initialSelected);
+  const [selected, setSelected] = useRouteEntity("adoption", initialSelected);
   const [creating, setCreating] = useState(false);
 
   if (selected) {

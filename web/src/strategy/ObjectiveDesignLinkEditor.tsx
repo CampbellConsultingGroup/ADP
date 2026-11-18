@@ -19,6 +19,7 @@ export default function ObjectiveDesignLinkEditor({ objective }: Props): React.R
   const all = useDesignsForLinking();
   return (
     <LinkEditor
+      action="write_business_arch"
       noun="design"
       plural="designs"
       isLoading={all.isLoading}

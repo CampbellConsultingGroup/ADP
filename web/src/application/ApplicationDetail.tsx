@@ -27,6 +27,7 @@ import { Tabs } from "../ui/Tabs";
 import { confirmAction } from "../ui/confirm";
 import ApplicationSummary from "./ApplicationSummary";
 import { Loading } from "../ui/primitives";
+import { useApplicationWrite } from "./appCapNav";
 
 interface Props {
   appId: string;
@@ -46,6 +47,7 @@ const APPLICATION_TYPE_LABELS: Record<string, string> = {
 };
 
 export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) {
+  const canWrite = useApplicationWrite(); // ADP-blp.65
   const { data: app, isLoading } = useApplication(appId);
   const updateApp = useUpdateApplication(appId);
   const deleteApp = useDeleteApplication();
@@ -164,8 +166,8 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
             </div>
           </div>
           <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-            <Button size="sm" onClick={() => setEditing(true)}>Edit</Button>
-            <Button size="sm" variant="danger" onClick={handleDelete}>Delete</Button>
+            <Button size="sm" onClick={() => setEditing(true)} disabled={!canWrite.allowed} title={canWrite.reason}>Edit</Button>
+            <Button size="sm" variant="danger" onClick={handleDelete} disabled={!canWrite.allowed} title={canWrite.reason}>Delete</Button>
           </div>
         </div>
       </div>

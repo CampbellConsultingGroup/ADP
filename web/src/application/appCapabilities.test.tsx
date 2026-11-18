@@ -14,7 +14,7 @@ import AppCapabilitiesView, { missingTechGaps } from "./AppCapabilitiesView";
 import { businessL3Options, technicalOptions } from "./AppCapDetail";
 import { buildAppCapTree } from "./AppCapTree";
 import { AppCapSummaryItems, ApplicationRealizes } from "./AppCapSummaryList";
-import { AppCapNavContext, canWriteApplications } from "./appCapNav";
+import { canWriteApplications } from "./appCapNav";
 
 vi.mock("../api/appCapabilities", async (orig) => {
   const actual = await orig<typeof import("../api/appCapabilities")>();
@@ -206,16 +206,11 @@ describe("read-only lists on other screens", () => {
     realized_by: [{ id: "pos", name: "Store POS" }],
   };
 
-  it("navigates to the application capability and shows who realizes it", async () => {
-    const open = vi.fn();
-    render(
-      <AppCapNavContext.Provider value={open}>
-        <AppCapSummaryItems items={[summary]} showRealizedBy />
-      </AppCapNavContext.Provider>,
-    );
+  it("links to the application capability and shows who realizes it", () => {
+    render(<AppCapSummaryItems items={[summary]} showRealizedBy />);
     expect(screen.getByText(/realized by Store POS/)).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: /Tender Authorization/ }));
-    expect(open).toHaveBeenCalledWith("a3");
+    expect(screen.getByRole("link", { name: /Tender Authorization/ }).getAttribute("href"))
+      .toBe("#/applications/capabilities/a3");
   });
 
   it("lists what an application realizes", () => {

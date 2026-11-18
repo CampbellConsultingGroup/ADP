@@ -5,7 +5,6 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as capAnalysisApi from "../api/capAnalysis";
 import type { ImpactResult } from "../api/capAnalysis";
-import { AppCapNavContext, CapabilityNavContext } from "./appCapNav";
 import TechCapImpactPanel from "./TechCapImpactPanel";
 
 vi.mock("../api/capAnalysis", async (importOriginal) => ({
@@ -68,23 +67,13 @@ describe("TechCapImpactPanel", () => {
     expect(screen.getByText("Nothing depends on this technical capability.")).toBeTruthy();
   });
 
-  it("navigates to each item's own screen", async () => {
-    const nav = { openBusinessCapability: vi.fn(), openApplication: vi.fn(), openTechnicalCapability: vi.fn() };
-    const openAppCap = vi.fn();
+  it("links each item to its own screen", async () => {
     const user = userEvent.setup();
-    render(
-      <AppCapNavContext.Provider value={openAppCap}>
-        <CapabilityNavContext.Provider value={nav}>
-          <TechCapImpactPanel tcId="tc" />
-        </CapabilityNavContext.Provider>
-      </AppCapNavContext.Provider>,
-    );
+    render(<TechCapImpactPanel tcId="tc" />);
     await user.click(screen.getByRole("button", { name: /Impact/ }));
-    await user.click(screen.getByRole("button", { name: "Process Checkout" }));
-    await user.click(screen.getByRole("button", { name: "Store POS" }));
-    await user.click(screen.getByRole("button", { name: "Basket Calculation" }));
-    expect(nav.openBusinessCapability).toHaveBeenCalledWith("b3");
-    expect(nav.openApplication).toHaveBeenCalledWith("pos");
-    expect(openAppCap).toHaveBeenCalledWith("ac");
+    const href = (name: string) => screen.getByRole("link", { name }).getAttribute("href");
+    expect(href("Process Checkout")).toBe("#/business/b3");
+    expect(href("Store POS")).toBe("#/applications/pos");
+    expect(href("Basket Calculation")).toBe("#/applications/capabilities/ac");
   });
 });

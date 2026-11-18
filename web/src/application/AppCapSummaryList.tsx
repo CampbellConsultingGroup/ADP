@@ -11,7 +11,7 @@ import {
   useAppCapsByBusinessCapability,
   useAppCapsByTechnicalCapability,
 } from "../api/appCapabilities";
-import { useOpenAppCapability } from "./appCapNav";
+import { EntityLink } from "../shell/EntityLink";
 import { useBusinessTechnology } from "../api/capAnalysis";
 import { BandChip, CapLink, CapWithPath } from "./capAnalysisUi";
 import { RationaleChip, geographyLabel } from "./RealizationList";
@@ -40,7 +40,6 @@ export function AppCapSummaryItems({
   /** 943: on an application's own list, show that application's rationale and geography. */
   forAppId?: string;
 }): React.ReactElement {
-  const open = useOpenAppCapability();
   if (items.length === 0) {
     return <div style={{ fontSize: 12, color: "var(--ink-3)" }}>None.</div>;
   }
@@ -57,17 +56,9 @@ export function AppCapSummaryItems({
         );
         return (
           <li key={s.id} style={{ fontSize: 12, padding: "1px 0" }}>
-            {open ? (
-              <button
-                onClick={() => open(s.id)}
-                title="Open in Applications → Capabilities"
-                className="ui-btn-plain" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--accent)", textAlign: "left", fontSize: 12 }}
-              >
-                {label}
-              </button>
-            ) : (
-              <span>{label}</span>
-            )}
+            <EntityLink kind="application_capability" id={s.id} title="Open in Applications → Capabilities">
+              {label}
+            </EntityLink>
             {s.warnings.includes(MISSING_TECHNICAL_CAPABILITY) && (
               <span style={{ fontSize: 10, color: "var(--warn)", marginLeft: 6 }}>⚠ no technical capability</span>
             )}

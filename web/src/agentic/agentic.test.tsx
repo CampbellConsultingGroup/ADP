@@ -266,8 +266,7 @@ describe("AgentDetail", () => {
     } as never);
   }
 
-  it("lists every solution with its role and opens one", async () => {
-    const onOpen = vi.fn();
+  it("lists every solution with its role and links to it", () => {
     mockDetail({
       solution_count: 2,
       solutions: [
@@ -275,11 +274,10 @@ describe("AgentDetail", () => {
         { app_id: "y", app_name: "Fraud", role: "reviewer", position: 1 },
       ],
     });
-    render(<AgentDetail agentId="ag-1" onBack={vi.fn()} onOpenSolution={onOpen} />);
+    render(<AgentDetail agentId="ag-1" onBack={vi.fn()} />);
     expect(screen.getByText(/Solutions \(2\)/)).toBeTruthy();
     expect(screen.getByText(/— Reviewer/)).toBeTruthy();
-    await userEvent.click(screen.getByRole("button", { name: "Fraud" }));
-    expect(onOpen).toHaveBeenCalledWith("y");
+    expect(screen.getByRole("link", { name: "Fraud" }).getAttribute("href")).toBe("#/applications/y");
   });
 
   it("shows Restricted cost and renders only http(s) Agent Card links", () => {

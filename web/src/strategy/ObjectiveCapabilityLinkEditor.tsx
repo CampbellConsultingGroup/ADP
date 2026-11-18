@@ -18,6 +18,7 @@ export default function ObjectiveCapabilityLinkEditor({ objective }: Props): Rea
   const all = useCapabilities();
   return (
     <LinkEditor
+      action="write_business_arch"
       noun="capability"
       entityKind="business_capability"
       plural="capabilities"

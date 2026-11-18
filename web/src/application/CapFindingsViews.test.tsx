@@ -2,10 +2,8 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import * as capAnalysisApi from "../api/capAnalysis";
 import type { CapabilityFindings } from "../api/capAnalysis";
-import { AppCapNavContext, CapabilityNavContext } from "./appCapNav";
 import CapFindingsViews from "./CapFindingsViews";
 
 vi.mock("../api/capAnalysis", async (importOriginal) => ({
@@ -126,20 +124,15 @@ describe("CapFindingsViews", () => {
   });
 
   it("lists redundant mappings by business capability, with TIME / 7R and the hint (943)", async () => {
-    const openAppCap = vi.fn();
-    render(
-      <AppCapNavContext.Provider value={openAppCap}>
-        <CapFindingsViews mode="redundant" />
-      </AppCapNavContext.Provider>,
-    );
+    render(<CapFindingsViews mode="redundant" />);
     const view = screen.getByLabelText("Redundant");
     expect(within(view).getByText("Old Promo Engine")).toBeTruthy();
     expect(within(view).getByText(/TIME Invest · 7R Retain/)).toBeTruthy();
     expect(within(view).getByText(/TIME says Invest/)).toBeTruthy();
     expect(within(view).getByText(/Europe/)).toBeTruthy();
     expect(within(view).getByText("Not linked to a business capability")).toBeTruthy();
-    await userEvent.click(within(view).getByRole("button", { name: "Online Promotion Evaluation" }));
-    expect(openAppCap).toHaveBeenCalledWith("ac9");
+    expect(within(view).getByRole("link", { name: "Online Promotion Evaluation" }).getAttribute("href"))
+      .toBe("#/applications/capabilities/ac9");
   });
 
   it("says when nothing is marked redundant", () => {
@@ -172,22 +165,11 @@ describe("CapFindingsViews", () => {
     expect(screen.getByText(/No application capability supports 3 or more/)).toBeTruthy();
   });
 
-  it("navigates from every item", async () => {
-    const nav = { openBusinessCapability: vi.fn(), openApplication: vi.fn(), openTechnicalCapability: vi.fn() };
-    const openAppCap = vi.fn();
-    const user = userEvent.setup();
-    render(
-      <AppCapNavContext.Provider value={openAppCap}>
-        <CapabilityNavContext.Provider value={nav}>
-          <CapFindingsViews mode="overlaps" />
-        </CapabilityNavContext.Provider>
-      </AppCapNavContext.Provider>,
-    );
-    await user.click(screen.getByRole("button", { name: "Apply Promotions" }));
-    await user.click(screen.getAllByRole("button", { name: "Store POS" })[0]);
-    await user.click(screen.getByRole("button", { name: "Price Rule Evaluation" }));
-    expect(nav.openBusinessCapability).toHaveBeenCalledWith("b4");
-    expect(nav.openApplication).toHaveBeenCalledWith("pos");
-    expect(openAppCap).toHaveBeenCalledWith("ac2");
+  it("links every item to its own screen", () => {
+    render(<CapFindingsViews mode="overlaps" />);
+    const href = (el: HTMLElement) => el.getAttribute("href");
+    expect(href(screen.getByRole("link", { name: "Apply Promotions" }))).toBe("#/business/b4");
+    expect(href(screen.getAllByRole("link", { name: "Store POS" })[0])).toBe("#/applications/pos");
+    expect(href(screen.getByRole("link", { name: "Price Rule Evaluation" }))).toBe("#/applications/capabilities/ac2");
   });
 });

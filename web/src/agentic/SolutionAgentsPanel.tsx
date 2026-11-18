@@ -19,6 +19,7 @@ import { RiskBadge, SolutionRiskBanner } from "./agenticRisk";
 import { ComplianceStatusText } from "./ComplianceStatusText";
 import { HUMAN_APPROVAL_LABELS, ROLE_LABELS, autonomyLabel } from "./autonomy";
 import { Loading } from "../ui/primitives";
+import { useCan } from "../auth/permissions";
 
 const ROLES = Object.keys(ROLE_LABELS) as SolutionRole[];
 
@@ -26,6 +27,8 @@ const cell: React.CSSProperties = { padding: "6px 8px", borderBottom: "1px solid
 const smallBtn: React.CSSProperties = { fontSize: 11, padding: "1px 7px", cursor: "pointer" };
 
 export default function SolutionAgentsPanel({ appId }: { appId: string }) {
+  const canWrite = useCan("write_application"); // ADP-blp.65
+  const locked = !canWrite.allowed;
   const { data, isLoading } = useSolutionAgents(appId);
   const { data: allAgents } = useAgents();
   const addAgent = useAddSolutionAgent(appId);
@@ -115,6 +118,8 @@ export default function SolutionAgentsPanel({ appId }: { appId: string }) {
                   <select
                     aria-label={`Role for ${m.agent.name}`}
                     value={m.role}
+                    disabled={locked}
+                    title={canWrite.reason}
                     onChange={(e) =>
                       void run(() =>
                         updateRole.mutateAsync({ agentId: m.agent.id, role: e.target.value as SolutionRole }),
@@ -132,12 +137,14 @@ export default function SolutionAgentsPanel({ appId }: { appId: string }) {
                 </td>
                 <td style={cell}>{[m.agent.model_provider, m.agent.model_id].filter(Boolean).join(" · ") || "—"}</td>
                 <td style={{ ...cell, whiteSpace: "nowrap" }}>
-                  <button type="button" style={smallBtn} aria-label={`Move ${m.agent.name} up`} disabled={i === 0} onClick={() => move(i, -1)}>↑</button>{" "}
-                  <button type="button" style={smallBtn} aria-label={`Move ${m.agent.name} down`} disabled={i === members.length - 1} onClick={() => move(i, 1)}>↓</button>{" "}
+                  <button type="button" style={smallBtn} aria-label={`Move ${m.agent.name} up`} disabled={locked || i === 0} title={canWrite.reason} onClick={() => move(i, -1)}>↑</button>{" "}
+                  <button type="button" style={smallBtn} aria-label={`Move ${m.agent.name} down`} disabled={locked || i === members.length - 1} title={canWrite.reason} onClick={() => move(i, 1)}>↓</button>{" "}
                   <button
                     type="button"
                     style={smallBtn}
                     aria-label={`Remove ${m.agent.name}`}
+                    disabled={locked}
+                    title={canWrite.reason}
                     onClick={() => void run(() => remove.mutateAsync(m.agent.id))}
                   >
                     Remove
@@ -150,7 +157,7 @@ export default function SolutionAgentsPanel({ appId }: { appId: string }) {
       )}
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <select aria-label="Agent to add" value={pickId} onChange={(e) => setPickId(e.target.value)}>
+        <select aria-label="Agent to add" disabled={locked} title={canWrite.reason} value={pickId} onChange={(e) => setPickId(e.target.value)}>
           <option value="">Add an existing agent…</option>
           {candidates.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
         </select>
@@ -160,7 +167,8 @@ export default function SolutionAgentsPanel({ appId }: { appId: string }) {
         <button
           type="button"
           className="ui-btn ui-btn-sm"
-          disabled={!pickId || addAgent.isPending}
+          disabled={locked || !pickId || addAgent.isPending}
+          title={canWrite.reason}
           onClick={() =>
             void run(async () => {
               await addAgent.mutateAsync({ agent_id: pickId, role: pickRole });
