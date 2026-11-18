@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from adp.business import store as bstore
+from adp.api.common import session_dependency
 from adp.search import (
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_TECHNICAL_CAPABILITY,
@@ -41,10 +41,7 @@ class SearchResponse(BaseModel):
     total: int
 
 
-async def _get_session():
-    factory = bstore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_session = session_dependency("adp.business.store")
 
 
 @router.get("", response_model=SearchResponse)

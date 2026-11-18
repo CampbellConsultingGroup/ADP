@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.agents.models import AgentSuggestionStatus
 from adp.agents.provenance import write_suggestion_audit
+from adp.api.common import session_dependency
 from adp.auth.actor import actor_of
 from adp.business import store as bstore
 from adp.business.models import (
@@ -64,26 +65,15 @@ def _get_actor(request: Request) -> str:
     return actor_of(request)
 
 
-async def _get_session():
-    factory = bstore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_session = session_dependency("adp.business.store")
 
 
-async def _get_application_session():
-    from adp.application import store as astore
-    factory = astore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_application_session = session_dependency("adp.application.store")
 
 
-async def _get_compliance_session():
-    """A compliance-scoped session (COMPLY-02 research.md D7), used only by the
-    reverse-lookup GET /capabilities/{id}/compliance-mappings endpoint below."""
-    from adp.compliance import store as cstore
-    factory = cstore._get_session_factory()
-    async with factory() as session:
-        yield session
+# A compliance-scoped session (COMPLY-02 research.md D7), used only by the reverse-lookup GET
+# /capabilities/{id}/compliance-mappings endpoint below.
+_get_compliance_session = session_dependency("adp.compliance.store")
 
 
 async def _get_biz_session_factory():

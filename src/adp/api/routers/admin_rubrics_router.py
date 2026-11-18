@@ -19,6 +19,7 @@ from adp.admin.rubric_models import (
     RubricListResponse,
     RubricRestoreRequest,
 )
+from adp.api.common import session_dependency
 from adp.auth.actor import actor_of
 from adp.authz.enforcement import require_action_dep
 from adp.authz.roles import ActionType
@@ -31,10 +32,7 @@ router = APIRouter(prefix="/api/v1/admin/scoring-rubrics", tags=["admin"])
 _require_manage_rubrics = require_action_dep(ActionType.MANAGE_SCORING_RUBRICS)
 
 
-async def _get_session():
-    factory = rubric_service._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_session = session_dependency("adp.admin.rubric_service")
 
 
 def _get_actor(request: Request) -> str:

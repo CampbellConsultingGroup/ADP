@@ -23,6 +23,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.api.common import session_dependency
 from adp.application import store as astore
 from adp.application.models import (
     AgenticSolutionHasAgentsError,
@@ -114,30 +115,17 @@ def _get_actor(request: Request) -> str:
     return actor_of(request)
 
 
-async def _get_session():
-    factory = astore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_session = session_dependency("adp.application.store")
 
 
-async def _get_strategy_session():
-    """A strategy-scoped session (ADP-d8u.2), used only by the reverse-lookup
-    GET /applications/{id}/objectives endpoint below."""
-    from adp.strategy import store as sstore
-
-    factory = sstore._get_session_factory()
-    async with factory() as session:
-        yield session
+# A strategy-scoped session (ADP-d8u.2), used only by the reverse-lookup GET
+# /applications/{id}/objectives endpoint below.
+_get_strategy_session = session_dependency("adp.strategy.store")
 
 
-async def _get_compliance_session():
-    """A compliance-scoped session (COMPLY-02 research.md D7), used only by the
-    reverse-lookup GET /applications/{id}/compliance-mappings endpoint below."""
-    from adp.compliance import store as cstore
-
-    factory = cstore._get_session_factory()
-    async with factory() as session:
-        yield session
+# A compliance-scoped session (COMPLY-02 research.md D7), used only by the reverse-lookup GET
+# /applications/{id}/compliance-mappings endpoint below.
+_get_compliance_session = session_dependency("adp.compliance.store")
 
 
 # Sensitive-read gate (APM US3): risk & compliance fields are not open to every

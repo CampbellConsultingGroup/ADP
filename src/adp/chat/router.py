@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.api.common import session_dependency
 from adp.auth.actor import actor_of
 from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
@@ -44,10 +45,7 @@ def _get_actor(request: Request) -> str:
     return actor_of(request)
 
 
-async def _get_chat_session():
-    factory = chat_store._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_chat_session = session_dependency("adp.chat.store")
 
 
 async def _get_chat_session_factory():

@@ -59,6 +59,7 @@ from adp.agentic.models import (
     TargetNotFoundError,
 )
 from adp.agentic.risk import solution_risk
+from adp.api.common import session_dependency
 from adp.auth.actor import actor_of
 from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
@@ -76,10 +77,7 @@ def _get_actor(request: Request) -> str:
     return actor_of(request)
 
 
-async def _get_session():
-    factory = agstore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_session = session_dependency("adp.agentic.store")
 
 
 # ── Cost gating (Clarification Q2) ────────────────────────────────────────────

@@ -21,6 +21,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.api.common import session_dependency
 from adp.api.deps import get_kb_session
 from adp.compliance.models import ControlMappingListResponse
 from adp.knowledge.index import KnowledgeIndex, knowledge_items
@@ -31,14 +32,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/knowledge", tags=["knowledge"])
 
 
-async def _get_compliance_session():
-    """A compliance-scoped session (COMPLY-02 research.md D7), used only by the
-    reverse-lookup GET /knowledge/{id}/compliance-mappings endpoint below."""
-    from adp.compliance import store as cstore
+# A compliance-scoped session (COMPLY-02 research.md D7), used only by the reverse-lookup GET
+# /knowledge/{id}/compliance-mappings endpoint below.
+_get_compliance_session = session_dependency("adp.compliance.store")
 
-    factory = cstore._get_session_factory()
-    async with factory() as session:
-        yield session
 
 # ── Embedding ────────────────────────────────────────────────────────────────
 

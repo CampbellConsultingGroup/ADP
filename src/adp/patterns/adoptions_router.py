@@ -26,6 +26,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.api.common import session_dependency
 from adp.auth.actor import actor_of
 from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
@@ -80,10 +81,7 @@ def _get_actor(request: Request) -> str:
     return actor_of(request)
 
 
-async def _get_session():  # type: ignore[no-untyped-def]
-    factory = pstore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_session = session_dependency("adp.patterns.store")
 
 
 Session = Annotated[AsyncSession, Depends(_get_session)]

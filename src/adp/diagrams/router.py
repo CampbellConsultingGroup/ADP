@@ -20,6 +20,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from adp.api.common import session_dependency
 from adp.auth.actor import actor_of
 from adp.diagrams import store as dstore
 from adp.diagrams.models import (
@@ -34,10 +35,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/diagrams", tags=["diagrams"])
 
 
-async def _get_session():
-    factory = dstore._get_session_factory()
-    async with factory() as session:
-        yield session
+_get_session = session_dependency("adp.diagrams.store")
 
 
 def _get_actor(request: Request) -> str:
