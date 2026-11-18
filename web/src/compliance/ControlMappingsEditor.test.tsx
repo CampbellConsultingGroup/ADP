@@ -2,24 +2,18 @@
 // target-type selector hiding the target-id field for "organization" (no target leg).
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactElement } from "react";
 import ControlMappingsEditor from "./ControlMappingsEditor";
 import * as complianceApi from "../api/compliance";
 import type { ControlMapping } from "../api/compliance";
 import * as agenticApi from "../api/agentic";
+import { renderWithQuery as renderWithQueryClient } from "../../tests/support/apiTestUtils";
 
 vi.mock("../api/compliance");
 vi.mock("../api/agentic");
 
 const mockedApi = vi.mocked(complianceApi);
-
-function renderWithQueryClient(ui: ReactElement) {
-  const qc = new QueryClient();
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
-}
 
 function makeMapping(overrides: Partial<ControlMapping> = {}): ControlMapping {
   return {

@@ -5,21 +5,15 @@
 // ApplicationDetail test suite from scratch just to reach this one new tab.
 
 import { describe, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactElement } from "react";
+import { screen } from "@testing-library/react";
 import ApplicationComplianceMappings from "./ApplicationComplianceMappings";
 import * as complianceApi from "../api/compliance";
 import { ApiError } from "../api/client";
+import { renderWithQuery as renderWithQueryClient } from "../../tests/support/apiTestUtils";
 
 vi.mock("../api/compliance");
 
 const mockedApi = vi.mocked(complianceApi);
-
-function renderWithQueryClient(ui: ReactElement) {
-  const qc = new QueryClient();
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
-}
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -5,16 +5,15 @@
 // helper.
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactElement } from "react";
 import CapabilityNode from "./CapabilityNode";
 import * as businessApi from "../api/business";
 import * as complianceApi from "../api/compliance";
 import * as capAnalysisApi from "../api/capAnalysis";
 import type { CapabilityTreeNode } from "./CapabilityTree";
 import * as agenticApi from "../api/agentic";
+import { renderWithQuery as renderWithQueryClient } from "../../tests/support/apiTestUtils";
 
 // ADP-blp.59: opening Details shows the Links section first; its editor has its own tests.
 vi.mock("./DesignLinkEditor", () => ({ default: () => <div>design-links-editor</div> }));
@@ -28,11 +27,6 @@ vi.mock("../api/capAnalysis", async (importOriginal) => ({
 
 const mockedBusinessApi = vi.mocked(businessApi);
 const mockedComplianceApi = vi.mocked(complianceApi);
-
-function renderWithQueryClient(ui: ReactElement) {
-  const qc = new QueryClient();
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
-}
 
 const CAPABILITY: CapabilityTreeNode = {
   id: "cap-1",

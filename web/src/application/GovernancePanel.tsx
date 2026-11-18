@@ -4,6 +4,7 @@ import type { ApplicationGovernanceUpdate } from "../api/application";
 import { hasStatus } from "../api/client";
 import { useCan } from "../auth/permissions";
 import { Loading, Button, Restricted, Field } from "../ui/primitives";
+import { useUnsavedChanges } from "../ui/unsaved";
 
 /** APM US7 — application ownership & governance (sensitive: gated server-side). */
 
@@ -22,9 +23,13 @@ export default function GovernancePanel({ appId }: Props) {
   const [itOwner, setItOwner] = useState("");
   const [decisionRights, setDecisionRights] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  // ADP-blp.63: any edit in the panel counts as unsaved until it is saved or reloaded.
+  const [touched, setTouched] = useState(false);
+  useUnsavedChanges(touched);
 
   useEffect(() => {
     if (!governance) return;
+    setTouched(false);
     setContractTerms(governance.contract_terms ?? "");
     setRenewalDate(governance.renewal_date ?? "");
     setSla(governance.sla ?? "");
@@ -56,6 +61,7 @@ export default function GovernancePanel({ appId }: Props) {
     };
     try {
       await updateGovernance.mutateAsync(body);
+      setTouched(false);
       showToast("Saved");
     } catch (e) {
       const forbidden = hasStatus(e, 403);
@@ -64,7 +70,7 @@ export default function GovernancePanel({ appId }: Props) {
   };
 
   return (
-    <div className="ui-form-stack" style={{ maxWidth: 460 }}>
+    <div className="ui-form-stack" style={{ maxWidth: 460 }} onChange={() => setTouched(true)}>
       <h4 style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--ink-2)" }}>Ownership &amp; Governance</h4>
       {toast && <div style={{ fontSize: 11, color: toast === "Saved" ? "var(--ink-2)" : "var(--crit)" }}>{toast}</div>}
 

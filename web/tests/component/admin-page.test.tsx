@@ -7,7 +7,7 @@ import AdminPage from "../../src/admin/AdminPage";
 import { AppShell } from "../../src/ui";
 import type { AgentPromptListResponse } from "../../src/api/adminPrompts";
 
-import { mockFetch, renderWithQuery } from "./registry-test-utils";
+import { mockFetch, renderWithQuery } from "../support/apiTestUtils";
 
 afterEach(() => {
   cleanup();

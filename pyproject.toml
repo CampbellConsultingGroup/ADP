@@ -26,7 +26,6 @@ dependencies = [
     "sentence-transformers>=2.7",
     "langgraph>=0.2",
     "langchain-core>=0.2",
-    "tiktoken>=0.7",
     # ── Knowledge connectors ──────────────────────────────────────────────────
     "gitpython>=3.1",
     "python-frontmatter>=1.1",
@@ -91,7 +90,7 @@ warn_return_any = false
 no_implicit_reexport = false
 
 [[tool.mypy.overrides]]
-module = ["numpy.*", "sentence_transformers.*", "langgraph.*", "langchain_core.*", "cairosvg.*", "jose.*", "pgvector.*", "prometheus_client.*", "tiktoken.*", "gitpython.*", "frontmatter.*", "sqlalchemy.*", "asyncpg.*", "alembic.*", "click.*"]
+module = ["numpy.*", "sentence_transformers.*", "langgraph.*", "langchain_core.*", "cairosvg.*", "jose.*", "pgvector.*", "prometheus_client.*", "gitpython.*", "frontmatter.*", "sqlalchemy.*", "asyncpg.*", "alembic.*", "click.*"]
 ignore_errors = true
 
 # ── Pytest ────────────────────────────────────────────────────────────────────

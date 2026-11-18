@@ -2,22 +2,16 @@
 // the confirm message names the total control count computed from the already-fetched tree.
 
 import { describe, expect, it, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactElement } from "react";
 import FrameworkDetail from "./FrameworkDetail";
 import * as complianceApi from "../api/compliance";
 import type { ControlNode, RegulatoryFrameworkDetail } from "../api/compliance";
+import { renderWithQuery as renderWithQueryClient } from "../../tests/support/apiTestUtils";
 
 vi.mock("../api/compliance");
 
 const mockedApi = vi.mocked(complianceApi);
-
-function renderWithQueryClient(ui: ReactElement) {
-  const qc = new QueryClient();
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
-}
 
 const FRAMEWORK_BASE = {
   id: "f1", name: "GDPR", jurisdiction: "EU", authority: "European Commission",

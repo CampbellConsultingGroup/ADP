@@ -19,6 +19,8 @@ import { Tabs } from "../ui/Tabs";
 import { QK } from "../api/queryKeys";
 
 interface CapabilityNodeProps {
+  /** Changes when anything rendered in this row's subtree should (see the memo below). */
+  revision?: string;
   // ADP-914.7: widened from BusinessCapability to CapabilityTreeNode (a
   // strict superset -- all existing field access below still compiles).
   capability: CapabilityTreeNode;
@@ -50,7 +52,7 @@ const DETAIL_SECTIONS: { id: DetailSection; label: string }[] = [
   { id: "review", label: "Review" },
 ];
 
-export default function CapabilityNode({ capability, children, isOrphan, focused, selected, onToggleSelect }: CapabilityNodeProps): React.ReactElement {
+function CapabilityNodeRow({ capability, children, isOrphan, focused, selected, onToggleSelect }: CapabilityNodeProps): React.ReactElement {
   const [expanded, setExpanded] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(capability.name);
@@ -382,3 +384,19 @@ function CapabilityComplianceMappings({ capabilityId }: { capabilityId: string }
     </div>
   );
 }
+
+/**
+ * ADP-blp.38: a row re-renders only when something it shows changed. `children` is a new array
+ * of elements on every render of the tree, so it cannot be compared; `revision` stands in for
+ * it (the tree sets it from what the subtree's rows depend on). A caller that passes no revision
+ * always re-renders, as before.
+ */
+export default React.memo(CapabilityNodeRow, (before, after) =>
+  after.revision !== undefined &&
+  before.revision === after.revision &&
+  before.capability === after.capability &&
+  before.isOrphan === after.isOrphan &&
+  before.focused === after.focused &&
+  before.selected === after.selected &&
+  before.onToggleSelect === after.onToggleSelect,
+);

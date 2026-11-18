@@ -18,7 +18,7 @@ import ApplicationDetail from "../../src/application/ApplicationDetail";
 import ApplicationPage from "../../src/application/ApplicationPage";
 import type { Application, TechnicalCapability } from "../../src/api/application";
 
-import { mockFetch, renderWithQuery, lastCall } from "./registry-test-utils";
+import { mockFetch, renderWithQuery, lastCall } from "../support/apiTestUtils";
 
 // These tests are about the registry, not roles: every write is allowed. (Without this the
 // answer depends on VITE_AUTH_ENABLED, which is off locally and on in CI.)

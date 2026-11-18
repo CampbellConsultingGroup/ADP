@@ -71,6 +71,7 @@ audit_entries = Table(
     Column("origin", Text, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Index("ix_audit_entries_design", "design_id", "design_version"),
+    Index("ix_audit_entries_timestamp", "timestamp"),  # migration 054
 )
 
 

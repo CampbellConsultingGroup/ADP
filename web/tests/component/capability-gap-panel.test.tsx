@@ -4,7 +4,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { screen, cleanup, waitFor } from "@testing-library/react";
 
 import CapabilityGapPanel from "../../src/intake/CapabilityGapPanel";
-import { mockFetch, renderWithQuery } from "./registry-test-utils";
+import { mockFetch, renderWithQuery } from "../support/apiTestUtils";
 
 afterEach(() => {
   cleanup();

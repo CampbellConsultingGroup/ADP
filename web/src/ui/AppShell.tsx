@@ -117,6 +117,8 @@ interface AppShellProps {
   currentView: AppView;
   onNavigate: (view: AppView) => void;
   designId?: string | null;
+  /** The open design's name, shown in the rail in place of its id (ADP-blp.63). */
+  designLabel?: React.ReactNode;
   // "Intake" nav click == "New Design": resets to a blank Intake form even if
   // a design is currently selected. Optional -- falls back to plain
   // onNavigate("intake") if omitted (e.g. in tests that don't wire it up).
@@ -133,7 +135,7 @@ interface AppShellProps {
   children: React.ReactNode;
 }
 
-export function AppShell({ currentView, onNavigate, designId, onStartNewDesign, onOpenSearchResult, topActions, backView, onBack, children }: AppShellProps): React.ReactElement {
+export function AppShell({ currentView, onNavigate, designId, designLabel, onStartNewDesign, onOpenSearchResult, topActions, backView, onBack, children }: AppShellProps): React.ReactElement {
   const { user, logout } = useAuth();
   const { cycle } = useTheme();
   const inDesign = !!designId;
@@ -187,7 +189,9 @@ export function AppShell({ currentView, onNavigate, designId, onStartNewDesign, 
           </>
         )}
 
-        <div className="shell-navlabel">{inDesign ? `Design · ${designId}` : "Design"}</div>
+        <div className="shell-navlabel" title={inDesign ? `Design ${designId}` : undefined}>
+          {inDesign ? <>Design · {designLabel ?? designId}</> : "Design"}
+        </div>
         {DESIGN_SCOPED.map((d) => <NavItem key={d.view} def={d} current={currentView} onNavigate={onNavigate} />)}
 
         <div className="shell-railspacer" />

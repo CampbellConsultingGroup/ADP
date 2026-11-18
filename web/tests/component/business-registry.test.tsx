@@ -15,7 +15,7 @@ import ValueStreamStageEditor from "../../src/business/ValueStreamStageEditor";
 import ValueStreamDetail from "../../src/business/ValueStreamDetail";
 import DomainDetail from "../../src/business/DomainDetail";
 
-import { mockFetch, renderWithQuery, lastCall } from "./registry-test-utils";
+import { mockFetch, renderWithQuery, lastCall } from "../support/apiTestUtils";
 
 afterEach(() => {
   cleanup();

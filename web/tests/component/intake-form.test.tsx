@@ -6,7 +6,7 @@ import { describe, it, expect, afterEach, vi } from "vitest";
 import { screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 
 import IntakeTextForm from "../../src/intake/IntakeTextForm";
-import { mockFetch, renderWithQuery } from "./registry-test-utils";
+import { mockFetch, renderWithQuery } from "../support/apiTestUtils";
 
 function routes(extra: Record<string, unknown> = {}) {
   return {

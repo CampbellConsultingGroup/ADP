@@ -80,7 +80,6 @@ export const QK = {
   strategySummary: "strategy-summary",
   strategyThemes: "strategy-themes",
   techCaps: "tech-caps",
-  theme: "theme",
   transformationInitiatives: "transformation-initiatives",
   validateStatus: "validate-status",
   vsDesigns: "vs-designs",
