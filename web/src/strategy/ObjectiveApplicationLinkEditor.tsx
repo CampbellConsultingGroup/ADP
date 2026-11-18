@@ -20,6 +20,7 @@ export default function ObjectiveApplicationLinkEditor({ objective }: Props): Re
   const all = useApplicationsForLinking();
   return (
     <LinkEditor
+      action="write_business_arch"
       noun="application"
       entityKind="application"
       plural="applications"

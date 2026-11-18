@@ -81,6 +81,94 @@ export function parseRoute(hash: string): AppRoute | null {
   return { view, entity, designId: designId || null };
 }
 
+// ── The open entity, read and written by the page that shows it (ADP-blp.57, ADP-blp.68) ──
+// App used to hold one "pending id" per kind of entity and hand it to the page as an initial
+// prop, remounting the page to apply it. A selection made inside a page never reached the URL.
+// Now the page reads its entity from the hash with useRouteEntity and writes it back, so a
+// selection is a history entry and a link to an entity is just an address.
+
+/** The screen that shows each kind of entity. */
+export const VIEW_FOR_ENTITY: Record<EntityKind, AppView> = {
+  business_capability: "business",
+  application: "applications",
+  application_capability: "applications",
+  technical_capability: "technical",
+  agent: "agents",
+  adoption: "patterns",
+};
+
+export function entityHref(kind: EntityKind, id: string): string {
+  return formatRoute({ view: VIEW_FOR_ENTITY[kind], entity: { kind, id }, designId: null });
+}
+
+/** Go to an entity's own screen (from an event handler; in markup use <EntityLink>). */
+export function goToEntity(kind: EntityKind, id: string): void {
+  window.location.hash = entityHref(kind, id);
+}
+
+/** Raised after the hash is changed with pushState, which fires no hashchange of its own. */
+export const ROUTE_EVENT = "adp:route";
+
+function routeEntityId(kind: EntityKind): string | null {
+  const route = parseRoute(window.location.hash);
+  return route?.entity?.kind === kind ? route.entity.id : null;
+}
+
+/**
+ * Open an entity (or with null, close the one open) as a new history entry. On the entity's
+ * own screen the page's other parameters (?tab=...) are kept; from another screen this is an
+ * ordinary navigation. Does nothing when there is no route in the URL (a component rendered
+ * outside the shell).
+ */
+export function openEntity(kind: EntityKind, id: string | null): void {
+  const current = parseRoute(window.location.hash);
+  if (!current) return;
+  const view = VIEW_FOR_ENTITY[kind];
+  if (current.view !== view) {
+    if (id !== null) window.location.hash = entityHref(kind, id);
+    return;
+  }
+  if (id === null && current.entity?.kind !== kind) return; // some other kind is open: leave it
+  if (id !== null && current.entity?.kind === kind && current.entity.id === id) return;
+  const { params } = splitHash();
+  const path = formatRoute({ view, entity: id === null ? null : { kind, id }, designId: null });
+  const query = params.toString();
+  window.history.pushState(null, "", query ? `${path}?${query}` : path);
+  window.dispatchEvent(new Event(ROUTE_EVENT));
+}
+
+/**
+ * The entity of one kind that is open on this screen, kept in the URL. `initial` is used when
+ * the URL names none (a caller that opens a page on a given entity; tests).
+ */
+export function useRouteEntity(
+  kind: EntityKind,
+  initial: string | null = null,
+): [string | null, (id: string | null) => void] {
+  const [id, setId] = useState<string | null>(() => routeEntityId(kind) ?? initial);
+
+  useEffect(() => {
+    // Follow Back/Forward, a link clicked elsewhere on the page, and other users of this hook.
+    const sync = () => {
+      if (parseRoute(window.location.hash)) setId(routeEntityId(kind));
+    };
+    window.addEventListener("popstate", sync);
+    window.addEventListener("hashchange", sync);
+    window.addEventListener(ROUTE_EVENT, sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener("hashchange", sync);
+      window.removeEventListener(ROUTE_EVENT, sync);
+    };
+  }, [kind]);
+
+  const set = (next: string | null) => {
+    setId(next);
+    openEntity(kind, next);
+  };
+  return [id, set];
+}
+
 // ── Page state in the URL (ADP-blp.68) ─────────────────────────────────────────
 // A page's own choices -- which tab is showing -- live in the hash query string beside the
 // route (`#/business?tab=capabilities`), so a reload or a shared link opens the same tab.

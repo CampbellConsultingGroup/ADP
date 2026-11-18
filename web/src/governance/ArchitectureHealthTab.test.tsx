@@ -10,7 +10,6 @@ import * as orgApi from "../api/organization";
 import type { CapabilityOrgFindings } from "../api/organization";
 import type { Adoption, ConformanceStatus } from "../api/patterns";
 import type { CapabilityFindings, CapabilityRollup, LifecycleBand } from "../api/capAnalysis";
-import { CapabilityNavContext } from "../application/appCapNav";
 import ArchitectureHealthTab from "./ArchitectureHealthTab";
 
 vi.mock("../api/patterns", async (orig) => ({
@@ -162,7 +161,7 @@ beforeEach(() => {
 
 describe("ArchitectureHealthTab tiles (US1)", () => {
   it("shows the five derived counts", () => {
-    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    render(<ArchitectureHealthTab />);
     expect(within(tile("Non-conformant adoptions")).getByText("2")).toBeTruthy();
     expect(within(tile("Indeterminate adoptions")).getByText("1")).toBeTruthy();
     expect(within(tile("Exposed capabilities")).getByText("2")).toBeTruthy();
@@ -172,7 +171,7 @@ describe("ArchitectureHealthTab tiles (US1)", () => {
   });
 
   it("shows the organization findings as tiles (ADP-m7x)", () => {
-    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    render(<ArchitectureHealthTab />);
     expect(within(tile("No accountable owner")).getByText("1")).toBeTruthy();
     expect(within(tile("No accountable owner")).getByText("of 6 L1/L2")).toBeTruthy();
     expect(within(tile("Shared-service candidates")).getByText("1")).toBeTruthy();
@@ -181,29 +180,25 @@ describe("ArchitectureHealthTab tiles (US1)", () => {
   });
 
   it("lists the organization findings and opens a capability on the Business screen (ADP-m7x)", async () => {
-    const nav = { openBusinessCapability: vi.fn(), openApplication: vi.fn(), openTechnicalCapability: vi.fn() };
-    render(
-      <CapabilityNavContext.Provider value={nav}>
-        <ArchitectureHealthTab onOpenAdoption={vi.fn()} />
-      </CapabilityNavContext.Provider>,
-    );
+    render(<ArchitectureHealthTab />);
     const section = screen.getByRole("region", { name: "Organization" });
     expect(within(section).getByText("Store Operations")).toBeTruthy();
     expect(within(section).getByText("Forecast Demand")).toBeTruthy();
+    window.location.hash = "#/governance";
     await userEvent.click(within(section).getByRole("button", { name: "Plan Assortment" }));
-    expect(nav.openBusinessCapability).toHaveBeenCalledWith("b10");
+    expect(window.location.hash).toBe("#/business/b10");
   });
 
   it("keeps the other sections when the organization findings fail (ADP-m7x)", () => {
     org.useCapabilityOrgFindings.mockReturnValue({ data: undefined, isLoading: false, error: new Error("x") } as never);
-    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    render(<ArchitectureHealthTab />);
     expect(within(tile("Unmapped L3s")).getByText("—")).toBeTruthy();
     expect(within(tile("Overlaps")).getByText("1")).toBeTruthy();
     expect(within(screen.getByRole("region", { name: "Organization" })).getByRole("alert")).toBeTruthy();
   });
 
   it("asks for adoption statuses and both capability analyses", () => {
-    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    render(<ArchitectureHealthTab />);
     expect(pat.useAdoptions).toHaveBeenCalledWith(true);
     expect(cap.useCapabilityRollup).toHaveBeenCalledWith(true);
   });
@@ -213,7 +208,7 @@ describe("ArchitectureHealthTab tiles (US1)", () => {
     cap.useCapabilityRollup.mockReturnValue({ data: undefined, isLoading: true, error: null } as never);
     cap.useCapabilityFindings.mockReturnValue({ data: undefined, isLoading: true, error: null } as never);
     org.useCapabilityOrgFindings.mockReturnValue({ data: undefined, isLoading: true, error: null } as never);
-    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    render(<ArchitectureHealthTab />);
     for (const label of ["Non-conformant adoptions", "Indeterminate adoptions", "Exposed capabilities", "Overlaps", "Gaps", "No accountable owner", "Shared-service candidates", "Unmapped L3s"]) {
       expect(within(tile(label)).getByText("…")).toBeTruthy();
     }
@@ -225,7 +220,7 @@ describe("ArchitectureHealthTab tiles (US1)", () => {
     cap.useCapabilityFindings.mockReturnValue(
       ok({ ...FINDINGS, overlaps: [], gaps: { business_without_app_capability: [], app_capability_without_business: [], app_capability_without_application: [] } }),
     );
-    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    render(<ArchitectureHealthTab />);
     expect(within(tile("Non-conformant adoptions")).getByText("0")).toBeTruthy();
     expect(screen.getByText("Every adoption is conformant or not applicable.")).toBeTruthy();
     expect(screen.getByText("No business capability depends on retiring or past-end-of-life technology.")).toBeTruthy();
@@ -234,9 +229,9 @@ describe("ArchitectureHealthTab tiles (US1)", () => {
 
 describe("ArchitectureHealthTab Patterns section (US2)", () => {
   it("lists non-conformant, then indeterminate, and summarizes the rest", () => {
-    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    render(<ArchitectureHealthTab />);
     const section = screen.getByRole("region", { name: "Pattern conformance" });
-    const names = within(section).getAllByRole("button").map((b) => b.textContent);
+    const names = within(section).getAllByRole("link").map((b) => b.textContent);
     expect(names).toEqual([
       "E-commerce & Digital — event backbone",
       "E-commerce & Digital — mesh migration",
@@ -246,22 +241,21 @@ describe("ArchitectureHealthTab Patterns section (US2)", () => {
     expect(within(section).getByText(/Indeterminate can mean/)).toBeTruthy();
   });
 
-  it("opens the adoption on the Patterns screen", async () => {
-    const onOpenAdoption = vi.fn();
-    render(<ArchitectureHealthTab onOpenAdoption={onOpenAdoption} />);
-    await userEvent.click(screen.getByRole("button", { name: "E-commerce & Digital — mesh migration" }));
-    expect(onOpenAdoption).toHaveBeenCalledWith("a1");
+  it("links the adoption to the Patterns screen", () => {
+    render(<ArchitectureHealthTab />);
+    const link = screen.getByRole("link", { name: "E-commerce & Digital — mesh migration" });
+    expect(link.getAttribute("href")).toBe("#/patterns/adoptions/a1");
   });
 
   it("says when nothing has been adopted", () => {
     pat.useAdoptions.mockReturnValue(ok({ items: [], total: 0 }));
-    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    render(<ArchitectureHealthTab />);
     expect(screen.getByText("No patterns have been adopted yet.")).toBeTruthy();
   });
 
   it("keeps the Capabilities section when the patterns source fails", () => {
     pat.useAdoptions.mockReturnValue({ data: undefined, isLoading: false, error: new Error("boom") } as never);
-    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    render(<ArchitectureHealthTab />);
     expect(screen.getByText("Failed to load pattern conformance.")).toBeTruthy();
     expect(within(tile("Non-conformant adoptions")).getByText("—")).toBeTruthy();
     expect(screen.getByText("Process Checkout")).toBeTruthy();
@@ -270,12 +264,7 @@ describe("ArchitectureHealthTab Patterns section (US2)", () => {
 
 describe("ArchitectureHealthTab Capabilities section (US3)", () => {
   it("lists exposed Level 3s worst first, with band and path, and navigates", async () => {
-    const nav = { openBusinessCapability: vi.fn(), openApplication: vi.fn(), openTechnicalCapability: vi.fn() };
-    render(
-      <CapabilityNavContext.Provider value={nav}>
-        <ArchitectureHealthTab onOpenAdoption={vi.fn()} />
-      </CapabilityNavContext.Provider>,
-    );
+    render(<ArchitectureHealthTab />);
     const section = screen.getByRole("region", { name: "Exposed capabilities" });
     const items = within(section).getAllByRole("listitem").map((li) => li.textContent ?? "");
     expect(items[0]).toContain("Legacy Returns");
@@ -283,12 +272,11 @@ describe("ArchitectureHealthTab Capabilities section (US3)", () => {
     expect(items[1]).toContain("Process Checkout");
     expect(items[1]).toContain("Retiring");
     expect(items[1]).toContain("Sales & Customer Transactions › In-Store Transaction Management");
-    await userEvent.click(within(section).getByRole("button", { name: "Process Checkout" }));
-    expect(nav.openBusinessCapability).toHaveBeenCalledWith("b3");
+    expect(within(section).getByRole("link", { name: "Process Checkout" }).getAttribute("href")).toBe("#/business/b3");
   });
 
   it("renders overlaps and gaps as on Applications -> Capabilities", () => {
-    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    render(<ArchitectureHealthTab />);
     const overlaps = screen.getByLabelText("Overlaps", { selector: "[aria-label='Overlaps']:not([role=group])" });
     expect(within(overlaps).getByText("Apply Promotions")).toBeTruthy();
     expect(within(overlaps).getByText("Online Promotion Evaluation")).toBeTruthy();
@@ -299,8 +287,8 @@ describe("ArchitectureHealthTab Capabilities section (US3)", () => {
   it("keeps the Patterns section when the capability sources fail", () => {
     cap.useCapabilityRollup.mockReturnValue({ data: undefined, isLoading: false, error: new Error("x") } as never);
     cap.useCapabilityFindings.mockReturnValue({ data: undefined, isLoading: false, error: new Error("x") } as never);
-    render(<ArchitectureHealthTab onOpenAdoption={vi.fn()} />);
+    render(<ArchitectureHealthTab />);
     expect(screen.getByText("Failed to load capability exposure.")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "E-commerce & Digital — mesh migration" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "E-commerce & Digital — mesh migration" })).toBeTruthy();
   });
 });

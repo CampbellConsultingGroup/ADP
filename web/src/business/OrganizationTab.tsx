@@ -18,7 +18,7 @@ import {
   useUnmatched,
   useUpdateOrgUnit,
 } from "../api/organization";
-import { useCanWriteApplications } from "../application/appCapNav";
+import { useBusinessWrite } from "../application/appCapNav";
 import GeographyTree from "./GeographyTree";
 import OrgUnitTree from "./OrgUnitTree";
 import UnmatchedList from "./UnmatchedList";
@@ -28,9 +28,9 @@ import { confirmAction } from "../ui/confirm";
 
 type Section = "org-units" | "geography" | "unmatched" | "findings";
 
-/** WRITE_BUSINESS_ARCH and WRITE_APPLICATION are held by the same roles; the server decides. */
+/** ADP-blp.65: the server's answer for WRITE_BUSINESS_ARCH (it used to borrow WRITE_APPLICATION's). */
 export function useCanWriteBusiness(): boolean {
-  return useCanWriteApplications();
+  return useBusinessWrite().allowed;
 }
 
 const muted: React.CSSProperties = { fontSize: 12, color: "var(--ink-3)" };

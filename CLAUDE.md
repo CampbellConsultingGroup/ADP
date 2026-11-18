@@ -173,6 +173,29 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- Fable review ADP-blp.57, .68 and .65, closing increments (frontend only):
+  - The open entity is owned by the page, in the URL. `useRouteEntity(kind, initial)` in
+    `shell/routing.ts` reads it from the hash and writes it back with `openEntity(kind, id)`: a
+    selection is a history entry (Back returns to the previous selection, reload restores it), the
+    page's own parameters (`?tab=`) are kept, and the page is NOT remounted. Used by Applications
+    (application, application capability), Business (focused capability), Technical Architecture,
+    Agents and Pattern adoptions. An entity in the URL decides the tab (an application capability shows
+    Capabilities); choosing another tab closes it.
+  - `App.tsx` no longer holds six `pending*Id` states, page `key`s, `AppCapNavContext` or
+    `CapabilityNavContext`; all are deleted, with the `onOpenSolution` / `onOpenAdoption` props. Link to
+    an entity with `<EntityLink kind id>`; from an event handler use `goToEntity(kind, id)`.
+    `CapLink`, the application capability summary list, "Automated by" and an agent's solutions are
+    plain links now (tests assert `href`, not a callback).
+  - Back: the top-bar control goes to the previous *screen* (with whatever was open there), not to the
+    previous selection on this screen. Clicking the nav item of the screen already showing closes the
+    open entity.
+  - Permissions: `LinkEditor` takes `action` (the strategy link editors and business design links pass
+    `write_business_arch`) and disables the picker and Remove with the reason. Pattern lifecycle uses
+    `govern_pattern` (`useCanGovernPatterns`); business writes ask for `write_business_arch`
+    (`useBusinessWrite`), no longer borrowing `write_application`. Application Add / Edit / Delete, the
+    solution agents panel and an agent's Automates links are disabled for roles without
+    `write_application`. The role lists in `appCapNav.tsx` and `patterns/permissions.ts` remain only as
+    the guess used until the server's answer loads.
 - Fable review ADP-blp.61 and .46, closing increments (frontend only):
   - .61: Agents and Patterns lists use `EmptyState`. An empty registry says what it is and what to do
     next (or that the role cannot add); when filters hide everything it says so and offers Clear filters.

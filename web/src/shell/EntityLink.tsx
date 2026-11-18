@@ -1,6 +1,7 @@
 import React from "react";
-import type { AppView } from "./index";
-import { formatRoute, type EntityKind } from "./routing";
+import { entityHref, type EntityKind } from "./routing";
+
+export { entityHref };
 
 /**
  * A link to one entity on the screen that owns it (ADP-blp.57).
@@ -10,19 +11,6 @@ import { formatRoute, type EntityKind } from "./routing";
  * a link is just an anchor: it works with Back, middle-click and "copy link", and needs no
  * context provider. Use this wherever an entity's name is displayed.
  */
-const VIEW_FOR: Record<EntityKind, AppView> = {
-  business_capability: "business",
-  application: "applications",
-  application_capability: "applications",
-  technical_capability: "technical",
-  agent: "agents",
-  adoption: "patterns",
-};
-
-export function entityHref(kind: EntityKind, id: string): string {
-  return formatRoute({ view: VIEW_FOR[kind], entity: { kind, id }, designId: null });
-}
-
 interface EntityLinkProps {
   kind: EntityKind;
   id: string;

@@ -24,13 +24,11 @@ interface GovernancePageProps {
   onNavigate: (view: AppView) => void;
   onSelectDesign: (id: string) => void;
   /** 939: opens an adoption on the Patterns screen. */
-  onOpenAdoption?: (id: string) => void;
 }
 
 export default function GovernancePage({
   onNavigate,
   onSelectDesign,
-  onOpenAdoption,
 }: GovernancePageProps): React.ReactElement {
   // ADP-blp.68: the tab is in the URL (?tab=...).
   const [activeTab, setActiveTab] = useHashParam<TabId>(
@@ -59,7 +57,7 @@ export default function GovernancePage({
         )}
         {activeTab === "activity" && <ActivityFeedTab />}
         {activeTab === "health" && (
-          <ArchitectureHealthTab onOpenAdoption={onOpenAdoption ?? (() => onNavigate("patterns"))} />
+          <ArchitectureHealthTab />
         )}
       </div>
     </div>

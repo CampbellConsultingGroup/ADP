@@ -1,6 +1,5 @@
-import React, { lazy, useEffect, useMemo, useRef, useState } from "react";
+import React, { lazy, useEffect, useRef, useState } from "react";
 import OverviewPage from "./overview/OverviewPage";
-import { AppCapNavContext, CapabilityNavContext, type CapabilityNav } from "./application/appCapNav";
 import type { DiagramSeed } from "./diagrams/generators";
 
 // ADP-blp.31: every page except the landing page is loaded on first visit. The app used to ship
@@ -33,7 +32,7 @@ import { AskAiLauncher } from "./chat/AskAiLauncher";
 import { PageBoundary } from "./ui/PageBoundary";
 import type { SearchHit } from "./ui/SearchPalette";
 import type { AppView } from "./shell";
-import { formatRoute, parseRoute, type AppRoute, type EntityKind } from "./shell/routing";
+import { ROUTE_EVENT, entityHref, formatRoute, parseRoute, type AppRoute, type EntityKind } from "./shell/routing";
 import DesignFlowSteps from "./designs/DesignFlowSteps";
 
 // C4 Design has no meaning without a design (it operates on elements that only
@@ -54,6 +53,15 @@ const DESIGN_ONLY_VIEW_LABELS: Record<string, string> = {
   "canvas-v2": "C4 Design",
 };
 
+// Search hit types that have an address of their own.
+const SEARCH_ENTITY_KINDS: Record<string, EntityKind> = {
+  business_capability: "business_capability",
+  application: "application",
+  application_capability: "application_capability",
+  technical_capability: "technical_capability",
+  agent: "agent",
+};
+
 // ADP-SPEC-025: Multi-design support.
 // currentDesignId is null until the user selects or creates a design.
 // Initial view is "overview" (the landing dashboard). All views render inside
@@ -62,8 +70,6 @@ export default function App(): React.ReactElement {
   // ADP-blp.53: the starting location comes from the URL hash, so a reload or a pasted link
   // opens the same screen (and entity, and design) instead of always landing on Overview.
   const [initialRoute] = useState<AppRoute | null>(() => parseRoute(window.location.hash));
-  const initialEntity = (kind: EntityKind): string | null =>
-    initialRoute?.entity?.kind === kind ? initialRoute.entity.id : null;
   const [view, setView] = useState<AppView>(initialRoute?.view ?? "overview");
   const [currentDesignId, setCurrentDesignId] = useState<string | null>(initialRoute?.designId ?? null);
   // Set when a design-only view is requested with no design selected yet --
@@ -75,77 +81,12 @@ export default function App(): React.ReactElement {
   // the app, waiting to be opened in the Diagrams editor -- mirrors
   // currentDesignId/onSelectDesign below exactly (research.md Decision 3).
   const [pendingDiagramSeed, setPendingDiagramSeed] = useState<DiagramSeed | null>(null);
-  // 933-agent-registry: an application to open when an agent's solution link is followed.
-  const [pendingAppId, setPendingAppId] = useState<string | null>(initialEntity("application"));
-  // 937-application-capabilities: an application capability to open in Applications ->
-  // Capabilities, when one is followed from a business/technical capability or an application.
-  const [pendingAppCapId, setPendingAppCapId] = useState<string | null>(
-    initialEntity("application_capability"),
-  );
-  const openAppCapability = (id: string) => {
-    setPendingAppId(null);
-    setPendingAppCapId(id);
-    setView("applications");
-  };
-  // 938-capability-model-analysis: the analysis lists navigate to business capabilities,
-  // applications and technical capabilities on their own screens.
-  const [pendingBusinessCapId, setPendingBusinessCapId] = useState<string | null>(
-    initialEntity("business_capability"),
-  );
-  const [pendingTechCapId, setPendingTechCapId] = useState<string | null>(
-    initialEntity("technical_capability"),
-  );
-  // 939-governance-architecture-health: an adoption to open on the Patterns screen.
-  const [pendingAdoptionId, setPendingAdoptionId] = useState<string | null>(initialEntity("adoption"));
-  const openAdoption = (id: string) => {
-    setPendingAdoptionId(id);
-    setView("patterns");
-  };
-  // 944-agent-traceability: an agent to open on the Agents screen.
-  const [pendingAgentId, setPendingAgentId] = useState<string | null>(initialEntity("agent"));
-  const capabilityNav: CapabilityNav = {
-    openBusinessCapability: (id) => {
-      setPendingBusinessCapId(id);
-      setView("business");
-    },
-    openApplication: (id) => {
-      setPendingAppCapId(null);
-      setPendingAppId(id);
-      setView("applications");
-    },
-    openTechnicalCapability: (id) => {
-      setPendingTechCapId(id);
-      setView("technical");
-    },
-    openAgent: (id) => {
-      setPendingAgentId(id);
-      setView("agents");
-    },
-  };
-
   // ADP-blp.56: a global search result opens on the screen that owns that kind of entity.
-  // Kinds with no single-entity deep link yet open their screen.
+  // Kinds with no single-entity address yet open their screen.
   const onOpenSearchResult = (hit: SearchHit) => {
-    switch (hit.entity_type) {
-      case "business_capability":
-        capabilityNav.openBusinessCapability(hit.entity_id);
-        break;
-      case "application":
-        capabilityNav.openApplication(hit.entity_id);
-        break;
-      case "application_capability":
-        openAppCapability(hit.entity_id);
-        break;
-      case "technical_capability":
-        capabilityNav.openTechnicalCapability(hit.entity_id);
-        break;
-      case "agent":
-        capabilityNav.openAgent?.(hit.entity_id);
-        break;
-      default:
-        // value streams, stages, value chains, domains, org units
-        onNavigate("business");
-    }
+    const kind = SEARCH_ENTITY_KINDS[hit.entity_type];
+    if (kind) window.location.hash = entityHref(kind, hit.entity_id);
+    else onNavigate("business"); // value streams, stages, value chains, domains, org units
   };
 
   function onNavigate(nextView: AppView) {
@@ -154,12 +95,12 @@ export default function App(): React.ReactElement {
       setView("designs");
       return;
     }
-    setPendingAppId(null);
-    setPendingAppCapId(null);
-    setPendingBusinessCapId(null);
-    setPendingTechCapId(null);
-    setPendingAdoptionId(null);
-    setPendingAgentId(null);
+    if (nextView === view && parseRoute(window.location.hash)?.entity) {
+      // The nav item of the screen already showing: close the open entity (ADP-blp.68).
+      window.history.pushState(null, "", formatRoute({ view, entity: null, designId: null }));
+      window.dispatchEvent(new Event(ROUTE_EVENT));
+      return;
+    }
     setView(nextView);
   }
 
@@ -189,77 +130,74 @@ export default function App(): React.ReactElement {
   };
 
   // ── URL hash <-> state (ADP-blp.53) ─────────────────────────────────────────
-  // The state above stays the source of truth; the hash mirrors it. Every change of screen,
-  // open entity or design becomes a history entry, and Back/Forward (or an edited URL) is
-  // applied back onto the state.
-  const route: AppRoute = useMemo(() => {
-    let entity: AppRoute["entity"] = null;
-    const pick = (kind: EntityKind, id: string | null) => (id ? { kind, id } : null);
-    if (view === "business") entity = pick("business_capability", pendingBusinessCapId);
-    else if (view === "applications") {
-      entity = pick("application_capability", pendingAppCapId) ?? pick("application", pendingAppId);
-    } else if (view === "technical") entity = pick("technical_capability", pendingTechCapId);
-    else if (view === "agents") entity = pick("agent", pendingAgentId);
-    else if (view === "patterns") entity = pick("adoption", pendingAdoptionId);
-    const designScoped = view === "intake" || DESIGN_ONLY_VIEWS.includes(view);
-    return { view, entity, designId: designScoped ? currentDesignId : null };
-  }, [
-    view, currentDesignId, pendingBusinessCapId, pendingAppCapId, pendingAppId, pendingTechCapId,
-    pendingAgentId, pendingAdoptionId,
-  ]);
+  // The screen and the design are state here and mirrored into the hash; Back/Forward (or an
+  // edited URL) is applied back onto the state. The open entity is not held here: each page
+  // reads it from the hash itself (useRouteEntity, ADP-blp.68), so selecting something inside a
+  // page is a history entry and does not remount the page.
+  const designScoped = view === "intake" || DESIGN_ONLY_VIEWS.includes(view);
+  const routeDesignId = designScoped ? currentDesignId : null;
+
+  // ADP-blp.57: "Back to <screen>" in the top bar. The trail holds the places visited in this
+  // session; returning to one of them (the browser's Back, or this control) shortens it.
+  const trail = useRef<string[]>([]);
+  const [back, setBack] = useState<{ view: AppView; hash: string } | null>(null);
+  const noteLocation = useRef(() => {});
+  noteLocation.current = () => {
+    const here = parseRoute(window.location.hash);
+    if (!here) return;
+    const key = formatRoute(here);
+    const visited = trail.current;
+    const seen = visited.lastIndexOf(key);
+    if (seen >= 0) visited.length = seen + 1;
+    else visited.push(key);
+    // The previous *screen*: selections made on this screen are not somewhere to go back to.
+    let previous: { view: AppView; hash: string } | null = null;
+    for (let i = visited.length - 2; i >= 0 && !previous; i--) {
+      const route = parseRoute(visited[i]);
+      if (route && route.view !== here.view) previous = { view: route.view, hash: visited[i] };
+    }
+    setBack(previous);
+  };
 
   const firstSync = useRef(true);
   useEffect(() => {
-    const hash = formatRoute(route);
     const first = firstSync.current;
     firstSync.current = false;
-    // Already at this route: leave the URL alone. It may carry a page's own parameters
-    // (?tab=...), which are not part of the route and must survive a reload (ADP-blp.68).
+    // Already on this screen and design: leave the URL alone. It may carry the open entity and
+    // a page's own parameters (?tab=...), which must survive a reload.
     const current = parseRoute(window.location.hash);
-    if (current && formatRoute(current) === hash) return;
-    // The first sync only fills in the address of the screen already showing.
-    if (first) window.history.replaceState(null, "", hash);
-    else window.history.pushState(null, "", hash);
-  }, [route]);
-
-  // ADP-blp.57: "Back to <screen>" in the top bar. Following a link to another screen used to
-  // leave no way back except finding the original screen in the nav again. The trail holds the
-  // routes visited in this session; stepping back to the previous one shortens it.
-  const trail = useRef<string[]>([]);
-  const [backView, setBackView] = useState<AppView | null>(null);
-  useEffect(() => {
-    const here = formatRoute(route);
-    const visited = trail.current;
-    if (visited[visited.length - 1] !== here) {
-      if (visited.length >= 2 && visited[visited.length - 2] === here) visited.pop();
-      else visited.push(here);
+    if (!current || current.view !== view || current.designId !== routeDesignId) {
+      const hash = formatRoute({ view, entity: null, designId: routeDesignId });
+      // The first sync only fills in the address of the screen already showing.
+      if (first) window.history.replaceState(null, "", hash);
+      else window.history.pushState(null, "", hash);
     }
-    const previous = visited.length >= 2 ? parseRoute(visited[visited.length - 2]) : null;
-    setBackView(previous && previous.view !== route.view ? previous.view : null);
-  }, [route]);
+    noteLocation.current();
+  }, [view, routeDesignId]);
 
   useEffect(() => {
     function applyLocation() {
       const next = parseRoute(window.location.hash);
       if (!next) return;
-      const id = (kind: EntityKind) => (next.entity?.kind === kind ? next.entity.id : null);
-      setPendingBusinessCapId(id("business_capability"));
-      setPendingAppId(id("application"));
-      setPendingAppCapId(id("application_capability"));
-      setPendingTechCapId(id("technical_capability"));
-      setPendingAgentId(id("agent"));
-      setPendingAdoptionId(id("adoption"));
       if (next.designId) setCurrentDesignId(next.designId);
       setPendingView(null);
       setView(next.view);
+      noteLocation.current();
     }
+    const onRoute = () => noteLocation.current();
     window.addEventListener("popstate", applyLocation);
     window.addEventListener("hashchange", applyLocation);
+    window.addEventListener(ROUTE_EVENT, onRoute);
     return () => {
       window.removeEventListener("popstate", applyLocation);
       window.removeEventListener("hashchange", applyLocation);
+      window.removeEventListener(ROUTE_EVENT, onRoute);
     };
   }, []);
+
+  const onBack = () => {
+    if (back) window.location.hash = back.hash;
+  };
 
   function renderPage(): React.ReactElement {
     // Global views — independent of design selection.
@@ -271,39 +209,21 @@ export default function App(): React.ReactElement {
       case "portfolio":
         return <PortfolioPage />;
       case "governance":
-        return <GovernancePage onNavigate={onNavigate} onSelectDesign={onSelectDesign} onOpenAdoption={openAdoption} />;
+        return <GovernancePage onNavigate={onNavigate} onSelectDesign={onSelectDesign} />;
       case "business":
         return (
           <BusinessPage
-            key={pendingBusinessCapId ?? "business"}
             onNavigate={onNavigate}
             designId={currentDesignId}
             onGenerateDiagram={onGenerateDiagram}
-            initialFocusCapabilityId={pendingBusinessCapId}
           />
         );
       case "applications":
-        return (
-          <ApplicationPage
-            key={pendingAppCapId ?? pendingAppId ?? "registry"}
-            initialAppId={pendingAppId}
-            initialAppCapId={pendingAppCapId}
-          />
-        );
+        return <ApplicationPage />;
       case "agents":
-        return (
-          <AgentsPage
-            key={pendingAgentId ?? "agents"}
-            initialAgentId={pendingAgentId}
-            onOpenSolution={(appId) => {
-              setPendingAppId(appId);
-              setPendingAppCapId(null);
-              setView("applications");
-            }}
-          />
-        );
+        return <AgentsPage />;
       case "technical":
-        return <TechCapPage key={pendingTechCapId ?? "technical"} focusTechCapId={pendingTechCapId} />;
+        return <TechCapPage />;
       case "diagrams":
         return (
           <DiagramsPage
@@ -316,13 +236,7 @@ export default function App(): React.ReactElement {
       case "compliance":
         return <CompliancePage />;
       case "patterns":
-        return (
-          <PatternsPage
-            key={pendingAdoptionId ?? "patterns"}
-            onGenerateDiagram={onGenerateDiagram}
-            initialAdoptionId={pendingAdoptionId}
-          />
-        );
+        return <PatternsPage onGenerateDiagram={onGenerateDiagram} />;
       case "admin":
         return <AdminPage />;
       case "scoring-rubrics":
@@ -363,32 +277,28 @@ export default function App(): React.ReactElement {
   }
 
   return (
-    <AppCapNavContext.Provider value={openAppCapability}>
-      <CapabilityNavContext.Provider value={capabilityNav}>
-        <AppShell
-          currentView={view}
-          onNavigate={onNavigate}
-          designId={currentDesignId}
-          onStartNewDesign={onStartNewDesign}
-          onOpenSearchResult={onOpenSearchResult}
-          topActions={<AskAiLauncher />}
-          backView={backView}
-          onBack={() => window.history.back()}
-        >
-          {/* ADP-blp.30: a page that fails must not take the nav down with it. */}
-          <PageBoundary key={view}>
-            {DESIGN_FLOW_VIEWS.includes(view) && (currentDesignId || view === "intake") ? (
-              // ADP-blp.59: the steps of creating a design, above the screens that make it up.
-              <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-                <DesignFlowSteps view={view} designId={currentDesignId} />
-                <div style={{ flex: 1, minHeight: 0 }}>{renderPage()}</div>
-              </div>
-            ) : (
-              renderPage()
-            )}
-          </PageBoundary>
-        </AppShell>
-      </CapabilityNavContext.Provider>
-    </AppCapNavContext.Provider>
+    <AppShell
+      currentView={view}
+      onNavigate={onNavigate}
+      designId={currentDesignId}
+      onStartNewDesign={onStartNewDesign}
+      onOpenSearchResult={onOpenSearchResult}
+      topActions={<AskAiLauncher />}
+      backView={back?.view ?? null}
+      onBack={onBack}
+    >
+      {/* ADP-blp.30: a page that fails must not take the nav down with it. */}
+      <PageBoundary key={view}>
+        {DESIGN_FLOW_VIEWS.includes(view) && (currentDesignId || view === "intake") ? (
+          // ADP-blp.59: the steps of creating a design, above the screens that make it up.
+          <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+            <DesignFlowSteps view={view} designId={currentDesignId} />
+            <div style={{ flex: 1, minHeight: 0 }}>{renderPage()}</div>
+          </div>
+        ) : (
+          renderPage()
+        )}
+      </PageBoundary>
+    </AppShell>
   );
 }

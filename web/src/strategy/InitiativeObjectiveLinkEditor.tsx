@@ -20,6 +20,7 @@ export default function InitiativeObjectiveLinkEditor({ initiative, onNavigateTo
   const all = useObjectives();
   return (
     <LinkEditor
+      action="write_business_arch"
       noun="objective"
       plural="objectives"
       prompt="Link an objective…"

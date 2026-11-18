@@ -10,18 +10,17 @@ import AgentForm from "./AgentForm";
 import { RiskBadge } from "./agenticRisk";
 import { AUTONOMY_LEVELS, HUMAN_APPROVAL_LABELS, LIFECYCLE_LABELS, autonomyLabel } from "./autonomy";
 import { useCan } from "../auth/permissions";
+import { useRouteEntity } from "../shell/routing";
 import { PageHeader, Loading, EmptyState, Table } from "../ui/primitives";
 
 export default function AgentsPage({
-  onOpenSolution,
   initialAgentId = null,
 }: {
-  onOpenSolution?: (appId: string) => void;
   /** 944: open this agent on arrival (from a capability, stage or control). */
   initialAgentId?: string | null;
 }) {
   const [filters, setFilters] = useState<AgentFilters>({});
-  const [selectedId, setSelectedId] = useState<string | null>(initialAgentId);
+  const [selectedId, setSelectedId] = useRouteEntity("agent", initialAgentId);
   const [creating, setCreating] = useState(false);
   const canWrite = useCan("write_application"); // agents ride the application write rule
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +36,7 @@ export default function AgentsPage({
   ).sort();
 
   if (selectedId) {
-    return <AgentDetail agentId={selectedId} onBack={() => setSelectedId(null)} onOpenSolution={onOpenSolution} />;
+    return <AgentDetail agentId={selectedId} onBack={() => setSelectedId(null)} />;
   }
 
   if (creating) {

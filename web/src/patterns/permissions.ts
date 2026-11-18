@@ -19,3 +19,9 @@ export function useCanManagePatterns(): boolean {
   const { user } = useAuth();
   return useCan("write_pattern", canManagePatterns(user?.role ?? null)).allowed;
 }
+
+/** Lifecycle transitions (propose, promote, deprecate, decommission) need GOVERN_PATTERN. */
+export function useCanGovernPatterns(): boolean {
+  const { user } = useAuth();
+  return useCan("govern_pattern", canManagePatterns(user?.role ?? null)).allowed;
+}

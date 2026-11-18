@@ -16,10 +16,11 @@
 // (confirmed by AppShell.test.tsx's own header comment), and exercising the
 // real nav is the point of these tests.
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import App from "./App";
+import { openEntity } from "./shell/routing";
 
 vi.mock("./overview/OverviewPage", () => ({
   default: () => <div>OverviewPage-stub</div>,
@@ -210,5 +211,32 @@ describe("Back to the previous screen (ADP-blp.57)", () => {
     window.history.replaceState(null, "", "#/governance");
     window.dispatchEvent(new PopStateEvent("popstate"));
     expect(await screen.findByRole("button", { name: "← Back to Overview" })).toBeTruthy();
+  });
+});
+
+describe("Open entity in the URL (ADP-blp.57, ADP-blp.68)", () => {
+  it("keeps the entity a link opened, closes it from the nav, and goes back to the previous screen", async () => {
+    window.history.replaceState(null, "", "#/governance");
+    const user = userEvent.setup();
+    render(<App />);
+    expect(await screen.findByText("GovernancePage-stub")).toBeTruthy();
+
+    // A link to an application, followed from Governance.
+    act(() => { window.location.hash = "#/applications/app-1"; });
+    await waitFor(() => expect(window.location.hash).toBe("#/applications/app-1"));
+    expect(await screen.findByRole("button", { name: "← Back to Governance" })).toBeTruthy();
+
+    // A selection made on the page: still "Back to Governance", not back to the last selection.
+    act(() => openEntity("application", "app-2"));
+    expect(window.location.hash).toBe("#/applications/app-2");
+    expect(screen.getByRole("button", { name: "← Back to Governance" })).toBeTruthy();
+
+    // The screen's own nav item closes the open entity.
+    await user.click(screen.getByRole("button", { name: "Applications" }));
+    expect(window.location.hash).toBe("#/applications");
+
+    await user.click(screen.getByRole("button", { name: "← Back to Governance" }));
+    await waitFor(() => expect(window.location.hash).toBe("#/governance"));
+    expect(await screen.findByText("GovernancePage-stub")).toBeTruthy();
   });
 });

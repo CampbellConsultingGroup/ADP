@@ -5,19 +5,10 @@ import type React from "react";
 import type { CapRef } from "../api/appCapabilities";
 import type { LifecycleBand } from "../api/capAnalysis";
 import { LIFECYCLE_BAND_LABEL } from "../api/capAnalysis";
-import { useCapabilityNav, useOpenAppCapability } from "./appCapNav";
+import { EntityLink } from "../shell/EntityLink";
+import type { EntityKind } from "../shell/routing";
 
 export type CapKind = "business" | "app-capability" | "technical" | "application";
-
-const linkStyle: React.CSSProperties = {
-  background: "none",
-  border: "none",
-  padding: 0,
-  cursor: "pointer",
-  color: "var(--accent)",
-  textAlign: "left",
-  fontSize: "inherit",
-};
 
 const OPEN_TITLE: Record<CapKind, string> = {
   business: "Open in Business → Capabilities",
@@ -26,24 +17,16 @@ const OPEN_TITLE: Record<CapKind, string> = {
   application: "Open the application",
 };
 
-/** A name that navigates to the item's own screen, or plain text when no navigator is provided. */
+const ENTITY_KIND: Record<CapKind, EntityKind> = {
+  business: "business_capability",
+  "app-capability": "application_capability",
+  technical: "technical_capability",
+  application: "application",
+};
+
+/** A name that links to the item's own screen. */
 export function CapLink({ kind, id, children }: { kind: CapKind; id: string; children: React.ReactNode }): React.ReactElement {
-  const nav = useCapabilityNav();
-  const openAppCap = useOpenAppCapability();
-  const open =
-    kind === "app-capability"
-      ? openAppCap
-      : kind === "business"
-        ? nav?.openBusinessCapability
-        : kind === "technical"
-          ? nav?.openTechnicalCapability
-          : nav?.openApplication;
-  if (!open) return <span>{children}</span>;
-  return (
-    <button type="button" onClick={() => open(id)} title={OPEN_TITLE[kind]} className="ui-btn-plain" style={linkStyle}>
-      {children}
-    </button>
-  );
+  return <EntityLink kind={ENTITY_KIND[kind]} id={id} title={OPEN_TITLE[kind]}>{children}</EntityLink>;
 }
 
 export function pathText(path: CapRef[]): string {

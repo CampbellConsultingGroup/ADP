@@ -11,7 +11,8 @@ import { useCapabilityFindings, useCapabilityRollup } from "../api/capAnalysis";
 import { useCapabilityOrgFindings } from "../api/organization";
 import { useAdoptions } from "../api/patterns";
 import CapFindingsViews from "../application/CapFindingsViews";
-import { useCapabilityNav } from "../application/appCapNav";
+import { EntityLink } from "../shell/EntityLink";
+import { goToEntity } from "../shell/routing";
 import OrgFindings from "../business/OrgFindings";
 import { BandChip, CapWithPath, muted } from "../application/capAnalysisUi";
 import { SCOPE_LABELS, STATUS_LABELS, STATUS_TONES } from "../patterns/labels";
@@ -49,14 +50,13 @@ const h3: React.CSSProperties = { fontSize: 15, margin: "0 0 8px", color: "var(-
 const card: React.CSSProperties = { border: "1px solid var(--border)", borderRadius: 8, padding: "12px 16px", marginBottom: 16 };
 const errorText: React.CSSProperties = { ...muted, color: "var(--crit)" };
 
-export default function ArchitectureHealthTab({ onOpenAdoption }: { onOpenAdoption: (id: string) => void }): React.ReactElement {
+export default function ArchitectureHealthTab(): React.ReactElement {
   const adoptions = useAdoptions(true);
   const rollup = useCapabilityRollup(true);
   const findings = useCapabilityFindings();
   const businessCaps = useCapabilities();
   const orgFindings = useCapabilityOrgFindings();
   const orgCounts = orgFindings.data?.counts;
-  const nav = useCapabilityNav();
 
   const att = adoptionsNeedingAttention(adoptions.data?.items);
   const exposed = exposedCapabilities(rollup.data);
@@ -112,14 +112,7 @@ export default function ArchitectureHealthTab({ onOpenAdoption }: { onOpenAdopti
                 {att.attention.map((a) => (
                   <li key={a.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "5px 0", fontSize: 13 }}>
                     {a.status && <StatusBadge tone={STATUS_TONES[a.status]}>{STATUS_LABELS[a.status]}</StatusBadge>}
-                    <button
-                      type="button"
-                      onClick={() => onOpenAdoption(a.id)}
-                      title="Open on the Patterns screen"
-                      style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--accent)", fontSize: 13, textAlign: "left" }}
-                    >
-                      {a.name}
-                    </button>
+                    <EntityLink kind="adoption" id={a.id} title="Open on the Patterns screen">{a.name}</EntityLink>
                     <span style={{ ...muted, fontSize: 11 }}>
                       {a.pattern_name ?? a.pattern_key} · {SCOPE_LABELS[a.scope_type]}
                       {a.scope_name ? `: ${a.scope_name}` : ""}
@@ -177,7 +170,7 @@ export default function ArchitectureHealthTab({ onOpenAdoption }: { onOpenAdopti
 
       <section aria-label="Organization" style={card}>
         <h3 style={h3}>Organization</h3>
-        <OrgFindings onOpenCapability={nav?.openBusinessCapability} />
+        <OrgFindings onOpenCapability={(id) => goToEntity("business_capability", id)} />
       </section>
     </div>
   );

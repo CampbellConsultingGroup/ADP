@@ -11,7 +11,7 @@ import OrganizationTab, { useCanWriteBusiness } from "./OrganizationTab";
 import RegionalHeatMap from "./RegionalHeatMap";
 import { Tabs } from "../ui/Tabs";
 import { PageHeader } from "../ui/primitives";
-import { useHashParam } from "../shell/routing";
+import { useHashParam, useRouteEntity } from "../shell/routing";
 
 type BusinessTab = "capabilities" | "heatmap" | "value-streams" | "domains" | "organization";
 
@@ -40,17 +40,19 @@ const BUSINESS_TABS: { id: BusinessTab; label: string }[] = [
 
 export default function BusinessPage({ onGenerateDiagram, initialFocusCapabilityId = null }: BusinessPageProps): React.ReactElement {
   // ADP-blp.68: the tab is in the URL (?tab=...), so a reload or shared link opens it.
-  const [tab, setTab] = useHashParam<BusinessTab>(
+  const [tabParam, setTab] = useHashParam<BusinessTab>(
     "tab",
     BUSINESS_TAB_IDS,
-    initialFocusCapabilityId ? "capabilities" : "domains",
+    "domains",
   );
   const [selectedVsId, setSelectedVsId] = useState<string | null>(null);
   const [selectedDomainId, setSelectedDomainId] = useState<string | null>(null);
   // 043-capability-heat-map US3: set when a heat-map cell is clicked; cleared
   // on any manual tab click so a later, unrelated visit to the Capabilities
   // tab doesn't carry a stale highlight forward.
-  const [focusCapabilityId, setFocusCapabilityId] = useState<string | null>(initialFocusCapabilityId);
+  // ADP-blp.68: the focused capability is in the URL; while one is open the Capabilities tab shows.
+  const [focusCapabilityId, setFocusCapabilityId] = useRouteEntity("business_capability", initialFocusCapabilityId);
+  const tab: BusinessTab = focusCapabilityId ? "capabilities" : tabParam;
   // 942-regional-assessments: the Heat Map tab's view and the regional columns, kept here so the
   // choice survives switching tabs for the session (null = the server's default, the regions).
   const [heatmapView, setHeatmapView] = useState<"capabilities" | "regional">("capabilities");

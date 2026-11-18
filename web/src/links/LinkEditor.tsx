@@ -11,6 +11,7 @@ import NavLinkButton from "./NavLinkButton";
 import { useLinkFeedback } from "./useLinkFeedback";
 import { EntityLink } from "../shell/EntityLink";
 import type { EntityKind } from "../shell/routing";
+import { useCan } from "../auth/permissions";
 
 export interface LinkOption {
   id: string;
@@ -57,14 +58,22 @@ interface LinkEditorProps {
   onOpen?: (id: string) => void;
   /** Tooltip for that button, e.g. "Jump to this objective". */
   openTitle?: string;
+  /**
+   * The permission linking needs, e.g. "write_business_arch" (ADP-blp.65). Without it the
+   * picker and Remove are disabled, with the reason as a tooltip, instead of failing on use.
+   */
+  action?: string;
 }
 
 const muted: React.CSSProperties = { fontSize: "0.85rem", color: "var(--ink-2)" };
 
 export default function LinkEditor({
   options, linkedIds, linkedItems, isLoading, noun, plural, prompt, link, unlink, entityKind, onOpen,
-  openTitle,
+  openTitle, action,
 }: LinkEditorProps): React.ReactElement {
+  const permission = useCan(action ?? "");
+  const canEdit = !action || permission.allowed;
+  const why = canEdit ? undefined : permission.reason;
   const [selectedId, setSelectedId] = useState("");
   const [linkError, setLinkError] = useState<string | null>(null);
   const feedback = useLinkFeedback();
@@ -125,7 +134,8 @@ export default function LinkEditor({
             )}
             <button
               onClick={() => unlink.mutate(o.id, { onSuccess: () => feedback.showRemoved(o.label) })}
-              disabled={unlink.isPending}
+              disabled={unlink.isPending || !canEdit}
+              title={why}
               style={{
                 background: "none",
                 border: "1px solid var(--border)",
@@ -146,7 +156,8 @@ export default function LinkEditor({
         <select
           value={selectedId}
           onChange={(e) => handleAdd(e.target.value)}
-          disabled={link.isPending}
+          disabled={link.isPending || !canEdit}
+          title={why}
           aria-label={prompt ?? `Link a ${noun}`}
           style={{
             flex: 1,

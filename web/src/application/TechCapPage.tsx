@@ -1,4 +1,5 @@
 import React from "react";
+import { useRouteEntity } from "../shell/routing";
 import TechCapTree from "./TechCapTree";
 import { PageHeader } from "../ui/primitives";
 
@@ -11,12 +12,13 @@ import { PageHeader } from "../ui/primitives";
  *  are Business Capability-specific enrichments from later work, out of
  *  scope here). */
 export default function TechCapPage({ focusTechCapId = null }: { focusTechCapId?: string | null }): React.ReactElement {
+  const [focusId] = useRouteEntity("technical_capability", focusTechCapId);
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <div style={{ flex: 1, overflowY: "auto", padding: 20, maxWidth: 900, width: "100%", margin: "0 auto" }}>
         <PageHeader title="Technical Architecture" lede="Define the technical capabilities that describe the platform's technology foundation." />
 
-        <TechCapTree focusId={focusTechCapId} />
+        <TechCapTree focusId={focusId} />
       </div>
     </div>
   );
