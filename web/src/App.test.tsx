@@ -16,11 +16,16 @@
 // (confirmed by AppShell.test.tsx's own header comment), and exercising the
 // real nav is the point of these tests.
 import { describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, configure, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import App from "./App";
 import { openEntity } from "./shell/routing";
+
+// Every page but Overview is loaded lazily, and a test may be the first to import several of
+// them. On a busy CI runner that has taken longer than the default one second, failing a
+// findBy* at random (seen on PR #184). Wait longer; a passing test is no slower.
+configure({ asyncUtilTimeout: 5000 });
 
 vi.mock("./overview/OverviewPage", () => ({
   default: () => <div>OverviewPage-stub</div>,
@@ -92,7 +97,7 @@ describe("App: onSelectDesign (regression -- opening a design lands on a populat
     render(<App />);
 
     await user.click(screen.getByRole("button", { name: "Designs" }));
-    expect(screen.getByText("DesignsPage-stub")).toBeTruthy();
+    expect(await screen.findByText("DesignsPage-stub")).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Open DSN-1" }));
 
@@ -141,7 +146,7 @@ describe("App: DESIGN_ONLY_VIEWS redirect (C4 Design with no design selected)", 
 
     await user.click(screen.getByRole("button", { name: "C4 Design" }));
 
-    expect(screen.getByText("DesignsPage-stub")).toBeTruthy();
+    expect(await screen.findByText("DesignsPage-stub")).toBeTruthy();
     expect(screen.getByText("continueTo:C4 Design")).toBeTruthy();
   });
 
@@ -152,7 +157,8 @@ describe("App: DESIGN_ONLY_VIEWS redirect (C4 Design with no design selected)", 
     await user.click(screen.getByRole("button", { name: "C4 Design" }));
     await user.click(screen.getByRole("button", { name: "Open DSN-1" }));
 
-    expect(screen.getByText(/C4DesignView-stub designId=DSN-1/)).toBeTruthy();
+    // findBy, not getBy: the page is loaded lazily, so it is not there synchronously.
+    expect(await screen.findByText(/C4DesignView-stub designId=DSN-1/)).toBeTruthy();
     expect(screen.queryByText(/IntakePage-stub/)).toBeNull();
   });
 
