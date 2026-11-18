@@ -102,6 +102,13 @@ addopts = "--cov=adp --cov-report=term-missing"
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
+filterwarnings = [
+    # ADP-blp.28: a test's SQLite engine that is not disposed is closed by the garbage collector
+    # after its event loop has gone, and aiosqlite's worker thread then cannot report back. It is
+    # harmless (the connection is closed) and is reported against whichever test happens to be
+    # running. Only this thread is silenced; any other thread error still warns.
+    "ignore:Exception in thread .*_connection_worker_thread:pytest.PytestUnhandledThreadExceptionWarning",
+]
 
 [tool.coverage.run]
 source = ["adp"]
