@@ -16,7 +16,8 @@
 #      not seeing a just-created subnet); fails fast on SkuNotAvailable.
 #   -- between stages, from stage 1's outputs --
 #      * seed Key Vault secrets (admin passwords, Postgres connection string
-#        from the real FQDN, ADP_LLM_API_KEY from the repo-root .env)
+#        from the real FQDN, ADP_LLM_API_KEY from the environment -- direnv
+#        loads it from 1Password -- else the repo-root .env)
 #      * grant the CD service principal its 4 roles if missing (they're
 #        deleted along with adp-rg; see .github/workflows/deploy-azure.yml)
 #      * build the Keycloak + API images, the API one with the real
@@ -287,18 +288,17 @@ set_secret postgres-app-connection-string \
 echo "  postgres-admin-password, keycloak-admin-password, postgres-connection-string,"
 echo "  postgres-app-password, postgres-keycloak-password, postgres-app-connection-string set."
 
-LLM_API_KEY=""
-if [[ -f "$REPO_ROOT/.env" ]]; then
-  LLM_API_KEY="$(grep -E '^ADP_LLM_API_KEY=' "$REPO_ROOT/.env" | head -1 | cut -d= -f2- || true)"
-fi
+# shellcheck source=llm-key.sh
+source "$SCRIPT_DIR/llm-key.sh"
+resolve_llm_api_key "$REPO_ROOT"
 if [[ -n "$LLM_API_KEY" ]]; then
   set_secret adp-llm-api-key "$LLM_API_KEY"
-  echo "  adp-llm-api-key set (from repo-root .env)."
+  echo "  adp-llm-api-key set (from $LLM_API_KEY_SOURCE)."
 elif ! az keyvault secret show --vault-name "$KEY_VAULT_NAME" --name adp-llm-api-key \
        --query id -o tsv >/dev/null 2>&1; then
   # adp-api references this secret, so it must exist for stage 2 to succeed.
   set_secret adp-llm-api-key "not-set"
-  echo "  WARNING: no ADP_LLM_API_KEY in .env -- placeholder stored; AI features will use stubs."
+  echo "  WARNING: no ADP_LLM_API_KEY in the environment or .env -- placeholder stored; AI features will use stubs."
 fi
 
 echo "== Ensuring the CD service principal's roles ($CD_APP_NAME) =="

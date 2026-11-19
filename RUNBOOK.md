@@ -64,7 +64,9 @@ alembic upgrade head
 cd /home/jmuir/projects/ADP
 export ADP_DATABASE_URL="postgresql+asyncpg://adp_user:adp_pass@127.0.0.1:5432/adp"
 export ADP_LLM_ENDPOINT="https://api.anthropic.com"
-export ADP_LLM_API_KEY="sk-..."   # Never logged; never in spans
+# ADP_LLM_API_KEY: keep it in 1Password, not in a file. An .envrc (direnv, gitignored) with
+#   export ADP_LLM_API_KEY="$(op.exe read 'op://Private/Anthropic API Key/credential')"
+# sets it on cd (use `op` instead of `op.exe` outside WSL). Never logged; never in spans.
 # The key is set here (or in Key Vault on Azure) only. It can no longer be set from the LLM Settings
 # screen (ADP-blp.13): that screen chooses models, which are stored in the database.
 export ADP_LLM_MODEL="claude-sonnet-4-6"   # Optional default model
@@ -695,7 +697,7 @@ git clone <your-repo-url> adp && cd adp
 
 # Copy the example env file and fill in your values
 cp .env.example .env
-# Edit .env — set POSTGRES_PASSWORD and ADP_LLM_API_KEY at minimum
+# Edit .env — set POSTGRES_PASSWORD at minimum; ADP_LLM_API_KEY comes from 1Password (see above)
 
 # Start the database
 docker compose up -d db
@@ -811,7 +813,7 @@ It runs in two Bicep stages with the glue between them:
    on `SkuNotAvailable` (regional capacity: re-run with another region).
 2. Between stages: seeds the Key Vault secrets (the cached admin passwords in
    `.secrets/`, the Postgres connection string, `ADP_LLM_API_KEY` from the
-   repo-root `.env`), grants the CD service principal its 4 roles if missing,
+   environment, else the repo-root `.env`), grants the CD service principal its 4 roles if missing,
    and builds both images, the API one with the real `VITE_KEYCLOAK_URL`.
 3. **`apps.bicep`** (resource-group scope): Keycloak, API (with the IP
    allow-list), and the migration + Keycloak-admin jobs.
