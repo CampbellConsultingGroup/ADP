@@ -45,6 +45,7 @@ Thumbs.db
 # Environment
 .env
 .env.*
+.envrc
 # ...except the shared template itself -- .env.* above was accidentally
 # excluding .env.example too, so it had NEVER actually been committed
 # (confirmed via `git log --all -- .env.example`: empty history). That
