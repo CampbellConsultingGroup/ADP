@@ -25,6 +25,20 @@ from adp.authz.roles import ActionType, PersonaRole
 
 AC = "/api/v1/application-capabilities"
 AN = f"{AC}/analysis"
+
+
+def _numeric_values(node: object) -> list[float]:
+    """Every JSON value in ``node`` that reads as a number (strings like "1000.00" included)."""
+    if isinstance(node, dict):
+        return [v for child in node.values() for v in _numeric_values(child)]
+    if isinstance(node, list):
+        return [v for child in node for v in _numeric_values(child)]
+    if isinstance(node, bool) or node is None:
+        return []
+    try:
+        return [float(node)]  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return []
 TC = "/api/v1/technical-capabilities"
 APPS = "/api/v1/applications"
 
@@ -177,7 +191,10 @@ async def test_business_rollup_reviewer_sees_no_cost_or_risk(ctx) -> None:
     assert all(i["risk"] is None and i["cost"] is None for i in body["items"])
     assert all(i["health"] is not None for i in body["items"])
     text = resp.text
-    assert "1000" not in text and "total_tco" not in text and '"high"' not in text
+    assert "total_tco" not in text and '"high"' not in text
+    # The seeded cost (1000) must not appear as any value. Compare parsed numbers, not
+    # substrings: the response carries random UUIDs, and one may contain "1000".
+    assert 1000 not in _numeric_values(body)
 
 
 @pytest.mark.parametrize(
