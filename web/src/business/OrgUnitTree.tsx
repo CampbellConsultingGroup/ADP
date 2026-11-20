@@ -66,7 +66,7 @@ export function NewOrgUnitForm({ parentId, onDone }: { parentId: string | null; 
         style={{ flex: 1, fontSize: 13, padding: "3px 6px", border: "1px solid var(--border)", borderRadius: 3 }}
       />
       <button type="submit" disabled={create.isPending || !name.trim()} style={linkBtn}>
-        Add
+        {create.isPending ? "Adding…" : "Add"}
       </button>
       <button type="button" onClick={() => onDone()} style={{ ...linkBtn, color: "var(--ink-3)" }}>
         Cancel

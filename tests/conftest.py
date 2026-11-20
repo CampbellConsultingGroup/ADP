@@ -9,6 +9,10 @@ import os
 
 # Disable auth for the entire test suite unless overridden per-test
 os.environ.setdefault("ADP_AUTH_ENABLED", "false")
+# The app's startup preloads the embedding model in a thread; in tests that thread could outlive
+# the fake-loader patch below and load the real model. tests/unit/knowledge/test_embedding_warmup.py
+# turns it back on where it is the subject.
+os.environ.setdefault("ADP_EMBEDDING_WARMUP", "0")
 
 
 def pytest_addoption(parser):  # type: ignore[no-untyped-def]

@@ -38,6 +38,35 @@ def _load_model(model_name: str) -> Any:
         return model
 
 
+def _warm(model_names: list[str]) -> None:
+    for name in model_names:
+        try:
+            _load_model(name)
+            logger.info("embedding model %s loaded", name)
+        except Exception as exc:  # noqa: BLE001 - warm-up is best effort; first use retries
+            logger.warning("embedding model %s not preloaded: %s", name, exc)
+
+
+def start_warmup() -> threading.Thread | None:
+    """Load the embedding models in a background thread at startup.
+
+    Every create or rename of a searchable record embeds its text while the request waits, and
+    the first one after the process starts also loaded the model: about 17 s locally, longer on
+    a cold Azure replica. The UI looked as if Add did nothing. Startup does not wait for this
+    thread; a request that arrives before it finishes waits on the model lock as before.
+    ADP_EMBEDDING_WARMUP=0 (or false/no/off) turns it off.
+    """
+    import os
+
+    if os.environ.get("ADP_EMBEDDING_WARMUP", "").strip().lower() in {"0", "false", "no", "off"}:
+        return None
+    search_model = os.environ.get("ADP_EMBEDDING_MODEL", DEFAULT_MODEL)
+    names = list(dict.fromkeys([search_model, DEFAULT_MODEL]))
+    thread = threading.Thread(target=_warm, args=(names,), name="embedding-warmup", daemon=True)
+    thread.start()
+    return thread
+
+
 class EmbeddingProvider:
     """Wraps a sentence-transformers model for local embedding generation."""
 
