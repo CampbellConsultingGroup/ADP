@@ -6563,6 +6563,8 @@ export interface components {
             name: string;
             /** Org Unit */
             org_unit: string | null;
+            /** Owner Org Unit Id */
+            owner_org_unit_id?: string | null;
             /** Risk Flags */
             risk_flags: string[];
             /** Scope Statement */
@@ -6584,6 +6586,8 @@ export interface components {
             name: string;
             /** Org Unit */
             org_unit?: string | null;
+            /** Owner Org Unit Id */
+            owner_org_unit_id?: string | null;
             /**
              * Risk Flags
              * @default []
@@ -6600,6 +6604,8 @@ export interface components {
             name?: string | null;
             /** Org Unit */
             org_unit?: string | null;
+            /** Owner Org Unit Id */
+            owner_org_unit_id?: string | null;
             /** Risk Flags */
             risk_flags?: string[] | null;
             /** Scope Statement */
@@ -7630,6 +7636,8 @@ export interface components {
             name: string;
             /** Org Unit */
             org_unit: string | null;
+            /** Owner Org Unit Id */
+            owner_org_unit_id?: string | null;
             /** Risk Flags */
             risk_flags: string[];
             /** Scope Statement */
@@ -7670,6 +7678,8 @@ export interface components {
             name: string;
             /** Org Unit */
             org_unit: string | null;
+            /** Owner Org Unit Id */
+            owner_org_unit_id?: string | null;
             /** Risk Flags */
             risk_flags: string[];
             /**

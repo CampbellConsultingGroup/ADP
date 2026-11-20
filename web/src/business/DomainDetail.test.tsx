@@ -13,6 +13,7 @@ import * as businessApi from "../api/business";
 import type { DomainDetail as DomainDetailType, BusinessCapability } from "../api/business";
 
 vi.mock("../api/business");
+vi.mock("../api/organization", () => ({ useOrgUnits: () => ({ data: { items: [], total: 0 } }) }));
 
 const mockedBusinessApi = vi.mocked(businessApi);
 

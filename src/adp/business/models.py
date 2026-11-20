@@ -350,6 +350,7 @@ class BusinessDomain(BaseModel):
     scope_statement: str | None
     classification: DomainClassification
     org_unit: str | None
+    owner_org_unit_id: str | None = None
     risk_flags: list[str]
     created_at: datetime
     updated_at: datetime
@@ -363,6 +364,7 @@ class DomainSummary(BaseModel):
     name: str
     classification: DomainClassification
     org_unit: str | None
+    owner_org_unit_id: str | None = None
     risk_flags: list[str]
     capability_count: int
     created_at: datetime
@@ -387,6 +389,8 @@ class BusinessDomainCreate(BaseModel):
     scope_statement: str | None = None
     classification: DomainClassification
     org_unit: str | None = None
+    # The owning division (a level-2 org unit). org_unit is the older free text.
+    owner_org_unit_id: str | None = None
     risk_flags: list[str] = []
 
     @field_validator("name")
@@ -412,6 +416,8 @@ class BusinessDomainUpdate(BaseModel):
     scope_statement: str | None = None
     classification: DomainClassification | None = None
     org_unit: str | None = None
+    # The owning division (a level-2 org unit). org_unit is the older free text.
+    owner_org_unit_id: str | None = None
     risk_flags: list[str] | None = None
 
     @field_validator("name")

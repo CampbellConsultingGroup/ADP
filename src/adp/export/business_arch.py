@@ -114,6 +114,7 @@ def _serialize_domain(domain: BusinessDomain) -> dict[str, Any]:
         "scope_statement": domain.scope_statement,
         "classification": domain.classification,
         "org_unit": domain.org_unit,
+        "owner_org_unit_id": domain.owner_org_unit_id,
         "risk_flags": list(domain.risk_flags),
     }
 
