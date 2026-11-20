@@ -203,6 +203,10 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logging.getLogger(__name__).warning("lifespan startup skipped: %s", exc)
 
     log_auth_mode()  # ADP-blp.3: say loudly when authentication is off
+    # Load the embedding model now, in a thread, rather than inside the first write request.
+    from adp.knowledge.embedder import start_warmup
+
+    start_warmup()
     # ADP-SPEC-044: opt-in continuous export of business architecture data to
     # versioned files. start_business_arch_export is a no-op (returns None,
     # writes nothing) unless ADP_BUSINESS_ARCH_EXPORT_ROOT is set.

@@ -131,6 +131,14 @@ describe("OrganizationTab — org units (US1)", () => {
     expect(mutate.create).toHaveBeenCalledWith({ name: "Other Co", parent_id: null });
   });
 
+  it("says Adding… while the create is in flight", async () => {
+    api.useCreateOrgUnit.mockReturnValue({ mutateAsync: vi.fn(), mutate: vi.fn(), isPending: true } as never);
+    render(<OrganizationTab />);
+    await userEvent.click(screen.getByRole("button", { name: "+ Enterprise" }));
+    const busy = screen.getByRole("button", { name: "Adding…" }) as HTMLButtonElement;
+    expect(busy.disabled).toBe(true);
+  });
+
   it("is read-only for reviewers", () => {
     setup("reviewer");
     render(<OrganizationTab />);
