@@ -429,6 +429,12 @@ async def org_unit_exists(ou_id: str, session: AsyncSession) -> bool:
     return await _row(_org_units, ou_id, session) is not None
 
 
+async def org_unit_level(ou_id: str, session: AsyncSession) -> int | None:
+    """The org unit's level (1 enterprise, 2 division, 3 function), or None if it does not exist."""
+    row = await _row(_org_units, ou_id, session)
+    return None if row is None else int(row.level)
+
+
 async def get_org_unit(ou_id: str, session: AsyncSession) -> OrgUnitDetail | None:
     models = await _org_unit_models(session, [ou_id])
     if not models:

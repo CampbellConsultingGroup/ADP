@@ -507,6 +507,23 @@ from adp.business.models import (  # noqa: E402 — appended block
 )
 
 
+async def _require_owner_division(org_unit_id: str | None, session: AsyncSession) -> None:
+    """A domain's owner is a division: a level-2 org unit. Checked through the organization
+    store on the same session (940's precedent for the application owner)."""
+    if org_unit_id is None:
+        return
+    from adp.organization import store as ostore
+
+    level = await ostore.org_unit_level(org_unit_id, session)
+    if level is None:
+        raise HTTPException(status_code=422, detail=f"Org unit {org_unit_id!r} not found")
+    if level != 2:
+        raise HTTPException(
+            status_code=422,
+            detail="A domain's owner must be a division (a level-2 org unit)",
+        )
+
+
 @router.get("/domains", response_model=DomainListResponse)
 async def list_domains(session: AsyncSession = Depends(_get_session)):
     return await bstore.list_domains(session)
@@ -518,6 +535,7 @@ async def create_domain(
     request: Request,
     session: AsyncSession = Depends(_get_session),
 ):
+    await _require_owner_division(body.owner_org_unit_id, session)
     domain = await bstore.create_domain(body, session)
     await session.commit()
     actor = _get_actor(request)
@@ -540,6 +558,8 @@ async def update_domain(
     request: Request,
     session: AsyncSession = Depends(_get_session),
 ):
+    if "owner_org_unit_id" in body.model_fields_set:
+        await _require_owner_division(body.owner_org_unit_id, session)
     domain = await bstore.update_domain(domain_id, body, session)
     if domain is None:
         raise HTTPException(status_code=404, detail=f"Domain {domain_id!r} not found")

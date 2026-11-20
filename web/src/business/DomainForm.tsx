@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { BusinessDomain } from "../api/business";
+import { useOrgUnits } from "../api/organization";
 
 interface DomainFormProps {
   initial?: Partial<BusinessDomain>;
@@ -20,7 +21,13 @@ export default function DomainForm({ initial = {}, onSubmit, onCancel, isLoading
   const [classification, setClassification] = useState<string>(
     initial.classification ?? "strategic",
   );
-  const [orgUnit, setOrgUnit] = useState(initial.org_unit ?? "");
+  const [ownerId, setOwnerId] = useState(initial.owner_org_unit_id ?? "");
+  const orgUnits = useOrgUnits();
+  // A domain is owned by a division: a level-2 org unit.
+  const divisions = (orgUnits.data?.items ?? [])
+    .filter((u) => u.level === 2)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const legacyText = !initial.owner_org_unit_id ? initial.org_unit : null;
   const [riskFlagsInput, setRiskFlagsInput] = useState(
     (initial.risk_flags ?? []).join(", "),
   );
@@ -40,7 +47,9 @@ export default function DomainForm({ initial = {}, onSubmit, onCancel, isLoading
       name: name.trim(),
       scope_statement: scopeStatement.trim() || null,
       classification: classification as BusinessDomain["classification"],
-      org_unit: orgUnit.trim() || null,
+      owner_org_unit_id: ownerId || null,
+      // Once a division is chosen the older free text has served its purpose.
+      ...(ownerId ? { org_unit: null } : {}),
       risk_flags,
     });
   }
@@ -72,13 +81,30 @@ export default function DomainForm({ initial = {}, onSubmit, onCancel, isLoading
         </select>
       </label>
       <label style={{ fontSize: 13 }}>
-        Org Unit
-        <input
-          value={orgUnit}
-          onChange={(e) => setOrgUnit(e.target.value)}
+        Owner (division)
+        <select
+          value={ownerId}
+          onChange={(e) => setOwnerId(e.target.value)}
+          disabled={orgUnits.isLoading}
           style={{ display: "block", width: "100%", marginTop: 2 }}
-          placeholder="e.g. CFO Office"
-        />
+        >
+          <option value="">{orgUnits.isLoading ? "Loading…" : "No owner"}</option>
+          {divisions.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+        {legacyText && (
+          <span style={{ display: "block", fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>
+            Recorded before as &ldquo;{legacyText}&rdquo;, which matches no division. Choose one.
+          </span>
+        )}
+        {!orgUnits.isLoading && divisions.length === 0 && (
+          <span style={{ display: "block", fontSize: 11, color: "var(--ink-3)", marginTop: 2 }}>
+            No divisions yet. Add them under Business &rarr; Organization.
+          </span>
+        )}
       </label>
       <label style={{ fontSize: 13 }}>
         Scope Statement

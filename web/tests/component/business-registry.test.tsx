@@ -47,6 +47,17 @@ const DOMAIN_DETAIL = {
   capabilities: [{ capability_id: "cap-1", name: "Billing", level: 1 }],
 };
 
+const ou = (id: string, name: string, level: number) => ({
+  id, name, description: null, parent_id: level === 1 ? null : "ent", level,
+  kind: ["enterprise", "division", "function"][level - 1], primary_geography_id: null,
+  geography_ids: [], path: [], application_count: 0, created_at: "", updated_at: "",
+});
+const ORG_UNITS = {
+  items: [ou("ent", "Retail Co", 1), ou("ops", "Retail Operations", 2), ou("fin", "Finance & Legal", 2),
+    ou("ap", "Accounts Payable", 3)],
+  total: 4,
+};
+
 describe("CapabilityForm", () => {
   it("submits a new L1 capability and calls onDone", async () => {
     const calls = mockFetch({
@@ -103,6 +114,38 @@ describe("DomainForm", () => {
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ name: "Finance", risk_flags: ["PII", "GDPR"] }),
     );
+  });
+
+  it("offers only divisions as the owner and submits the chosen one", async () => {
+    mockFetch({ "GET /api/v1/business/org-units": ORG_UNITS });
+    const onSubmit = vi.fn();
+    renderWithQuery(
+      <DomainForm initial={{ name: "Finance", org_unit: "CFO Office" }} onSubmit={onSubmit} onCancel={vi.fn()} />,
+    );
+    const select = (await screen.findByLabelText(/Owner \(division\)/)) as HTMLSelectElement;
+    await waitFor(() => expect(select.options.length).toBe(3));
+    expect(Array.from(select.options).map((o) => o.textContent)).toEqual([
+      "No owner", "Finance & Legal", "Retail Operations",
+    ]);
+    expect(screen.getByText(/Recorded before as .CFO Office./)).toBeDefined();
+
+    fireEvent.change(select, { target: { value: "fin" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({ owner_org_unit_id: "fin", org_unit: null }),
+    );
+  });
+
+  it("keeps the older text when no division is chosen", async () => {
+    mockFetch({ "GET /api/v1/business/org-units": ORG_UNITS });
+    const onSubmit = vi.fn();
+    renderWithQuery(
+      <DomainForm initial={{ name: "Finance", org_unit: "CFO Office" }} onSubmit={onSubmit} onCancel={vi.fn()} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    const sent = onSubmit.mock.calls[0][0];
+    expect(sent.owner_org_unit_id).toBeNull();
+    expect("org_unit" in sent).toBe(false);
   });
 
   it("shows an error when name is blank", () => {
@@ -293,5 +336,15 @@ describe("DomainDetail", () => {
     expect(screen.getByText(/In: money/)).toBeDefined();
     expect(screen.getByText("PII")).toBeDefined();
     expect(screen.getByText("Billing")).toBeDefined();
+  });
+
+  it("shows the owning division's name", async () => {
+    mockFetch({
+      "GET /api/v1/business/domains/dom-1": { ...DOMAIN_DETAIL, org_unit: null, owner_org_unit_id: "fin" },
+      "GET /api/v1/business/capabilities": { items: [CAP], total: 1 },
+      "GET /api/v1/business/org-units": ORG_UNITS,
+    });
+    renderWithQuery(<DomainDetail domainId="dom-1" onBack={vi.fn()} />);
+    expect(await screen.findByText(/strategic · Finance & Legal/)).toBeDefined();
   });
 });

@@ -489,7 +489,10 @@ export interface BusinessDomain {
   name: string;
   scope_statement: string | null;
   classification: "strategic" | "differentiating" | "commodity";
+  /** Older free text, kept only where it named no division. */
   org_unit: string | null;
+  /** The owning division (a level-2 org unit). */
+  owner_org_unit_id?: string | null;
   risk_flags: string[];
   created_at: string;
   updated_at: string;

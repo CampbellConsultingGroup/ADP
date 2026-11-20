@@ -6,6 +6,7 @@ import {
   useAssignCapabilityDomain,
   type BusinessDomain,
 } from "../api/business";
+import { useOrgUnits } from "../api/organization";
 import DomainForm from "./DomainForm";
 import { Loading } from "../ui/primitives";
 
@@ -18,12 +19,14 @@ export default function DomainDetail({ domainId, onBack }: DomainDetailProps) {
   const { data: domain, isLoading, error } = useDomain(domainId);
   const { data: allCaps } = useCapabilities();
   const updateMutation = useUpdateDomain(domainId);
+  const { data: orgUnits } = useOrgUnits();
   const [editing, setEditing] = useState(false);
   const [assignError, setAssignError] = useState<string | null>(null);
 
   if (isLoading) return <Loading pad={16} />;
   if (error || !domain) return <div style={{ padding: 16, color: "var(--crit)" }}>Domain not found</div>;
 
+  const ownerName = orgUnits?.items.find((u) => u.id === domain.owner_org_unit_id)?.name ?? null;
   const assignedIds = new Set(domain.capabilities.map((c) => c.capability_id));
   const l1Caps = (allCaps?.items ?? []).filter((c) => c.level === 1);
   const unassigned = l1Caps.filter((c) => !assignedIds.has(c.id));
@@ -54,7 +57,7 @@ export default function DomainDetail({ domainId, onBack }: DomainDetailProps) {
               <h3 style={{ margin: "0 0 4px 0", fontSize: 16 }}>{domain.name}</h3>
               <div style={{ fontSize: 12, color: "var(--ink-2)" }}>
                 {domain.classification}
-                {domain.org_unit ? ` · ${domain.org_unit}` : ""}
+                {ownerName ? ` · ${ownerName}` : domain.org_unit ? ` · ${domain.org_unit} (no division)` : ""}
               </div>
             </div>
             <button onClick={() => setEditing(true)} style={{ fontSize: 12 }}>

@@ -99,13 +99,15 @@ def test_serialize_capability_empty_linked_designs_is_empty_list_not_omitted() -
 def test_serialize_domain() -> None:
     domain = BusinessDomain(
         id="domain-1", name="Underwriting", scope_statement="...",
-        classification="strategic", org_unit="Insurance Ops", risk_flags=[],
+        classification="strategic", org_unit="Insurance Ops", owner_org_unit_id="ou-2",
+        risk_flags=[],
         created_at=_NOW, updated_at=_NOW,
     )
     result = _serialize_domain(domain)
     assert result == {
         "id": "domain-1", "name": "Underwriting", "scope_statement": "...",
-        "classification": "strategic", "org_unit": "Insurance Ops", "risk_flags": [],
+        "classification": "strategic", "org_unit": "Insurance Ops",
+        "owner_org_unit_id": "ou-2", "risk_flags": [],
     }
 
 

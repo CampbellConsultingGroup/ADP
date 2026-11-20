@@ -150,6 +150,9 @@ _domains = sa.Table(
     sa.Column("scope_statement", sa.Text()),
     sa.Column("classification", sa.Text(), nullable=False),
     sa.Column("org_unit", sa.String(255)),
+    # Plain column here; the FK to org_units (ON DELETE SET NULL) is in migration 056 only,
+    # because org_units lives on the organization metadata (940 precedent).
+    sa.Column("owner_org_unit_id", sa.String(36)),
     sa.Column("risk_flags", sa.ARRAY(sa.Text()).with_variant(sa.JSON(), "sqlite"), nullable=False),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
@@ -936,6 +939,7 @@ def _row_to_domain(row: Any) -> BusinessDomain:
         scope_statement=row.scope_statement,
         classification=row.classification,
         org_unit=row.org_unit,
+        owner_org_unit_id=row.get("owner_org_unit_id"),
         risk_flags=list(row.risk_flags or []),
         created_at=row.created_at,
         updated_at=row.updated_at,
@@ -962,6 +966,7 @@ async def list_domains(session: AsyncSession) -> DomainListResponse:
             name=row.name,
             classification=row.classification,
             org_unit=row.org_unit,
+            owner_org_unit_id=row.get("owner_org_unit_id"),
             risk_flags=list(row.risk_flags or []),
             capability_count=row.capability_count,
             created_at=row.created_at,
@@ -1020,6 +1025,7 @@ async def create_domain(data: BusinessDomainCreate, session: AsyncSession) -> Bu
             scope_statement=data.scope_statement,
             classification=data.classification,
             org_unit=data.org_unit,
+            owner_org_unit_id=data.owner_org_unit_id,
             risk_flags=data.risk_flags,
             created_at=now,
             updated_at=now,
@@ -1031,6 +1037,7 @@ async def create_domain(data: BusinessDomainCreate, session: AsyncSession) -> Bu
         scope_statement=data.scope_statement,
         classification=data.classification,
         org_unit=data.org_unit,
+        owner_org_unit_id=data.owner_org_unit_id,
         risk_flags=data.risk_flags,
         created_at=now,
         updated_at=now,
@@ -1062,6 +1069,8 @@ async def update_domain(
         updates["scope_statement"] = data.scope_statement
     if "org_unit" in data.model_fields_set:
         updates["org_unit"] = data.org_unit
+    if "owner_org_unit_id" in data.model_fields_set:
+        updates["owner_org_unit_id"] = data.owner_org_unit_id
     if data.risk_flags is not None:
         updates["risk_flags"] = data.risk_flags
 
