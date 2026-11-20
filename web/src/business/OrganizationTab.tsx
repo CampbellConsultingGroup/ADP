@@ -8,6 +8,7 @@ import type React from "react";
 import { errorDetail } from "../api/appCapabilities";
 import type { Geography } from "../api/organization";
 import {
+  geographyLabel,
   ORG_UNIT_KIND_LABEL,
   useDeleteOrgUnit,
   useGeographies,
@@ -19,7 +20,8 @@ import {
   useUpdateOrgUnit,
 } from "../api/organization";
 import { useBusinessWrite } from "../application/appCapNav";
-import GeographyTree from "./GeographyTree";
+import { useCan } from "../auth/permissions";
+import GeoHierarchies from "./GeoHierarchies";
 import OrgUnitTree from "./OrgUnitTree";
 import UnmatchedList from "./UnmatchedList";
 import OrgFindings from "./OrgFindings";
@@ -38,7 +40,8 @@ const field: React.CSSProperties = { fontSize: 12, padding: "3px 6px", border: "
 const h4: React.CSSProperties = { fontSize: 13, margin: "14px 0 6px", color: "var(--ink-2)" };
 
 function geoLabel(g: Geography): string {
-  return g.code ? `${g.name} (${g.code})` : `${g.name} — ${g.kind}`;
+  if (g.code) return `${g.name} (${g.code})`;
+  return g.hierarchy_kind && g.hierarchy_kind !== "reference" ? geographyLabel(g) : `${g.name} — ${g.kind}`;
 }
 
 function OrgUnitDetailPanel({
@@ -240,6 +243,7 @@ const tab = (active: boolean): React.CSSProperties => ({
 
 export default function OrganizationTab({ onOpenCapability }: { onOpenCapability?: (id: string) => void } = {}): React.ReactElement {
   const canWrite = useCanWriteBusiness();
+  const canWriteCompliance = useCan("write_compliance").allowed;
   const orgUnits = useOrgUnits();
   const unmatched = useUnmatched();
   const [section, setSection] = useState<Section>("org-units");
@@ -294,7 +298,7 @@ export default function OrganizationTab({ onOpenCapability }: { onOpenCapability
             </div>
           </div>
         ))}
-      {section === "geography" && <GeographyTree canWrite={canWrite} />}
+      {section === "geography" && <GeoHierarchies canWrite={canWrite} canWriteCompliance={canWriteCompliance} />}
       {section === "unmatched" && <UnmatchedList canWrite={canWrite} />}
       {section === "findings" && <OrgFindings onOpenCapability={onOpenCapability} />}
     </div>

@@ -8,7 +8,7 @@ import { useState } from "react";
 import type React from "react";
 import type { AppRef, Rationale, RealizationAttrs } from "../api/appCapabilities";
 import { errorDetail, useAddRealization, useRemoveAppCapLink, useUpdateRealization } from "../api/appCapabilities";
-import { useGeographies } from "../api/organization";
+import { geographyLabel as sharedGeographyLabel, useGeographies } from "../api/organization";
 import { assessableGeographies } from "../business/RegionalAssessmentEditor";
 import { Button } from "../ui";
 import { RATIONALES, RATIONALE_HELP, RATIONALE_LABEL, rationaleColors, rationaleLabel } from "./realizationRationale";
@@ -31,9 +31,10 @@ export function RationaleChip({ rationale }: { rationale: Rationale | null | und
   );
 }
 
-export function geographyLabel(g: { name: string; code: string | null } | null | undefined): string {
-  if (!g) return "Everywhere";
-  return g.code ? `${g.name} (${g.code})` : g.name;
+export function geographyLabel(
+  g: { name: string; code: string | null; hierarchy_kind?: string | null; hierarchy_name?: string | null } | null | undefined,
+): string {
+  return sharedGeographyLabel(g, "Everywhere"); // 946: nodes of other hierarchies show "APAC · Sales"
 }
 
 function RationaleSelect({ label, value, onChange, disabled }: { label: string; value: Rationale | null; onChange: (v: Rationale | null) => void; disabled?: boolean }) {

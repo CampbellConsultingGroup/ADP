@@ -191,6 +191,15 @@ async def test_geography_index_loaded_when_a_realization_names_one(env, monkeypa
         }
 
     monkeypatch.setattr(ostore, "geography_index", _index)
+
+    async def _graph(session):
+        from adp.organization.geo_model import GeoGraph
+
+        return GeoGraph.from_tree(
+            [("geo-m49-150", "geo-001", False), ("geo-DE", "geo-m49-150", True)]
+        )
+
+    monkeypatch.setattr(ostore, "geo_graph", _graph)
     snap = await build_snapshot(s, risk_visible=False, cost_visible=False)
     assert snap.realizations[("a3", ids["app"])].geography_id == "geo-DE"
     assert snap.geographies["geo-DE"].parent_id == "geo-m49-150"

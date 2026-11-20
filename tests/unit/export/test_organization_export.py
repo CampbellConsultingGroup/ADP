@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from adp.export.organization import reconcile_organization
 from adp.organization import store as ostore
-from adp.organization.geodata import geography_seed_rows
 from adp.organization.models import OrgUnitCreate
 
 NOW = datetime(2026, 11, 15, tzinfo=timezone.utc)
@@ -28,7 +27,7 @@ async def session(tmp_path, monkeypatch):
         await conn.run_sync(ostore._metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as s:
-        await s.execute(ostore._geographies.insert(), geography_seed_rows(NOW))
+        await ostore.seed_geography(s, NOW)
         yield s
     await engine.dispose()
 
@@ -60,3 +59,32 @@ async def test_writes_org_units_and_geographies_and_cleans_orphans(session, tmp_
     await reconcile_organization(root, session, NOW)
     assert not (root / "organization" / "org-units" / f"{st.id}.json").exists()
     assert (root / "organization" / "org-units" / f"{rc.id}.json").exists()
+
+
+async def test_geographies_file_lists_hierarchies_with_dated_memberships(session, tmp_path):
+    from datetime import date
+
+    from adp.organization import hierarchies
+    from adp.organization.models import AddMemberships, GeoHierarchyCreate, GeoNodeCreate
+
+    h = await hierarchies.create_hierarchy(
+        GeoHierarchyCreate(name="Regulatory", kind="regulatory", shape="dag"), session
+    )
+    eu = await hierarchies.create_node(h.id, GeoNodeCreate(name="EU"), session)
+    await hierarchies.add_memberships(
+        h.id,
+        AddMemberships(parent_id=eu.id, child_ids=["geo-GB"], valid_to=date(2020, 1, 31)),
+        session,
+    )
+    root = tmp_path / "out"
+    await reconcile_organization(root, session, NOW)
+    data = json.loads((root / "organization" / "geographies.json").read_text())
+    by_id = {x["id"]: x for x in data["hierarchies"]}
+    assert by_id["geoh-m49"]["kind"] == "reference" and len(by_id["geoh-m49"]["memberships"]) > 200
+    reg = by_id[h.id]
+    assert reg["node_ids"] == [eu.id]
+    assert reg["memberships"] == [
+        {"parent_id": eu.id, "child_id": "geo-GB", "valid_from": None, "valid_to": "2020-01-31"}
+    ]
+    eu_row = next(g for g in data["geographies"] if g["id"] == eu.id)
+    assert eu_row["entity"] == "node" and eu_row["hierarchy_id"] == h.id

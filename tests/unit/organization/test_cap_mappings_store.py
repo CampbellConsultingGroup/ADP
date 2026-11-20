@@ -15,7 +15,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from adp.organization import cap_mappings as cm
 from adp.organization import store as ostore
-from adp.organization.geodata import geography_seed_rows
 from adp.organization.models import (
     AddMapping,
     DuplicateLinkError,
@@ -40,7 +39,7 @@ async def session(tmp_path, monkeypatch):
         await conn.run_sync(ostore._metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as s:
-        await s.execute(ostore._geographies.insert(), geography_seed_rows(NOW))
+        await ostore.seed_geography(s, NOW)
         for cid, name, level, parent in [
             ("sell", "Sell", 1, None),
             ("pay", "Payments", 2, "sell"),
@@ -177,6 +176,17 @@ class TestPerformers:
             await cm.remove_mapping(added.id, session)
 
 
+async def _node(session) -> str:
+    """946: only nodes can be deleted (countries are read-only places)."""
+    from adp.organization import hierarchies
+    from adp.organization.models import GeoHierarchyCreate, GeoNodeCreate
+
+    h = await hierarchies.create_hierarchy(
+        GeoHierarchyCreate(name="Scratch", kind="custom", shape="dag"), session
+    )
+    return (await hierarchies.create_node(h.id, GeoNodeCreate(name="Scratchland"), session)).id
+
+
 class TestDeletes:
     async def test_deleting_an_org_unit_removes_its_mappings_and_owner_falls_back(
         self, session
@@ -194,15 +204,17 @@ class TestDeletes:
 
     async def test_deleting_a_geography_clears_it(self, session) -> None:
         st = await _ou(session, "Stores")
-        await cm.add_mapping(_perf("accept", st, "geo-DE"), session)
-        await ostore.delete_geography("geo-DE", session)
+        node = await _node(session)
+        await cm.add_mapping(_perf("accept", st, node), session)
+        await ostore.delete_geography(node, session)
         assert await _rows(session) == [("accept", st, "performer", None)]
 
     async def test_deleting_a_geography_merges_into_the_everywhere_row(self, session) -> None:
         st = await _ou(session, "Stores")
         await cm.add_mapping(_perf("accept", st), session)
-        await cm.add_mapping(_perf("accept", st, "geo-DE"), session)
-        await ostore.delete_geography("geo-DE", session)
+        node = await _node(session)
+        await cm.add_mapping(_perf("accept", st, node), session)
+        await ostore.delete_geography(node, session)
         assert await _rows(session) == [("accept", st, "performer", None)]
 
     async def test_mappings_to_a_missing_capability_never_surface(self, session) -> None:

@@ -19,6 +19,7 @@ import {
   useRemoveRegionalAssessment,
   useSetRegionScope,
   useSetRegionalAssessment,
+  geographyLabel,
 } from "../api/organization";
 import { maturitySwatch } from "./maturityScale";
 
@@ -40,7 +41,7 @@ export function maturityLabel(level: number): string {
 }
 
 function geoLabel(g: GeoRef | Geography): string {
-  return g.code ? `${g.name} (${g.code})` : g.name;
+  return geographyLabel(g);
 }
 
 /** Regions first, then countries, both by name; never Global (that is the baseline). */

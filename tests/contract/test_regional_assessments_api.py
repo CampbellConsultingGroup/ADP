@@ -21,7 +21,6 @@ from adp.business import router as brouter
 from adp.business import store as bstore
 from adp.organization import router as orouter
 from adp.organization import store as ostore
-from adp.organization.geodata import geography_seed_rows
 
 B = "/api/v1/business"
 RA = f"{B}/regional-assessments"
@@ -57,7 +56,7 @@ async def ctx(tmp_path, monkeypatch):
         )
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as s:
-        await s.execute(ostore._geographies.insert(), geography_seed_rows(NOW))
+        await ostore.seed_geography(s, NOW)
         for cid, name, level, parent, pos, maturity in CAPS:
             await s.execute(
                 bstore._capabilities.insert().values(

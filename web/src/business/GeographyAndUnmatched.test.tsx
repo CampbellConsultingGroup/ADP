@@ -1,17 +1,15 @@
-// 940-org-units-geography: the geography tree (US2) and the review queue (US4).
+// 940-org-units-geography: the review queue (US4). The geography screen is tested in GeoHierarchies.test.tsx (946).
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as orgApi from "../api/organization";
 import type { Geography, OrgUnit } from "../api/organization";
-import GeographyTree from "./GeographyTree";
 import UnmatchedList from "./UnmatchedList";
 
 vi.mock("../api/organization", async (orig) => ({
   ...(await orig<typeof import("../api/organization")>()),
   useGeographies: vi.fn(),
-  useCreateGeography: vi.fn(),
   useDeleteGeography: vi.fn(),
   useUnmatched: vi.fn(),
   useOrgUnits: vi.fn(),
@@ -38,17 +36,14 @@ const ou = (id: string, name: string, level: number, path: string[] = []): OrgUn
   primary_geography_id: null, geography_ids: [], path: path.map((p) => ({ id: p, name: p, level: 1 })), application_count: 0, created_at: "", updated_at: "",
 });
 
-let createGeo: ReturnType<typeof vi.fn>;
 let deleteGeo: ReturnType<typeof vi.fn>;
 let resolve: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
-  createGeo = vi.fn().mockResolvedValue({});
   deleteGeo = vi.fn().mockResolvedValue(undefined);
   resolve = vi.fn().mockResolvedValue({ org_unit: ou("st", "Stores", 2), updated_count: 3 });
   api.useGeographies.mockReturnValue({ data: { items: GEOS, total: GEOS.length }, isLoading: false, error: null } as never);
-  api.useCreateGeography.mockReturnValue({ mutateAsync: createGeo, isPending: false } as never);
   api.useDeleteGeography.mockReturnValue({ mutateAsync: deleteGeo, isPending: false } as never);
   api.useOrgUnits.mockReturnValue({ data: { items: [ou("rc", "Retail Co", 1), ou("st", "Stores", 2, ["Retail Co"])], total: 2 } } as never);
   api.useResolveUnmatched.mockReturnValue({ mutateAsync: resolve, isPending: false } as never);
@@ -63,49 +58,6 @@ beforeEach(() => {
     isLoading: false,
     error: null,
   } as never);
-});
-
-describe("GeographyTree (US2)", () => {
-  it("starts with regions collapsed, showing counts; unassigned countries sit under Global", () => {
-    render(<GeographyTree canWrite />);
-    expect(screen.getByText("Europe")).toBeTruthy();
-    expect(screen.queryByText("Germany")).toBeNull();
-    expect(screen.getByText("Taiwan")).toBeTruthy();
-    expect(screen.getByText("4 countries")).toBeTruthy();
-  });
-
-  it("expands a region and shows ISO codes and org unit counts", async () => {
-    render(<GeographyTree canWrite />);
-    await userEvent.click(screen.getByRole("button", { name: "Expand Europe" }));
-    expect(screen.getByText("Germany")).toBeTruthy();
-    expect(screen.getByText("DE")).toBeTruthy();
-    expect(screen.getByText("1 org unit")).toBeTruthy();
-  });
-
-  it("filters by name or ISO code", async () => {
-    render(<GeographyTree canWrite />);
-    await userEvent.type(screen.getByLabelText("Filter geography"), "br");
-    expect(screen.getByText("Brazil")).toBeTruthy();
-    expect(screen.queryByText("Germany")).toBeNull();
-  });
-
-  it("adds a country with an ISO code and removes a leaf after confirming", async () => {
-    vi.spyOn(window, "confirm").mockReturnValue(true);
-    render(<GeographyTree canWrite />);
-    await userEvent.click(screen.getByRole("button", { name: "Add to Europe" }));
-    await userEvent.type(screen.getByLabelText("New country name"), "Kosovo");
-    await userEvent.type(screen.getByLabelText("ISO code"), "xk");
-    await userEvent.click(screen.getByRole("button", { name: "Add" }));
-    expect(createGeo).toHaveBeenCalledWith({ name: "Kosovo", parent_id: "geo-m49-150", code: "XK" });
-    await userEvent.click(screen.getByRole("button", { name: "Remove Taiwan" }));
-    expect(deleteGeo).toHaveBeenCalledWith("geo-TW");
-  });
-
-  it("hides edit controls for readers", () => {
-    render(<GeographyTree canWrite={false} />);
-    expect(screen.queryByRole("button", { name: /Add to/ })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Remove/ })).toBeNull();
-  });
 });
 
 describe("UnmatchedList (US4)", () => {

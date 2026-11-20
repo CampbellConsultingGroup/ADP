@@ -9,7 +9,7 @@ import { useState } from "react";
 import type React from "react";
 import { MATURITY_LEVEL_LABEL } from "../api/business";
 import type { GeoRef, HeatmapCell, HeatmapRow } from "../api/organization";
-import { useGeographies, useRegionalHeatmap } from "../api/organization";
+import { geographyLabel, useGeographies, useRegionalHeatmap } from "../api/organization";
 import { assessableGeographies, CellEditor } from "./RegionalAssessmentEditor";
 import { maturitySwatch } from "./maturityScale";
 
@@ -106,7 +106,7 @@ function ColumnPicker({
         <option value="">{full ? `At most ${max} columns` : "Add a region or country…"}</option>
         {options.map((g) => (
           <option key={g.id} value={g.id}>
-            {g.code ? `${g.name} (${g.code})` : g.name}
+            {geographyLabel(g)}
           </option>
         ))}
       </select>

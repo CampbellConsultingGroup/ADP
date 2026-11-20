@@ -53,6 +53,141 @@ export interface Geography {
   kind: GeographyKind;
   path: Ref[];
   org_unit_count: number;
+  /** 946 GEO-01: a place (country) or a node of one hierarchy. `parent_id`/`path` are the UN M49 ones. */
+  entity?: "place" | "node";
+  hierarchy_id?: string | null;
+  hierarchy_name?: string | null;
+  hierarchy_kind?: HierarchyKind | null;
+}
+
+/** One label for a geography in every picker: "France (FR)", "Europe", "APAC · Sales". */
+export function geographyLabel(
+  g: { name: string; code?: string | null; hierarchy_kind?: string | null; hierarchy_name?: string | null } | null | undefined,
+  fallback = "Everywhere",
+): string {
+  if (!g) return fallback;
+  if (g.code) return `${g.name} (${g.code})`;
+  if (g.hierarchy_name && g.hierarchy_kind && g.hierarchy_kind !== "reference") return `${g.name} · ${g.hierarchy_name}`;
+  return g.name;
+}
+
+// ── 946 GEO-01: hierarchies, nodes, dated memberships ─────────────────────────
+
+export type HierarchyKind =
+  | "reference"
+  | "regulatory"
+  | "data_residency"
+  | "infrastructure"
+  | "sales"
+  | "tax"
+  | "operational"
+  | "custom";
+export type HierarchyShape = "strict_tree" | "dag";
+
+export const HIERARCHY_KIND_LABEL: Record<HierarchyKind, string> = {
+  reference: "Reference",
+  regulatory: "Regulatory",
+  data_residency: "Data residency",
+  infrastructure: "Infrastructure",
+  sales: "Sales",
+  tax: "Tax",
+  operational: "Operational",
+  custom: "Custom",
+};
+/** Writes to these kinds also need write_compliance (they drive compliance applicability). */
+export const COMPLIANCE_KINDS: ReadonlySet<HierarchyKind> = new Set(["regulatory", "data_residency", "tax"]);
+
+export interface GeoHierarchy {
+  id: string;
+  name: string;
+  kind: HierarchyKind;
+  shape: HierarchyShape;
+  system_of_record: string | null;
+  description: string | null;
+  read_only: boolean;
+  node_count: number;
+  membership_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GeoMembership {
+  id: string;
+  hierarchy_id: string;
+  parent_id: string;
+  child_id: string;
+  child_entity: "place" | "node";
+  valid_from: string | null;
+  valid_to: string | null;
+  active: boolean;
+}
+
+export interface GeoHierarchyDetail extends GeoHierarchy {
+  as_of: string;
+  nodes: { id: string; name: string }[];
+  memberships: GeoMembership[];
+}
+
+export function useGeoHierarchies() {
+  return useQuery<{ items: GeoHierarchy[]; total: number }>({
+    queryKey: [...ORG_KEY, "geo-hierarchies"],
+    queryFn: () => apiGet(`${BASE}/geo-hierarchies`),
+  });
+}
+
+export function useGeoHierarchy(id: string | null, asOf: string | null) {
+  const q = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
+  return useQuery<GeoHierarchyDetail>({
+    queryKey: [...ORG_KEY, "geo-hierarchy", id, asOf ?? "today"],
+    queryFn: () => apiGet(`${BASE}/geo-hierarchies/${id}${q}`),
+    enabled: !!id,
+    // Changing the "as of" date keeps the tree (and what is expanded) on screen while it loads.
+    placeholderData: (previous) => (previous && previous.id === id ? previous : undefined),
+  });
+}
+
+export function useCreateGeoHierarchy() {
+  return useOrgMutation((body: { name: string; kind: Exclude<HierarchyKind, "reference">; shape: HierarchyShape; description?: string | null }) =>
+    apiMutation<GeoHierarchy>("POST", `${BASE}/geo-hierarchies`, body),
+  );
+}
+
+export function useUpdateGeoHierarchy() {
+  return useOrgMutation(({ id, body }: { id: string; body: { name?: string; shape?: HierarchyShape; description?: string | null } }) =>
+    apiMutation<GeoHierarchy>("PATCH", `${BASE}/geo-hierarchies/${id}`, body),
+  );
+}
+
+export function useDeleteGeoHierarchy() {
+  return useOrgMutation((id: string) => apiMutation<void>("DELETE", `${BASE}/geo-hierarchies/${id}`));
+}
+
+export function useCreateGeoNode() {
+  return useOrgMutation(({ hierarchyId, name, parentId }: { hierarchyId: string; name: string; parentId?: string | null }) =>
+    apiMutation<Geography>("POST", `${BASE}/geo-hierarchies/${hierarchyId}/nodes`, { name, parent_id: parentId ?? null }),
+  );
+}
+
+export function useAddGeoMemberships() {
+  return useOrgMutation(
+    ({ hierarchyId, parentId, childIds, validFrom, validTo }: { hierarchyId: string; parentId: string; childIds: string[]; validFrom?: string | null; validTo?: string | null }) =>
+      apiMutation<GeoMembership[]>("POST", `${BASE}/geo-hierarchies/${hierarchyId}/memberships`, {
+        parent_id: parentId,
+        child_ids: childIds,
+        valid_from: validFrom || null,
+        valid_to: validTo || null,
+      }),
+  );
+}
+
+export function useUpdateGeoMembership() {
+  return useOrgMutation(({ id, validFrom, validTo }: { id: string; validFrom: string | null; validTo: string | null }) =>
+    apiMutation<GeoMembership>("PATCH", `${BASE}/geo-memberships/${id}`, { valid_from: validFrom, valid_to: validTo }),
+  );
+}
+
+export function useDeleteGeoMembership() {
+  return useOrgMutation((id: string) => apiMutation<void>("DELETE", `${BASE}/geo-memberships/${id}`));
 }
 
 export interface UnmatchedValue {
@@ -143,14 +278,9 @@ export function useUnlinkGeography() {
   );
 }
 
-export function useCreateGeography() {
-  return useOrgMutation((body: { name: string; code?: string | null; parent_id: string }) =>
-    apiMutation<Geography>("POST", `${BASE}/geographies`, body),
-  );
-}
-
+/** Rename a node (places are read-only). */
 export function useUpdateGeography() {
-  return useOrgMutation(({ id, body }: { id: string; body: { name?: string; code?: string | null } }) =>
+  return useOrgMutation(({ id, body }: { id: string; body: { name?: string } }) =>
     apiMutation<Geography>("PATCH", `${BASE}/geographies/${id}`, body),
   );
 }

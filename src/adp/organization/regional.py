@@ -34,12 +34,15 @@ from adp.organization.models import (
 )
 from adp.organization.regional_analysis import Assessment, CapNode, GeoNode, RegionalSnapshot
 from adp.organization.store import (
+    REFERENCE_HIERARCHY_ID,
     _business_capabilities,
     _capability_regional_assessments,
     _geographies,
     _now,
     _region_specific_capabilities,
     _region_specific_capability_geographies,
+    display_level,
+    geo_graph,
 )
 
 _ra = _capability_regional_assessments
@@ -61,14 +64,15 @@ async def _geography(
 ) -> GeoRef:
     row = (
         await session.execute(
-            sa.select(_g.c.id, _g.c.name, _g.c.level, _g.c.code).where(_g.c.id == geo_id)
+            sa.select(_g.c.id, _g.c.name, _g.c.entity, _g.c.code).where(_g.c.id == geo_id)
         )
     ).first()
     if row is None:
         raise missing(f"Geography {geo_id!r} not found")
-    if int(row.level) == 1:
+    level = display_level(row.entity, row.id)
+    if level == 1:
         raise LevelRuleError(ra.GLOBAL_RULE)
-    return GeoRef(id=row.id, name=row.name, level=int(row.level), code=row.code)
+    return GeoRef(id=row.id, name=row.name, level=level, code=row.code)
 
 
 def _assessment(row: sa.Row, geo: GeoRef) -> RegionalAssessment:
@@ -124,7 +128,7 @@ async def list_assessments(
     session: AsyncSession, capability_id: str | None = None
 ) -> RegionalAssessmentListResponse:
     query = (
-        sa.select(_ra, _g.c.name.label("geo_name"), _g.c.level.label("geo_level"), _g.c.code)
+        sa.select(_ra, _g.c.name.label("geo_name"), _g.c.entity.label("geo_entity"), _g.c.code)
         .join(_g, _g.c.id == _ra.c.geography_id)
         .join(_b, _b.c.id == _ra.c.capability_id)  # hide rows whose capability is gone
         .order_by(_g.c.name, _ra.c.capability_id)
@@ -134,7 +138,12 @@ async def list_assessments(
     items = [
         _assessment(
             r,
-            GeoRef(id=r.geography_id, name=r.geo_name, level=int(r.geo_level), code=r.code),
+            GeoRef(
+                id=r.geography_id,
+                name=r.geo_name,
+                level=display_level(r.geo_entity, r.geography_id),
+                code=r.code,
+            ),
         )
         for r in await session.execute(query)
     ]
@@ -155,9 +164,9 @@ async def get_scope(cap_id: str, session: AsyncSession) -> RegionScope:
     ).first() is not None
     sg = _region_specific_capability_geographies
     geos = [
-        GeoRef(id=r.id, name=r.name, level=int(r.level), code=r.code)
+        GeoRef(id=r.id, name=r.name, level=display_level(r.entity, r.id), code=r.code)
         for r in await session.execute(
-            sa.select(_g.c.id, _g.c.name, _g.c.level, _g.c.code)
+            sa.select(_g.c.id, _g.c.name, _g.c.entity, _g.c.code)
             .join(sg, sg.c.geography_id == _g.c.id)
             .where(sg.c.capability_id == cap_id)
             .order_by(_g.c.name)
@@ -208,11 +217,15 @@ async def build_snapshot(session: AsyncSession) -> RegionalSnapshot:
             )
         )
     ]
+    graph = await geo_graph(session)
+
+    def _ref_parent(geo_id: str) -> str | None:
+        parents = graph.parents(geo_id, REFERENCE_HIERARCHY_ID)
+        return parents[0] if parents else None
+
     geos = [
-        GeoNode(r.id, r.name, int(r.level), r.parent_id, r.code)
-        for r in await session.execute(
-            sa.select(_g.c.id, _g.c.name, _g.c.level, _g.c.parent_id, _g.c.code)
-        )
+        GeoNode(r.id, r.name, display_level(r.entity, r.id), _ref_parent(r.id), r.code)
+        for r in await session.execute(sa.select(_g.c.id, _g.c.name, _g.c.entity, _g.c.code))
     ]
     assessments = [
         Assessment(r.id, r.capability_id, r.geography_id, r.maturity_level, r.note, r.updated_at)
@@ -235,6 +248,7 @@ async def build_snapshot(session: AsyncSession) -> RegionalSnapshot:
         geographies=geos,
         assessments=assessments,
         scopes={k: frozenset(v) for k, v in scopes.items()},
+        graph=graph,
     )
 
 

@@ -13,20 +13,22 @@ import sqlalchemy as sa
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from adp.organization import hierarchies
 from adp.organization import store as ostore
 from adp.organization.geodata import geography_seed_rows
 from adp.organization.models import (
     DepthError,
-    DuplicateCodeError,
     DuplicateLinkError,
     DuplicateSiblingError,
-    GeographyCreate,
     GeographyUpdate,
+    GeoHierarchyCreate,
+    GeoNodeCreate,
     HasChildrenError,
     InvalidCodeError,
     OrgNotFoundError,
     OrgUnitCreate,
     OrgUnitUpdate,
+    ReadOnlyHierarchyError,
     ResolveCreate,
     ResolveUnmatched,
 )
@@ -51,7 +53,7 @@ async def session(tmp_path, monkeypatch):
         await conn.run_sync(ostore._metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as s:
-        await s.execute(ostore._geographies.insert(), geography_seed_rows(NOW))
+        await ostore.seed_geography(s, NOW)
         s.info["indexed"] = indexed
         yield s
     await engine.dispose()
@@ -184,46 +186,47 @@ class TestGeographies:
         assert [p.name for p in de.path] == ["Global", "Europe"]
         assert [p.name for p in by_id["geo-TW"].path] == ["Global"]
 
-    async def test_create_country_validates_code(self, session):
-        with pytest.raises(InvalidCodeError):
-            await ostore.create_geography(
-                GeographyCreate(name="Atlantis", code="ATL", parent_id="geo-m49-150"), session
-            )
-        with pytest.raises(DuplicateCodeError):
-            await ostore.create_geography(
-                GeographyCreate(name="Germany 2", code="de", parent_id="geo-m49-150"), session
-            )
-        with pytest.raises(InvalidCodeError):
-            await ostore.create_geography(
-                GeographyCreate(name="EMEA", code="EM", parent_id="geo-001"), session
-            )
-        emea = await ostore.create_geography(
-            GeographyCreate(name="EMEA", parent_id="geo-001"), session
-        )
-        assert emea.kind == "region"
-        with pytest.raises(DepthError):
-            await ostore.create_geography(
-                GeographyCreate(name="Berlin", parent_id="geo-DE"), session
-            )
-
-    async def test_rename_keeps_children_and_code_update_checks(self, session):
-        await ostore.update_geography("geo-m49-150", GeographyUpdate(name="Europe (M49)"), session)
-        de = await ostore.get_geography("geo-DE", session)
-        assert de is not None and de.path[-1].name == "Europe (M49)"
-        with pytest.raises(DuplicateCodeError):
-            await ostore.update_geography("geo-FR", GeographyUpdate(code="DE"), session)
+    async def test_places_and_the_reference_hierarchy_are_read_only(self, session):
+        # 946: countries are places; Global and the UN regions are nodes of the read-only
+        # reference hierarchy.
+        for geo_id in ("geo-DE", "geo-m49-150"):
+            with pytest.raises(ReadOnlyHierarchyError):
+                await ostore.update_geography(geo_id, GeographyUpdate(name="x"), session)
+            with pytest.raises(ReadOnlyHierarchyError):
+                await ostore.delete_geography(geo_id, session)
         assert await ostore.update_geography("nope", GeographyUpdate(name="x"), session) is None
+        assert await ostore.delete_geography("nope", session) is False
 
-    async def test_delete_refused_with_children_and_clears_primary(self, session):
-        with pytest.raises(HasChildrenError):
-            await ostore.delete_geography("geo-m49-150", session)
-        ou = await ostore.create_org_unit(
-            OrgUnitCreate(name="Germany Retail", primary_geography_id="geo-DE"), session
+    async def test_rename_a_node_checks_names_and_codes(self, session):
+        h = await hierarchies.create_hierarchy(
+            GeoHierarchyCreate(name="Sales", kind="sales", shape="strict_tree"), session
         )
-        assert ou.primary_geography_id == "geo-DE"
-        assert await ostore.delete_geography("geo-DE", session)
+        emea = await hierarchies.create_node(h.id, GeoNodeCreate(name="EMEA"), session)
+        await hierarchies.create_node(h.id, GeoNodeCreate(name="APAC"), session)
+        renamed = await ostore.update_geography(emea.id, GeographyUpdate(name="Europe+"), session)
+        assert renamed is not None and renamed.name == "Europe+" and renamed.entity == "node"
+        with pytest.raises(DuplicateSiblingError):
+            await ostore.update_geography(emea.id, GeographyUpdate(name="apac"), session)
+        with pytest.raises(InvalidCodeError):
+            await ostore.update_geography(emea.id, GeographyUpdate(code="EM"), session)
+
+    async def test_delete_node_refused_with_sub_nodes_and_clears_primary(self, session):
+        h = await hierarchies.create_hierarchy(
+            GeoHierarchyCreate(name="Sales", kind="sales", shape="strict_tree"), session
+        )
+        amer = await hierarchies.create_node(h.id, GeoNodeCreate(name="Americas"), session)
+        na = await hierarchies.create_node(
+            h.id, GeoNodeCreate(name="NA", parent_id=amer.id), session
+        )
+        with pytest.raises(HasChildrenError):
+            await ostore.delete_geography(amer.id, session)
+        ou = await ostore.create_org_unit(
+            OrgUnitCreate(name="NA Retail", primary_geography_id=na.id), session
+        )
+        assert await ostore.delete_geography(na.id, session)
         refreshed = await ostore.get_org_unit(ou.id, session)
         assert refreshed is not None and refreshed.primary_geography_id is None
+        assert await ostore.delete_geography(amer.id, session)
 
     async def test_unknown_primary_geography(self, session):
         with pytest.raises(OrgNotFoundError):
@@ -265,13 +268,15 @@ class TestLinks:
     async def test_delete_either_side_removes_links(self, session):
         a = await _ou(session, "A")
         b = await _ou(session, "B")
-        await ostore.link_geography(a.id, "geo-JP", session)
-        await ostore.link_geography(b.id, "geo-JP", session)
+        h = await hierarchies.create_hierarchy(
+            GeoHierarchyCreate(name="Ops", kind="operational", shape="strict_tree"), session
+        )
+        hub = (await hierarchies.create_node(h.id, GeoNodeCreate(name="Hub"), session)).id
+        await ostore.link_geography(a.id, hub, session)
+        await ostore.link_geography(b.id, hub, session)
         await ostore.delete_org_unit(a.id, session)
-        assert [o.name for o in await ostore.org_units_for_geography("geo-JP", session) or []] == [
-            "B"
-        ]
-        await ostore.delete_geography("geo-JP", session)
+        assert [o.name for o in await ostore.org_units_for_geography(hub, session) or []] == ["B"]
+        await ostore.delete_geography(hub, session)
         assert (await ostore.get_org_unit(b.id, session)).geography_ids == []  # type: ignore[union-attr]
 
     async def test_link_unknown(self, session):

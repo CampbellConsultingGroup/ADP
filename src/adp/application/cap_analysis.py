@@ -51,6 +51,7 @@ from adp.application.cap_analysis_models import (
     SharedEntry,
     TechnologyDependency,
 )
+from adp.organization.geo_model import GeoGraph  # pure, no I/O (946)
 
 HORIZON = timedelta(days=365)
 SHARED_THRESHOLD = 3
@@ -146,6 +147,8 @@ class CapabilitySnapshot:
     realizations: Mapping[tuple[str, str], Realization] = field(default_factory=dict)
     # 943: only populated when some realization names a geography (research R4).
     geographies: Mapping[str, GeoInfo] = field(default_factory=dict)
+    # 946: containment as of today across hierarchies (store sets it with the geographies).
+    geo_graph: GeoGraph | None = None
 
 
 # ── Tree helpers ──────────────────────────────────────────────────────────────
@@ -547,22 +550,25 @@ def _geo_ref(snapshot: CapabilitySnapshot, geo_id: str | None) -> GeoRef | None:
     return GeoRef(id=geo_id, name=info.name, code=info.code) if info and geo_id else None
 
 
-def _ancestors(geo_id: str, snapshot: CapabilitySnapshot) -> set[str]:
-    out: set[str] = set()
-    current: str | None = geo_id
-    while current is not None and current not in out and current in snapshot.geographies:
-        out.add(current)
-        current = snapshot.geographies[current].parent_id
-    return out
+def _graph(snapshot: CapabilitySnapshot) -> GeoGraph:
+    if snapshot.geo_graph is not None:
+        return snapshot.geo_graph
+    # Hand-built snapshots (tests) give parents only: a geography with a code is a country.
+    return GeoGraph.from_tree(
+        (g, info.parent_id, info.code is not None) for g, info in snapshot.geographies.items()
+    )
 
 
-def _scopes_overlap(a: str | None, b: str | None, snapshot: CapabilitySnapshot) -> bool:
-    """Two scopes overlap when either is everywhere, or one geography equals or contains the
-    other (942's containment, both ways). An unknown geography counts as everywhere."""
+def _scopes_overlap(
+    a: str | None, b: str | None, snapshot: CapabilitySnapshot, graph: GeoGraph | None = None
+) -> bool:
+    """Two scopes overlap when either is everywhere, or one geography contains the other, or
+    (946) they share a country -- across hierarchies. An unknown geography counts as
+    everywhere."""
     if a not in snapshot.geographies or b not in snapshot.geographies:
         return True
     assert a is not None and b is not None
-    return a in _ancestors(b, snapshot) or b in _ancestors(a, snapshot)
+    return (graph or _graph(snapshot)).overlaps(a, b)
 
 
 def _mapping(snapshot: CapabilitySnapshot, ac: str, app_id: str) -> RealizationMapping:
@@ -587,9 +593,10 @@ def _overlap_reasons(
     ]
     targets = [(app, r.geography_id) for app, _, r in rows if r.rationale == "target"]
     competing: set[str] = set()
+    graph = _graph(snapshot) if len(targets) > 1 else None
     for i, (a, ga) in enumerate(targets):
         for b, gb in targets[i + 1 :]:
-            if a != b and _scopes_overlap(ga, gb, snapshot):
+            if a != b and _scopes_overlap(ga, gb, snapshot, graph):
                 competing.update((a, b))
     reasons: list[OverlapReason] = []
     if unclassified:

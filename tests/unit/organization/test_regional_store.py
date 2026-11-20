@@ -13,11 +13,11 @@ import sqlalchemy as sa
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from adp.organization import regional
+from adp.organization import hierarchies, regional
 from adp.organization import store as ostore
-from adp.organization.geodata import geography_seed_rows
 from adp.organization.models import (
-    GeographyCreate,
+    GeoHierarchyCreate,
+    GeoNodeCreate,
     LevelRuleError,
     OrgNotFoundError,
     SetRegionalAssessment,
@@ -41,7 +41,7 @@ async def session(tmp_path, monkeypatch):
         await conn.run_sync(ostore._metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as s:
-        await s.execute(ostore._geographies.insert(), geography_seed_rows(NOW))
+        await ostore.seed_geography(s, NOW)
         for cid, name, level, parent, baseline in [
             ("sell", "Sell", 1, None, 3),
             ("pay", "Payments", 2, "sell", None),
@@ -176,9 +176,10 @@ class TestScope:
 
 class TestDeletes:
     async def test_deleting_a_geography_removes_its_rows_and_keeps_the_flag(self, session) -> None:
-        geo = await ostore.create_geography(
-            GeographyCreate(name="Scratchland", code="XQ", parent_id=EU), session
+        h = await hierarchies.create_hierarchy(
+            GeoHierarchyCreate(name="Scratch", kind="custom", shape="dag"), session
         )
+        geo = await hierarchies.create_node(h.id, GeoNodeCreate(name="Scratchland"), session)
         await regional.set_assessment("accept", geo.id, _set(2), session)
         await regional.set_scope(
             "accept", SetRegionScope(region_specific=True, geography_ids=[geo.id]), session
