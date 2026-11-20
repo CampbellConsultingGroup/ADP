@@ -20,6 +20,7 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 
+from adp.organization.geo_model import GeoGraph
 from adp.organization.models import (
     CapabilityOrgFindings,
     CapabilityOrgMapping,
@@ -79,6 +80,9 @@ class Snapshot:
     geographies: Mapping[str, GeoNode]
     operates_in: Mapping[str, frozenset[str]]
     mappings: tuple[MappingRow, ...]
+    # 946: containment as of today, across hierarchies. build() derives one from the nodes'
+    # parent ids when the caller gives none (pure tests).
+    graph: GeoGraph | None = None
     # Derived indexes, filled by build().
     owners: Mapping[str, str] = field(default_factory=dict)
     by_capability: Mapping[str, tuple[MappingRow, ...]] = field(default_factory=dict)
@@ -93,9 +97,11 @@ class Snapshot:
         geographies: Iterable[GeoNode],
         operates_in: Mapping[str, frozenset[str]],
         mappings: Iterable[MappingRow],
+        graph: GeoGraph | None = None,
     ) -> Snapshot:
         caps = {c.id: c for c in capabilities}
         ous = {o.id: o for o in org_units}
+        geos = {g.id: g for g in geographies}
         # Mappings whose capability or org unit is gone are dropped (SQLite has no cascade).
         rows = tuple(
             r for r in mappings if r.capability_id in caps and r.org_unit_id in ous
@@ -107,7 +113,9 @@ class Snapshot:
         return cls(
             capabilities=caps,
             org_units=ous,
-            geographies={g.id: g for g in geographies},
+            geographies=geos,
+            graph=graph
+            or GeoGraph.from_tree((g.id, g.parent_id, g.level >= 3) for g in geos.values()),
             operates_in=dict(operates_in),
             mappings=rows,
             owners=owners,
@@ -202,15 +210,10 @@ def outside_operating_geographies(s: Snapshot, ou_id: str, geo_id: str | None) -
     operating = s.operates_in.get(ou_id) or frozenset()
     if geo_id is None or not operating:
         return False
-    current: str | None = geo_id
-    seen: set[str] = set()
-    while current is not None and current not in seen:
-        if current in operating:
-            return False
-        seen.add(current)
-        node = s.geographies.get(current)
-        current = node.parent_id if node else None
-    return True
+    if s.graph is None or geo_id not in s.graph:
+        return False  # unknown geography: nothing to compare against
+    # 946: "inside" through memberships as of today, so a performer in Japan is inside APAC.
+    return not any(s.graph.contains(op, geo_id) for op in operating)
 
 
 def _mapping(s: Snapshot, r: MappingRow) -> CapabilityOrgMapping:

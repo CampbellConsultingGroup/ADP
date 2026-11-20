@@ -17,7 +17,6 @@ from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
 from adp.authz.roles import PersonaRole
 from adp.organization import store as ostore
-from adp.organization.geodata import geography_seed_rows
 
 AC = "/api/v1/application-capabilities"
 APPS = "/api/v1/applications"
@@ -32,7 +31,7 @@ async def ctx(tmp_path):
         await conn.run_sync(ostore._metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as s:
-        await s.execute(ostore._geographies.insert(), geography_seed_rows(NOW))
+        await ostore.seed_geography(s, NOW)
         await s.commit()
 
     from adp.api.app import create_app

@@ -13,7 +13,7 @@ already uses "organization" to mean estate-wide scope (control_organization_mapp
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -64,6 +64,23 @@ class InvalidCodeError(OrganizationError):
 
 class LevelRuleError(OrganizationError):
     """941: a capability mapping at a level its role doesn't allow (422)."""
+
+
+class ReadOnlyHierarchyError(OrganizationError):
+    """946: the hierarchy has a system of record (the reference hierarchy, imported ones)."""
+
+
+class HierarchyRuleError(OrganizationError):
+    """946: a write would break a hierarchy rule (cycle, dates, wrong hierarchy)."""
+
+
+class MembershipConflictError(OrganizationError):
+    """946: a strict tree already has another parent for that member in that period, or the
+    same membership already covers part of the period."""
+
+
+class GeographyPermissionError(OrganizationError):
+    """946 Q2: regulatory, data residency and tax hierarchies need write_compliance."""
 
 
 class UnknownReferenceError(OrganizationError):
@@ -162,23 +179,13 @@ class Geography(_Model):
     kind: GeographyKind
     path: list[Ref] = []
     org_unit_count: int = 0
-
-
-class GeographyCreate(_Model):
-    name: str
-    code: str | None = None
-    m49: str | None = None
-    parent_id: str | None = None
-
-    @field_validator("name")
-    @classmethod
-    def _check_name(cls, v: str | None) -> str | None:
-        return _name(v)
-
-    @field_validator("code")
-    @classmethod
-    def _code(cls, v: str | None) -> str | None:
-        return v.strip().upper() if v else None
+    # 946 GEO-01: a place (a country) or a node of one hierarchy. ``level`` is for display (1
+    # Global, 2 any other node, 3 a place); ``parent_id``/``path`` are the reference-hierarchy
+    # (UN M49) parent and path as of today.
+    entity: Literal["place", "node"] = "place"
+    hierarchy_id: str | None = None
+    hierarchy_name: str | None = None
+    hierarchy_kind: str | None = None
 
 
 class GeographyUpdate(_Model):
@@ -200,6 +207,107 @@ class GeographyUpdate(_Model):
 class GeographyListResponse(_Model):
     items: list[Geography]
     total: int
+
+
+# ── Hierarchies (946 GEO-01) ──────────────────────────────────────────────────
+
+HierarchyKind = Literal[
+    "reference", "regulatory", "data_residency", "infrastructure", "sales", "tax",
+    "operational", "custom",
+]
+# Writes to these kinds need write_compliance as well (Q2): they will drive applicability.
+COMPLIANCE_KINDS: frozenset[str] = frozenset({"regulatory", "data_residency", "tax"})
+HierarchyShape = Literal["strict_tree", "dag"]
+
+
+class GeoHierarchy(_Model):
+    id: str
+    name: str
+    kind: HierarchyKind
+    shape: HierarchyShape
+    system_of_record: str | None = None
+    description: str | None = None
+    read_only: bool = False
+    node_count: int = 0
+    membership_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class GeoHierarchyListResponse(_Model):
+    items: list[GeoHierarchy]
+    total: int
+
+
+class GeoHierarchyCreate(_Model):
+    name: str = Field(max_length=255)
+    kind: Literal[
+        "regulatory", "data_residency", "infrastructure", "sales", "tax", "operational", "custom"
+    ]
+    shape: HierarchyShape
+    description: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        return _name(v)  # type: ignore[return-value]
+
+
+class GeoHierarchyUpdate(_Model):
+    name: str | None = Field(default=None, max_length=255)
+    shape: HierarchyShape | None = None
+    description: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str | None) -> str | None:
+        return _name(v)
+
+
+class GeoNodeRef(_Model):
+    id: str
+    name: str
+
+
+class GeoMembership(_Model):
+    id: str
+    hierarchy_id: str
+    parent_id: str
+    child_id: str
+    child_entity: Literal["place", "node"]
+    valid_from: date | None = None
+    valid_to: date | None = None
+    active: bool = True  # on the detail's as_of date
+
+
+class GeoHierarchyDetail(GeoHierarchy):
+    as_of: date
+    nodes: list[GeoNodeRef] = []
+    memberships: list[GeoMembership] = []
+
+
+class GeoNodeCreate(_Model):
+    name: str = Field(max_length=255)
+    parent_id: str | None = None  # optional first membership, undated unless valid_from is set
+    valid_from: date | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        return _name(v)  # type: ignore[return-value]
+
+
+class AddMemberships(_Model):
+    parent_id: str
+    child_ids: list[str] = Field(min_length=1, max_length=400)
+    valid_from: date | None = None
+    valid_to: date | None = None
+
+
+class GeoMembershipUpdate(_Model):
+    # Omitted = unchanged; explicit null = open.
+    valid_from: date | None = None
+    valid_to: date | None = None
 
 
 # ── Review queue ──────────────────────────────────────────────────────────────

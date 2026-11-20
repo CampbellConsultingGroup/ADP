@@ -50,9 +50,7 @@ async def ctx(tmp_path, monkeypatch):
         )
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as s:
-        await s.execute(
-            ostore._geographies.insert(), geography_seed_rows(datetime.now(timezone.utc))
-        )
+        await ostore.seed_geography(s, datetime.now(timezone.utc))
         await s.commit()
 
     from adp.api.app import create_app
@@ -125,7 +123,9 @@ async def test_org_units_reviewer_reads_but_cannot_write(ctx) -> None:
         await c.post(f"{B}/org-units/unmatched/resolve", json={"value": "x", "org_unit_id": "y"})
     ).status_code == 403
     assert (
-        await c.post(f"{B}/geographies", json={"name": "EMEA", "parent_id": "geo-001"})
+        await c.post(
+            f"{B}/geo-hierarchies", json={"name": "Sales", "kind": "sales", "shape": "dag"}
+        )
     ).status_code == 403
 
 
@@ -138,25 +138,10 @@ async def test_geographies(ctx) -> None:
     assert body["total"] == len(geography_seed_rows(datetime.now(timezone.utc)))
     de = next(g for g in body["items"] if g["code"] == "DE")
     assert [p["name"] for p in de["path"]] == ["Global", "Europe"] and de["kind"] == "country"
-    emea = await _post(c, f"{B}/geographies", {"name": "EMEA", "parent_id": "geo-001"})
-    assert emea["kind"] == "region"
-    await _post(
-        c,
-        f"{B}/geographies",
-        {"name": "Germany 2", "code": "DE", "parent_id": "geo-m49-150"},
-        expect=409,
-    )
-    await _post(
-        c,
-        f"{B}/geographies",
-        {"name": "Atlantis", "code": "ATL", "parent_id": "geo-m49-150"},
-        expect=422,
-    )
-    await _post(c, f"{B}/geographies", {"name": "Berlin", "parent_id": "geo-DE"}, expect=422)
-    r = await c.patch(f"{B}/geographies/geo-m49-150", json={"name": "Europe (M49)"})
-    assert r.status_code == 200
-    assert (await c.delete(f"{B}/geographies/geo-m49-150")).status_code == 409
-    assert (await c.delete(f"{B}/geographies/{emea['id']}")).status_code == 204
+    # 946: places and the reference hierarchy are read-only; no geography is created here.
+    assert (await c.post(f"{B}/geographies", json={"name": "EMEA"})).status_code == 405
+    assert (await c.patch(f"{B}/geographies/geo-m49-150", json={"name": "x"})).status_code == 409
+    assert (await c.delete(f"{B}/geographies/geo-DE")).status_code == 409
     assert (await c.patch(f"{B}/geographies/nope", json={"name": "x"})).status_code == 404
     assert (await c.delete(f"{B}/geographies/nope")).status_code == 404
 

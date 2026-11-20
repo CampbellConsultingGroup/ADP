@@ -10,15 +10,21 @@ before the business router.
 from __future__ import annotations
 
 import logging
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adp.api.common import session_dependency
-from adp.organization import cap_mappings, regional
+from adp.auth.deps import get_current_user
+from adp.auth.models import AuthenticatedUser
+from adp.authz.permissions import is_permitted
+from adp.authz.roles import ActionType
+from adp.organization import cap_mappings, hierarchies, regional
 from adp.organization import store as ostore
 from adp.organization.models import (
     AddMapping,
+    AddMemberships,
     CapabilityOrgFindings,
     CapabilityOrgMapping,
     CapabilityOrgMappingsResponse,
@@ -28,13 +34,23 @@ from adp.organization.models import (
     DuplicateLinkError,
     DuplicateSiblingError,
     Geography,
-    GeographyCreate,
     GeographyLinkCreate,
     GeographyListResponse,
+    GeographyPermissionError,
     GeographyUpdate,
+    GeoHierarchy,
+    GeoHierarchyCreate,
+    GeoHierarchyDetail,
+    GeoHierarchyListResponse,
+    GeoHierarchyUpdate,
+    GeoMembership,
+    GeoMembershipUpdate,
+    GeoNodeCreate,
     HasChildrenError,
+    HierarchyRuleError,
     InvalidCodeError,
     LevelRuleError,
+    MembershipConflictError,
     OrganizationError,
     OrgNotFoundError,
     OrgUnit,
@@ -43,6 +59,7 @@ from adp.organization.models import (
     OrgUnitFootprint,
     OrgUnitListResponse,
     OrgUnitUpdate,
+    ReadOnlyHierarchyError,
     RegionalAssessment,
     RegionalAssessmentListResponse,
     RegionalHeatmap,
@@ -70,6 +87,11 @@ _STATUS: list[tuple[type[OrganizationError], int]] = [
     (DuplicateSiblingError, status.HTTP_409_CONFLICT),
     (DuplicateCodeError, status.HTTP_409_CONFLICT),
     (DuplicateLinkError, status.HTTP_409_CONFLICT),
+    # 946 GEO-01
+    (ReadOnlyHierarchyError, status.HTTP_409_CONFLICT),
+    (MembershipConflictError, status.HTTP_409_CONFLICT),
+    (HierarchyRuleError, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    (GeographyPermissionError, status.HTTP_403_FORBIDDEN),
 ]
 
 
@@ -81,6 +103,12 @@ def _http(exc: OrganizationError) -> HTTPException:
 
 
 _get_session = session_dependency("adp.organization.store")
+
+
+def _can_write_compliance(user: AuthenticatedUser = Depends(get_current_user)) -> bool:
+    """946 Q2: regulatory, data residency and tax hierarchies also need write_compliance (the
+    /api/v1/business/ prefix rule already required write_business_arch)."""
+    return is_permitted(user.role, ActionType.WRITE_COMPLIANCE)
 
 
 def _actor(request: Request) -> str:
@@ -218,21 +246,14 @@ async def unlink_geography(
 
 
 @router.get("/geographies", response_model=GeographyListResponse)
-async def list_geographies(session: AsyncSession = Depends(_get_session)) -> GeographyListResponse:
-    return await ostore.list_geographies(session)
+async def list_geographies(
+    as_of: date | None = None, session: AsyncSession = Depends(_get_session)
+) -> GeographyListResponse:
+    return await ostore.list_geographies(session, as_of=as_of)
 
 
-@router.post("/geographies", response_model=Geography, status_code=status.HTTP_201_CREATED)
-async def create_geography(
-    body: GeographyCreate, request: Request, session: AsyncSession = Depends(_get_session)
-) -> Geography:
-    try:
-        geo = await ostore.create_geography(body, session)
-    except OrganizationError as exc:
-        raise _http(exc) from exc
-    await session.commit()
-    _log("geography.create", request, id=geo.id, parent=geo.parent_id)
-    return geo
+# 946 GEO-01: places (countries) are read-only; a geography is created as a node of a hierarchy
+# (POST /geo-hierarchies/{id}/nodes). PATCH/DELETE here act on nodes of writable hierarchies.
 
 
 @router.patch("/geographies/{geo_id}", response_model=Geography)
@@ -241,9 +262,10 @@ async def update_geography(
     body: GeographyUpdate,
     request: Request,
     session: AsyncSession = Depends(_get_session),
+    can_compliance: bool = Depends(_can_write_compliance),
 ) -> Geography:
     try:
-        geo = await ostore.update_geography(geo_id, body, session)
+        geo = await ostore.update_geography(geo_id, body, session, can_compliance)
     except OrganizationError as exc:
         raise _http(exc) from exc
     if geo is None:
@@ -255,16 +277,172 @@ async def update_geography(
 
 @router.delete("/geographies/{geo_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_geography(
-    geo_id: str, request: Request, session: AsyncSession = Depends(_get_session)
+    geo_id: str,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+    can_compliance: bool = Depends(_can_write_compliance),
 ) -> Response:
     try:
-        deleted = await ostore.delete_geography(geo_id, session)
+        deleted = await ostore.delete_geography(geo_id, session, can_compliance)
     except OrganizationError as exc:
         raise _http(exc) from exc
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Geography {geo_id!r} not found")
     await session.commit()
     _log("geography.delete", request, id=geo_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# ── Hierarchies, nodes, memberships (946 GEO-01) ───────────────────────────────
+
+
+@router.get("/geo-hierarchies", response_model=GeoHierarchyListResponse)
+async def list_geo_hierarchies(
+    session: AsyncSession = Depends(_get_session),
+) -> GeoHierarchyListResponse:
+    return await hierarchies.list_hierarchies(session)
+
+
+@router.post("/geo-hierarchies", response_model=GeoHierarchy, status_code=status.HTTP_201_CREATED)
+async def create_geo_hierarchy(
+    body: GeoHierarchyCreate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+    can_compliance: bool = Depends(_can_write_compliance),
+) -> GeoHierarchy:
+    try:
+        h = await hierarchies.create_hierarchy(body, session, can_compliance)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    _log("geo_hierarchy.create", request, id=h.id, kind=h.kind, shape=h.shape, name=repr(h.name))
+    return h
+
+
+@router.get("/geo-hierarchies/{hierarchy_id}", response_model=GeoHierarchyDetail)
+async def get_geo_hierarchy(
+    hierarchy_id: str, as_of: date | None = None, session: AsyncSession = Depends(_get_session)
+) -> GeoHierarchyDetail:
+    detail = await hierarchies.get_hierarchy(hierarchy_id, session, as_of)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"Hierarchy {hierarchy_id!r} not found")
+    return detail
+
+
+@router.patch("/geo-hierarchies/{hierarchy_id}", response_model=GeoHierarchy)
+async def update_geo_hierarchy(
+    hierarchy_id: str,
+    body: GeoHierarchyUpdate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+    can_compliance: bool = Depends(_can_write_compliance),
+) -> GeoHierarchy:
+    try:
+        h = await hierarchies.update_hierarchy(hierarchy_id, body, session, can_compliance)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    if h is None:
+        raise HTTPException(status_code=404, detail=f"Hierarchy {hierarchy_id!r} not found")
+    await session.commit()
+    _log("geo_hierarchy.update", request, id=hierarchy_id,
+         fields=",".join(sorted(body.model_fields_set)) or "-")
+    return h
+
+
+@router.delete("/geo-hierarchies/{hierarchy_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_geo_hierarchy(
+    hierarchy_id: str,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+    can_compliance: bool = Depends(_can_write_compliance),
+) -> Response:
+    try:
+        deleted = await hierarchies.delete_hierarchy(hierarchy_id, session, can_compliance)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Hierarchy {hierarchy_id!r} not found")
+    await session.commit()
+    _log("geo_hierarchy.delete", request, id=hierarchy_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/geo-hierarchies/{hierarchy_id}/nodes",
+    response_model=Geography,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_geo_node(
+    hierarchy_id: str,
+    body: GeoNodeCreate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+    can_compliance: bool = Depends(_can_write_compliance),
+) -> Geography:
+    try:
+        node = await hierarchies.create_node(hierarchy_id, body, session, can_compliance)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    _log("geo_node.create", request, id=node.id, hierarchy=hierarchy_id, name=repr(node.name),
+         parent=body.parent_id or "-")
+    return node
+
+
+@router.post(
+    "/geo-hierarchies/{hierarchy_id}/memberships",
+    response_model=list[GeoMembership],
+    status_code=status.HTTP_201_CREATED,
+)
+async def add_geo_memberships(
+    hierarchy_id: str,
+    body: AddMemberships,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+    can_compliance: bool = Depends(_can_write_compliance),
+) -> list[GeoMembership]:
+    try:
+        added = await hierarchies.add_memberships(hierarchy_id, body, session, can_compliance)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    _log("geo_membership.add", request, hierarchy=hierarchy_id, parent=body.parent_id,
+         children=",".join(m.child_id for m in added), valid_from=body.valid_from or "-",
+         valid_to=body.valid_to or "-")
+    return added
+
+
+@router.patch("/geo-memberships/{membership_id}", response_model=GeoMembership)
+async def update_geo_membership(
+    membership_id: str,
+    body: GeoMembershipUpdate,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+    can_compliance: bool = Depends(_can_write_compliance),
+) -> GeoMembership:
+    try:
+        mb = await hierarchies.update_membership(membership_id, body, session, can_compliance)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    _log("geo_membership.update", request, id=membership_id, valid_from=mb.valid_from or "-",
+         valid_to=mb.valid_to or "-")
+    return mb
+
+
+@router.delete("/geo-memberships/{membership_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_geo_membership(
+    membership_id: str,
+    request: Request,
+    session: AsyncSession = Depends(_get_session),
+    can_compliance: bool = Depends(_can_write_compliance),
+) -> Response:
+    try:
+        await hierarchies.delete_membership(membership_id, session, can_compliance)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    _log("geo_membership.delete", request, id=membership_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

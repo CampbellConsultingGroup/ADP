@@ -170,6 +170,54 @@
     "title": "AddMapping",
     "type": "object"
    },
+   "AddMemberships": {
+    "additionalProperties": false,
+    "properties": {
+     "child_ids": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 400,
+      "minItems": 1,
+      "title": "Child Ids",
+      "type": "array"
+     },
+     "parent_id": {
+      "title": "Parent Id",
+      "type": "string"
+     },
+     "valid_from": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid From"
+     },
+     "valid_to": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid To"
+     }
+    },
+    "required": [
+     "parent_id",
+     "child_ids"
+    ],
+    "title": "AddMemberships",
+    "type": "object"
+   },
    "Adoption": {
     "additionalProperties": false,
     "properties": {
@@ -9015,6 +9063,485 @@
     "title": "FrameworkCoverageRollup",
     "type": "object"
    },
+   "GeoHierarchy": {
+    "additionalProperties": false,
+    "properties": {
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "reference",
+       "regulatory",
+       "data_residency",
+       "infrastructure",
+       "sales",
+       "tax",
+       "operational",
+       "custom"
+      ],
+      "title": "Kind",
+      "type": "string"
+     },
+     "membership_count": {
+      "default": 0,
+      "title": "Membership Count",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "node_count": {
+      "default": 0,
+      "title": "Node Count",
+      "type": "integer"
+     },
+     "read_only": {
+      "default": false,
+      "title": "Read Only",
+      "type": "boolean"
+     },
+     "shape": {
+      "enum": [
+       "strict_tree",
+       "dag"
+      ],
+      "title": "Shape",
+      "type": "string"
+     },
+     "system_of_record": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "System Of Record"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "kind",
+     "shape",
+     "created_at",
+     "updated_at"
+    ],
+    "title": "GeoHierarchy",
+    "type": "object"
+   },
+   "GeoHierarchyCreate": {
+    "additionalProperties": false,
+    "properties": {
+     "description": {
+      "anyOf": [
+       {
+        "maxLength": 2000,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "kind": {
+      "enum": [
+       "regulatory",
+       "data_residency",
+       "infrastructure",
+       "sales",
+       "tax",
+       "operational",
+       "custom"
+      ],
+      "title": "Kind",
+      "type": "string"
+     },
+     "name": {
+      "maxLength": 255,
+      "title": "Name",
+      "type": "string"
+     },
+     "shape": {
+      "enum": [
+       "strict_tree",
+       "dag"
+      ],
+      "title": "Shape",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "kind",
+     "shape"
+    ],
+    "title": "GeoHierarchyCreate",
+    "type": "object"
+   },
+   "GeoHierarchyDetail": {
+    "additionalProperties": false,
+    "properties": {
+     "as_of": {
+      "format": "date",
+      "title": "As Of",
+      "type": "string"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "reference",
+       "regulatory",
+       "data_residency",
+       "infrastructure",
+       "sales",
+       "tax",
+       "operational",
+       "custom"
+      ],
+      "title": "Kind",
+      "type": "string"
+     },
+     "membership_count": {
+      "default": 0,
+      "title": "Membership Count",
+      "type": "integer"
+     },
+     "memberships": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/GeoMembership"
+      },
+      "title": "Memberships",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "node_count": {
+      "default": 0,
+      "title": "Node Count",
+      "type": "integer"
+     },
+     "nodes": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/GeoNodeRef"
+      },
+      "title": "Nodes",
+      "type": "array"
+     },
+     "read_only": {
+      "default": false,
+      "title": "Read Only",
+      "type": "boolean"
+     },
+     "shape": {
+      "enum": [
+       "strict_tree",
+       "dag"
+      ],
+      "title": "Shape",
+      "type": "string"
+     },
+     "system_of_record": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "System Of Record"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "kind",
+     "shape",
+     "created_at",
+     "updated_at",
+     "as_of"
+    ],
+    "title": "GeoHierarchyDetail",
+    "type": "object"
+   },
+   "GeoHierarchyListResponse": {
+    "additionalProperties": false,
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/GeoHierarchy"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total"
+    ],
+    "title": "GeoHierarchyListResponse",
+    "type": "object"
+   },
+   "GeoHierarchyUpdate": {
+    "additionalProperties": false,
+    "properties": {
+     "description": {
+      "anyOf": [
+       {
+        "maxLength": 2000,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "maxLength": 255,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "shape": {
+      "anyOf": [
+       {
+        "enum": [
+         "strict_tree",
+         "dag"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Shape"
+     }
+    },
+    "title": "GeoHierarchyUpdate",
+    "type": "object"
+   },
+   "GeoMembership": {
+    "additionalProperties": false,
+    "properties": {
+     "active": {
+      "default": true,
+      "title": "Active",
+      "type": "boolean"
+     },
+     "child_entity": {
+      "enum": [
+       "place",
+       "node"
+      ],
+      "title": "Child Entity",
+      "type": "string"
+     },
+     "child_id": {
+      "title": "Child Id",
+      "type": "string"
+     },
+     "hierarchy_id": {
+      "title": "Hierarchy Id",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "parent_id": {
+      "title": "Parent Id",
+      "type": "string"
+     },
+     "valid_from": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid From"
+     },
+     "valid_to": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid To"
+     }
+    },
+    "required": [
+     "id",
+     "hierarchy_id",
+     "parent_id",
+     "child_id",
+     "child_entity"
+    ],
+    "title": "GeoMembership",
+    "type": "object"
+   },
+   "GeoMembershipUpdate": {
+    "additionalProperties": false,
+    "properties": {
+     "valid_from": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid From"
+     },
+     "valid_to": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid To"
+     }
+    },
+    "title": "GeoMembershipUpdate",
+    "type": "object"
+   },
+   "GeoNodeCreate": {
+    "additionalProperties": false,
+    "properties": {
+     "name": {
+      "maxLength": 255,
+      "title": "Name",
+      "type": "string"
+     },
+     "parent_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent Id"
+     },
+     "valid_from": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid From"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "GeoNodeCreate",
+    "type": "object"
+   },
+   "GeoNodeRef": {
+    "additionalProperties": false,
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name"
+    ],
+    "title": "GeoNodeRef",
+    "type": "object"
+   },
    "Geography": {
     "additionalProperties": false,
     "properties": {
@@ -9028,6 +9555,48 @@
        }
       ],
       "title": "Code"
+     },
+     "entity": {
+      "default": "place",
+      "enum": [
+       "place",
+       "node"
+      ],
+      "title": "Entity",
+      "type": "string"
+     },
+     "hierarchy_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hierarchy Id"
+     },
+     "hierarchy_kind": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hierarchy Kind"
+     },
+     "hierarchy_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hierarchy Name"
      },
      "id": {
       "title": "Id",
@@ -9096,53 +9665,6 @@
      "kind"
     ],
     "title": "Geography",
-    "type": "object"
-   },
-   "GeographyCreate": {
-    "additionalProperties": false,
-    "properties": {
-     "code": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Code"
-     },
-     "m49": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "M49"
-     },
-     "name": {
-      "title": "Name",
-      "type": "string"
-     },
-     "parent_id": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Parent Id"
-     }
-    },
-    "required": [
-     "name"
-    ],
-    "title": "GeographyCreate",
     "type": "object"
    },
    "GeographyLinkCreate": {
@@ -25305,33 +25827,283 @@
     ]
    }
   },
-  "/api/v1/business/geographies": {
+  "/api/v1/business/geo-hierarchies": {
    "get": {
-    "operationId": "list_geographies_api_v1_business_geographies_get",
+    "operationId": "list_geo_hierarchies_api_v1_business_geo_hierarchies_get",
     "responses": {
      "200": {
       "content": {
        "application/json": {
         "schema": {
-         "$ref": "#/components/schemas/GeographyListResponse"
+         "$ref": "#/components/schemas/GeoHierarchyListResponse"
         }
        }
       },
       "description": "Successful Response"
      }
     },
-    "summary": "List Geographies",
+    "summary": "List Geo Hierarchies",
     "tags": [
      "organization"
     ]
    },
    "post": {
-    "operationId": "create_geography_api_v1_business_geographies_post",
+    "operationId": "create_geo_hierarchy_api_v1_business_geo_hierarchies_post",
     "requestBody": {
      "content": {
       "application/json": {
        "schema": {
-        "$ref": "#/components/schemas/GeographyCreate"
+        "$ref": "#/components/schemas/GeoHierarchyCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoHierarchy"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Create Geo Hierarchy",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/geo-hierarchies/{hierarchy_id}": {
+   "delete": {
+    "operationId": "delete_geo_hierarchy_api_v1_business_geo_hierarchies__hierarchy_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "hierarchy_id",
+      "required": true,
+      "schema": {
+       "title": "Hierarchy Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Delete Geo Hierarchy",
+    "tags": [
+     "organization"
+    ]
+   },
+   "get": {
+    "operationId": "get_geo_hierarchy_api_v1_business_geo_hierarchies__hierarchy_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "hierarchy_id",
+      "required": true,
+      "schema": {
+       "title": "Hierarchy Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "as_of",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoHierarchyDetail"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Geo Hierarchy",
+    "tags": [
+     "organization"
+    ]
+   },
+   "patch": {
+    "operationId": "update_geo_hierarchy_api_v1_business_geo_hierarchies__hierarchy_id__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "hierarchy_id",
+      "required": true,
+      "schema": {
+       "title": "Hierarchy Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GeoHierarchyUpdate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoHierarchy"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Update Geo Hierarchy",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/geo-hierarchies/{hierarchy_id}/memberships": {
+   "post": {
+    "operationId": "add_geo_memberships_api_v1_business_geo_hierarchies__hierarchy_id__memberships_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "hierarchy_id",
+      "required": true,
+      "schema": {
+       "title": "Hierarchy Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AddMemberships"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/GeoMembership"
+         },
+         "title": "Response Add Geo Memberships Api V1 Business Geo Hierarchies  Hierarchy Id  Memberships Post",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Add Geo Memberships",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/geo-hierarchies/{hierarchy_id}/nodes": {
+   "post": {
+    "operationId": "create_geo_node_api_v1_business_geo_hierarchies__hierarchy_id__nodes_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "hierarchy_id",
+      "required": true,
+      "schema": {
+       "title": "Hierarchy Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GeoNodeCreate"
        }
       }
      },
@@ -25359,7 +26131,142 @@
       "description": "Validation Error"
      }
     },
-    "summary": "Create Geography",
+    "summary": "Create Geo Node",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/geo-memberships/{membership_id}": {
+   "delete": {
+    "operationId": "delete_geo_membership_api_v1_business_geo_memberships__membership_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "membership_id",
+      "required": true,
+      "schema": {
+       "title": "Membership Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Delete Geo Membership",
+    "tags": [
+     "organization"
+    ]
+   },
+   "patch": {
+    "operationId": "update_geo_membership_api_v1_business_geo_memberships__membership_id__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "membership_id",
+      "required": true,
+      "schema": {
+       "title": "Membership Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GeoMembershipUpdate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoMembership"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Update Geo Membership",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/geographies": {
+   "get": {
+    "operationId": "list_geographies_api_v1_business_geographies_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "as_of",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeographyListResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Geographies",
     "tags": [
      "organization"
     ]

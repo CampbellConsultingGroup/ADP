@@ -20,7 +20,6 @@ vi.mock("../api/organization", async (orig) => ({
   useDeleteOrgUnit: vi.fn(),
   useLinkGeography: vi.fn(),
   useUnlinkGeography: vi.fn(),
-  useCreateGeography: vi.fn(),
   useDeleteGeography: vi.fn(),
   useResolveUnmatched: vi.fn(),
   useOrgUnitFootprint: vi.fn(),
@@ -76,7 +75,6 @@ function setup(role = "enterprise_architect", detail: Partial<OrgUnitDetail> = {
   api.useDeleteOrgUnit.mockReturnValue(m("delete"));
   api.useLinkGeography.mockReturnValue(m("link"));
   api.useUnlinkGeography.mockReturnValue(m("unlink"));
-  api.useCreateGeography.mockReturnValue(m("createGeo"));
   api.useDeleteGeography.mockReturnValue(m("deleteGeo"));
   api.useResolveUnmatched.mockReturnValue(m("resolve"));
   api.useOrgUnitFootprint.mockReturnValue({

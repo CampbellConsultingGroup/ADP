@@ -17,6 +17,7 @@ import {
   useOrgUnits,
   useRemoveCapabilityMapping,
   useSetCapabilityOwner,
+  geographyLabel,
 } from "../api/organization";
 
 // Bounded so a long owner or performer list never widens the row (found live: an unbounded chip
@@ -266,7 +267,7 @@ function MappingEditor({ view, orgUnits, canWrite }: { view: CapabilityOrgView; 
                 <optgroup label="Where it operates">
                   {operating.map((g) => (
                     <option key={g.id} value={g.id}>
-                      {g.name}
+                      {geographyLabel(g)}
                     </option>
                   ))}
                 </optgroup>
@@ -274,7 +275,7 @@ function MappingEditor({ view, orgUnits, canWrite }: { view: CapabilityOrgView; 
               <optgroup label={operating.length > 0 ? "Elsewhere" : "All"}>
                 {rest.map((g) => (
                   <option key={g.id} value={g.id}>
-                    {g.name}
+                    {geographyLabel(g)}
                   </option>
                 ))}
               </optgroup>

@@ -1607,6 +1607,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/business/geo-hierarchies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Geo Hierarchies */
+        get: operations["list_geo_hierarchies_api_v1_business_geo_hierarchies_get"];
+        put?: never;
+        /** Create Geo Hierarchy */
+        post: operations["create_geo_hierarchy_api_v1_business_geo_hierarchies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/geo-hierarchies/{hierarchy_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Geo Hierarchy */
+        get: operations["get_geo_hierarchy_api_v1_business_geo_hierarchies__hierarchy_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Geo Hierarchy */
+        delete: operations["delete_geo_hierarchy_api_v1_business_geo_hierarchies__hierarchy_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Geo Hierarchy */
+        patch: operations["update_geo_hierarchy_api_v1_business_geo_hierarchies__hierarchy_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/business/geo-hierarchies/{hierarchy_id}/memberships": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Geo Memberships */
+        post: operations["add_geo_memberships_api_v1_business_geo_hierarchies__hierarchy_id__memberships_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/geo-hierarchies/{hierarchy_id}/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Geo Node */
+        post: operations["create_geo_node_api_v1_business_geo_hierarchies__hierarchy_id__nodes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/geo-memberships/{membership_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Geo Membership */
+        delete: operations["delete_geo_membership_api_v1_business_geo_memberships__membership_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Geo Membership */
+        patch: operations["update_geo_membership_api_v1_business_geo_memberships__membership_id__patch"];
+        trace?: never;
+    };
     "/api/v1/business/geographies": {
         parameters: {
             query?: never;
@@ -1617,8 +1706,7 @@ export interface paths {
         /** List Geographies */
         get: operations["list_geographies_api_v1_business_geographies_get"];
         put?: never;
-        /** Create Geography */
-        post: operations["create_geography_api_v1_business_geographies_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5088,6 +5176,17 @@ export interface components {
              */
             role: "performer" | "contributor";
         };
+        /** AddMemberships */
+        AddMemberships: {
+            /** Child Ids */
+            child_ids: string[];
+            /** Parent Id */
+            parent_id: string;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+        };
         /** Adoption */
         Adoption: {
             /**
@@ -8055,10 +8154,210 @@ export interface components {
             framework_id: string;
             organization_status: components["schemas"]["ComplianceStatus"] | null;
         };
+        /** GeoHierarchy */
+        GeoHierarchy: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "reference" | "regulatory" | "data_residency" | "infrastructure" | "sales" | "tax" | "operational" | "custom";
+            /**
+             * Membership Count
+             * @default 0
+             */
+            membership_count: number;
+            /** Name */
+            name: string;
+            /**
+             * Node Count
+             * @default 0
+             */
+            node_count: number;
+            /**
+             * Read Only
+             * @default false
+             */
+            read_only: boolean;
+            /**
+             * Shape
+             * @enum {string}
+             */
+            shape: "strict_tree" | "dag";
+            /** System Of Record */
+            system_of_record?: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** GeoHierarchyCreate */
+        GeoHierarchyCreate: {
+            /** Description */
+            description?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "regulatory" | "data_residency" | "infrastructure" | "sales" | "tax" | "operational" | "custom";
+            /** Name */
+            name: string;
+            /**
+             * Shape
+             * @enum {string}
+             */
+            shape: "strict_tree" | "dag";
+        };
+        /** GeoHierarchyDetail */
+        GeoHierarchyDetail: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "reference" | "regulatory" | "data_residency" | "infrastructure" | "sales" | "tax" | "operational" | "custom";
+            /**
+             * Membership Count
+             * @default 0
+             */
+            membership_count: number;
+            /**
+             * Memberships
+             * @default []
+             */
+            memberships: components["schemas"]["GeoMembership"][];
+            /** Name */
+            name: string;
+            /**
+             * Node Count
+             * @default 0
+             */
+            node_count: number;
+            /**
+             * Nodes
+             * @default []
+             */
+            nodes: components["schemas"]["GeoNodeRef"][];
+            /**
+             * Read Only
+             * @default false
+             */
+            read_only: boolean;
+            /**
+             * Shape
+             * @enum {string}
+             */
+            shape: "strict_tree" | "dag";
+            /** System Of Record */
+            system_of_record?: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** GeoHierarchyListResponse */
+        GeoHierarchyListResponse: {
+            /** Items */
+            items: components["schemas"]["GeoHierarchy"][];
+            /** Total */
+            total: number;
+        };
+        /** GeoHierarchyUpdate */
+        GeoHierarchyUpdate: {
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Shape */
+            shape?: ("strict_tree" | "dag") | null;
+        };
+        /** GeoMembership */
+        GeoMembership: {
+            /**
+             * Active
+             * @default true
+             */
+            active: boolean;
+            /**
+             * Child Entity
+             * @enum {string}
+             */
+            child_entity: "place" | "node";
+            /** Child Id */
+            child_id: string;
+            /** Hierarchy Id */
+            hierarchy_id: string;
+            /** Id */
+            id: string;
+            /** Parent Id */
+            parent_id: string;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+        };
+        /** GeoMembershipUpdate */
+        GeoMembershipUpdate: {
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+        };
+        /** GeoNodeCreate */
+        GeoNodeCreate: {
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Valid From */
+            valid_from?: string | null;
+        };
+        /** GeoNodeRef */
+        GeoNodeRef: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** Geography */
         Geography: {
             /** Code */
             code: string | null;
+            /**
+             * Entity
+             * @default place
+             * @enum {string}
+             */
+            entity: "place" | "node";
+            /** Hierarchy Id */
+            hierarchy_id?: string | null;
+            /** Hierarchy Kind */
+            hierarchy_kind?: string | null;
+            /** Hierarchy Name */
+            hierarchy_name?: string | null;
             /** Id */
             id: string;
             /**
@@ -8084,17 +8383,6 @@ export interface components {
              * @default []
              */
             path: components["schemas"]["Ref"][];
-        };
-        /** GeographyCreate */
-        GeographyCreate: {
-            /** Code */
-            code?: string | null;
-            /** M49 */
-            m49?: string | null;
-            /** Name */
-            name: string;
-            /** Parent Id */
-            parent_id?: string | null;
         };
         /** GeographyLinkCreate */
         GeographyLinkCreate: {
@@ -15681,7 +15969,7 @@ export interface operations {
             };
         };
     };
-    list_geographies_api_v1_business_geographies_get: {
+    list_geo_hierarchies_api_v1_business_geo_hierarchies_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -15696,12 +15984,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["GeographyListResponse"];
+                    "application/json": components["schemas"]["GeoHierarchyListResponse"];
                 };
             };
         };
     };
-    create_geography_api_v1_business_geographies_post: {
+    create_geo_hierarchy_api_v1_business_geo_hierarchies_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -15710,7 +15998,174 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["GeographyCreate"];
+                "application/json": components["schemas"]["GeoHierarchyCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoHierarchy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_geo_hierarchy_api_v1_business_geo_hierarchies__hierarchy_id__get: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+            };
+            header?: never;
+            path: {
+                hierarchy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoHierarchyDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_geo_hierarchy_api_v1_business_geo_hierarchies__hierarchy_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hierarchy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_geo_hierarchy_api_v1_business_geo_hierarchies__hierarchy_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hierarchy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeoHierarchyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoHierarchy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_geo_memberships_api_v1_business_geo_hierarchies__hierarchy_id__memberships_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hierarchy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddMemberships"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoMembership"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_geo_node_api_v1_business_geo_hierarchies__hierarchy_id__nodes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                hierarchy_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeoNodeCreate"];
             };
         };
         responses: {
@@ -15721,6 +16176,101 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Geography"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_geo_membership_api_v1_business_geo_memberships__membership_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_geo_membership_api_v1_business_geo_memberships__membership_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                membership_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeoMembershipUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoMembership"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_geographies_api_v1_business_geographies_get: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeographyListResponse"];
                 };
             };
             /** @description Validation Error */

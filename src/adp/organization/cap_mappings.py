@@ -36,12 +36,15 @@ from adp.organization.models import (
     UnknownReferenceError,
 )
 from adp.organization.store import (
+    REFERENCE_HIERARCHY_ID,
     _business_capabilities,
     _capability_org_mappings,
     _geographies,
     _now,
     _org_unit_geographies,
     _org_units,
+    display_level,
+    geo_graph,
 )
 
 OWNER_LEVEL_RULE = "Owners are set at L2 or L1, not L3"
@@ -73,8 +76,7 @@ async def build_snapshot(session: AsyncSession) -> Snapshot:
             sa.select(
                 _geographies.c.id,
                 _geographies.c.name,
-                _geographies.c.level,
-                _geographies.c.parent_id,
+                _geographies.c.entity,
                 _org_unit_geographies.c.org_unit_id,
             ).select_from(
                 _geographies.outerjoin(
@@ -84,10 +86,15 @@ async def build_snapshot(session: AsyncSession) -> Snapshot:
             )
         )
     ).all()
+    graph = await geo_graph(session)
     geos: dict[str, GeoNode] = {}
     operates: dict[str, set[str]] = {}
     for r in geo_rows:
-        geos.setdefault(r.id, GeoNode(r.id, r.name, int(r.level), r.parent_id))
+        parents = graph.parents(r.id, REFERENCE_HIERARCHY_ID)
+        geos.setdefault(
+            r.id,
+            GeoNode(r.id, r.name, display_level(r.entity, r.id), parents[0] if parents else None),
+        )
         if r.org_unit_id is not None:
             operates.setdefault(r.org_unit_id, set()).add(r.id)
     rows = [
@@ -104,6 +111,7 @@ async def build_snapshot(session: AsyncSession) -> Snapshot:
         geographies=geos.values(),
         operates_in={k: frozenset(v) for k, v in operates.items()},
         mappings=rows,
+        graph=graph,
     )
 
 

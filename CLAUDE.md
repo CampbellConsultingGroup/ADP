@@ -173,6 +173,38 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 946-geo-hierarchies: GEO-01 of epic ADP-bo1 (ADP-bo1.1). Places, typed hierarchies, nodes and
+  effective-dated memberships; replaces the 940 editable tree. Decisions (user, 2026-11-20):
+  any place or node may be a link target; write permission by kind; managed on
+  Business -> Organization -> Geography; user-added tree regions move to "Custom (migrated)".
+  - Migration `057`: `geographies` stays the one table everything links to, ids unchanged (no
+    referencing table touched). + `entity` (place|node), `hierarchy_id` (nodes), `place_type`;
+    `parent_id`/`level` DROPPED (moved to `geo_memberships`: hierarchy, parent, child,
+    valid_from inclusive, valid_to exclusive, NULL = open). `geo_hierarchies` (kind: reference |
+    regulatory | data_residency | infrastructure | sales | tax | operational | custom; shape
+    strict_tree | dag; system_of_record = read-only). The M49 tree is `geoh-m49` (read-only).
+    Node names unique per hierarchy. Downgrade rebuilds the tree from reference memberships.
+  - Pure `adp.organization.geo_model`: `GeoGraph(entities, memberships, as_of)` -- places(),
+    ancestors() across hierarchies, contains() (a place contains only itself; a node contains its
+    descendants and any node whose countries are all its own), overlaps(); `GeoGraph.from_tree`
+    for parent-only snapshots (tests); `check_membership` (cycle, strict tree one parent at a
+    time, dates, same hierarchy) and `check_shape`. 941/942/943 engines all use it via
+    `ostore.geo_graph(session)`.
+  - API "level"/"kind"/"parent_id"/"path" are kept for display (1 Global, 2 node, 3 place; parent
+    = UN M49 parent today). Global (`geo-001`) is still refused where it was.
+  - Routes `/api/v1/business/geo-hierarchies[/{id}[/nodes|/memberships]]` (detail `?as_of=`),
+    `/geo-memberships/{id}` (PATCH dates, DELETE). `POST /geographies` REMOVED (places are
+    read-only, 405); PATCH/DELETE `/geographies/{id}` act on nodes of writable hierarchies only.
+    Regulatory/data residency/tax writes also need `write_compliance` (`_can_write_compliance`
+    dependency; same roles hold both today).
+  - Tests: use `await ostore.seed_geography(session, now)` (geodata.seed_v2), not
+    `geography_seed_rows` (kept for migration 048 only). Only nodes can be deleted in tests.
+  - UI: `GeoHierarchies.tsx` replaces `GeographyTree.tsx` (as-of date, other-periods toggle,
+    dated members, add every country of a UN region). Pickers label nodes "APAC · Sales"
+    (`geographyLabel` in api/organization.ts).
+  - Export: `hierarchies` (with dated memberships) in `organization/geographies.json`. Seed wipe
+    deletes non-reference hierarchies by hand (never truncate geographies/geo_hierarchies).
+  - Parked predecessor: local branch `945-custom-regions` (commit 7ce7e54), not merged.
 - Fable review ADP-blp.13, last part (decision 2026-11-18: API key deploy-time only, model choices
   in the database):
   - `adp.llm.settings` + migration `055` (`llm_settings`: name, value, updated_at, updated_by). The

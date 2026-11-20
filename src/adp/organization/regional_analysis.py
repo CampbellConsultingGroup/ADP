@@ -22,6 +22,7 @@ from datetime import datetime
 from typing import Any
 
 from adp.organization import cap_org_analysis
+from adp.organization.geo_model import GeoGraph
 from adp.organization.models import (
     GeoRef,
     HeatmapCapability,
@@ -81,6 +82,8 @@ class RegionalSnapshot:
     scopes: Mapping[str, frozenset[str]]
     cap_order: tuple[str, ...] = ()
     ancestors: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    # 946: containment as of today across hierarchies; from the nodes' parent ids if not given.
+    graph: GeoGraph | None = None
 
     @classmethod
     def build(
@@ -90,6 +93,7 @@ class RegionalSnapshot:
         geographies: Iterable[GeoNode],
         assessments: Iterable[Assessment],
         scopes: Mapping[str, frozenset[str]],
+        graph: GeoGraph | None = None,
     ) -> RegionalSnapshot:
         caps = {c.id: c for c in capabilities}
         geos = {g.id: g for g in geographies}
@@ -113,6 +117,8 @@ class RegionalSnapshot:
             },
             cap_order=order,
             ancestors={g: _geo_ancestors(geos, g) for g in geos},
+            graph=graph
+            or GeoGraph.from_tree((g.id, g.parent_id, g.level >= 3) for g in geos.values()),
         )
 
 
@@ -136,14 +142,10 @@ def geo_ref(s: RegionalSnapshot, geo_id: str) -> GeoRef:
 def applicable(s: RegionalSnapshot, cap_id: str, geo_id: str) -> bool:
     if cap_id not in s.scopes:
         return True
-    for scoped in s.scopes[cap_id]:
-        if (
-            scoped == geo_id
-            or scoped in s.ancestors.get(geo_id, ())  # the column is inside the scope
-            or geo_id in s.ancestors.get(scoped, ())  # the column contains the scope
-        ):
-            return True
-    return False
+    # Either contains the other, or (946) they share a country -- across hierarchies.
+    graph = s.graph
+    assert graph is not None  # build() always sets it
+    return any(graph.overlaps(scoped, geo_id) for scoped in s.scopes[cap_id])
 
 
 # ── US3: cells, columns, heat map ──────────────────────────────────────────────
@@ -172,7 +174,16 @@ def cell(s: RegionalSnapshot, cap_id: str, geo_id: str) -> HeatmapCell:
 
 def columns(s: RegionalSnapshot, requested: list[str] | None) -> list[str]:
     if not requested:
-        regions = [g for g in s.geographies.values() if g.level == 2]
+        # The reference regions: nodes directly under Global (946: other hierarchies' nodes have
+        # no reference parent, so they are added as columns only on request).
+        regions = [
+            g
+            for g in s.geographies.values()
+            if g.level == 2
+            and g.parent_id is not None
+            and s.geographies.get(g.parent_id) is not None
+            and s.geographies[g.parent_id].level == 1
+        ]
         return [g.id for g in sorted(regions, key=lambda g: g.name.lower())]
     ids = list(dict.fromkeys(requested))
     if len(ids) > MAX_COLUMNS:

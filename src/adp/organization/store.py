@@ -15,23 +15,22 @@ from __future__ import annotations
 import logging
 import uuid
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, NamedTuple, cast
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from adp.organization.geo_model import Entity, GeoGraph, Membership
 from adp.organization.models import (
-    GEOGRAPHY_KINDS,
-    ISO2,
+    COMPLIANCE_KINDS,
     ORG_UNIT_KINDS,
     DepthError,
-    DuplicateCodeError,
     DuplicateLinkError,
     DuplicateSiblingError,
     Geography,
-    GeographyCreate,
     GeographyListResponse,
+    GeographyPermissionError,
     GeographyUpdate,
     HasChildrenError,
     InvalidCodeError,
@@ -41,6 +40,7 @@ from adp.organization.models import (
     OrgUnitDetail,
     OrgUnitListResponse,
     OrgUnitUpdate,
+    ReadOnlyHierarchyError,
     Ref,
     ResolveResult,
     ResolveUnmatched,
@@ -55,6 +55,23 @@ MAX_LEVEL = 3
 
 _metadata = sa.MetaData()
 
+# 946 GEO-01: typed hierarchies (migration 057). The 940 tree is the read-only reference
+# hierarchy ``geoh-m49``; a hierarchy with a system of record is read-only through the API.
+_geo_hierarchies = sa.Table(
+    "geo_hierarchies",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.String(255), nullable=False),
+    sa.Column("kind", sa.Text(), nullable=False),
+    sa.Column("shape", sa.Text(), nullable=False),
+    sa.Column("system_of_record", sa.String(255), nullable=True),
+    sa.Column("description", sa.Text(), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# Every geography link points here (ids unchanged since 940). A row is a place (a country) or a
+# node of one hierarchy; parenthood is in _geo_memberships, not on the row (946 GEO-01).
 _geographies = sa.Table(
     "geographies",
     _metadata,
@@ -62,8 +79,32 @@ _geographies = sa.Table(
     sa.Column("name", sa.String(255), nullable=False),
     sa.Column("code", sa.String(8), nullable=True),
     sa.Column("m49", sa.String(3), nullable=True),
-    sa.Column("parent_id", sa.String(36), sa.ForeignKey("geographies.id"), nullable=True),
-    sa.Column("level", sa.SmallInteger(), nullable=False),
+    sa.Column("entity", sa.Text(), nullable=False, default="place"),
+    sa.Column("hierarchy_id", sa.String(36), sa.ForeignKey("geo_hierarchies.id"), nullable=True),
+    sa.Column("place_type", sa.Text(), nullable=True),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+# A node or place under a node of the same hierarchy, valid_from inclusive, valid_to exclusive.
+_geo_memberships = sa.Table(
+    "geo_memberships",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column(
+        "hierarchy_id", sa.String(36), sa.ForeignKey("geo_hierarchies.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column(
+        "parent_id", sa.String(36), sa.ForeignKey("geographies.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column(
+        "child_id", sa.String(36), sa.ForeignKey("geographies.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column("valid_from", sa.Date(), nullable=True),
+    sa.Column("valid_to", sa.Date(), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
@@ -448,7 +489,7 @@ async def get_org_unit(ou_id: str, session: AsyncSession) -> OrgUnitDetail | Non
     ).all()
     geos = (
         await session.execute(
-            sa.select(_geographies.c.id, _geographies.c.name, _geographies.c.level)
+            sa.select(_geographies.c.id, _geographies.c.name, _geographies.c.entity)
             .where(_geographies.c.id.in_(models[0].geography_ids))
             .order_by(_geographies.c.name)
         )
@@ -456,7 +497,9 @@ async def get_org_unit(ou_id: str, session: AsyncSession) -> OrgUnitDetail | Non
     return OrgUnitDetail(
         **models[0].model_dump(),
         applications=[Ref(id=a.id, name=a.name, level=0) for a in apps],
-        geographies=[Ref(id=g.id, name=g.name, level=g.level) for g in geos],
+        geographies=[
+            Ref(id=g.id, name=g.name, level=display_level(g.entity, g.id)) for g in geos
+        ],
     )
 
 
@@ -469,23 +512,27 @@ class GeographyInfo(NamedTuple):
 
 
 async def geography_level(geo_id: str, session: AsyncSession) -> int | None:
-    """The geography's level (1 Global, 2 region, 3 country), or None if it doesn't exist.
-
-    Public and read-only: the application store validates a realization's geography with it."""
-    return (
-        await session.execute(sa.select(_geographies.c.level).where(_geographies.c.id == geo_id))
+    """The geography's display level (1 Global, 2 any other node, 3 a place), or None if it
+    doesn't exist. Public and read-only: the application store validates a realization's
+    geography with it (Global refused)."""
+    entity = (
+        await session.execute(sa.select(_geographies.c.entity).where(_geographies.c.id == geo_id))
     ).scalar_one_or_none()
+    return None if entity is None else display_level(entity, geo_id)
 
 
 async def geography_index(session: AsyncSession) -> dict[str, GeographyInfo]:
-    """Every geography by id, with parent, name and code -- one query. Used for scope
-    containment and display by the application capability analysis (943)."""
+    """Every geography by id, with its reference parent (today), name and code. Used for display
+    by the application capability analysis (943); containment uses ``geo_graph``."""
+    graph = await geo_graph(session)
     rows = await session.execute(
-        sa.select(
-            _geographies.c.id, _geographies.c.parent_id, _geographies.c.name, _geographies.c.code
-        )
+        sa.select(_geographies.c.id, _geographies.c.name, _geographies.c.code)
     )
-    return {r.id: GeographyInfo(r.parent_id, r.name, r.code) for r in rows}
+    out = {}
+    for r in rows:
+        parents = graph.parents(r.id, REFERENCE_HIERARCHY_ID)
+        out[r.id] = GeographyInfo(parents[0] if parents else None, r.name, r.code)
+    return out
 
 
 async def _require_geography(geo_id: str | None, session: AsyncSession) -> None:
@@ -616,36 +663,75 @@ async def org_units_for_geography(geo_id: str, session: AsyncSession) -> list[Or
     return await _org_unit_models(session, ids) if ids else []
 
 
-# ── Geography (US2) ───────────────────────────────────────────────────────────
+# ── Geography (940 US2, reshaped by 946 GEO-01) ─────────────────────────────────
+
+GLOBAL_ID = "geo-001"
+REFERENCE_HIERARCHY_ID = "geoh-m49"
 
 
-def _validate_code(code: str | None, level: int) -> None:
-    if code is None:
-        return
-    if level != 3:
-        raise InvalidCodeError("Only countries carry an ISO code; use m49 for regions")
-    if not ISO2.match(code):
-        raise InvalidCodeError(f"Country code {code!r} must be two uppercase letters (ISO 3166-1)")
+def display_level(entity: str, geo_id: str) -> int:
+    """946 R7: 1 for Global, 2 for any other node, 3 for a place (kept for the 940 API shape)."""
+    if entity == "place":
+        return 3
+    return 1 if geo_id == GLOBAL_ID else 2
 
 
-async def _check_code_unique(
-    code: str | None, session: AsyncSession, exclude_id: str | None = None
-) -> None:
-    if code is None:
-        return
-    q = sa.select(_geographies.c.id).where(_geographies.c.code == code)
-    if exclude_id is not None:
-        q = q.where(_geographies.c.id != exclude_id)
-    if (await session.execute(q)).first() is not None:
-        raise DuplicateCodeError(f"Country code {code!r} is already used")
+def _kind(entity: str, geo_id: str) -> str:
+    return {1: "global", 2: "region", 3: "country"}[display_level(entity, geo_id)]
 
 
-async def _geography_models(session: AsyncSession, ids: list[str] | None = None) -> list[Geography]:
-    q = sa.select(_geographies).order_by(_geographies.c.level, _geographies.c.name)
+async def geo_graph(session: AsyncSession, as_of: date | None = None) -> GeoGraph:
+    """Every place, node and membership, resolved as of ``as_of`` (today by default). Two
+    queries; the 941/942/943 engines and the geography read model use it (946 R5)."""
+    entities = {
+        r.id: Entity(r.id, r.entity, r.hierarchy_id)
+        for r in await session.execute(
+            sa.select(_geographies.c.id, _geographies.c.entity, _geographies.c.hierarchy_id)
+        )
+    }
+    m = _geo_memberships
+    memberships = [
+        Membership(r.id, r.hierarchy_id, r.parent_id, r.child_id, r.valid_from, r.valid_to)
+        for r in await session.execute(
+            sa.select(
+                m.c.id, m.c.hierarchy_id, m.c.parent_id, m.c.child_id, m.c.valid_from,
+                m.c.valid_to,
+            )
+        )
+    ]
+    return GeoGraph(entities, memberships, as_of or date.today())
+
+
+def _reference_path(graph: GeoGraph, geo_id: str, names: dict[str, str]) -> list[Ref]:
+    """Reference-hierarchy ancestors, root first (cycle-safe)."""
+    out: list[Ref] = []
+    seen = {geo_id}
+    cur = geo_id
+    while True:
+        parents = graph.parents(cur, REFERENCE_HIERARCHY_ID)
+        if not parents or parents[0] in seen:
+            break
+        cur = parents[0]
+        seen.add(cur)
+        out.append(Ref(id=cur, name=names.get(cur, cur), level=display_level("node", cur)))
+    return list(reversed(out))
+
+
+async def _geography_models(
+    session: AsyncSession, ids: list[str] | None = None, as_of: date | None = None
+) -> list[Geography]:
+    h = _geo_hierarchies
+    q = sa.select(
+        _geographies, h.c.name.label("hierarchy_name"), h.c.kind.label("hierarchy_kind")
+    ).select_from(_geographies.outerjoin(h, h.c.id == _geographies.c.hierarchy_id))
     if ids is not None:
         q = q.where(_geographies.c.id.in_(ids))
     rows = (await session.execute(q)).all()
-    tree = await _tree(_geographies, session)
+    graph = await geo_graph(session, as_of)
+    names = {
+        r.id: r.name
+        for r in await session.execute(sa.select(_geographies.c.id, _geographies.c.name))
+    }
     counts: dict[str, int] = dict(
         (
             await session.execute(
@@ -657,24 +743,34 @@ async def _geography_models(session: AsyncSession, ids: list[str] | None = None)
         .tuples()
         .all()
     )
-    return [
-        Geography(
-            id=r.id,
-            name=r.name,
-            code=r.code,
-            m49=r.m49,
-            parent_id=r.parent_id,
-            level=r.level,
-            kind=GEOGRAPHY_KINDS[r.level],
-            path=_path(r.id, tree),
-            org_unit_count=int(counts.get(r.id, 0)),
+    items = []
+    for r in rows:
+        parents = graph.parents(r.id, REFERENCE_HIERARCHY_ID)
+        items.append(
+            Geography(
+                id=r.id,
+                name=r.name,
+                code=r.code,
+                m49=r.m49,
+                parent_id=parents[0] if parents else None,
+                level=display_level(r.entity, r.id),
+                kind=_kind(r.entity, r.id),  # type: ignore[arg-type]
+                path=_reference_path(graph, r.id, names),
+                org_unit_count=int(counts.get(r.id, 0)),
+                entity=r.entity,
+                hierarchy_id=r.hierarchy_id,
+                hierarchy_name=r.hierarchy_name,
+                hierarchy_kind=r.hierarchy_kind,
+            )
         )
-        for r in rows
-    ]
+    items.sort(key=lambda g: (g.level, g.name.lower()))
+    return items
 
 
-async def list_geographies(session: AsyncSession) -> GeographyListResponse:
-    items = await _geography_models(session)
+async def list_geographies(
+    session: AsyncSession, as_of: date | None = None
+) -> GeographyListResponse:
+    items = await _geography_models(session, as_of=as_of)
     return GeographyListResponse(items=items, total=len(items))
 
 
@@ -683,48 +779,68 @@ async def get_geography(geo_id: str, session: AsyncSession) -> Geography | None:
     return models[0] if models else None
 
 
-async def create_geography(body: GeographyCreate, session: AsyncSession) -> Geography:
-    level = await _level_under(_geographies, body.parent_id, "Geography", session)
-    _validate_code(body.code, level)
-    await _check_sibling(_geographies, body.name, body.parent_id, session)
-    await _check_code_unique(body.code, session)
-    geo_id = str(uuid.uuid4())
-    now = _now()
-    await session.execute(
-        _geographies.insert().values(
-            id=geo_id,
-            name=body.name,
-            code=body.code,
-            m49=body.m49,
-            parent_id=body.parent_id,
-            level=level,
-            created_at=now,
-            updated_at=now,
-        )
-    )
-    return (await _geography_models(session, [geo_id]))[0]
-
-
-async def update_geography(
-    geo_id: str, body: GeographyUpdate, session: AsyncSession
-) -> Geography | None:
+async def _writable_node(
+    geo_id: str, session: AsyncSession, can_write_compliance: bool
+) -> Any | None:
+    """The node row, after checking it is a node of a hierarchy this caller may change."""
     row = await _row(_geographies, geo_id, session)
     if row is None:
         return None
-    values: dict[str, Any] = body.model_dump(exclude_unset=True)
-    if values.get("name") is not None:
-        await _check_sibling(
-            _geographies, values["name"], row.parent_id, session, exclude_id=geo_id
+    if row.entity != "node":
+        raise ReadOnlyHierarchyError(
+            "Places (countries) are reference data and can't be changed here"
         )
-    elif "name" in values:
-        values.pop("name")
-    if "code" in values:
-        _validate_code(values["code"], row.level)
-        await _check_code_unique(values["code"], session, exclude_id=geo_id)
-    if values:
-        values["updated_at"] = _now()
+    hierarchy = await _row(_geo_hierarchies, row.hierarchy_id, session)
+    require_hierarchy_write(hierarchy, can_write_compliance)
+    return row
+
+
+def require_hierarchy_write(hierarchy: Any, can_write_compliance: bool) -> None:
+    """946 FR-006/FR-007: refuse writes to a mastered-elsewhere hierarchy, and to a
+    compliance-driving kind without write_compliance."""
+    if hierarchy.system_of_record:
+        raise ReadOnlyHierarchyError(
+            f"{hierarchy.name!r} is read-only: it is mastered in {hierarchy.system_of_record}"
+        )
+    require_kind_write(hierarchy.kind, can_write_compliance)
+
+
+def require_kind_write(kind: str, can_write_compliance: bool) -> None:
+    if kind in COMPLIANCE_KINDS and not can_write_compliance:
+        raise GeographyPermissionError(
+            f"Changing a {kind.replace('_', ' ')} hierarchy needs write_compliance"
+        )
+
+
+async def check_node_name(
+    hierarchy_id: str, name: str, session: AsyncSession, exclude_id: str | None = None
+) -> None:
+    q = sa.select(_geographies.c.id).where(
+        _geographies.c.hierarchy_id == hierarchy_id,
+        sa.func.lower(_geographies.c.name) == name.lower(),
+    )
+    if exclude_id is not None:
+        q = q.where(_geographies.c.id != exclude_id)
+    if (await session.execute(q)).first() is not None:
+        raise DuplicateSiblingError(f"This hierarchy already has a node named {name!r}")
+
+
+async def update_geography(
+    geo_id: str, body: GeographyUpdate, session: AsyncSession, can_write_compliance: bool = True
+) -> Geography | None:
+    """Rename a node (946: places are read-only; nodes carry no code)."""
+    row = await _writable_node(geo_id, session, can_write_compliance)
+    if row is None:
+        return None
+    values: dict[str, Any] = body.model_dump(exclude_unset=True)
+    if values.get("code") is not None or values.get("m49") is not None:
+        raise InvalidCodeError("Only places carry codes; a node has a name only")
+    if values.get("name") is not None:
+        await check_node_name(row.hierarchy_id, values["name"], session, exclude_id=geo_id)
         await session.execute(
-            _geographies.update().where(_geographies.c.id == geo_id).values(**values)
+            _geographies.update()
+            .where(_geographies.c.id == geo_id)
+            .values(name=values["name"], updated_at=_now())
         )
     return (await _geography_models(session, [geo_id]))[0]
 
@@ -749,14 +865,29 @@ async def _clear_mapping_geography(geo_id: str, session: AsyncSession) -> None:
     await session.execute(m.update().where(m.c.geography_id == geo_id).values(geography_id=None))
 
 
-async def delete_geography(geo_id: str, session: AsyncSession) -> bool:
-    if await _row(_geographies, geo_id, session) is None:
+async def delete_geography(
+    geo_id: str, session: AsyncSession, can_write_compliance: bool = True
+) -> bool:
+    """Delete a node of a writable hierarchy (946). Refused while it has member nodes; its place
+    memberships go with it, and every link to it is cleaned up as in 940-943."""
+    row = await _writable_node(geo_id, session, can_write_compliance)
+    if row is None:
         return False
-    await _refuse_if_children(_geographies, geo_id, "Geography", session)
+    m = _geo_memberships
+    child = _geographies.alias("child")
+    sub = (
+        await session.execute(
+            sa.select(sa.func.count())
+            .select_from(m.join(child, child.c.id == m.c.child_id))
+            .where(m.c.parent_id == geo_id, child.c.entity == "node")
+        )
+    ).scalar_one()
+    if sub:
+        raise HasChildrenError(f"Node {row.name!r} has {sub} member node(s). Remove them first.")
     await _clear_mapping_geography(geo_id, session)
     # 942 FR-015: its regional assessments and its place in any region-specific scope go too;
     # the region-specific flag itself stays (then "scope needs updating"). SQLite parity --
-    # migration 050's CASCADEs are the safety net.
+    # the migrations' CASCADEs are the safety net.
     await session.execute(
         _capability_regional_assessments.delete().where(
             _capability_regional_assessments.c.geography_id == geo_id
@@ -775,6 +906,7 @@ async def delete_geography(geo_id: str, session: AsyncSession) -> bool:
     await session.execute(
         _org_unit_geographies.delete().where(_org_unit_geographies.c.geography_id == geo_id)
     )
+    await session.execute(m.delete().where(sa.or_(m.c.parent_id == geo_id, m.c.child_id == geo_id)))
     return (
         _rowcount(await session.execute(_geographies.delete().where(_geographies.c.id == geo_id)))
         > 0
@@ -838,3 +970,14 @@ async def resolve_unmatched(body: ResolveUnmatched, session: AsyncSession) -> Re
     return ResolveResult(
         org_unit=(await _org_unit_models(session, [ou_id]))[0], updated_count=_rowcount(result)
     )
+
+
+async def seed_geography(session: AsyncSession, now: datetime) -> None:
+    """Load the seeded geography in the 946 shape (reference hierarchy, places, nodes,
+    memberships). For tests and fresh databases; migration 057 converts existing ones."""
+    from adp.organization.geodata import seed_v2
+
+    hierarchy, geographies, memberships = seed_v2(now)
+    await session.execute(_geo_hierarchies.insert().values(**hierarchy))
+    await session.execute(_geographies.insert(), geographies)
+    await session.execute(_geo_memberships.insert(), memberships)

@@ -142,6 +142,7 @@ async def build_snapshot(
     # 943 research R4: the geography tree only when some realization names a geography, so the
     # query count (and every fixture without the organization tables) is unchanged otherwise.
     geographies: dict[str, GeoInfo] = {}
+    geo_graph = None
     if any(r.geography_id for r in realizations.values()):
         from adp.organization import store as ostore
 
@@ -149,6 +150,7 @@ async def build_snapshot(
             gid: GeoInfo(g.parent_id, g.name, g.code)
             for gid, g in (await ostore.geography_index(session)).items()
         }
+        geo_graph = await ostore.geo_graph(session)  # 946: containment across hierarchies
 
     risk: dict[str, RiskInfo] = {}
     if risk_visible:
@@ -180,4 +182,5 @@ async def build_snapshot(
         cost_visible=cost_visible,
         realizations=realizations,
         geographies=geographies,
+        geo_graph=geo_graph,
     )

@@ -8,7 +8,6 @@ import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from adp.organization import store as ostore
-from adp.organization.geodata import geography_seed_rows
 
 NOW = datetime(2026, 11, 16, tzinfo=timezone.utc)
 
@@ -20,7 +19,7 @@ async def session(tmp_path):
         await conn.run_sync(ostore._metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as s:
-        await s.execute(ostore._geographies.insert(), geography_seed_rows(NOW))
+        await ostore.seed_geography(s, NOW)
         yield s
     await engine.dispose()
 
