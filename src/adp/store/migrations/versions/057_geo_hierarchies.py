@@ -61,7 +61,7 @@ def upgrade() -> None:
     op.execute(
         "INSERT INTO geo_hierarchies (id, name, kind, shape, system_of_record, description,"
         " created_at, updated_at) VALUES"
-        f" ('{REFERENCE_ID}', 'UN M49 regions', 'reference', 'strict_tree', 'UN M49',"
+        " ('geoh-m49', 'UN M49 regions', 'reference', 'strict_tree', 'UN M49',"
         " 'The UN M49 standard regions with ISO 3166 countries. Read-only reference.',"
         " now(), now())"
     )
@@ -79,20 +79,20 @@ def upgrade() -> None:
     op.add_column("geographies", sa.Column("place_type", sa.Text(), nullable=True))
 
     op.execute(
-        f"UPDATE geographies SET entity = 'node', hierarchy_id = '{REFERENCE_ID}'"
+        "UPDATE geographies SET entity = 'node', hierarchy_id = 'geoh-m49'"
         " WHERE id = 'geo-001' OR id LIKE 'geo-m49-%'"
     )
     # Rows users added above country level (940 allowed new regions under Global).
     op.execute(
-        f"""
+        """
         INSERT INTO geo_hierarchies (id, name, kind, shape, description, created_at, updated_at)
-        SELECT '{CUSTOM_ID}', 'Custom (migrated)', 'custom', 'dag',
+        SELECT 'geoh-custom-migrated', 'Custom (migrated)', 'custom', 'dag',
                'Regions added to the old geography tree before hierarchies existed.', now(), now()
          WHERE EXISTS (SELECT 1 FROM geographies WHERE level < 3 AND entity = 'place')
         """
     )
     op.execute(
-        f"UPDATE geographies SET entity = 'node', hierarchy_id = '{CUSTOM_ID}'"
+        "UPDATE geographies SET entity = 'node', hierarchy_id = 'geoh-custom-migrated'"
         " WHERE level < 3 AND entity = 'place'"
     )
     op.execute("UPDATE geographies SET place_type = 'country' WHERE entity = 'place'")
@@ -176,10 +176,10 @@ def downgrade() -> None:
     # Memberships of other hierarchies can't be expressed in one tree and are dropped; their
     # nodes come back as regions named "<node> (<hierarchy>)" so names can't collide.
     op.execute(
-        f"""
+        """
         UPDATE geographies g SET parent_id = m.parent_id
           FROM geo_memberships m
-         WHERE m.child_id = g.id AND m.hierarchy_id = '{REFERENCE_ID}'
+         WHERE m.child_id = g.id AND m.hierarchy_id = 'geoh-m49'
            AND g.entity = 'place' AND m.valid_to IS NULL
         """
     )
@@ -188,9 +188,9 @@ def downgrade() -> None:
         " WHERE entity = 'place' AND parent_id IS NULL AND id <> 'geo-001'"
     )
     op.execute(
-        f"""
+        """
         UPDATE geographies g SET parent_id = 'geo-001',
-               name = CASE WHEN g.hierarchy_id = '{REFERENCE_ID}' THEN g.name
+               name = CASE WHEN g.hierarchy_id = 'geoh-m49' THEN g.name
                            ELSE left(g.name || ' (' || h.name || ')', 255) END
           FROM geo_hierarchies h
          WHERE h.id = g.hierarchy_id AND g.entity = 'node' AND g.id <> 'geo-001'
