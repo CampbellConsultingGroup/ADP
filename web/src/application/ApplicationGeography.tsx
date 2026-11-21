@@ -6,8 +6,11 @@
 import { useState } from "react";
 import type React from "react";
 import { errorDetail } from "../api/appCapabilities";
+import type { FootprintLink } from "../api/organization";
 import {
+  geographyLabel,
   useApplicationLegalEntities,
+  useGeoFootprint,
   useLegalEntities,
   useLinkApplicationLegalEntity,
   useUnlinkApplicationLegalEntity,
@@ -90,6 +93,64 @@ export default function ApplicationGeography({ appId }: { appId: string }): Reac
         canWrite={canWrite}
         hint="Where it runs and stores data, whose personal data it processes and whose customers it serves. Leave the dates empty for always."
       />
+      <Footprint appId={appId} />
     </div>
+  );
+}
+
+function linkText(lk: FootprintLink): string {
+  const via = lk.via_legal_entity ? `, via ${lk.via_legal_entity.name}` : "";
+  return `${lk.relation_label} ${geographyLabel(lk.geography)}${via}`;
+}
+
+// 949 GEO-04: every place the application reaches on a date (its own links and its legal
+// entities'), with the nodes of each hierarchy that contain it.
+export function Footprint({ appId }: { appId: string }): React.ReactElement {
+  const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
+  const fp = useGeoFootprint(appId, asOf || null);
+  const places = fp.data?.places ?? [];
+  return (
+    <section aria-label="Geography footprint" style={{ marginTop: 12 }}>
+      <h4 style={{ fontSize: 13, margin: "0 0 6px", color: "var(--ink-2)" }}>Footprint</h4>
+      <div style={{ ...muted, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <span>Every place it reaches through the links above and its legal entities&apos; links, and the hierarchies each place belongs to.</span>
+        <label>
+          As of <input type="date" aria-label="Footprint as of" value={asOf} onChange={(e) => setAsOf(e.target.value)} style={field} />
+        </label>
+      </div>
+      {fp.isLoading ? (
+        <div style={muted}>Loading…</div>
+      ) : fp.error ? (
+        <div role="alert" style={{ fontSize: 12, color: "var(--crit)" }}>
+          {errorDetail(fp.error)}
+        </div>
+      ) : places.length === 0 ? (
+        <div style={muted}>No places on this date.</div>
+      ) : (
+        <ul style={{ listStyle: "none", padding: 0, margin: "6px 0", display: "flex", flexDirection: "column", gap: 6 }}>
+          {places.map((p) => (
+            <li key={p.place.id} style={{ fontSize: 12, borderBottom: "1px solid var(--border)", paddingBottom: 4 }}>
+              <strong>
+                {p.place.name}
+                {p.place.code ? ` (${p.place.code})` : ""}
+              </strong>
+              <div style={muted}>{p.links.map(linkText).join("; ")}</div>
+              {p.placements.length > 0 && (
+                <div>
+                  {p.placements.map((pl) => (
+                    <span key={pl.hierarchy_id} style={{ ...chip, marginRight: 4 }}>
+                      {pl.hierarchy_name}: {pl.nodes.map((n) => n.name).join(" · ")}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {(fp.data?.unresolved ?? []).length > 0 && (
+        <div style={muted}>No places on this date for: {(fp.data?.unresolved ?? []).map(linkText).join("; ")}</div>
+      )}
+    </section>
   );
 }

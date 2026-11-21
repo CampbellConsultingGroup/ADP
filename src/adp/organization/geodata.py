@@ -115,3 +115,95 @@ def seed_v2(now: datetime) -> tuple[dict[str, Any], list[dict[str, Any]], list[d
                 }
             )
     return hierarchy, geographies, memberships
+
+
+# ── 949 GEO-04: subdivisions, custom places and the regulatory blocs ─────────────
+
+SUBDIVISIONS_FILE = Path(__file__).resolve().parent / "data" / "iso_3166-2.json.gz"
+BLOCS_FILE = Path(__file__).resolve().parent / "data" / "regulatory_blocs.json"
+BLOCS_HIERARCHY_ID = "geoh-regulatory-blocs"
+PLACE_TYPES = ("country", "subdivision", "authority", "residual")
+
+_subdivisions: dict[str, dict[str, str]] | None = None
+
+
+def subdivisions() -> dict[str, dict[str, str]]:
+    """The pinned ISO 3166-2 list by code (loaded once). The reference for valid codes and names;
+    never bulk-loaded into the database (epic decision 2026-11-20)."""
+    global _subdivisions
+    if _subdivisions is None:
+        import gzip
+
+        doc = json.loads(gzip.decompress(SUBDIVISIONS_FILE.read_bytes()).decode("utf-8"))
+        _subdivisions = {r["code"]: r for r in doc["subdivisions"]}
+    return _subdivisions
+
+
+def subdivision(code: str) -> dict[str, str] | None:
+    return subdivisions().get(code.strip().upper())
+
+
+def subdivision_id(code: str) -> str:
+    return f"geo-{code.strip().upper()}"
+
+
+def subdivision_country(code: str) -> str:
+    """ISO 3166-2 codes start with the country's alpha-2 code."""
+    return code.strip().upper().split("-", 1)[0]
+
+
+def blocs_seed(now: datetime) -> dict[str, Any]:
+    """Rows migration 060 inserts: the regulatory blocs hierarchy, its nodes, their dated country
+    memberships and the governed custom places (shared with the tests so they can't drift)."""
+    from datetime import date
+
+    data = json.loads(BLOCS_FILE.read_text(encoding="utf-8"))
+    h = data["hierarchy"]
+    hierarchy = {**h, "system_of_record": None, "created_at": now, "updated_at": now}
+    nodes = [
+        {
+            "id": n["id"],
+            "name": n["name"],
+            "code": None,
+            "m49": None,
+            "entity": "node",
+            "hierarchy_id": h["id"],
+            "place_type": None,
+            "parent_place_id": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        for n in data["nodes"]
+    ]
+    memberships = []
+    for node_id, groups in data["memberships"].items():
+        for g in groups:
+            for iso2 in g["countries"]:
+                memberships.append(
+                    {
+                        "id": f"geom-{node_id}-{iso2}",
+                        "hierarchy_id": h["id"],
+                        "parent_id": node_id,
+                        "child_id": country_id(iso2),
+                        "valid_from": date.fromisoformat(g["from"]) if g.get("from") else None,
+                        "valid_to": date.fromisoformat(g["to"]) if g.get("to") else None,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+    places = [
+        {
+            "id": p["id"],
+            "name": p["name"],
+            "code": None,
+            "m49": None,
+            "entity": "place",
+            "hierarchy_id": None,
+            "place_type": p["place_type"],
+            "parent_place_id": country_id(p["parent_country"]) if p["parent_country"] else None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        for p in data["custom_places"]
+    ]
+    return {"hierarchy": hierarchy, "nodes": nodes, "memberships": memberships, "places": places}

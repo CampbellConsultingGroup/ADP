@@ -22,8 +22,9 @@ from typing import Any
 from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from adp.organization import geo_links, legal_entities
+from adp.organization import geo_links, geo_views, legal_entities
 from adp.organization.models import (
+    GeoFootprint,
     GeoLink,
     GeoLinkCreate,
     GeoLinkListResponse,
@@ -144,6 +145,15 @@ async def org_unit_legal_entities(
 
 
 # ── An application's legal entities (FR-002) ──────────────────────────────────
+
+
+@applications_router.get("/{app_id}/geo-footprint", response_model=GeoFootprint)
+async def application_geo_footprint(
+    app_id: str, as_of: date | None = None, session: AsyncSession = Depends(_get_session)
+) -> GeoFootprint:
+    """949 GEO-04: every place the application reaches on the date (its own links and its legal
+    entities'), with the hierarchy nodes containing each one."""
+    return await _run(lambda: geo_views.footprint_for(app_id, session, as_of))  # type: ignore[no-any-return]
 
 
 @applications_router.get("/{app_id}/legal-entities", response_model=list[LegalEntity])

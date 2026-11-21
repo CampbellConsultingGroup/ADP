@@ -979,6 +979,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/applications/{app_id}/geo-footprint": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Application Geo Footprint
+         * @description 949 GEO-04: every place the application reaches on the date (its own links and its legal
+         *     entities'), with the hierarchy nodes containing each one.
+         */
+        get: operations["application_geo_footprint_api_v1_applications__app_id__geo_footprint_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications/{app_id}/governance": {
         parameters: {
             query?: never;
@@ -1801,6 +1822,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/business/geographies/matrix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Geography Matrix */
+        get: operations["geography_matrix_api_v1_business_geographies_matrix_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/geographies/subdivisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Subdivision */
+        post: operations["add_subdivision_api_v1_business_geographies_subdivisions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/business/geographies/{geo_id}": {
         parameters: {
             query?: never;
@@ -1828,6 +1883,23 @@ export interface paths {
         };
         /** Geography Org Units */
         get: operations["geography_org_units_api_v1_business_geographies__geo_id__org_units_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/geographies/{geo_id}/subdivisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Subdivision Catalog */
+        get: operations["subdivision_catalog_api_v1_business_geographies__geo_id__subdivisions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5504,6 +5576,14 @@ export interface components {
             /** Valid To */
             valid_to?: string | null;
         };
+        /** AddSubdivision */
+        AddSubdivision: {
+            /**
+             * Code
+             * @description An ISO 3166-2 code, e.g. US-CA
+             */
+            code: string;
+        };
         /** Adoption */
         Adoption: {
             /**
@@ -8415,6 +8495,19 @@ export interface components {
             /** Performed By */
             performed_by: components["schemas"]["FootprintPerformer"][];
         };
+        /** FootprintLink */
+        FootprintLink: {
+            geography: components["schemas"]["LinkGeography"];
+            /** Relation */
+            relation: string;
+            /** Relation Label */
+            relation_label: string;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+            via_legal_entity?: components["schemas"]["GeoNodeRef"] | null;
+        };
         /** FootprintPerformer */
         FootprintPerformer: {
             /**
@@ -8423,6 +8516,14 @@ export interface components {
              */
             geographies: components["schemas"]["Ref"][];
             org_unit: components["schemas"]["Ref"];
+        };
+        /** FootprintPlace */
+        FootprintPlace: {
+            /** Links */
+            links: components["schemas"]["FootprintLink"][];
+            place: components["schemas"]["PlaceRef"];
+            /** Placements */
+            placements: components["schemas"]["HierarchyPlacement"][];
         };
         /**
          * FrameworkAmendment
@@ -8555,6 +8656,23 @@ export interface components {
             geographies: components["schemas"]["JurisdictionGeography"][];
             /** Triggers */
             triggers: components["schemas"]["JurisdictionTrigger"][];
+        };
+        /** GeoFootprint */
+        GeoFootprint: {
+            /** Application Id */
+            application_id: string;
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Places */
+            places: components["schemas"]["FootprintPlace"][];
+            /**
+             * Unresolved
+             * @description Active links to a node that has no places on the date
+             */
+            unresolved?: components["schemas"]["FootprintLink"][];
         };
         /** GeoHierarchy */
         GeoHierarchy: {
@@ -8852,11 +8970,15 @@ export interface components {
             org_unit_count: number;
             /** Parent Id */
             parent_id: string | null;
+            /** Parent Place Id */
+            parent_place_id?: string | null;
             /**
              * Path
              * @default []
              */
             path: components["schemas"]["Ref"][];
+            /** Place Type */
+            place_type?: ("country" | "subdivision" | "authority" | "residual") | null;
         };
         /** GeographyLinkCreate */
         GeographyLinkCreate: {
@@ -9027,6 +9149,20 @@ export interface components {
              * @default false
              */
             scope_needs_update: boolean;
+        };
+        /**
+         * HierarchyPlacement
+         * @description The nodes of one hierarchy that contain a place on the date, most specific first.
+         */
+        HierarchyPlacement: {
+            /** Hierarchy Id */
+            hierarchy_id: string;
+            /** Hierarchy Kind */
+            hierarchy_kind: string;
+            /** Hierarchy Name */
+            hierarchy_name: string;
+            /** Nodes */
+            nodes: components["schemas"]["GeoNodeRef"][];
         };
         /** ImpactAppCapability */
         ImpactAppCapability: {
@@ -9622,6 +9758,23 @@ export interface components {
          * @enum {string}
          */
         MappingTargetType: "capability" | "application" | "design" | "pattern" | "organization" | "agent";
+        /** MatrixHierarchy */
+        MatrixHierarchy: {
+            /** Id */
+            id: string;
+            /** Kind */
+            kind: string;
+            /** Name */
+            name: string;
+        };
+        /** MatrixRow */
+        MatrixRow: {
+            /** Cells */
+            cells: {
+                [key: string]: components["schemas"]["GeoNodeRef"][];
+            };
+            place: components["schemas"]["PlaceRef"];
+        };
         /** MembersIn */
         MembersIn: {
             /** Member Ids */
@@ -10277,6 +10430,31 @@ export interface components {
         PinsIn: {
             /** Pins */
             pins: components["schemas"]["PinIn"][];
+        };
+        /** PlaceMatrix */
+        PlaceMatrix: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Hierarchies */
+            hierarchies: components["schemas"]["MatrixHierarchy"][];
+            /** Rows */
+            rows: components["schemas"]["MatrixRow"][];
+        };
+        /** PlaceRef */
+        PlaceRef: {
+            /** Code */
+            code?: string | null;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Parent Place Id */
+            parent_place_id?: string | null;
+            /** Place Type */
+            place_type?: ("country" | "subdivision" | "authority" | "residual") | null;
         };
         /** Plateau */
         Plateau: {
@@ -11923,6 +12101,26 @@ export interface components {
             owner?: string | null;
             /** Status */
             status?: ("planned" | "in_progress" | "blocked" | "complete" | "cancelled") | null;
+        };
+        /** SubdivisionCatalog */
+        SubdivisionCatalog: {
+            /** Country Id */
+            country_id: string;
+            /** Country Name */
+            country_name: string;
+            /** Items */
+            items: components["schemas"]["SubdivisionEntry"][];
+        };
+        /** SubdivisionEntry */
+        SubdivisionEntry: {
+            /** Added */
+            added: boolean;
+            /** Code */
+            code: string;
+            /** Name */
+            name: string;
+            /** Type */
+            type: string;
         };
         /** SubjectApplicabilityResponse */
         SubjectApplicabilityResponse: {
@@ -15102,6 +15300,39 @@ export interface operations {
             };
         };
     };
+    application_geo_footprint_api_v1_applications__app_id__geo_footprint_get: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+            };
+            header?: never;
+            path: {
+                app_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoFootprint"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_application_governance_api_v1_applications__app_id__governance_get: {
         parameters: {
             query?: never;
@@ -17252,6 +17483,71 @@ export interface operations {
             };
         };
     };
+    geography_matrix_api_v1_business_geographies_matrix_get: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+                hierarchy_ids?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaceMatrix"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_subdivision_api_v1_business_geographies_subdivisions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddSubdivision"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Geography"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_geography_api_v1_business_geographies__geo_id__delete: {
         parameters: {
             query?: never;
@@ -17334,6 +17630,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgUnit"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    subdivision_catalog_api_v1_business_geographies__geo_id__subdivisions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                geo_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubdivisionCatalog"];
                 };
             };
             /** @description Validation Error */

@@ -1,0 +1,46 @@
+{
+ "hierarchy": {
+  "id": "geoh-regulatory-blocs",
+  "name": "Regulatory blocs",
+  "kind": "regulatory",
+  "shape": "dag",
+  "description": "EU and EEA membership by country, dated (valid_from inclusive, valid_to exclusive). Seeded by migration 060; maintained here by compliance writers. Dates are the day each accession took effect (EEA: the day each enlargement agreement began to apply, provisionally where ratification came later). The UK left the EU and the EEA on 2020-01-31; EU law (and the EEA Agreement) still applied to it during the transition period to 2020-12-31, which is not a membership and is not recorded here. Only member states are listed: territories with their own ISO code (Åland, French outermost regions, Gibraltar until 2020) are not, and can be added as members."
+ },
+ "sources": [
+  "CVCE, Member States and EU applicant countries: chronology of accession agreements (https://www.cvce.eu/en/obj/member_states_and_eu_applicant_countries_chronology_of_ec_ue_association_and_accession_agreements-en-9c983946-ead0-4021-8098-5c4d7aa8242c.html)",
+  "Eurostat, Glossary: EU enlargements (https://ec.europa.eu/eurostat/statistics-explained/index.php/Glossary:EU_enlargements)",
+  "EFTA, EEA legal texts: entry into force 1994-01-01; enlargement agreements applied from 2004-05-01, 2007-08-01 and 2014-04-12 (https://www.efta.int/about-efta/legal-documents/eea-legal-texts)",
+  "EEA Council Decision No 1/95: entry into force for Liechtenstein 1995-05-01 (https://eur-lex.europa.eu/eli/dec/1995/1(3)/oj)",
+  "EFTA, EEA EFTA-UK Separation Agreement (https://www.efta.int/eea-relations-eu/eea-efta-uk-separation-agreement)"
+ ],
+ "retrieved": "2026-11-21",
+ "nodes": [
+  {"id": "geo-bloc-eu", "name": "European Union"},
+  {"id": "geo-bloc-eea", "name": "European Economic Area"}
+ ],
+ "memberships": {
+  "geo-bloc-eu": [
+   {"from": "1958-01-01", "countries": ["BE", "DE", "FR", "IT", "LU", "NL"]},
+   {"from": "1973-01-01", "countries": ["DK", "IE"]},
+   {"from": "1973-01-01", "to": "2020-02-01", "countries": ["GB"]},
+   {"from": "1981-01-01", "countries": ["GR"]},
+   {"from": "1986-01-01", "countries": ["ES", "PT"]},
+   {"from": "1995-01-01", "countries": ["AT", "FI", "SE"]},
+   {"from": "2004-05-01", "countries": ["CY", "CZ", "EE", "HU", "LT", "LV", "MT", "PL", "SI", "SK"]},
+   {"from": "2007-01-01", "countries": ["BG", "RO"]},
+   {"from": "2013-07-01", "countries": ["HR"]}
+  ],
+  "geo-bloc-eea": [
+   {"from": "1994-01-01", "countries": ["AT", "BE", "DE", "DK", "ES", "FI", "FR", "GR", "IE", "IS", "IT", "LU", "NL", "NO", "PT", "SE"]},
+   {"from": "1994-01-01", "to": "2020-02-01", "countries": ["GB"]},
+   {"from": "1995-05-01", "countries": ["LI"]},
+   {"from": "2004-05-01", "countries": ["CY", "CZ", "EE", "HU", "LT", "LV", "MT", "PL", "SI", "SK"]},
+   {"from": "2007-08-01", "countries": ["BG", "RO"]},
+   {"from": "2014-04-12", "countries": ["HR"]}
+  ]
+ },
+ "custom_places": [
+  {"id": "geo-lloyds", "name": "Lloyd's of London", "place_type": "authority", "parent_country": "GB"},
+  {"id": "geo-rest-of-world", "name": "Rest of World", "place_type": "residual", "parent_country": null}
+ ]
+}

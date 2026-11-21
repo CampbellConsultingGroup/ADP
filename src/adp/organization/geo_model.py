@@ -7,8 +7,11 @@ Pure: no I/O. Built per request from rows the store reads; never stored.
   valid from a date (inclusive, None = always) until a date (exclusive, None = open).
 * As of a date, ``places(node)`` are the places reachable down active memberships;
   ``ancestors(g)`` are the nodes reachable up active memberships, across every hierarchy.
-* ``contains(a, b)``: a is b; otherwise a must be a node and b either its descendant or a node
-  whose places are non-empty and all among a's. A place never contains a node, so a region with a
+* A place may lie in another place (949 GEO-04: a subdivision or authority in its country,
+  ``Entity.parent_place``). That is structural and undated: the subdivision is a descendant of its
+  country and so of every node the country belongs to, and ``places(country)`` includes it.
+* ``contains(a, b)``: a is b; otherwise b is a's descendant, or a is a node and b a node whose
+  places are non-empty and all among a's. A place never contains a node, so a region with a
   single country is not inside that country. ``overlaps(a, b)``: either contains the other, or
   they share a place. For tree-shaped data these are exactly the old ancestor answers (research R5).
 
@@ -25,6 +28,7 @@ from datetime import date
 from typing import Literal
 
 EntityKind = Literal["place", "node"]
+PLACE_HIERARCHY = "place"  # pseudo hierarchy id of the place-in-place edges (949)
 Shape = Literal["strict_tree", "dag"]
 
 
@@ -33,6 +37,7 @@ class Entity:
     id: str
     entity: EntityKind
     hierarchy_id: str | None = None
+    parent_place: str | None = None  # 949: the country a subdivision lies in
 
 
 @dataclass(frozen=True)
@@ -70,6 +75,12 @@ class GeoGraph:
                 continue
             self._children[mb.parent_id].append(mb.child_id)
             self._parents[mb.child_id].append(mb)
+        for e in self._entities.values():
+            if e.entity == "place" and e.parent_place and e.parent_place in self._entities:
+                self._children[e.parent_place].append(e.id)
+                self._parents[e.id].append(
+                    Membership(f"place:{e.id}", PLACE_HIERARCHY, e.parent_place, e.id)
+                )
         self._places: dict[str, frozenset[str]] = {}
         self._ancestors: dict[str, frozenset[str]] = {}
         self._descendants: dict[str, frozenset[str]] = {}
@@ -92,6 +103,14 @@ class GeoGraph:
 
     def __contains__(self, geo_id: object) -> bool:
         return geo_id in self._entities
+
+    def parent_place(self, geo_id: str) -> str | None:
+        e = self._entities.get(geo_id)
+        return e.parent_place if e is not None and e.parent_place in self._entities else None
+
+    def hierarchy_of(self, geo_id: str) -> str | None:
+        e = self._entities.get(geo_id)
+        return e.hierarchy_id if e is not None and e.entity == "node" else None
 
     def is_place(self, geo_id: str) -> bool:
         e = self._entities.get(geo_id)
@@ -124,7 +143,7 @@ class GeoGraph:
             if geo_id not in self._entities:
                 out: frozenset[str] = frozenset()
             elif self.is_place(geo_id):
-                out = frozenset({geo_id})
+                out = frozenset({geo_id, *self.descendants(geo_id)})
             else:
                 out = frozenset(d for d in self.descendants(geo_id) if self.is_place(d))
             self._places[geo_id] = out
@@ -142,11 +161,9 @@ class GeoGraph:
             return False
         if a == b:
             return True
-        if self.is_place(a):
-            return False
         if b in self.descendants(a):
             return True
-        if self.is_place(b):
+        if self.is_place(a) or self.is_place(b):
             return False
         inner = self.places(b)
         return bool(inner) and inner <= self.places(a)

@@ -173,6 +173,27 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 949-geo-seeds-views: GEO-04 of epic ADP-bo1 (ADP-bo1.4). Decisions (user, 2026-11-21):
+  subdivisions on demand, inside their country; seed EU + EEA; CRM hierarchy import deferred
+  (follow-on bead); footprint and place matrix as API + UI.
+  - Migration `060`: `geographies.parent_place_id` (structural, undated: the country a subdivision
+    or authority lies in), CHECK on `place_type` (country | subdivision | authority | residual).
+    Seeds custom places `geo-lloyds` (authority, in GB) and `geo-rest-of-world` (residual) and the
+    writable regulatory hierarchy `geoh-regulatory-blocs` (`geo-bloc-eu`, `geo-bloc-eea`, 59 dated
+    memberships) from `src/adp/organization/data/regulatory_blocs.json` (sources in the file;
+    EEA dates differ from EU dates; UK ends 2020-02-01 exclusive). Tests: `ostore.seed_blocs`.
+  - `GeoGraph`: `Entity.parent_place`; a place contains itself and its subdivisions and
+    `places(country)` includes them, so 948 applicability follows a subdivision to its country's
+    blocs. Pseudo hierarchy id `place` for those edges (`graph.parents()` includes the country).
+  - Pinned ISO 3166-2 snapshot `data/iso_3166-2.json.gz` (iso-codes 4.20.1, LGPL, see
+    `data/README.md`); package-data includes `*.json.gz`. `POST /business/geographies/subdivisions
+    {code}` (name from the snapshot; ids `geo-US-CA`), `GET /business/geographies/{country}/subdivisions`.
+    Places stay read-only (no rename/delete).
+  - Read views (pure `adp.organization.geo_views`): `GET /business/geographies/matrix?as_of=&hierarchy_ids=`
+    and `GET /applications/{id}/geo-footprint?as_of=` (own + legal entities' links, node links
+    expanded to places). UI: Business -> Organization -> Places; Footprint on the application
+    Geography tab. Placement nodes are joined with " · " (a DAG is not a chain).
+  - The seed wipe keeps `geoh-regulatory-blocs` as well as `geoh-m49`.
 - 948-framework-applicability: GEO-03 of epic ADP-bo1 (ADP-bo1.3; supersedes ADP-90r.1). Decisions
   (user, 2026-11-20): an application also counts its legal entities' links ("via"); framework
   lifecycle counts (repealed / not in force on the date -> does not apply); shown on framework,
