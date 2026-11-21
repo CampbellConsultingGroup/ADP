@@ -2551,6 +2551,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/compliance/applications/{application_id}/applicability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Application Applicability */
+        get: operations["get_application_applicability_api_v1_compliance_applications__application_id__applicability_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/compliance/controls/{control_id}": {
         parameters: {
             query?: never;
@@ -2901,6 +2918,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/compliance/frameworks/{framework_id}/applicability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Framework Applicability */
+        get: operations["get_framework_applicability_api_v1_compliance_frameworks__framework_id__applicability_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/compliance/frameworks/{framework_id}/application-phases": {
         parameters: {
             query?: never;
@@ -2976,6 +3010,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/compliance/frameworks/{framework_id}/jurisdiction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Jurisdiction */
+        get: operations["get_jurisdiction_api_v1_compliance_frameworks__framework_id__jurisdiction_get"];
+        /** Set Jurisdiction */
+        put: operations["set_jurisdiction_api_v1_compliance_frameworks__framework_id__jurisdiction_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/compliance/frameworks/{framework_id}/rollup": {
         parameters: {
             query?: never;
@@ -3015,6 +3067,23 @@ export interface paths {
          *     target-entity sensitivity of its own, mirroring list_control_objectives above.
          */
         get: operations["list_framework_themes_api_v1_compliance_frameworks__framework_id__themes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compliance/legal-entities/{legal_entity_id}/applicability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Legal Entity Applicability */
+        get: operations["get_legal_entity_applicability_api_v1_compliance_legal_entities__legal_entity_id__applicability_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -5923,6 +5992,62 @@ export interface components {
             /** Via */
             via: components["schemas"]["CapRef"][];
         };
+        /**
+         * Applicability
+         * @description Derived on read, never stored (spec FR-006).
+         */
+        Applicability: {
+            /**
+             * Evidence
+             * @default []
+             */
+            evidence: components["schemas"]["ApplicabilityEvidence"][];
+            framework: components["schemas"]["ApplicabilityRef"];
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "applies" | "does_not_apply" | "unknown";
+            subject: components["schemas"]["ApplicabilityRef"];
+            /**
+             * Subject Type
+             * @enum {string}
+             */
+            subject_type: "application" | "legal_entity";
+        };
+        /** ApplicabilityEvidence */
+        ApplicabilityEvidence: {
+            geography: components["schemas"]["JurisdictionGeography"];
+            /**
+             * How
+             * @enum {string}
+             */
+            how: "same" | "inside" | "covers" | "shares_countries";
+            jurisdiction_geography: components["schemas"]["JurisdictionGeography"];
+            /**
+             * Path
+             * @default []
+             */
+            path: string[];
+            /** Relation */
+            relation: string;
+            /** Relation Label */
+            relation_label: string;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+            via_legal_entity?: components["schemas"]["ApplicabilityRef"] | null;
+        };
+        /** ApplicabilityRef */
+        ApplicabilityRef: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
         /** Application */
         Application: {
             /** Application Type */
@@ -8339,6 +8464,24 @@ export interface components {
             /** Total */
             total: number;
         };
+        /** FrameworkApplicabilityResponse */
+        FrameworkApplicabilityResponse: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Configured */
+            configured: boolean;
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Framework Id */
+            framework_id: string;
+            /** Items */
+            items: components["schemas"]["Applicability"][];
+        };
         /**
          * FrameworkApplicationPhase
          * @description Read model.
@@ -8401,6 +8544,17 @@ export interface components {
             /** Framework Id */
             framework_id: string;
             organization_status: components["schemas"]["ComplianceStatus"] | null;
+        };
+        /** FrameworkJurisdiction */
+        FrameworkJurisdiction: {
+            /** Configured */
+            configured: boolean;
+            /** Framework Id */
+            framework_id: string;
+            /** Geographies */
+            geographies: components["schemas"]["JurisdictionGeography"][];
+            /** Triggers */
+            triggers: components["schemas"]["JurisdictionTrigger"][];
         };
         /** GeoHierarchy */
         GeoHierarchy: {
@@ -9052,6 +9206,39 @@ export interface components {
             operation_id: string;
             /** Status */
             status: string;
+        };
+        /** JurisdictionGeography */
+        JurisdictionGeography: {
+            /** Code */
+            code?: string | null;
+            /**
+             * Entity
+             * @default place
+             */
+            entity: string;
+            /** Hierarchy Kind */
+            hierarchy_kind?: string | null;
+            /** Hierarchy Name */
+            hierarchy_name?: string | null;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * JurisdictionTrigger
+         * @description A 947 typed geography relation that brings a subject into scope.
+         */
+        JurisdictionTrigger: {
+            /** Label */
+            label?: string | null;
+            /** Relation */
+            relation: string;
+            /**
+             * Subject Type
+             * @enum {string}
+             */
+            subject_type: "application" | "legal_entity";
         };
         /** KnowledgeItemCreateRequest */
         KnowledgeItemCreateRequest: {
@@ -11178,6 +11365,16 @@ export interface components {
             /** Diagram Context */
             diagram_context?: string | null;
         };
+        /**
+         * SetFrameworkJurisdiction
+         * @description Replaces both lists. Empty lists clear the jurisdiction (applicability becomes unknown).
+         */
+        SetFrameworkJurisdiction: {
+            /** Geography Ids */
+            geography_ids?: string[];
+            /** Triggers */
+            triggers?: components["schemas"]["JurisdictionTrigger"][];
+        };
         /** SetOwner */
         SetOwner: {
             /** Org Unit Id */
@@ -11726,6 +11923,23 @@ export interface components {
             owner?: string | null;
             /** Status */
             status?: ("planned" | "in_progress" | "blocked" | "complete" | "cancelled") | null;
+        };
+        /** SubjectApplicabilityResponse */
+        SubjectApplicabilityResponse: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Items */
+            items: components["schemas"]["Applicability"][];
+            /** Subject Id */
+            subject_id: string;
+            /**
+             * Subject Type
+             * @enum {string}
+             */
+            subject_type: "application" | "legal_entity";
         };
         /**
          * SuggestionAcceptRequest
@@ -19122,6 +19336,39 @@ export interface operations {
             };
         };
     };
+    get_application_applicability_api_v1_compliance_applications__application_id__applicability_get: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+            };
+            header?: never;
+            path: {
+                application_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubjectApplicabilityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_control_api_v1_compliance_controls__control_id__delete: {
         parameters: {
             query?: never;
@@ -20077,6 +20324,39 @@ export interface operations {
             };
         };
     };
+    get_framework_applicability_api_v1_compliance_frameworks__framework_id__applicability_get: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+            };
+            header?: never;
+            path: {
+                framework_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FrameworkApplicabilityResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_application_phases_api_v1_compliance_frameworks__framework_id__application_phases_get: {
         parameters: {
             query?: never;
@@ -20239,6 +20519,72 @@ export interface operations {
             };
         };
     };
+    get_jurisdiction_api_v1_compliance_frameworks__framework_id__jurisdiction_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                framework_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FrameworkJurisdiction"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_jurisdiction_api_v1_compliance_frameworks__framework_id__jurisdiction_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                framework_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetFrameworkJurisdiction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FrameworkJurisdiction"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_framework_rollup_api_v1_compliance_frameworks__framework_id__rollup_get: {
         parameters: {
             query?: never;
@@ -20288,6 +20634,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StrategicThemeListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_legal_entity_applicability_api_v1_compliance_legal_entities__legal_entity_id__applicability_get: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+            };
+            header?: never;
+            path: {
+                legal_entity_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubjectApplicabilityResponse"];
                 };
             };
             /** @description Validation Error */

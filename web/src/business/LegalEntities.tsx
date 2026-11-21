@@ -20,6 +20,7 @@ import {
 } from "../api/organization";
 import { EntityLink } from "../shell/EntityLink";
 import { confirmAction } from "../ui/confirm";
+import { SubjectApplicability } from "../compliance/Applicability";
 import GeoLinksEditor from "./GeoLinksEditor";
 
 const muted: React.CSSProperties = { fontSize: 12, color: "var(--ink-3)" };
@@ -210,6 +211,9 @@ function EntityDetail({ id, items, canWrite, onDeleted, onSelect }: { id: string
         canWrite={canWrite}
         hint="Where it is incorporated (one country at a time), licensed, has an establishment and is tax resident. Regulations attach to these."
       />
+
+      {/* 948 GEO-03 */}
+      <SubjectApplicability subject="legal_entity" subjectId={id} />
 
       <h4 style={h4}>Org units ({data.org_units?.length ?? 0})</h4>
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>

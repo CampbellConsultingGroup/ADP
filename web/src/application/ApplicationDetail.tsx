@@ -25,6 +25,7 @@ import SolutionAgentsPanel from "../agentic/SolutionAgentsPanel";
 import { errorDetail } from "../api/agentic";
 import { Tabs } from "../ui/Tabs";
 import ApplicationGeography from "./ApplicationGeography";
+import { SubjectApplicability } from "../compliance/Applicability";
 import { confirmAction } from "../ui/confirm";
 import ApplicationSummary from "./ApplicationSummary";
 import { Loading } from "../ui/primitives";
@@ -222,7 +223,14 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
         {section === "governance" && <GovernancePanel appId={appId} />}
         {section === "quality" && <QualityPanel appId={appId} />}
         {section === "objectives" && <ObjectiveLinksPanel appId={appId} />}
-        {section === "compliance-mappings" && <ApplicationComplianceMappings appId={appId} />}
+        {section === "compliance-mappings" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* 948 GEO-03: derived from geography links; the mapped controls follow. */}
+            <SubjectApplicability subject="application" subjectId={appId} />
+            <h4 style={{ fontSize: 14, margin: "8px 0 0" }}>Mapped controls</h4>
+            <ApplicationComplianceMappings appId={appId} />
+          </div>
+        )}
         {section === "geography" && <ApplicationGeography appId={appId} />}
         {section === "agents" && app.application_type === "agentic" && <SolutionAgentsPanel appId={appId} />}
       </div>

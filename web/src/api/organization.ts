@@ -246,6 +246,8 @@ function useOrgMutation<V, R>(fn: (v: V) => Promise<R>) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ORG_KEY });
       void qc.invalidateQueries({ queryKey: [QK.applications] });
+      // 948: links, legal entities and hierarchies all feed derived framework applicability.
+      void qc.invalidateQueries({ queryKey: [QK.complianceApplicability] });
     },
   });
 }
