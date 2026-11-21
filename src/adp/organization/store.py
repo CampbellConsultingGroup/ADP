@@ -25,6 +25,7 @@ from adp.organization.geo_model import Entity, GeoGraph, Membership
 from adp.organization.models import (
     COMPLIANCE_KINDS,
     ORG_UNIT_KINDS,
+    AddSubdivision,
     DepthError,
     DuplicateLinkError,
     DuplicateSiblingError,
@@ -44,6 +45,8 @@ from adp.organization.models import (
     Ref,
     ResolveResult,
     ResolveUnmatched,
+    SubdivisionCatalog,
+    SubdivisionEntry,
     UnmatchedListResponse,
     UnmatchedValue,
 )
@@ -82,6 +85,8 @@ _geographies = sa.Table(
     sa.Column("entity", sa.Text(), nullable=False, default="place"),
     sa.Column("hierarchy_id", sa.String(36), sa.ForeignKey("geo_hierarchies.id"), nullable=True),
     sa.Column("place_type", sa.Text(), nullable=True),
+    # 949 GEO-04: the country a subdivision or authority lies in (migration 060).
+    sa.Column("parent_place_id", sa.String(36), sa.ForeignKey("geographies.id"), nullable=True),
     sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
@@ -776,10 +781,11 @@ def _kind(entity: str, geo_id: str) -> str:
 async def geo_graph(session: AsyncSession, as_of: date | None = None) -> GeoGraph:
     """Every place, node and membership, resolved as of ``as_of`` (today by default). Two
     queries; the 941/942/943 engines and the geography read model use it (946 R5)."""
+    g = _geographies
     entities = {
-        r.id: Entity(r.id, r.entity, r.hierarchy_id)
+        r.id: Entity(r.id, r.entity, r.hierarchy_id, r.parent_place_id)
         for r in await session.execute(
-            sa.select(_geographies.c.id, _geographies.c.entity, _geographies.c.hierarchy_id)
+            sa.select(g.c.id, g.c.entity, g.c.hierarchy_id, g.c.parent_place_id)
         )
     }
     m = _geo_memberships
@@ -796,7 +802,14 @@ async def geo_graph(session: AsyncSession, as_of: date | None = None) -> GeoGrap
 
 
 def _reference_path(graph: GeoGraph, geo_id: str, names: dict[str, str]) -> list[Ref]:
-    """Reference-hierarchy ancestors, root first (cycle-safe)."""
+    """Reference-hierarchy ancestors, root first (cycle-safe). A subdivision's path is its
+    country's path and then the country (949)."""
+    country = graph.parent_place(geo_id)
+    if country is not None:
+        return [
+            *_reference_path(graph, country, names),
+            Ref(id=country, name=names.get(country, country), level=3),
+        ]
     out: list[Ref] = []
     seen = {geo_id}
     cur = geo_id
@@ -841,7 +854,9 @@ async def _geography_models(
     )
     items = []
     for r in rows:
-        parents = graph.parents(r.id, REFERENCE_HIERARCHY_ID)
+        parents = [r.parent_place_id] if r.parent_place_id else graph.parents(
+            r.id, REFERENCE_HIERARCHY_ID
+        )
         items.append(
             Geography(
                 id=r.id,
@@ -857,6 +872,8 @@ async def _geography_models(
                 hierarchy_id=r.hierarchy_id,
                 hierarchy_name=r.hierarchy_name,
                 hierarchy_kind=r.hierarchy_kind,
+                place_type=r.place_type,
+                parent_place_id=r.parent_place_id,
             )
         )
     items.sort(key=lambda g: (g.level, g.name.lower()))
@@ -884,7 +901,7 @@ async def _writable_node(
         return None
     if row.entity != "node":
         raise ReadOnlyHierarchyError(
-            "Places (countries) are reference data and can't be changed here"
+            "Places (countries, subdivisions) are reference data and can't be changed here"
         )
     hierarchy = await _row(_geo_hierarchies, row.hierarchy_id, session)
     require_hierarchy_write(hierarchy, can_write_compliance)
@@ -1077,3 +1094,80 @@ async def seed_geography(session: AsyncSession, now: datetime) -> None:
     await session.execute(_geo_hierarchies.insert().values(**hierarchy))
     await session.execute(_geographies.insert(), geographies)
     await session.execute(_geo_memberships.insert(), memberships)
+
+
+# ── 949 GEO-04: subdivisions on demand ────────────────────────────────────────
+
+
+async def subdivision_catalog(country_id: str, session: AsyncSession) -> SubdivisionCatalog:
+    """The pinned ISO 3166-2 subdivisions of one country, each marked when already added."""
+    from adp.organization.geodata import subdivisions
+
+    country = await _row(_geographies, country_id, session)
+    if country is None or country.place_type != "country" or not country.code:
+        raise OrgNotFoundError(f"Country {country_id!r} not found")
+    prefix = f"{country.code}-"
+    added = {
+        r.code
+        for r in await session.execute(
+            sa.select(_geographies.c.code).where(_geographies.c.parent_place_id == country_id)
+        )
+    }
+    items = [
+        SubdivisionEntry(code=r["code"], name=r["name"], type=r["type"], added=r["code"] in added)
+        for code, r in sorted(subdivisions().items())
+        if code.startswith(prefix)
+    ]
+    return SubdivisionCatalog(country_id=country_id, country_name=country.name, items=items)
+
+
+async def add_subdivision(body: AddSubdivision, session: AsyncSession) -> Geography:
+    """Add one ISO 3166-2 subdivision as a place inside its country. Only a code in the pinned
+    snapshot is accepted, and the name comes from it (FR-002)."""
+    from adp.organization.geodata import (
+        country_id,
+        subdivision,
+        subdivision_country,
+        subdivision_id,
+    )
+
+    entry = subdivision(body.code)
+    if entry is None:
+        raise InvalidCodeError(
+            f"{body.code.strip().upper()!r} is not an ISO 3166-2 code in the pinned iso-codes list"
+        )
+    parent = country_id(subdivision_country(entry["code"]))
+    country = await _row(_geographies, parent, session)
+    if country is None:
+        raise OrgNotFoundError(f"Country {parent!r} not found")
+    geo_id = subdivision_id(entry["code"])
+    if await _row(_geographies, geo_id, session) is not None:
+        raise DuplicateSiblingError(f"{entry['name']} ({entry['code']}) is already added")
+    now = _now()
+    await session.execute(
+        _geographies.insert().values(
+            id=geo_id,
+            name=entry["name"],
+            code=entry["code"],
+            m49=None,
+            entity="place",
+            hierarchy_id=None,
+            place_type="subdivision",
+            parent_place_id=parent,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    return (await _geography_models(session, [geo_id]))[0]
+
+
+async def seed_blocs(session: AsyncSession, now: datetime) -> None:
+    """Migration 060's seed (custom places, regulatory blocs) for tests and fresh databases.
+    Needs ``seed_geography`` first."""
+    from adp.organization.geodata import blocs_seed
+
+    seed = blocs_seed(now)
+    await session.execute(_geographies.insert(), seed["places"])
+    await session.execute(_geo_hierarchies.insert().values(**seed["hierarchy"]))
+    await session.execute(_geographies.insert(), seed["nodes"])
+    await session.execute(_geo_memberships.insert(), seed["memberships"])

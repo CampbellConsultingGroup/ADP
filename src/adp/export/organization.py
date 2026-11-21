@@ -99,6 +99,8 @@ def _serialize_geographies(
                 "code": g.code,
                 "m49": g.m49,
                 "parent_id": g.parent_id,  # the reference (UN M49) parent today
+                "place_type": g.place_type,  # 949: country | subdivision | authority | residual
+                "parent_place_id": g.parent_place_id,
             }
             for g in sorted(items, key=lambda g: (g.level, g.name))
         ],

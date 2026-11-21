@@ -20,11 +20,12 @@ from adp.auth.deps import get_current_user
 from adp.auth.models import AuthenticatedUser
 from adp.authz.permissions import is_permitted
 from adp.authz.roles import ActionType
-from adp.organization import cap_mappings, hierarchies, regional
+from adp.organization import cap_mappings, geo_views, hierarchies, regional
 from adp.organization import store as ostore
 from adp.organization.models import (
     AddMapping,
     AddMemberships,
+    AddSubdivision,
     CapabilityOrgFindings,
     CapabilityOrgMapping,
     CapabilityOrgMappingsResponse,
@@ -61,6 +62,7 @@ from adp.organization.models import (
     OrgUnitFootprint,
     OrgUnitListResponse,
     OrgUnitUpdate,
+    PlaceMatrix,
     ReadOnlyHierarchyError,
     RegionalAssessment,
     RegionalAssessmentListResponse,
@@ -71,6 +73,7 @@ from adp.organization.models import (
     SetOwner,
     SetRegionalAssessment,
     SetRegionScope,
+    SubdivisionCatalog,
     UnknownReferenceError,
     UnmatchedListResponse,
 )
@@ -255,6 +258,48 @@ async def list_geographies(
     as_of: date | None = None, session: AsyncSession = Depends(_get_session)
 ) -> GeographyListResponse:
     return await ostore.list_geographies(session, as_of=as_of)
+
+
+# 949 GEO-04: the place matrix and subdivisions on demand. Literal paths, declared before the
+# /geographies/{geo_id} routes.
+
+
+@router.get("/geographies/matrix", response_model=PlaceMatrix)
+async def geography_matrix(
+    as_of: date | None = None,
+    hierarchy_ids: str | None = None,
+    session: AsyncSession = Depends(_get_session),
+) -> PlaceMatrix:
+    ids = [i for i in (hierarchy_ids or "").split(",") if i.strip()] or None
+    try:
+        return await geo_views.matrix_for(session, as_of, ids)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+
+
+@router.post(
+    "/geographies/subdivisions", response_model=Geography, status_code=status.HTTP_201_CREATED
+)
+async def add_subdivision(
+    body: AddSubdivision, request: Request, session: AsyncSession = Depends(_get_session)
+) -> Geography:
+    try:
+        geo = await ostore.add_subdivision(body, session)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
+    await session.commit()
+    _log("geography.subdivision.add", request, id=geo.id)
+    return geo
+
+
+@router.get("/geographies/{geo_id}/subdivisions", response_model=SubdivisionCatalog)
+async def subdivision_catalog(
+    geo_id: str, session: AsyncSession = Depends(_get_session)
+) -> SubdivisionCatalog:
+    try:
+        return await ostore.subdivision_catalog(geo_id, session)
+    except OrganizationError as exc:
+        raise _http(exc) from exc
 
 
 # 946 GEO-01: places (countries) are read-only; a geography is created as a node of a hierarchy

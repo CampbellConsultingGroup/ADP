@@ -777,13 +777,25 @@ async def wipe(engine) -> None:
     stmt = f"TRUNCATE TABLE {', '.join(WIPE_TABLES)} RESTART IDENTITY CASCADE"
     async with engine.begin() as conn:
         await conn.execute(text(stmt))
-        # 946 GEO-01: hierarchies other than the UN M49 reference, with their nodes and
-        # memberships. Never TRUNCATE geographies or geo_hierarchies (the reference lives there).
-        await conn.execute(text("DELETE FROM geo_memberships WHERE hierarchy_id <> 'geoh-m49'"))
+        # 946 GEO-01: hierarchies other than the seeded reference ones (UN M49; 949's regulatory
+        # blocs, from migration 060), with their nodes and memberships. Never TRUNCATE
+        # geographies or geo_hierarchies (the reference lives there); places (countries,
+        # subdivisions, custom places) are kept.
         await conn.execute(
-            text("DELETE FROM geographies WHERE entity = 'node' AND hierarchy_id <> 'geoh-m49'")
+            text(
+                "DELETE FROM geo_memberships"
+                " WHERE hierarchy_id NOT IN ('geoh-m49', 'geoh-regulatory-blocs')"
+            )
         )
-        await conn.execute(text("DELETE FROM geo_hierarchies WHERE id <> 'geoh-m49'"))
+        await conn.execute(
+            text(
+                "DELETE FROM geographies WHERE entity = 'node'"
+                " AND hierarchy_id NOT IN ('geoh-m49', 'geoh-regulatory-blocs')"
+            )
+        )
+        await conn.execute(
+            text("DELETE FROM geo_hierarchies WHERE id NOT IN ('geoh-m49', 'geoh-regulatory-blocs')")
+        )
     print(f"  wiped {len(WIPE_TABLES)} tables (knowledge base preserved)")
 
 

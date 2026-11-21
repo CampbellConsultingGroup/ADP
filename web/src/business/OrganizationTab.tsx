@@ -20,6 +20,7 @@ import {
 import { useBusinessWrite } from "../application/appCapNav";
 import { useCan } from "../auth/permissions";
 import GeoHierarchies from "./GeoHierarchies";
+import GeoPlaces from "./GeoPlaces";
 import GeoLinksEditor from "./GeoLinksEditor";
 import LegalEntities from "./LegalEntities";
 import OrgUnitTree from "./OrgUnitTree";
@@ -28,7 +29,7 @@ import OrgFindings from "./OrgFindings";
 import OrgUnitFootprint from "./OrgUnitFootprint";
 import { confirmAction } from "../ui/confirm";
 
-type Section = "org-units" | "legal-entities" | "geography" | "unmatched" | "findings";
+type Section = "org-units" | "legal-entities" | "geography" | "places" | "unmatched" | "findings";
 
 /** ADP-blp.65: the server's answer for WRITE_BUSINESS_ARCH (it used to borrow WRITE_APPLICATION's). */
 export function useCanWriteBusiness(): boolean {
@@ -223,6 +224,9 @@ export default function OrganizationTab({ onOpenCapability }: { onOpenCapability
         <button role="tab" aria-selected={section === "geography"} style={tab(section === "geography")} onClick={() => setSection("geography")}>
           Geography
         </button>
+        <button role="tab" aria-selected={section === "places"} style={tab(section === "places")} onClick={() => setSection("places")}>
+          Places
+        </button>
         <button role="tab" aria-selected={section === "unmatched"} style={tab(section === "unmatched")} onClick={() => setSection("unmatched")}>
           Unmatched{unmatchedCount > 0 ? ` (${unmatchedCount})` : ""}
         </button>
@@ -258,6 +262,7 @@ export default function OrganizationTab({ onOpenCapability }: { onOpenCapability
         ))}
       {section === "legal-entities" && <LegalEntities canWrite={canWrite} />}
       {section === "geography" && <GeoHierarchies canWrite={canWrite} canWriteCompliance={canWriteCompliance} />}
+      {section === "places" && <GeoPlaces canWrite={canWrite} />}
       {section === "unmatched" && <UnmatchedList canWrite={canWrite} />}
       {section === "findings" && <OrgFindings onOpenCapability={onOpenCapability} />}
     </div>

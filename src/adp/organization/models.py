@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 OrgUnitKind = Literal["enterprise", "division", "function"]
 GeographyKind = Literal["global", "region", "country"]
+PlaceType = Literal["country", "subdivision", "authority", "residual"]
 
 ORG_UNIT_KINDS: dict[int, OrgUnitKind] = {1: "enterprise", 2: "division", 3: "function"}
 GEOGRAPHY_KINDS: dict[int, GeographyKind] = {1: "global", 2: "region", 3: "country"}
@@ -194,6 +195,10 @@ class Geography(_Model):
     hierarchy_id: str | None = None
     hierarchy_name: str | None = None
     hierarchy_kind: str | None = None
+    # 949 GEO-04: country | subdivision | authority | residual (places only), and the country a
+    # subdivision or authority lies in. For those, ``parent_id`` is that country.
+    place_type: PlaceType | None = None
+    parent_place_id: str | None = None
 
 
 class GeographyUpdate(_Model):
@@ -763,3 +768,82 @@ class LinkOrgUnit(_Model):
 
 class LinkLegalEntity(_Model):
     legal_entity_id: str
+
+
+# ── 949 GEO-04: subdivisions, footprint, place matrix ─────────────────────────
+
+
+class SubdivisionEntry(_Model):
+    code: str
+    name: str
+    type: str
+    added: bool
+
+
+class SubdivisionCatalog(_Model):
+    country_id: str
+    country_name: str
+    items: list[SubdivisionEntry]
+
+
+class AddSubdivision(_Model):
+    code: str = Field(min_length=4, max_length=8, description="An ISO 3166-2 code, e.g. US-CA")
+
+
+class PlaceRef(_Model):
+    id: str
+    name: str
+    code: str | None = None
+    place_type: PlaceType | None = None
+    parent_place_id: str | None = None
+
+
+class HierarchyPlacement(_Model):
+    """The nodes of one hierarchy that contain a place on the date, most specific first."""
+
+    hierarchy_id: str
+    hierarchy_name: str
+    hierarchy_kind: str
+    nodes: list[GeoNodeRef]
+
+
+class FootprintLink(_Model):
+    relation: str
+    relation_label: str
+    geography: LinkGeography
+    via_legal_entity: GeoNodeRef | None = None
+    valid_from: date | None = None
+    valid_to: date | None = None
+
+
+class FootprintPlace(_Model):
+    place: PlaceRef
+    links: list[FootprintLink]
+    placements: list[HierarchyPlacement]
+
+
+class GeoFootprint(_Model):
+    as_of: date
+    application_id: str
+    places: list[FootprintPlace]
+    unresolved: list[FootprintLink] = Field(
+        default_factory=list,
+        description="Active links to a node that has no places on the date",
+    )
+
+
+class MatrixHierarchy(_Model):
+    id: str
+    name: str
+    kind: str
+
+
+class MatrixRow(_Model):
+    place: PlaceRef
+    cells: dict[str, list[GeoNodeRef]]
+
+
+class PlaceMatrix(_Model):
+    as_of: date
+    hierarchies: list[MatrixHierarchy]
+    rows: list[MatrixRow]

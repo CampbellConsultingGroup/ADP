@@ -218,6 +218,23 @@
     "title": "AddMemberships",
     "type": "object"
    },
+   "AddSubdivision": {
+    "additionalProperties": false,
+    "properties": {
+     "code": {
+      "description": "An ISO 3166-2 code, e.g. US-CA",
+      "maxLength": 8,
+      "minLength": 4,
+      "title": "Code",
+      "type": "string"
+     }
+    },
+    "required": [
+     "code"
+    ],
+    "title": "AddSubdivision",
+    "type": "object"
+   },
    "Adoption": {
     "additionalProperties": false,
     "properties": {
@@ -8929,6 +8946,63 @@
     "title": "FootprintL3",
     "type": "object"
    },
+   "FootprintLink": {
+    "additionalProperties": false,
+    "properties": {
+     "geography": {
+      "$ref": "#/components/schemas/LinkGeography"
+     },
+     "relation": {
+      "title": "Relation",
+      "type": "string"
+     },
+     "relation_label": {
+      "title": "Relation Label",
+      "type": "string"
+     },
+     "valid_from": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid From"
+     },
+     "valid_to": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid To"
+     },
+     "via_legal_entity": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/GeoNodeRef"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "required": [
+     "relation",
+     "relation_label",
+     "geography"
+    ],
+    "title": "FootprintLink",
+    "type": "object"
+   },
    "FootprintPerformer": {
     "additionalProperties": false,
     "properties": {
@@ -8948,6 +9022,35 @@
      "org_unit"
     ],
     "title": "FootprintPerformer",
+    "type": "object"
+   },
+   "FootprintPlace": {
+    "additionalProperties": false,
+    "properties": {
+     "links": {
+      "items": {
+       "$ref": "#/components/schemas/FootprintLink"
+      },
+      "title": "Links",
+      "type": "array"
+     },
+     "place": {
+      "$ref": "#/components/schemas/PlaceRef"
+     },
+     "placements": {
+      "items": {
+       "$ref": "#/components/schemas/HierarchyPlacement"
+      },
+      "title": "Placements",
+      "type": "array"
+     }
+    },
+    "required": [
+     "place",
+     "links",
+     "placements"
+    ],
+    "title": "FootprintPlace",
     "type": "object"
    },
    "FrameworkAmendment": {
@@ -9299,6 +9402,42 @@
      "triggers"
     ],
     "title": "FrameworkJurisdiction",
+    "type": "object"
+   },
+   "GeoFootprint": {
+    "additionalProperties": false,
+    "properties": {
+     "application_id": {
+      "title": "Application Id",
+      "type": "string"
+     },
+     "as_of": {
+      "format": "date",
+      "title": "As Of",
+      "type": "string"
+     },
+     "places": {
+      "items": {
+       "$ref": "#/components/schemas/FootprintPlace"
+      },
+      "title": "Places",
+      "type": "array"
+     },
+     "unresolved": {
+      "description": "Active links to a node that has no places on the date",
+      "items": {
+       "$ref": "#/components/schemas/FootprintLink"
+      },
+      "title": "Unresolved",
+      "type": "array"
+     }
+    },
+    "required": [
+     "as_of",
+     "application_id",
+     "places"
+    ],
+    "title": "GeoFootprint",
     "type": "object"
    },
    "GeoHierarchy": {
@@ -10084,6 +10223,17 @@
       ],
       "title": "Parent Id"
      },
+     "parent_place_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent Place Id"
+     },
      "path": {
       "default": [],
       "items": {
@@ -10091,6 +10241,23 @@
       },
       "title": "Path",
       "type": "array"
+     },
+     "place_type": {
+      "anyOf": [
+       {
+        "enum": [
+         "country",
+         "subdivision",
+         "authority",
+         "residual"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Place Type"
      }
     },
     "required": [
@@ -10565,6 +10732,39 @@
      "cells"
     ],
     "title": "HeatmapRow",
+    "type": "object"
+   },
+   "HierarchyPlacement": {
+    "additionalProperties": false,
+    "description": "The nodes of one hierarchy that contain a place on the date, most specific first.",
+    "properties": {
+     "hierarchy_id": {
+      "title": "Hierarchy Id",
+      "type": "string"
+     },
+     "hierarchy_kind": {
+      "title": "Hierarchy Kind",
+      "type": "string"
+     },
+     "hierarchy_name": {
+      "title": "Hierarchy Name",
+      "type": "string"
+     },
+     "nodes": {
+      "items": {
+       "$ref": "#/components/schemas/GeoNodeRef"
+      },
+      "title": "Nodes",
+      "type": "array"
+     }
+    },
+    "required": [
+     "hierarchy_id",
+     "hierarchy_name",
+     "hierarchy_kind",
+     "nodes"
+    ],
+    "title": "HierarchyPlacement",
     "type": "object"
    },
    "ImpactAppCapability": {
@@ -12254,6 +12454,54 @@
     ],
     "title": "MappingTargetType",
     "type": "string"
+   },
+   "MatrixHierarchy": {
+    "additionalProperties": false,
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "kind"
+    ],
+    "title": "MatrixHierarchy",
+    "type": "object"
+   },
+   "MatrixRow": {
+    "additionalProperties": false,
+    "properties": {
+     "cells": {
+      "additionalProperties": {
+       "items": {
+        "$ref": "#/components/schemas/GeoNodeRef"
+       },
+       "type": "array"
+      },
+      "title": "Cells",
+      "type": "object"
+     },
+     "place": {
+      "$ref": "#/components/schemas/PlaceRef"
+     }
+    },
+    "required": [
+     "place",
+     "cells"
+    ],
+    "title": "MatrixRow",
+    "type": "object"
    },
    "MembersIn": {
     "additionalProperties": false,
@@ -13964,6 +14212,95 @@
      "pins"
     ],
     "title": "PinsIn",
+    "type": "object"
+   },
+   "PlaceMatrix": {
+    "additionalProperties": false,
+    "properties": {
+     "as_of": {
+      "format": "date",
+      "title": "As Of",
+      "type": "string"
+     },
+     "hierarchies": {
+      "items": {
+       "$ref": "#/components/schemas/MatrixHierarchy"
+      },
+      "title": "Hierarchies",
+      "type": "array"
+     },
+     "rows": {
+      "items": {
+       "$ref": "#/components/schemas/MatrixRow"
+      },
+      "title": "Rows",
+      "type": "array"
+     }
+    },
+    "required": [
+     "as_of",
+     "hierarchies",
+     "rows"
+    ],
+    "title": "PlaceMatrix",
+    "type": "object"
+   },
+   "PlaceRef": {
+    "additionalProperties": false,
+    "properties": {
+     "code": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Code"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "parent_place_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent Place Id"
+     },
+     "place_type": {
+      "anyOf": [
+       {
+        "enum": [
+         "country",
+         "subdivision",
+         "authority",
+         "residual"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Place Type"
+     }
+    },
+    "required": [
+     "id",
+     "name"
+    ],
+    "title": "PlaceRef",
     "type": "object"
    },
    "Plateau": {
@@ -18688,6 +19025,62 @@
      }
     },
     "title": "StrategyInitiativeUpdate",
+    "type": "object"
+   },
+   "SubdivisionCatalog": {
+    "additionalProperties": false,
+    "properties": {
+     "country_id": {
+      "title": "Country Id",
+      "type": "string"
+     },
+     "country_name": {
+      "title": "Country Name",
+      "type": "string"
+     },
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/SubdivisionEntry"
+      },
+      "title": "Items",
+      "type": "array"
+     }
+    },
+    "required": [
+     "country_id",
+     "country_name",
+     "items"
+    ],
+    "title": "SubdivisionCatalog",
+    "type": "object"
+   },
+   "SubdivisionEntry": {
+    "additionalProperties": false,
+    "properties": {
+     "added": {
+      "title": "Added",
+      "type": "boolean"
+     },
+     "code": {
+      "title": "Code",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "type": {
+      "title": "Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "code",
+     "name",
+     "type",
+     "added"
+    ],
+    "title": "SubdivisionEntry",
     "type": "object"
    },
    "SubjectApplicabilityResponse": {
@@ -24694,6 +25087,66 @@
     ]
    }
   },
+  "/api/v1/applications/{app_id}/geo-footprint": {
+   "get": {
+    "description": "949 GEO-04: every place the application reaches on the date (its own links and its legal\nentities'), with the hierarchy nodes containing each one.",
+    "operationId": "application_geo_footprint_api_v1_applications__app_id__geo_footprint_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "app_id",
+      "required": true,
+      "schema": {
+       "title": "App Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "as_of",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoFootprint"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Application Geo Footprint",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
   "/api/v1/applications/{app_id}/governance": {
    "get": {
     "operationId": "get_application_governance_api_v1_applications__app_id__governance_get",
@@ -27739,6 +28192,113 @@
     ]
    }
   },
+  "/api/v1/business/geographies/matrix": {
+   "get": {
+    "operationId": "geography_matrix_api_v1_business_geographies_matrix_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "as_of",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      }
+     },
+     {
+      "in": "query",
+      "name": "hierarchy_ids",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Hierarchy Ids"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PlaceMatrix"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Geography Matrix",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/geographies/subdivisions": {
+   "post": {
+    "operationId": "add_subdivision_api_v1_business_geographies_subdivisions_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AddSubdivision"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Geography"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Add Subdivision",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
   "/api/v1/business/geographies/{geo_id}": {
    "delete": {
     "operationId": "delete_geography_api_v1_business_geographies__geo_id__delete",
@@ -27865,6 +28425,48 @@
      }
     },
     "summary": "Geography Org Units",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/geographies/{geo_id}/subdivisions": {
+   "get": {
+    "operationId": "subdivision_catalog_api_v1_business_geographies__geo_id__subdivisions_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "geo_id",
+      "required": true,
+      "schema": {
+       "title": "Geo Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SubdivisionCatalog"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Subdivision Catalog",
     "tags": [
      "organization"
     ]

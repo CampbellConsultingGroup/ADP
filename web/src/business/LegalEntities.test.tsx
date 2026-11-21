@@ -24,6 +24,7 @@ vi.mock("../api/organization", async (orig) => ({
   useApplicationLegalEntities: vi.fn(),
   useLinkApplicationLegalEntity: vi.fn(),
   useUnlinkApplicationLegalEntity: vi.fn(),
+  useGeoFootprint: vi.fn(),
   // The geography links editor inside both screens.
   useGeoLinkRelations: vi.fn(),
   useGeoLinks: vi.fn(),
@@ -82,6 +83,7 @@ beforeEach(() => {
   api.useApplicationLegalEntities.mockReturnValue({ data: [GMBH], isLoading: false } as never);
   api.useLinkApplicationLegalEntity.mockReturnValue(m("linkApp"));
   api.useUnlinkApplicationLegalEntity.mockReturnValue(m("unlinkApp"));
+  api.useGeoFootprint.mockReturnValue({ data: { as_of: "2026-11-21", application_id: "pos", places: [], unresolved: [] }, isLoading: false, error: null } as never);
   api.useGeoLinkRelations.mockReturnValue({ data: { subjects: { legal_entity: [], application: [{ relation: "deployed_in", label: "Deployed in" }] } }, isLoading: false } as never);
   api.useGeoLinks.mockReturnValue({ data: { as_of: "2026-11-20", items: [] }, isLoading: false, error: null } as never);
   api.useGeographies.mockReturnValue({ data: { items: [], total: 0 } } as never);

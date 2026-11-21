@@ -59,7 +59,13 @@ export interface Geography {
   hierarchy_id?: string | null;
   hierarchy_name?: string | null;
   hierarchy_kind?: HierarchyKind | null;
+  /** 949 GEO-04: country | subdivision | authority | residual (places). A subdivision's or
+   * authority's country is `parent_place_id` (and `parent_id`). */
+  place_type?: PlaceType | null;
+  parent_place_id?: string | null;
 }
+
+export type PlaceType = "country" | "subdivision" | "authority" | "residual";
 
 /** One label for a geography in every picker: "France (FR)", "Europe", "APAC · Sales". */
 export function geographyLabel(
@@ -664,4 +670,55 @@ export function useUnlinkApplicationLegalEntity() {
   return useOrgMutation(({ appId, legalEntityId }: { appId: string; legalEntityId: string }) =>
     apiMutation<void>("DELETE", `/api/v1/applications/${appId}/legal-entities/${legalEntityId}`),
   );
+}
+
+// ── 949 GEO-04: subdivisions on demand, place matrix, application footprint ────
+
+export type SubdivisionCatalog = components["schemas"]["SubdivisionCatalog"];
+export type PlaceMatrix = components["schemas"]["PlaceMatrix"];
+export type PlaceRef = components["schemas"]["PlaceRef"];
+export type GeoFootprint = components["schemas"]["GeoFootprint"];
+export type FootprintPlace = components["schemas"]["FootprintPlace"];
+export type FootprintLink = components["schemas"]["FootprintLink"];
+export type HierarchyPlacement = components["schemas"]["HierarchyPlacement"];
+
+export const PLACE_TYPE_LABEL: Record<PlaceType, string> = {
+  country: "Country",
+  subdivision: "Subdivision",
+  authority: "Authority",
+  residual: "Residual",
+};
+
+export function useSubdivisionCatalog(countryId: string | null) {
+  return useQuery<SubdivisionCatalog>({
+    queryKey: [...ORG_KEY, "subdivision-catalog", countryId],
+    queryFn: () => apiGet(`${BASE}/geographies/${encodeURIComponent(countryId ?? "")}/subdivisions`),
+    enabled: !!countryId,
+  });
+}
+
+export function useAddSubdivision() {
+  return useOrgMutation((code: string) => apiMutation<Geography>("POST", `${BASE}/geographies/subdivisions`, { code }));
+}
+
+export function usePlaceMatrix(asOf: string | null, hierarchyIds: string[] | null) {
+  const params = new URLSearchParams();
+  if (asOf) params.set("as_of", asOf);
+  if (hierarchyIds && hierarchyIds.length > 0) params.set("hierarchy_ids", hierarchyIds.join(","));
+  const q = params.toString() ? `?${params}` : "";
+  return useQuery<PlaceMatrix>({
+    queryKey: [...ORG_KEY, "place-matrix", asOf ?? "today", hierarchyIds?.join(",") ?? "all"],
+    queryFn: () => apiGet(`${BASE}/geographies/matrix${q}`),
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useGeoFootprint(appId: string | null, asOf: string | null) {
+  const q = asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
+  return useQuery<GeoFootprint>({
+    queryKey: [...ORG_KEY, "geo-footprint", appId, asOf ?? "today"],
+    queryFn: () => apiGet(`/api/v1/applications/${encodeURIComponent(appId ?? "")}/geo-footprint${q}`),
+    enabled: !!appId,
+    placeholderData: (previous) => previous,
+  });
 }
