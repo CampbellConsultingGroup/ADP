@@ -127,25 +127,6 @@ _org_units = sa.Table(
     sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
 )
 
-_org_unit_geographies = sa.Table(
-    "org_unit_geographies",
-    _metadata,
-    sa.Column(
-        "org_unit_id",
-        sa.String(36),
-        sa.ForeignKey("org_units.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-    sa.Column(
-        "geography_id",
-        sa.String(36),
-        sa.ForeignKey("geographies.id", ondelete="CASCADE"),
-        nullable=False,
-    ),
-    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-    sa.PrimaryKeyConstraint("org_unit_id", "geography_id"),
-)
-
 # Narrow mirror (research R2). A fixture creating both this metadata and
 # adp.application.store's must create astore first and exclude this table here.
 _applications = sa.Table(
@@ -156,6 +137,99 @@ _applications = sa.Table(
     sa.Column("owning_business_unit", sa.String(255)),
     sa.Column("owning_org_unit_id", sa.String(36)),
 )
+
+# 947 GEO-02 (migration 058): legal entities, their links, and typed, dated geography links.
+_legal_entities = sa.Table(
+    "legal_entities",
+    _metadata,
+    sa.Column("id", sa.String(36), primary_key=True),
+    sa.Column("name", sa.String(255), nullable=False),
+    sa.Column("registration_number", sa.String(100), nullable=True),
+    sa.Column("lei", sa.String(20), nullable=True),
+    sa.Column("description", sa.Text(), nullable=True),
+    sa.Column(
+        "parent_id",
+        sa.String(36),
+        sa.ForeignKey("legal_entities.id", ondelete="SET NULL"),
+        nullable=True,
+    ),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+)
+
+_legal_entity_org_units = sa.Table(
+    "legal_entity_org_units",
+    _metadata,
+    sa.Column(
+        "legal_entity_id",
+        sa.String(36),
+        sa.ForeignKey("legal_entities.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column(
+        "org_unit_id", sa.String(36), sa.ForeignKey("org_units.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.PrimaryKeyConstraint("legal_entity_id", "org_unit_id"),
+)
+
+# The application leg has no FK here: ``applications`` is a narrow mirror that may be absent
+# (or created by astore); migration 058 holds the real CASCADE.
+_application_legal_entities = sa.Table(
+    "application_legal_entities",
+    _metadata,
+    sa.Column("application_id", sa.String(36), nullable=False),
+    sa.Column(
+        "legal_entity_id",
+        sa.String(36),
+        sa.ForeignKey("legal_entities.id", ondelete="CASCADE"),
+        nullable=False,
+    ),
+    sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+    sa.PrimaryKeyConstraint("application_id", "legal_entity_id"),
+)
+
+
+def _geo_link_table(name: str, subject: str, subject_fk: str | None) -> sa.Table:
+    subject_args: list[Any] = [sa.ForeignKey(subject_fk, ondelete="CASCADE")] if subject_fk else []
+    return sa.Table(
+        name,
+        _metadata,
+        sa.Column("id", sa.String(36), primary_key=True),
+        sa.Column(subject, sa.String(36), *subject_args, nullable=False),
+        sa.Column("relation", sa.String(40), nullable=False),
+        sa.Column(
+            "geography_id",
+            sa.String(36),
+            sa.ForeignKey("geographies.id", ondelete="CASCADE"),
+            nullable=False,
+        ),
+        sa.Column("valid_from", sa.Date(), nullable=True),
+        sa.Column("valid_to", sa.Date(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+    )
+
+
+_application_geo_links = _geo_link_table("application_geo_links", "application_id", None)
+_legal_entity_geo_links = _geo_link_table(
+    "legal_entity_geo_links", "legal_entity_id", "legal_entities.id"
+)
+# 947 Q1b: 940's operating geographies are the ``operates_in`` rows here.
+_org_unit_geo_links = _geo_link_table("org_unit_geo_links", "org_unit_id", "org_units.id")
+OPERATES_IN = "operates_in"
+
+
+def _operating_today(today: date | None = None) -> Any:
+    """``operates_in`` links of org units active today (947 FR-009)."""
+    t = _org_unit_geo_links
+    d = today or date.today()
+    return sa.and_(
+        t.c.relation == OPERATES_IN,
+        sa.or_(t.c.valid_from.is_(None), t.c.valid_from <= d),
+        sa.or_(t.c.valid_to.is_(None), t.c.valid_to > d),
+    )
 
 # 941-capability-org-mappings: narrow, read-only mirror of the business capability tree (research
 # R1). Fixtures that also create adp.business.store's or adp.application.store's metadata must
@@ -419,14 +493,20 @@ async def _org_unit_models(session: AsyncSession, ids: list[str] | None = None) 
         return []
     tree = await _tree(_org_units, session)
     geo: dict[str, list[str]] = defaultdict(list)
-    for ou, g in (
+    for ou, g, _name in (
         await session.execute(
-            sa.select(_org_unit_geographies.c.org_unit_id, _org_unit_geographies.c.geography_id)
+            sa.select(
+                _org_unit_geo_links.c.org_unit_id,
+                _org_unit_geo_links.c.geography_id,
+                _geographies.c.name,
+            )
             .select_from(
-                _org_unit_geographies.join(
-                    _geographies, _geographies.c.id == _org_unit_geographies.c.geography_id
+                _org_unit_geo_links.join(
+                    _geographies, _geographies.c.id == _org_unit_geo_links.c.geography_id
                 )
             )
+            .where(_operating_today())
+            .distinct()
             .order_by(_geographies.c.name)
         )
     ).all():
@@ -597,8 +677,12 @@ async def delete_org_unit(ou_id: str, session: AsyncSession) -> bool:
         .where(_applications.c.owning_org_unit_id == ou_id)
         .values(owning_org_unit_id=None)
     )
+    # 947: its typed geography links and legal entity links (SQLite parity; CASCADE in 058).
     await session.execute(
-        _org_unit_geographies.delete().where(_org_unit_geographies.c.org_unit_id == ou_id)
+        _org_unit_geo_links.delete().where(_org_unit_geo_links.c.org_unit_id == ou_id)
+    )
+    await session.execute(
+        _legal_entity_org_units.delete().where(_legal_entity_org_units.c.org_unit_id == ou_id)
     )
     # 941: its capability mappings go too; owned capabilities fall back to their parent's owner
     # (the effective owner is derived). Migration 049's CASCADE is the safety net.
@@ -617,31 +701,39 @@ async def delete_org_unit(ou_id: str, session: AsyncSession) -> bool:
 
 
 async def link_geography(ou_id: str, geo_id: str, session: AsyncSession) -> OrgUnit:
+    """940 route kept (947 R4): an undated ``operates_in`` link; 409 if one exists for the pair."""
     await _require(_org_units, ou_id, "Org unit", session)
     await _require(_geographies, geo_id, "Geography", session)
+    t = _org_unit_geo_links
     exists = (
         await session.execute(
-            sa.select(_org_unit_geographies.c.org_unit_id).where(
-                _org_unit_geographies.c.org_unit_id == ou_id,
-                _org_unit_geographies.c.geography_id == geo_id,
+            sa.select(t.c.id).where(
+                t.c.org_unit_id == ou_id, t.c.geography_id == geo_id, t.c.relation == OPERATES_IN
             )
         )
     ).first()
     if exists is not None:
         raise DuplicateLinkError(f"Org unit {ou_id!r} is already linked to geography {geo_id!r}")
+    now = _now()
     await session.execute(
-        _org_unit_geographies.insert().values(
-            org_unit_id=ou_id, geography_id=geo_id, created_at=_now()
+        t.insert().values(
+            id=str(uuid.uuid4()),
+            org_unit_id=ou_id,
+            relation=OPERATES_IN,
+            geography_id=geo_id,
+            created_at=now,
+            updated_at=now,
         )
     )
     return (await _org_unit_models(session, [ou_id]))[0]
 
 
 async def unlink_geography(ou_id: str, geo_id: str, session: AsyncSession) -> bool:
+    """Removes every ``operates_in`` link for the pair, whatever its dates (947 R4)."""
+    t = _org_unit_geo_links
     result = await session.execute(
-        _org_unit_geographies.delete().where(
-            _org_unit_geographies.c.org_unit_id == ou_id,
-            _org_unit_geographies.c.geography_id == geo_id,
+        t.delete().where(
+            t.c.org_unit_id == ou_id, t.c.geography_id == geo_id, t.c.relation == OPERATES_IN
         )
     )
     return _rowcount(result) > 0
@@ -650,13 +742,14 @@ async def unlink_geography(ou_id: str, geo_id: str, session: AsyncSession) -> bo
 async def org_units_for_geography(geo_id: str, session: AsyncSession) -> list[OrgUnit] | None:
     if await _row(_geographies, geo_id, session) is None:
         return None
+    t = _org_unit_geo_links
     ids = [
         r[0]
         for r in (
             await session.execute(
-                sa.select(_org_unit_geographies.c.org_unit_id).where(
-                    _org_unit_geographies.c.geography_id == geo_id
-                )
+                sa.select(t.c.org_unit_id)
+                .where(t.c.geography_id == geo_id, _operating_today())
+                .distinct()
             )
         ).all()
     ]
@@ -735,9 +828,12 @@ async def _geography_models(
     counts: dict[str, int] = dict(
         (
             await session.execute(
-                sa.select(_org_unit_geographies.c.geography_id, sa.func.count()).group_by(
-                    _org_unit_geographies.c.geography_id
+                sa.select(
+                    _org_unit_geo_links.c.geography_id,
+                    sa.func.count(sa.distinct(_org_unit_geo_links.c.org_unit_id)),
                 )
+                .where(_operating_today())
+                .group_by(_org_unit_geo_links.c.geography_id)
             )
         )
         .tuples()
@@ -903,9 +999,9 @@ async def delete_geography(
         .where(_org_units.c.primary_geography_id == geo_id)
         .values(primary_geography_id=None)
     )
-    await session.execute(
-        _org_unit_geographies.delete().where(_org_unit_geographies.c.geography_id == geo_id)
-    )
+    # 947: every typed link to it (SQLite parity; CASCADE in migration 058).
+    for links in (_org_unit_geo_links, _legal_entity_geo_links, _application_geo_links):
+        await session.execute(links.delete().where(links.c.geography_id == geo_id))
     await session.execute(m.delete().where(sa.or_(m.c.parent_id == geo_id, m.c.child_id == geo_id)))
     return (
         _rowcount(await session.execute(_geographies.delete().where(_geographies.c.id == geo_id)))

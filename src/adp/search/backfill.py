@@ -19,6 +19,7 @@ from adp.search import (
     ENTITY_APPLICATION_CAPABILITY,
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
+    ENTITY_LEGAL_ENTITY,
     ENTITY_ORG_UNIT,
     ENTITY_TECHNICAL_CAPABILITY,
     ENTITY_VALUE_CHAIN,
@@ -82,6 +83,7 @@ async def reindex_all(session: "AsyncSession") -> dict[str, int]:
         ENTITY_AGENT: 0,
         ENTITY_APPLICATION_CAPABILITY: 0,
         ENTITY_ORG_UNIT: 0,
+        ENTITY_LEGAL_ENTITY: 0,
     }
 
     cap_total = await reindex_capabilities(session)
@@ -158,6 +160,13 @@ async def reindex_all(session: "AsyncSession") -> dict[str, int]:
     for ou_id, text in await ostore.search_entries(session):
         await index.upsert(ENTITY_ORG_UNIT, ou_id, text, session)
         counts[ENTITY_ORG_UNIT] += 1
+
+    # 947-legal-entities: same text (name, registration number, LEI, description, parent path).
+    from adp.organization import legal_entities
+
+    for le_id, text in await legal_entities.search_entries(session):
+        await index.upsert(ENTITY_LEGAL_ENTITY, le_id, text, session)
+        counts[ENTITY_LEGAL_ENTITY] += 1
 
     return counts
 

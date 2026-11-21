@@ -44,6 +44,7 @@ from adp.search.index import (
     ENTITY_APPLICATION_CAPABILITY,
     ENTITY_BUSINESS_CAPABILITY,
     ENTITY_BUSINESS_DOMAIN,
+    ENTITY_LEGAL_ENTITY,
     ENTITY_ORG_UNIT,
     ENTITY_TECHNICAL_CAPABILITY,
     ENTITY_VALUE_CHAIN,
@@ -131,8 +132,23 @@ async def test_reindex_all_covers_every_entity_type(session, recording_index) ->
 
     rc = await ostore.create_org_unit(OrgUnitCreate(name="Retail Co"), session)
     stores = await ostore.create_org_unit(OrgUnitCreate(name="Stores", parent_id=rc.id), session)
+    # 947: legal entities, text = name, registration number, LEI, description, parent path.
+    from adp.organization import legal_entities
+    from adp.organization.models import LegalEntityCreate
+
+    plc = await legal_entities.create_legal_entity(LegalEntityCreate(name="Retail Co plc"), session)
+    gmbh = await legal_entities.create_legal_entity(
+        LegalEntityCreate(name="Retail Co GmbH", registration_number="HRB 1", parent_id=plc.id),
+        session,
+    )
 
     counts = await bf.reindex_all(session)
+
+    assert (
+        ENTITY_LEGAL_ENTITY,
+        gmbh.id,
+        "Retail Co GmbH HRB 1 Retail Co plc",
+    ) in recording_index.upserted
 
     assert (ENTITY_ORG_UNIT, stores.id, "Stores Retail Co") in recording_index.upserted
     assert (
@@ -163,6 +179,7 @@ async def test_reindex_all_covers_every_entity_type(session, recording_index) ->
         ENTITY_AGENT: 1,
         ENTITY_APPLICATION_CAPABILITY: 2,
         ENTITY_ORG_UNIT: 2,
+        ENTITY_LEGAL_ENTITY: 2,
     }
 
 
@@ -193,6 +210,7 @@ async def test_reindex_all_empty_database_returns_zero_counts(session, recording
         ENTITY_VALUE_CHAIN_ACTIVITY: 0,
         ENTITY_AGENT: 0,
         ENTITY_ORG_UNIT: 0,
+        ENTITY_LEGAL_ENTITY: 0,
         ENTITY_APPLICATION_CAPABILITY: 0,
     }
     assert recording_index.upserted == []

@@ -53,6 +53,8 @@ ENTITY_AGENT = "agent"
 ENTITY_APPLICATION_CAPABILITY = "application_capability"
 # 940-org-units-geography (ADP-55k.1). Geography is deliberately not indexed (plan R7).
 ENTITY_ORG_UNIT = "org_unit"
+# 947-legal-entities (ADP-bo1.2).
+ENTITY_LEGAL_ENTITY = "legal_entity"
 
 _metadata = sa.MetaData()
 searchable_items = sa.Table(

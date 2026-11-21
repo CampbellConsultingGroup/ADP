@@ -9387,6 +9387,206 @@
     "title": "GeoHierarchyUpdate",
     "type": "object"
    },
+   "GeoLink": {
+    "additionalProperties": false,
+    "properties": {
+     "active": {
+      "title": "Active",
+      "type": "boolean"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "geography": {
+      "$ref": "#/components/schemas/LinkGeography"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "relation": {
+      "title": "Relation",
+      "type": "string"
+     },
+     "subject_id": {
+      "title": "Subject Id",
+      "type": "string"
+     },
+     "subject_type": {
+      "enum": [
+       "application",
+       "legal_entity",
+       "org_unit"
+      ],
+      "title": "Subject Type",
+      "type": "string"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     },
+     "valid_from": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid From"
+     },
+     "valid_to": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid To"
+     }
+    },
+    "required": [
+     "id",
+     "subject_type",
+     "subject_id",
+     "relation",
+     "geography",
+     "active",
+     "created_at",
+     "updated_at"
+    ],
+    "title": "GeoLink",
+    "type": "object"
+   },
+   "GeoLinkCreate": {
+    "additionalProperties": false,
+    "properties": {
+     "geography_id": {
+      "title": "Geography Id",
+      "type": "string"
+     },
+     "relation": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Relation",
+      "type": "string"
+     },
+     "valid_from": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid From"
+     },
+     "valid_to": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid To"
+     }
+    },
+    "required": [
+     "relation",
+     "geography_id"
+    ],
+    "title": "GeoLinkCreate",
+    "type": "object"
+   },
+   "GeoLinkListResponse": {
+    "additionalProperties": false,
+    "properties": {
+     "as_of": {
+      "format": "date",
+      "title": "As Of",
+      "type": "string"
+     },
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/GeoLink"
+      },
+      "title": "Items",
+      "type": "array"
+     }
+    },
+    "required": [
+     "as_of",
+     "items"
+    ],
+    "title": "GeoLinkListResponse",
+    "type": "object"
+   },
+   "GeoLinkRelations": {
+    "additionalProperties": false,
+    "description": "The relation matrix (FR-006): which relations each subject may use.",
+    "properties": {
+     "subjects": {
+      "additionalProperties": {
+       "items": {
+        "$ref": "#/components/schemas/RelationRule"
+       },
+       "type": "array"
+      },
+      "title": "Subjects",
+      "type": "object"
+     }
+    },
+    "required": [
+     "subjects"
+    ],
+    "title": "GeoLinkRelations",
+    "type": "object"
+   },
+   "GeoLinkUpdate": {
+    "additionalProperties": false,
+    "description": "Only the dates change (FR-005); both are replaced as sent (null = open).",
+    "properties": {
+     "valid_from": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid From"
+     },
+     "valid_to": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid To"
+     }
+    },
+    "title": "GeoLinkUpdate",
+    "type": "object"
+   },
    "GeoMembership": {
     "additionalProperties": false,
     "properties": {
@@ -11037,6 +11237,379 @@
     "title": "LayoutResponse",
     "type": "object"
    },
+   "LegalEntity": {
+    "additionalProperties": false,
+    "properties": {
+     "application_count": {
+      "default": 0,
+      "title": "Application Count",
+      "type": "integer"
+     },
+     "child_count": {
+      "default": 0,
+      "title": "Child Count",
+      "type": "integer"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "lei": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Lei"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "org_unit_ids": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Org Unit Ids",
+      "type": "array"
+     },
+     "parent_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent Id"
+     },
+     "path": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/Ref"
+      },
+      "title": "Path",
+      "type": "array"
+     },
+     "registration_number": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Registration Number"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "created_at",
+     "updated_at"
+    ],
+    "title": "LegalEntity",
+    "type": "object"
+   },
+   "LegalEntityCreate": {
+    "additionalProperties": false,
+    "properties": {
+     "description": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "lei": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Lei"
+     },
+     "name": {
+      "maxLength": 255,
+      "title": "Name",
+      "type": "string"
+     },
+     "parent_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent Id"
+     },
+     "registration_number": {
+      "anyOf": [
+       {
+        "maxLength": 100,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Registration Number"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "LegalEntityCreate",
+    "type": "object"
+   },
+   "LegalEntityDetail": {
+    "additionalProperties": false,
+    "properties": {
+     "application_count": {
+      "default": 0,
+      "title": "Application Count",
+      "type": "integer"
+     },
+     "applications": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/Ref"
+      },
+      "title": "Applications",
+      "type": "array"
+     },
+     "child_count": {
+      "default": 0,
+      "title": "Child Count",
+      "type": "integer"
+     },
+     "children": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/Ref"
+      },
+      "title": "Children",
+      "type": "array"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "lei": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Lei"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "org_unit_ids": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Org Unit Ids",
+      "type": "array"
+     },
+     "org_units": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/Ref"
+      },
+      "title": "Org Units",
+      "type": "array"
+     },
+     "parent_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent Id"
+     },
+     "path": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/Ref"
+      },
+      "title": "Path",
+      "type": "array"
+     },
+     "registration_number": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Registration Number"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "created_at",
+     "updated_at"
+    ],
+    "title": "LegalEntityDetail",
+    "type": "object"
+   },
+   "LegalEntityListResponse": {
+    "additionalProperties": false,
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/LegalEntity"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total"
+    ],
+    "title": "LegalEntityListResponse",
+    "type": "object"
+   },
+   "LegalEntityUpdate": {
+    "additionalProperties": false,
+    "description": "Fields sent are changed; an explicit null clears an optional one.",
+    "properties": {
+     "description": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "lei": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Lei"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "maxLength": 255,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "parent_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent Id"
+     },
+     "registration_number": {
+      "anyOf": [
+       {
+        "maxLength": 100,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Registration Number"
+     }
+    },
+    "title": "LegalEntityUpdate",
+    "type": "object"
+   },
    "LifecycleEvent": {
     "additionalProperties": false,
     "properties": {
@@ -11169,6 +11742,91 @@
     ],
     "title": "LifecycleStatus",
     "type": "string"
+   },
+   "LinkGeography": {
+    "additionalProperties": false,
+    "properties": {
+     "code": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Code"
+     },
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "hierarchy_kind": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hierarchy Kind"
+     },
+     "hierarchy_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hierarchy Name"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "entity"
+    ],
+    "title": "LinkGeography",
+    "type": "object"
+   },
+   "LinkLegalEntity": {
+    "additionalProperties": false,
+    "properties": {
+     "legal_entity_id": {
+      "title": "Legal Entity Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "legal_entity_id"
+    ],
+    "title": "LinkLegalEntity",
+    "type": "object"
+   },
+   "LinkOrgUnit": {
+    "additionalProperties": false,
+    "properties": {
+     "org_unit_id": {
+      "title": "Org Unit Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "org_unit_id"
+    ],
+    "title": "LinkOrgUnit",
+    "type": "object"
    },
    "LinkedCapRef": {
     "additionalProperties": false,
@@ -14852,6 +15510,35 @@
      "rejection_reason"
     ],
     "title": "RejectOptionRequest",
+    "type": "object"
+   },
+   "RelationRule": {
+    "additionalProperties": false,
+    "properties": {
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "place_only": {
+      "default": false,
+      "title": "Place Only",
+      "type": "boolean"
+     },
+     "relation": {
+      "title": "Relation",
+      "type": "string"
+     },
+     "single_active": {
+      "default": false,
+      "title": "Single Active",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "relation",
+     "label"
+    ],
+    "title": "RelationRule",
     "type": "object"
    },
    "Relationship": {
@@ -23993,6 +24680,150 @@
     ]
    }
   },
+  "/api/v1/applications/{app_id}/legal-entities": {
+   "get": {
+    "operationId": "application_legal_entities_api_v1_applications__app_id__legal_entities_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "app_id",
+      "required": true,
+      "schema": {
+       "title": "App Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/LegalEntity"
+         },
+         "title": "Response Application Legal Entities Api V1 Applications  App Id  Legal Entities Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Application Legal Entities",
+    "tags": [
+     "organization"
+    ]
+   },
+   "post": {
+    "operationId": "link_application_legal_entity_api_v1_applications__app_id__legal_entities_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "app_id",
+      "required": true,
+      "schema": {
+       "title": "App Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LinkLegalEntity"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/LegalEntity"
+         },
+         "title": "Response Link Application Legal Entity Api V1 Applications  App Id  Legal Entities Post",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Link Application Legal Entity",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/applications/{app_id}/legal-entities/{le_id}": {
+   "delete": {
+    "operationId": "unlink_application_legal_entity_api_v1_applications__app_id__legal_entities__le_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "app_id",
+      "required": true,
+      "schema": {
+       "title": "App Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "le_id",
+      "required": true,
+      "schema": {
+       "title": "Le Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Unlink Application Legal Entity",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
   "/api/v1/applications/{app_id}/objectives": {
    "get": {
     "description": "ADP-d8u.2: reverse lookup -- every strategic objective this\napplication realizes.",
@@ -24498,6 +25329,228 @@
     "summary": "Delete Tech Cap Link",
     "tags": [
      "applications"
+    ]
+   }
+  },
+  "/api/v1/applications/{subject_id}/geo-links": {
+   "get": {
+    "operationId": "list_application_geo_links",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "subject_id",
+      "required": true,
+      "schema": {
+       "title": "Subject Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "as_of",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      }
+     },
+     {
+      "in": "query",
+      "name": "all",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "All",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoLinkListResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Application Geo Links",
+    "tags": [
+     "organization"
+    ]
+   },
+   "post": {
+    "operationId": "add_application_geo_link",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "subject_id",
+      "required": true,
+      "schema": {
+       "title": "Subject Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GeoLinkCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoLink"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Add Application Geo Link",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/applications/{subject_id}/geo-links/{link_id}": {
+   "delete": {
+    "operationId": "delete_application_geo_link",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "subject_id",
+      "required": true,
+      "schema": {
+       "title": "Subject Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "link_id",
+      "required": true,
+      "schema": {
+       "title": "Link Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Remove a application geography link",
+    "tags": [
+     "organization"
+    ]
+   },
+   "patch": {
+    "operationId": "update_application_geo_link",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "subject_id",
+      "required": true,
+      "schema": {
+       "title": "Subject Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "link_id",
+      "required": true,
+      "schema": {
+       "title": "Link Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GeoLinkUpdate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoLink"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Update Application Geo Link",
+    "tags": [
+     "organization"
     ]
    }
   },
@@ -26137,6 +27190,27 @@
     ]
    }
   },
+  "/api/v1/business/geo-link-relations": {
+   "get": {
+    "operationId": "get_relations_api_v1_business_geo_link_relations_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoLinkRelations"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Relations",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
   "/api/v1/business/geo-memberships/{membership_id}": {
    "delete": {
     "operationId": "delete_geo_membership_api_v1_business_geo_memberships__membership_id__delete",
@@ -26398,6 +27472,509 @@
      }
     },
     "summary": "Geography Org Units",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/legal-entities": {
+   "get": {
+    "operationId": "list_legal_entities_api_v1_business_legal_entities_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LegalEntityListResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "List Legal Entities",
+    "tags": [
+     "organization"
+    ]
+   },
+   "post": {
+    "operationId": "create_legal_entity_api_v1_business_legal_entities_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LegalEntityCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LegalEntity"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Create Legal Entity",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/legal-entities/{le_id}": {
+   "delete": {
+    "operationId": "delete_legal_entity_api_v1_business_legal_entities__le_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "le_id",
+      "required": true,
+      "schema": {
+       "title": "Le Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Delete Legal Entity",
+    "tags": [
+     "organization"
+    ]
+   },
+   "get": {
+    "operationId": "get_legal_entity_api_v1_business_legal_entities__le_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "le_id",
+      "required": true,
+      "schema": {
+       "title": "Le Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LegalEntityDetail"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Legal Entity",
+    "tags": [
+     "organization"
+    ]
+   },
+   "patch": {
+    "operationId": "update_legal_entity_api_v1_business_legal_entities__le_id__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "le_id",
+      "required": true,
+      "schema": {
+       "title": "Le Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LegalEntityUpdate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LegalEntity"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Update Legal Entity",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/legal-entities/{le_id}/org-units": {
+   "post": {
+    "operationId": "link_org_unit_api_v1_business_legal_entities__le_id__org_units_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "le_id",
+      "required": true,
+      "schema": {
+       "title": "Le Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/LinkOrgUnit"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/LegalEntityDetail"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Link Org Unit",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/legal-entities/{le_id}/org-units/{ou_id}": {
+   "delete": {
+    "operationId": "unlink_org_unit_api_v1_business_legal_entities__le_id__org_units__ou_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "le_id",
+      "required": true,
+      "schema": {
+       "title": "Le Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "ou_id",
+      "required": true,
+      "schema": {
+       "title": "Ou Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Unlink Org Unit",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/legal-entities/{subject_id}/geo-links": {
+   "get": {
+    "operationId": "list_legal_entity_geo_links",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "subject_id",
+      "required": true,
+      "schema": {
+       "title": "Subject Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "as_of",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      }
+     },
+     {
+      "in": "query",
+      "name": "all",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "All",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoLinkListResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Legal Entity Geo Links",
+    "tags": [
+     "organization"
+    ]
+   },
+   "post": {
+    "operationId": "add_legal_entity_geo_link",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "subject_id",
+      "required": true,
+      "schema": {
+       "title": "Subject Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GeoLinkCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoLink"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Add Legal Entity Geo Link",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/legal-entities/{subject_id}/geo-links/{link_id}": {
+   "delete": {
+    "operationId": "delete_legal_entity_geo_link",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "subject_id",
+      "required": true,
+      "schema": {
+       "title": "Subject Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "link_id",
+      "required": true,
+      "schema": {
+       "title": "Link Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Remove a legal-entity geography link",
+    "tags": [
+     "organization"
+    ]
+   },
+   "patch": {
+    "operationId": "update_legal_entity_geo_link",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "subject_id",
+      "required": true,
+      "schema": {
+       "title": "Subject Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "link_id",
+      "required": true,
+      "schema": {
+       "title": "Link Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GeoLinkUpdate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoLink"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Update Legal Entity Geo Link",
     "tags": [
      "organization"
     ]
@@ -26783,6 +28360,274 @@
      }
     },
     "summary": "Unlink Geography",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/org-units/{ou_id}/legal-entities": {
+   "get": {
+    "operationId": "org_unit_legal_entities_api_v1_business_org_units__ou_id__legal_entities_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "ou_id",
+      "required": true,
+      "schema": {
+       "title": "Ou Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/LegalEntity"
+         },
+         "title": "Response Org Unit Legal Entities Api V1 Business Org Units  Ou Id  Legal Entities Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Org Unit Legal Entities",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/org-units/{subject_id}/geo-links": {
+   "get": {
+    "operationId": "list_org_unit_geo_links",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "subject_id",
+      "required": true,
+      "schema": {
+       "title": "Subject Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "as_of",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      }
+     },
+     {
+      "in": "query",
+      "name": "all",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "All",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoLinkListResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Org Unit Geo Links",
+    "tags": [
+     "organization"
+    ]
+   },
+   "post": {
+    "operationId": "add_org_unit_geo_link",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "subject_id",
+      "required": true,
+      "schema": {
+       "title": "Subject Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GeoLinkCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoLink"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Add Org Unit Geo Link",
+    "tags": [
+     "organization"
+    ]
+   }
+  },
+  "/api/v1/business/org-units/{subject_id}/geo-links/{link_id}": {
+   "delete": {
+    "operationId": "delete_org_unit_geo_link",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "subject_id",
+      "required": true,
+      "schema": {
+       "title": "Subject Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "link_id",
+      "required": true,
+      "schema": {
+       "title": "Link Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Remove a org-unit geography link",
+    "tags": [
+     "organization"
+    ]
+   },
+   "patch": {
+    "operationId": "update_org_unit_geo_link",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "subject_id",
+      "required": true,
+      "schema": {
+       "title": "Subject Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "link_id",
+      "required": true,
+      "schema": {
+       "title": "Link Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/GeoLinkUpdate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GeoLink"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Update Org Unit Geo Link",
     "tags": [
      "organization"
     ]

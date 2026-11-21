@@ -3,6 +3,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import type { components } from "./generated/schema";
 import { QK } from "./queryKeys";
 
 const BASE = "/api/v1/business";
@@ -527,5 +528,138 @@ export function useSetRegionScope() {
   return useOrgMutation(
     ({ capabilityId, region_specific, geography_ids }: { capabilityId: string; region_specific: boolean; geography_ids: string[] }) =>
       apiMutation<RegionScope>("PUT", `${BASE}/capability-region-scope/${capabilityId}`, { region_specific, geography_ids }),
+  );
+}
+
+
+// ── 947 GEO-02: legal entities and typed, dated geography links ──────────────
+
+export type LegalEntity = components["schemas"]["LegalEntity"];
+export type LegalEntityDetail = components["schemas"]["LegalEntityDetail"];
+export type GeoLink = components["schemas"]["GeoLink"];
+export type GeoLinkList = components["schemas"]["GeoLinkListResponse"];
+export type RelationRule = components["schemas"]["RelationRule"];
+export type GeoLinkSubject = GeoLink["subject_type"];
+
+/** Where a subject's links live: applications ride their own route prefix (WRITE_APPLICATION). */
+export function geoLinkBase(subject: GeoLinkSubject, id: string): string {
+  if (subject === "application") return `/api/v1/applications/${id}/geo-links`;
+  return `${BASE}/${subject === "legal_entity" ? "legal-entities" : "org-units"}/${id}/geo-links`;
+}
+
+export function useGeoLinkRelations() {
+  return useQuery<components["schemas"]["GeoLinkRelations"]>({
+    queryKey: [...ORG_KEY, "geo-link-relations"],
+    queryFn: () => apiGet(`${BASE}/geo-link-relations`),
+    staleTime: Infinity,
+  });
+}
+
+export function useGeoLinks(subject: GeoLinkSubject, id: string | null, asOf: string | null, all: boolean) {
+  const params = new URLSearchParams();
+  if (asOf) params.set("as_of", asOf);
+  if (all) params.set("all", "true");
+  const q = params.toString() ? `?${params}` : "";
+  return useQuery<GeoLinkList>({
+    queryKey: [...ORG_KEY, "geo-links", subject, id, asOf ?? "today", all],
+    queryFn: () => apiGet(`${geoLinkBase(subject, id ?? "")}${q}`),
+    enabled: !!id,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useAddGeoLink() {
+  return useOrgMutation(
+    ({ subject, id, relation, geographyId, validFrom, validTo }: { subject: GeoLinkSubject; id: string; relation: string; geographyId: string; validFrom?: string | null; validTo?: string | null }) =>
+      apiMutation<GeoLink>("POST", geoLinkBase(subject, id), {
+        relation,
+        geography_id: geographyId,
+        valid_from: validFrom || null,
+        valid_to: validTo || null,
+      }),
+  );
+}
+
+export function useUpdateGeoLink() {
+  return useOrgMutation(
+    ({ subject, id, linkId, validFrom, validTo }: { subject: GeoLinkSubject; id: string; linkId: string; validFrom: string | null; validTo: string | null }) =>
+      apiMutation<GeoLink>("PATCH", `${geoLinkBase(subject, id)}/${linkId}`, { valid_from: validFrom, valid_to: validTo }),
+  );
+}
+
+export function useDeleteGeoLink() {
+  return useOrgMutation(({ subject, id, linkId }: { subject: GeoLinkSubject; id: string; linkId: string }) =>
+    apiMutation<void>("DELETE", `${geoLinkBase(subject, id)}/${linkId}`),
+  );
+}
+
+export function useLegalEntities() {
+  return useQuery<components["schemas"]["LegalEntityListResponse"]>({
+    queryKey: [...ORG_KEY, "legal-entities"],
+    queryFn: () => apiGet(`${BASE}/legal-entities`),
+  });
+}
+
+export function useLegalEntity(id: string | null) {
+  return useQuery<LegalEntityDetail>({
+    queryKey: [...ORG_KEY, "legal-entity", id],
+    queryFn: () => apiGet(`${BASE}/legal-entities/${id}`),
+    enabled: !!id,
+  });
+}
+
+export type LegalEntityFields = {
+  name?: string;
+  registration_number?: string | null;
+  lei?: string | null;
+  description?: string | null;
+  parent_id?: string | null;
+};
+
+export function useCreateLegalEntity() {
+  return useOrgMutation((body: LegalEntityFields & { name: string }) =>
+    apiMutation<LegalEntity>("POST", `${BASE}/legal-entities`, body),
+  );
+}
+
+export function useUpdateLegalEntity() {
+  return useOrgMutation(({ id, body }: { id: string; body: LegalEntityFields }) =>
+    apiMutation<LegalEntity>("PATCH", `${BASE}/legal-entities/${id}`, body),
+  );
+}
+
+export function useDeleteLegalEntity() {
+  return useOrgMutation((id: string) => apiMutation<void>("DELETE", `${BASE}/legal-entities/${id}`));
+}
+
+export function useLinkLegalEntityOrgUnit() {
+  return useOrgMutation(({ id, orgUnitId }: { id: string; orgUnitId: string }) =>
+    apiMutation<LegalEntityDetail>("POST", `${BASE}/legal-entities/${id}/org-units`, { org_unit_id: orgUnitId }),
+  );
+}
+
+export function useUnlinkLegalEntityOrgUnit() {
+  return useOrgMutation(({ id, orgUnitId }: { id: string; orgUnitId: string }) =>
+    apiMutation<void>("DELETE", `${BASE}/legal-entities/${id}/org-units/${orgUnitId}`),
+  );
+}
+
+export function useApplicationLegalEntities(appId: string | null) {
+  return useQuery<LegalEntity[]>({
+    queryKey: [...ORG_KEY, "application-legal-entities", appId],
+    queryFn: () => apiGet(`/api/v1/applications/${appId}/legal-entities`),
+    enabled: !!appId,
+  });
+}
+
+export function useLinkApplicationLegalEntity() {
+  return useOrgMutation(({ appId, legalEntityId }: { appId: string; legalEntityId: string }) =>
+    apiMutation<LegalEntity[]>("POST", `/api/v1/applications/${appId}/legal-entities`, { legal_entity_id: legalEntityId }),
+  );
+}
+
+export function useUnlinkApplicationLegalEntity() {
+  return useOrgMutation(({ appId, legalEntityId }: { appId: string; legalEntityId: string }) =>
+    apiMutation<void>("DELETE", `/api/v1/applications/${appId}/legal-entities/${legalEntityId}`),
   );
 }

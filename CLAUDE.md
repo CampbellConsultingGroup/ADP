@@ -173,6 +173,34 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 947-legal-entities: GEO-02 of epic ADP-bo1 (ADP-bo1.2; settles ADP-90r.5: legal entities are
+  ADP-native). Decisions (user, 2026-11-20): org units get typed links too; their operating
+  geographies became undated `operates_in` links; legal entity has an optional parent legal entity
+  plus many-to-many org unit links; nothing inferred from an application's owning org unit.
+  - Migration `058`: `legal_entities` (name unique ignoring case, LEI unique, parent SET NULL),
+    `legal_entity_org_units`, `application_legal_entities`, and three link tables of one shape
+    (`application_geo_links`, `legal_entity_geo_links`, `org_unit_geo_links`: relation, geography,
+    valid_from inclusive, valid_to exclusive). `org_unit_geographies` is DROPPED (rows copied as
+    `operates_in`); downgrade rebuilds it from `operates_in` (dates lost).
+  - `adp.organization.geo_links`: `RELATIONS` matrix (application: deployed_in, stores_data_in,
+    processes_personal_data_of, serves_customers_in; legal entity: incorporated_in [country only,
+    one at a time], licensed_in, has_establishment_in, tax_resident_in; org unit: operates_in,
+    serves_customers_in, has_staff_in), pure `check_link`, CRUD via `_SUBJECTS` (one code path,
+    three tables). Relation and geography of a link are fixed; only dates change.
+  - `OrgUnit.geography_ids`, `Geography.org_unit_count`, `/geographies/{id}/org-units` and 941's
+    snapshot mean "`operates_in` active today" (`ostore._operating_today()`). The 940 routes
+    `POST/DELETE /org-units/{id}/geographies` still work (undated operates_in / remove all for the pair).
+  - Routes in `adp.organization.links_router`: `router` (/api/v1/business: `/legal-entities[...]`,
+    `/legal-entities/{id}/org-units`, `/org-units/{id}/legal-entities`, `/{legal-entities|org-units}/{id}/geo-links[/{link_id}]`,
+    `/geo-link-relations`) and `applications_router` (/api/v1/applications: `/{id}/legal-entities`,
+    `/{id}/geo-links`, so writes need write_application). Both registered in app.py, never nested.
+  - Application delete relies on 058's CASCADE (adp.application can't import adp.organization).
+  - Search `ENTITY_LEGAL_ENTITY`; export `organization/legal-entities/<id>.json`,
+    `organization/application-geo-links.json`, org unit files gain `geo_links`.
+  - UI: Business -> Organization -> Legal entities (tree, detail, org units, apps); shared
+    `business/GeoLinksEditor.tsx` (as-of date, other periods, add/edit dates/remove) used by legal
+    entities, the org unit panel (replaces "Operates in") and the new application Geography tab
+    (`application/ApplicationGeography.tsx`).
 - 946-geo-hierarchies: GEO-01 of epic ADP-bo1 (ADP-bo1.1). Places, typed hierarchies, nodes and
   effective-dated memberships; replaces the 940 editable tree. Decisions (user, 2026-11-20):
   any place or node may be a link target; write permission by kind; managed on
