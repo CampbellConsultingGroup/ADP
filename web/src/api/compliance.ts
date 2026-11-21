@@ -3,6 +3,7 @@
 
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiGet, apiMutation } from "./client";
+import type { components } from "./generated/schema";
 import { QK } from "./queryKeys";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -451,5 +452,65 @@ export function useComplianceSummary() {
   return useQuery<ComplianceSummaryResponse>({
     queryKey: [QK.complianceSummary],
     queryFn: () => apiGet("/api/v1/compliance/summary"),
+  });
+}
+
+
+// ── 948 GEO-03: framework jurisdiction and derived applicability ─────────────
+
+export type FrameworkJurisdiction = components["schemas"]["FrameworkJurisdiction"];
+export type JurisdictionTrigger = components["schemas"]["JurisdictionTrigger"];
+export type Applicability = components["schemas"]["Applicability"];
+export type ApplicabilityEvidence = components["schemas"]["ApplicabilityEvidence"];
+export type ApplicabilityStatus = Applicability["status"];
+export type FrameworkApplicability = components["schemas"]["FrameworkApplicabilityResponse"];
+export type SubjectApplicability = components["schemas"]["SubjectApplicabilityResponse"];
+
+export const APPLICABILITY_LABEL: Record<ApplicabilityStatus, string> = {
+  applies: "Applies",
+  does_not_apply: "Does not apply",
+  unknown: "Unknown",
+};
+
+function asOfQuery(asOf: string | null): string {
+  return asOf ? `?as_of=${encodeURIComponent(asOf)}` : "";
+}
+
+export function useFrameworkJurisdiction(frameworkId: string | null) {
+  return useQuery<FrameworkJurisdiction>({
+    queryKey: [QK.complianceJurisdiction, frameworkId],
+    queryFn: () => apiGet(`/api/v1/compliance/frameworks/${frameworkId}/jurisdiction`),
+    enabled: !!frameworkId,
+  });
+}
+
+export function useSetFrameworkJurisdiction(frameworkId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { geography_ids: string[]; triggers: { subject_type: JurisdictionTrigger["subject_type"]; relation: string }[] }) =>
+      apiMutation<FrameworkJurisdiction>("PUT", `/api/v1/compliance/frameworks/${frameworkId}/jurisdiction`, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: [QK.complianceJurisdiction, frameworkId] });
+      void qc.invalidateQueries({ queryKey: [QK.complianceApplicability] });
+    },
+  });
+}
+
+export function useFrameworkApplicability(frameworkId: string | null, asOf: string | null) {
+  return useQuery<FrameworkApplicability>({
+    queryKey: [QK.complianceApplicability, "framework", frameworkId, asOf ?? "today"],
+    queryFn: () => apiGet(`/api/v1/compliance/frameworks/${frameworkId}/applicability${asOfQuery(asOf)}`),
+    enabled: !!frameworkId,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useSubjectApplicability(subject: "application" | "legal_entity", id: string | null, asOf: string | null) {
+  const path = subject === "application" ? "applications" : "legal-entities";
+  return useQuery<SubjectApplicability>({
+    queryKey: [QK.complianceApplicability, subject, id, asOf ?? "today"],
+    queryFn: () => apiGet(`/api/v1/compliance/${path}/${id}/applicability${asOfQuery(asOf)}`),
+    enabled: !!id,
+    placeholderData: (previous) => previous,
   });
 }

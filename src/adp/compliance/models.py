@@ -542,3 +542,101 @@ class ComplianceSummaryResponse(BaseModel):
 
 RegulatoryFrameworkDetail.model_rebuild()
 ControlNode.model_rebuild()
+
+# ── 948 GEO-03: framework jurisdiction and derived applicability (ADP-bo1.3) ───
+
+ApplicabilityStatus = Literal["applies", "does_not_apply", "unknown"]
+ApplicabilitySubject = Literal["application", "legal_entity"]
+
+
+class JurisdictionGeography(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    name: str
+    code: str | None = None
+    entity: str = "place"
+    hierarchy_name: str | None = None
+    hierarchy_kind: str | None = None
+
+
+class JurisdictionTrigger(BaseModel):
+    """A 947 typed geography relation that brings a subject into scope."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    subject_type: ApplicabilitySubject
+    relation: str = Field(min_length=1, max_length=40)
+    label: str | None = None
+
+
+class FrameworkJurisdiction(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    framework_id: str
+    configured: bool
+    geographies: list[JurisdictionGeography]
+    triggers: list[JurisdictionTrigger]
+
+
+class SetFrameworkJurisdiction(BaseModel):
+    """Replaces both lists. Empty lists clear the jurisdiction (applicability becomes unknown)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    geography_ids: list[str] = Field(default_factory=list, max_length=200)
+    triggers: list[JurisdictionTrigger] = Field(default_factory=list, max_length=20)
+
+
+class ApplicabilityRef(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    name: str
+
+
+class ApplicabilityEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    relation: str
+    relation_label: str
+    geography: JurisdictionGeography
+    jurisdiction_geography: JurisdictionGeography
+    how: Literal["same", "inside", "covers", "shares_countries"]
+    path: list[str] = []
+    via_legal_entity: ApplicabilityRef | None = None
+    valid_from: date | None = None
+    valid_to: date | None = None
+
+
+class Applicability(BaseModel):
+    """Derived on read, never stored (spec FR-006)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    framework: ApplicabilityRef
+    subject_type: ApplicabilitySubject
+    subject: ApplicabilityRef
+    status: ApplicabilityStatus
+    reason: str | None = None
+    evidence: list[ApplicabilityEvidence] = []
+
+
+class SubjectApplicabilityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: date
+    subject_type: ApplicabilitySubject
+    subject_id: str
+    items: list[Applicability]
+
+
+class FrameworkApplicabilityResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    as_of: date
+    framework_id: str
+    configured: bool
+    counts: dict[ApplicabilityStatus, int]
+    items: list[Applicability]
+

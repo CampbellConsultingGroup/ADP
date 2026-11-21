@@ -173,6 +173,28 @@ uvicorn adp.api.app:app --host 0.0.0.0 --port 8001 --reload
 Python 3.12 (runtime) targeting 3.11+ compatibility; follow standard PEP 8 conventions enforced by ruff.
 
 ## Recent Changes
+- 948-framework-applicability: GEO-03 of epic ADP-bo1 (ADP-bo1.3; supersedes ADP-90r.1). Decisions
+  (user, 2026-11-20): an application also counts its legal entities' links ("via"); framework
+  lifecycle counts (repealed / not in force on the date -> does not apply); shown on framework,
+  application and legal entity; control-mapping screens unchanged (follow-on).
+  - Migration `059`: `framework_jurisdiction_geographies` (framework, geography) and
+    `framework_jurisdiction_triggers` (framework, subject_type application|legal_entity, relation).
+    Tables live in `adp.compliance.jurisdiction` on the compliance metadata (import the module before
+    `create_all` in fixtures); geography column has no FK there (058 precedent).
+  - Pure `adp.compliance.applicability.compute_framework_applicability(framework, links, graph,
+    as_of)`: no jurisdiction -> unknown; repealed / not in force -> does_not_apply; no active trigger
+    link -> unknown; any trigger link overlapping the scope (946 GeoGraph as of the date) -> applies
+    with evidence (how: same|inside|covers|shares_countries, path, via entity); else does_not_apply.
+    Never stored (guard `test_applicability_not_stored.py`).
+  - `adp.compliance` now reads `adp.organization` (geo_model, geo_links, legal_entities, store);
+    one-way, organization never imports compliance.
+  - Routes (`adp.compliance.applicability_router`, registered beside the compliance router):
+    GET/PUT `/compliance/frameworks/{id}/jurisdiction` (PUT replaces; write_compliance),
+    GET `/compliance/frameworks/{id}/applicability?as_of=`,
+    GET `/compliance/{applications|legal-entities}/{id}/applicability?as_of=`.
+  - UI `web/src/compliance/Applicability.tsx`: jurisdiction editor + "Applies to" on the framework,
+    "Which regulations apply" on the application's Regulatory Mappings tab and the legal entity.
+    Organization mutations invalidate `QK.complianceApplicability`.
 - 947-legal-entities: GEO-02 of epic ADP-bo1 (ADP-bo1.2; settles ADP-90r.5: legal entities are
   ADP-native). Decisions (user, 2026-11-20): org units get typed links too; their operating
   geographies became undated `operates_in` links; legal entity has an optional parent legal entity

@@ -1836,6 +1836,161 @@
     "title": "AppVia",
     "type": "object"
    },
+   "Applicability": {
+    "additionalProperties": false,
+    "description": "Derived on read, never stored (spec FR-006).",
+    "properties": {
+     "evidence": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/ApplicabilityEvidence"
+      },
+      "title": "Evidence",
+      "type": "array"
+     },
+     "framework": {
+      "$ref": "#/components/schemas/ApplicabilityRef"
+     },
+     "reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reason"
+     },
+     "status": {
+      "enum": [
+       "applies",
+       "does_not_apply",
+       "unknown"
+      ],
+      "title": "Status",
+      "type": "string"
+     },
+     "subject": {
+      "$ref": "#/components/schemas/ApplicabilityRef"
+     },
+     "subject_type": {
+      "enum": [
+       "application",
+       "legal_entity"
+      ],
+      "title": "Subject Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "framework",
+     "subject_type",
+     "subject",
+     "status"
+    ],
+    "title": "Applicability",
+    "type": "object"
+   },
+   "ApplicabilityEvidence": {
+    "additionalProperties": false,
+    "properties": {
+     "geography": {
+      "$ref": "#/components/schemas/JurisdictionGeography"
+     },
+     "how": {
+      "enum": [
+       "same",
+       "inside",
+       "covers",
+       "shares_countries"
+      ],
+      "title": "How",
+      "type": "string"
+     },
+     "jurisdiction_geography": {
+      "$ref": "#/components/schemas/JurisdictionGeography"
+     },
+     "path": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Path",
+      "type": "array"
+     },
+     "relation": {
+      "title": "Relation",
+      "type": "string"
+     },
+     "relation_label": {
+      "title": "Relation Label",
+      "type": "string"
+     },
+     "valid_from": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid From"
+     },
+     "valid_to": {
+      "anyOf": [
+       {
+        "format": "date",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Valid To"
+     },
+     "via_legal_entity": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ApplicabilityRef"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "required": [
+     "relation",
+     "relation_label",
+     "geography",
+     "jurisdiction_geography",
+     "how"
+    ],
+    "title": "ApplicabilityEvidence",
+    "type": "object"
+   },
+   "ApplicabilityRef": {
+    "additionalProperties": false,
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name"
+    ],
+    "title": "ApplicabilityRef",
+    "type": "object"
+   },
    "Application": {
     "additionalProperties": false,
     "properties": {
@@ -8913,6 +9068,54 @@
     "title": "FrameworkAmendmentListResponse",
     "type": "object"
    },
+   "FrameworkApplicabilityResponse": {
+    "additionalProperties": false,
+    "properties": {
+     "as_of": {
+      "format": "date",
+      "title": "As Of",
+      "type": "string"
+     },
+     "configured": {
+      "title": "Configured",
+      "type": "boolean"
+     },
+     "counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "propertyNames": {
+       "enum": [
+        "applies",
+        "does_not_apply",
+        "unknown"
+       ]
+      },
+      "title": "Counts",
+      "type": "object"
+     },
+     "framework_id": {
+      "title": "Framework Id",
+      "type": "string"
+     },
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/Applicability"
+      },
+      "title": "Items",
+      "type": "array"
+     }
+    },
+    "required": [
+     "as_of",
+     "framework_id",
+     "configured",
+     "counts",
+     "items"
+    ],
+    "title": "FrameworkApplicabilityResponse",
+    "type": "object"
+   },
    "FrameworkApplicationPhase": {
     "additionalProperties": false,
     "description": "Read model.",
@@ -9061,6 +9264,41 @@
      "organization_status"
     ],
     "title": "FrameworkCoverageRollup",
+    "type": "object"
+   },
+   "FrameworkJurisdiction": {
+    "additionalProperties": false,
+    "properties": {
+     "configured": {
+      "title": "Configured",
+      "type": "boolean"
+     },
+     "framework_id": {
+      "title": "Framework Id",
+      "type": "string"
+     },
+     "geographies": {
+      "items": {
+       "$ref": "#/components/schemas/JurisdictionGeography"
+      },
+      "title": "Geographies",
+      "type": "array"
+     },
+     "triggers": {
+      "items": {
+       "$ref": "#/components/schemas/JurisdictionTrigger"
+      },
+      "title": "Triggers",
+      "type": "array"
+     }
+    },
+    "required": [
+     "framework_id",
+     "configured",
+     "geographies",
+     "triggers"
+    ],
+    "title": "FrameworkJurisdiction",
     "type": "object"
    },
    "GeoHierarchy": {
@@ -10854,6 +11092,100 @@
      "status"
     ],
     "title": "IntakeSubmitResponse",
+    "type": "object"
+   },
+   "JurisdictionGeography": {
+    "additionalProperties": false,
+    "properties": {
+     "code": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Code"
+     },
+     "entity": {
+      "default": "place",
+      "title": "Entity",
+      "type": "string"
+     },
+     "hierarchy_kind": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hierarchy Kind"
+     },
+     "hierarchy_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hierarchy Name"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name"
+    ],
+    "title": "JurisdictionGeography",
+    "type": "object"
+   },
+   "JurisdictionTrigger": {
+    "additionalProperties": false,
+    "description": "A 947 typed geography relation that brings a subject into scope.",
+    "properties": {
+     "label": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Label"
+     },
+     "relation": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Relation",
+      "type": "string"
+     },
+     "subject_type": {
+      "enum": [
+       "application",
+       "legal_entity"
+      ],
+      "title": "Subject Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "subject_type",
+     "relation"
+    ],
+    "title": "JurisdictionTrigger",
     "type": "object"
    },
    "KnowledgeItemCreateRequest": {
@@ -16770,6 +17102,30 @@
     "title": "SendMessageRequest",
     "type": "object"
    },
+   "SetFrameworkJurisdiction": {
+    "additionalProperties": false,
+    "description": "Replaces both lists. Empty lists clear the jurisdiction (applicability becomes unknown).",
+    "properties": {
+     "geography_ids": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 200,
+      "title": "Geography Ids",
+      "type": "array"
+     },
+     "triggers": {
+      "items": {
+       "$ref": "#/components/schemas/JurisdictionTrigger"
+      },
+      "maxItems": 20,
+      "title": "Triggers",
+      "type": "array"
+     }
+    },
+    "title": "SetFrameworkJurisdiction",
+    "type": "object"
+   },
    "SetOwner": {
     "additionalProperties": false,
     "properties": {
@@ -18332,6 +18688,43 @@
      }
     },
     "title": "StrategyInitiativeUpdate",
+    "type": "object"
+   },
+   "SubjectApplicabilityResponse": {
+    "additionalProperties": false,
+    "properties": {
+     "as_of": {
+      "format": "date",
+      "title": "As Of",
+      "type": "string"
+     },
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/Applicability"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "subject_id": {
+      "title": "Subject Id",
+      "type": "string"
+     },
+     "subject_type": {
+      "enum": [
+       "application",
+       "legal_entity"
+      ],
+      "title": "Subject Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "as_of",
+     "subject_type",
+     "subject_id",
+     "items"
+    ],
+    "title": "SubjectApplicabilityResponse",
     "type": "object"
    },
    "SuggestionAcceptRequest": {
@@ -30321,6 +30714,65 @@
     ]
    }
   },
+  "/api/v1/compliance/applications/{application_id}/applicability": {
+   "get": {
+    "operationId": "get_application_applicability_api_v1_compliance_applications__application_id__applicability_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "application_id",
+      "required": true,
+      "schema": {
+       "title": "Application Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "as_of",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SubjectApplicabilityResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Application Applicability",
+    "tags": [
+     "compliance"
+    ]
+   }
+  },
   "/api/v1/compliance/controls/{control_id}": {
    "delete": {
     "operationId": "delete_control_api_v1_compliance_controls__control_id__delete",
@@ -31711,6 +32163,65 @@
     ]
    }
   },
+  "/api/v1/compliance/frameworks/{framework_id}/applicability": {
+   "get": {
+    "operationId": "get_framework_applicability_api_v1_compliance_frameworks__framework_id__applicability_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "framework_id",
+      "required": true,
+      "schema": {
+       "title": "Framework Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "as_of",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FrameworkApplicabilityResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Framework Applicability",
+    "tags": [
+     "compliance"
+    ]
+   }
+  },
   "/api/v1/compliance/frameworks/{framework_id}/application-phases": {
    "get": {
     "operationId": "list_application_phases_api_v1_compliance_frameworks__framework_id__application_phases_get",
@@ -31942,6 +32453,98 @@
     ]
    }
   },
+  "/api/v1/compliance/frameworks/{framework_id}/jurisdiction": {
+   "get": {
+    "operationId": "get_jurisdiction_api_v1_compliance_frameworks__framework_id__jurisdiction_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "framework_id",
+      "required": true,
+      "schema": {
+       "title": "Framework Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FrameworkJurisdiction"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Jurisdiction",
+    "tags": [
+     "compliance"
+    ]
+   },
+   "put": {
+    "operationId": "set_jurisdiction_api_v1_compliance_frameworks__framework_id__jurisdiction_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "framework_id",
+      "required": true,
+      "schema": {
+       "title": "Framework Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SetFrameworkJurisdiction"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/FrameworkJurisdiction"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Set Jurisdiction",
+    "tags": [
+     "compliance"
+    ]
+   }
+  },
   "/api/v1/compliance/frameworks/{framework_id}/rollup": {
    "get": {
     "description": "Framework coverage rollup (COMPLY-04 US1, FR-001/002/003): a live count of entities at\neach compliance status, scoped to this framework's own controls, plus its estate-wide\nobligation status as a separate line if one exists. Application-targeted entities are\nexcluded from the counts for a caller lacking READ_APPLICATION_GOVERNANCE (FR-007) --\nnever a 403, unlike GET /applications/{id}/compliance-mappings's own route-level gate\n(research.md D2 deliberately mirrors list_control_mappings' filtering precedent instead).",
@@ -32023,6 +32626,65 @@
      }
     },
     "summary": "List Framework Themes",
+    "tags": [
+     "compliance"
+    ]
+   }
+  },
+  "/api/v1/compliance/legal-entities/{legal_entity_id}/applicability": {
+   "get": {
+    "operationId": "get_legal_entity_applicability_api_v1_compliance_legal_entities__legal_entity_id__applicability_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "legal_entity_id",
+      "required": true,
+      "schema": {
+       "title": "Legal Entity Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "as_of",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "date",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Of"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SubjectApplicabilityResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Legal Entity Applicability",
     "tags": [
      "compliance"
     ]

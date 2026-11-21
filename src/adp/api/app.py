@@ -60,6 +60,7 @@ from adp.business import router as business_router_module
 from adp.business import store as bstore
 from adp.business import value_chains_router as business_value_chains_router_module
 from adp.chat import router as chat_router_module
+from adp.compliance import applicability_router as compliance_applicability_router_module
 from adp.compliance import router as compliance_router_module
 from adp.diagrams import router as diagrams_router
 from adp.export import agentic as agentic_export
@@ -427,6 +428,8 @@ def create_app() -> FastAPI:
     app.include_router(diagrams_router.router)
     app.include_router(strategy_router.router)
     app.include_router(compliance_router_module.router)
+    # 948 GEO-03: framework jurisdiction and derived applicability (same prefix, not nested).
+    app.include_router(compliance_applicability_router_module.router)
     app.include_router(agentic_router_module.router)
     # 936: adoption routes first, so /adoptions and /evaluate are never taken as a {key}.
     app.include_router(pattern_adoptions_router_module.router)

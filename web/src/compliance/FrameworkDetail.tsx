@@ -8,6 +8,7 @@ import {
 import type { ComplianceStatus, ControlNode, EntityStatusCounts } from "../api/compliance";
 import FrameworkForm from "./FrameworkForm";
 import ControlTree from "./ControlTree";
+import { FrameworkJurisdictionPanel } from "./Applicability";
 import { isHttpUrl } from "../ui/url";
 import { confirmAction } from "../ui/confirm";
 import { useCan } from "../auth/permissions";
@@ -167,6 +168,8 @@ export default function FrameworkDetail({ frameworkId, onBack }: FrameworkDetail
       )}
 
       <FrameworkCoverageRollup frameworkId={frameworkId} />
+      {/* 948 GEO-03: jurisdiction and what the framework applies to. */}
+      <FrameworkJurisdictionPanel frameworkId={frameworkId} canWrite={canWrite.allowed} />
 
       <h4 style={{ fontSize: 14, marginBottom: 8 }}>Controls</h4>
       <ControlTree frameworkId={frameworkId} controls={framework.controls} />

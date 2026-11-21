@@ -9,6 +9,8 @@ import * as capNav from "../application/appCapNav";
 import ApplicationGeography from "../application/ApplicationGeography";
 import LegalEntities from "./LegalEntities";
 
+// 948: the applicability panels have their own tests (compliance/Applicability.test.tsx).
+vi.mock("../compliance/Applicability", () => ({ FrameworkJurisdictionPanel: () => null, SubjectApplicability: () => null }));
 vi.mock("../api/organization", async (orig) => ({
   ...(await orig<typeof import("../api/organization")>()),
   useLegalEntities: vi.fn(),

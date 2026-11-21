@@ -9,6 +9,8 @@ import * as complianceApi from "../api/compliance";
 import type { ControlNode, RegulatoryFrameworkDetail } from "../api/compliance";
 import { renderWithQuery as renderWithQueryClient } from "../../tests/support/apiTestUtils";
 
+// 948: the applicability panels have their own tests (compliance/Applicability.test.tsx).
+vi.mock("./Applicability", () => ({ FrameworkJurisdictionPanel: () => null, SubjectApplicability: () => null }));
 vi.mock("../api/compliance");
 
 const mockedApi = vi.mocked(complianceApi);
