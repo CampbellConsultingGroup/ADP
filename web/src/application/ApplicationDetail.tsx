@@ -24,6 +24,7 @@ import ApplicationComplianceMappings from "./ApplicationComplianceMappings";
 import SolutionAgentsPanel from "../agentic/SolutionAgentsPanel";
 import { errorDetail } from "../api/agentic";
 import { Tabs } from "../ui/Tabs";
+import ApplicationGeography from "./ApplicationGeography";
 import { confirmAction } from "../ui/confirm";
 import ApplicationSummary from "./ApplicationSummary";
 import { Loading } from "../ui/primitives";
@@ -35,7 +36,7 @@ interface Props {
   onDeleted: () => void;
 }
 
-type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs" | "risk" | "cost" | "tech-fit" | "initiatives" | "governance" | "quality" | "objectives" | "compliance-mappings" | "agents";
+type Section = "overview" | "capabilities" | "tech-caps" | "stages" | "integrations" | "designs" | "risk" | "cost" | "tech-fit" | "initiatives" | "governance" | "quality" | "objectives" | "compliance-mappings" | "agents" | "geography";
 
 // ADP-3jj: matches ApplicationForm.tsx's own APPLICATION_TYPE_LABELS.
 const APPLICATION_TYPE_LABELS: Record<string, string> = {
@@ -86,6 +87,8 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
     { id: "capabilities", label: "Capabilities" },
     { id: "tech-caps", label: "Technical Capabilities" },
     { id: "stages", label: "Stages" },
+    // 947 GEO-02: legal entities and typed, dated geography links.
+    { id: "geography", label: "Geography" },
     { id: "integrations", label: "Integrations" },
     { id: "designs", label: "Designs" },
     { id: "risk", label: "Risk Profile" },
@@ -220,6 +223,7 @@ export default function ApplicationDetail({ appId, allApps, onDeleted }: Props) 
         {section === "quality" && <QualityPanel appId={appId} />}
         {section === "objectives" && <ObjectiveLinksPanel appId={appId} />}
         {section === "compliance-mappings" && <ApplicationComplianceMappings appId={appId} />}
+        {section === "geography" && <ApplicationGeography appId={appId} />}
         {section === "agents" && app.application_type === "agentic" && <SolutionAgentsPanel appId={appId} />}
       </div>
 

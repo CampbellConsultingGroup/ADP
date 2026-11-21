@@ -66,6 +66,7 @@ from adp.export import agentic as agentic_export
 from adp.export import application_arch, business_arch
 from adp.export import patterns as patterns_export
 from adp.export import strategy as strategy_export
+from adp.organization import links_router as organization_links_router_module
 from adp.organization import router as organization_router_module
 from adp.patterns import adoptions_router as pattern_adoptions_router_module
 from adp.patterns import router as patterns_router_module
@@ -406,6 +407,9 @@ def create_app() -> FastAPI:
     app.include_router(config.router)
     # 940-org-units-geography: before the business router (both under /api/v1/business).
     app.include_router(organization_router_module.router)
+    # 947 GEO-02: legal entities and typed geography links (two routers, never nested).
+    app.include_router(organization_links_router_module.router)
+    app.include_router(organization_links_router_module.applications_router)
     app.include_router(business_router_module.router)
     # Split out of the business router (ADP-blp.27); same prefix, registered straight after it.
     app.include_router(business_agent_review_router_module.router)

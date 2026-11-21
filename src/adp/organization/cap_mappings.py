@@ -41,7 +41,8 @@ from adp.organization.store import (
     _capability_org_mappings,
     _geographies,
     _now,
-    _org_unit_geographies,
+    _operating_today,
+    _org_unit_geo_links,
     _org_units,
     display_level,
     geo_graph,
@@ -77,11 +78,15 @@ async def build_snapshot(session: AsyncSession) -> Snapshot:
                 _geographies.c.id,
                 _geographies.c.name,
                 _geographies.c.entity,
-                _org_unit_geographies.c.org_unit_id,
+                _org_unit_geo_links.c.org_unit_id,
             ).select_from(
+                # 947 Q1b: operating geographies are the operates_in links active today.
                 _geographies.outerjoin(
-                    _org_unit_geographies,
-                    _org_unit_geographies.c.geography_id == _geographies.c.id,
+                    _org_unit_geo_links,
+                    sa.and_(
+                        _org_unit_geo_links.c.geography_id == _geographies.c.id,
+                        _operating_today(),
+                    ),
                 )
             )
         )

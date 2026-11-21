@@ -112,7 +112,13 @@ WIPE_TABLES = [
     "capability_regional_assessments",
     # 941-capability-org-mappings: owner / performer / contributor mappings (before org_units).
     "capability_org_mappings",
-    "org_unit_geographies",
+    # 947-legal-entities: typed geography links and legal entities (before org_units/applications).
+    "application_geo_links",
+    "legal_entity_geo_links",
+    "org_unit_geo_links",
+    "application_legal_entities",
+    "legal_entity_org_units",
+    "legal_entities",
     "org_units",
     # 937-application-capabilities: the middle capability layer and its links.
     "app_capability_realizations",

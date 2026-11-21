@@ -24,6 +24,13 @@ vi.mock("../api/organization", async (orig) => ({
   useResolveUnmatched: vi.fn(),
   useOrgUnitFootprint: vi.fn(),
   useCapabilityOrgFindings: vi.fn(),
+  // 947 GEO-02: the panel's typed geography links.
+  useGeoLinkRelations: vi.fn(),
+  useGeoLinks: vi.fn(),
+  useAddGeoLink: vi.fn(),
+  useUpdateGeoLink: vi.fn(),
+  useDeleteGeoLink: vi.fn(),
+  useLegalEntities: vi.fn(),
 }));
 vi.mock("../auth/AuthProvider", async (orig) => ({
   ...(await orig<typeof import("../auth/AuthProvider")>()),
@@ -77,6 +84,35 @@ function setup(role = "enterprise_architect", detail: Partial<OrgUnitDetail> = {
   api.useUnlinkGeography.mockReturnValue(m("unlink"));
   api.useDeleteGeography.mockReturnValue(m("deleteGeo"));
   api.useResolveUnmatched.mockReturnValue(m("resolve"));
+  api.useGeoLinkRelations.mockReturnValue({
+    data: {
+      subjects: {
+        org_unit: [
+          { relation: "operates_in", label: "Operates in" },
+          { relation: "has_staff_in", label: "Has staff in" },
+        ],
+      },
+    },
+    isLoading: false,
+  } as never);
+  api.useGeoLinks.mockReturnValue({
+    data: {
+      as_of: "2026-11-20",
+      items: [
+        {
+          id: "lk1", subject_type: "org_unit", subject_id: "st", relation: "operates_in", active: true,
+          geography: { id: "geo-DE", name: "Germany", code: "DE", entity: "place" },
+          valid_from: null, valid_to: null, created_at: "", updated_at: "",
+        },
+      ],
+    },
+    isLoading: false,
+    error: null,
+  } as never);
+  api.useAddGeoLink.mockReturnValue(m("addLink"));
+  api.useUpdateGeoLink.mockReturnValue(m("updateLink"));
+  api.useDeleteGeoLink.mockReturnValue(m("deleteLink"));
+  api.useLegalEntities.mockReturnValue({ data: { items: [], total: 0 }, isLoading: false, error: null } as never);
   api.useOrgUnitFootprint.mockReturnValue({
     data: { org_unit: UNITS[1], includes_descendants: true, l3_total: 0, performs: [], owns: [], contributes: [] },
     isLoading: false,
@@ -152,19 +188,19 @@ describe("OrganizationTab — org units (US1)", () => {
 });
 
 describe("OrganizationTab — detail panel (US3)", () => {
-  it("shows geographies and applications, links and unlinks, sets the primary geography", async () => {
+  it("shows typed geography links and applications, adds and removes links, sets the primary geography", async () => {
     render(<OrganizationTab />);
     await userEvent.click(screen.getByRole("button", { name: "Stores" }));
     const panel = screen.getByLabelText("Org unit Stores");
-    expect(within(panel).getByText("Germany")).toBeTruthy();
+    expect(within(panel).getByRole("button", { name: "Change dates of Germany (DE)" })).toBeTruthy();
+    expect(within(panel).getAllByRole("term").map((t) => t.textContent)).toEqual(["Operates in", "Has staff in"]);
     expect(within(panel).getByText("Xstore POS")).toBeTruthy();
-    const add = within(panel).getByLabelText("Add geography") as HTMLSelectElement;
-    expect(Array.from(add.options).map((o) => o.textContent)).toEqual(["Add a region or country…", "Europe — region", "France (FR)"]);
-    await userEvent.selectOptions(add, "geo-FR");
-    await userEvent.click(within(panel).getByRole("button", { name: "Link" }));
-    expect(mutate.link).toHaveBeenCalledWith({ id: "st", geographyId: "geo-FR" });
-    await userEvent.click(within(panel).getByRole("button", { name: "Remove Germany" }));
-    expect(mutate.unlink).toHaveBeenCalledWith({ id: "st", geographyId: "geo-DE" });
+    await userEvent.selectOptions(within(panel).getByLabelText("Relation"), "has_staff_in");
+    await userEvent.selectOptions(within(panel).getByLabelText("Geography"), "geo-FR");
+    await userEvent.click(within(panel).getByRole("button", { name: "Add" }));
+    expect(mutate.addLink).toHaveBeenCalledWith({ subject: "org_unit", id: "st", relation: "has_staff_in", geographyId: "geo-FR", validFrom: null, validTo: null });
+    await userEvent.click(within(panel).getByRole("button", { name: "Remove Germany (DE)" }));
+    expect(mutate.deleteLink).toHaveBeenCalledWith({ subject: "org_unit", id: "st", linkId: "lk1" });
     await userEvent.selectOptions(within(panel).getByLabelText("Primary geography"), "geo-m49-150");
     expect(mutate.update).toHaveBeenCalledWith({ id: "st", body: { primary_geography_id: "geo-m49-150" } });
   });

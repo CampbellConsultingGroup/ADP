@@ -87,6 +87,14 @@ class UnknownReferenceError(OrganizationError):
     """941: an org unit or geography id in a request body that doesn't exist (422)."""
 
 
+class LinkRuleError(OrganizationError):
+    """947: a geography link the relation matrix or the dates don't allow (422)."""
+
+
+class DuplicateNameError(OrganizationError):
+    """947: a legal entity name or LEI already in use (409)."""
+
+
 # ── Shared ────────────────────────────────────────────────────────────────────
 
 
@@ -579,3 +587,179 @@ class RegionalHeatmap(_Model):
     columns: list[GeoRef]
     rows: list[HeatmapRow]
     max_columns: int
+
+
+# ── Legal entities and typed geography links (947 GEO-02, ADP-bo1.2) ──────────
+
+GeoLinkSubject = Literal["application", "legal_entity", "org_unit"]
+LEI = re.compile(r"^[A-Z0-9]{18}[0-9]{2}$")
+
+
+def lei_is_valid(lei: str) -> bool:
+    """ISO 17442: 20 characters, the last two are ISO 7064 mod 97-10 check digits."""
+    if not LEI.match(lei):
+        return False
+    digits = "".join(str(int(c, 36)) for c in lei)
+    return int(digits) % 97 == 1
+
+
+class RelationRule(_Model):
+    relation: str
+    label: str
+    place_only: bool = False
+    single_active: bool = False
+
+
+class GeoLinkRelations(_Model):
+    """The relation matrix (FR-006): which relations each subject may use."""
+
+    subjects: dict[str, list[RelationRule]]
+
+
+class LinkGeography(_Model):
+    id: str
+    name: str
+    code: str | None = None
+    entity: str
+    hierarchy_name: str | None = None
+    hierarchy_kind: str | None = None
+
+
+class GeoLink(_Model):
+    id: str
+    subject_type: GeoLinkSubject
+    subject_id: str
+    relation: str
+    geography: LinkGeography
+    valid_from: date | None = None
+    valid_to: date | None = None
+    active: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class GeoLinkListResponse(_Model):
+    as_of: date
+    items: list[GeoLink]
+
+
+class _Dates(_Model):
+    valid_from: date | None = None
+    valid_to: date | None = None
+
+    @model_validator(mode="after")
+    def _check_dates(self) -> "_Dates":
+        if self.valid_from and self.valid_to and self.valid_to <= self.valid_from:
+            raise ValueError("The end date must be after the start date")
+        return self
+
+
+class GeoLinkCreate(_Dates):
+    relation: str = Field(min_length=1, max_length=40)
+    geography_id: str
+
+
+class GeoLinkUpdate(_Dates):
+    """Only the dates change (FR-005); both are replaced as sent (null = open)."""
+
+
+class LegalEntity(_Model):
+    id: str
+    name: str
+    registration_number: str | None = None
+    lei: str | None = None
+    description: str | None = None
+    parent_id: str | None = None
+    path: list[Ref] = []
+    org_unit_ids: list[str] = []
+    application_count: int = 0
+    child_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
+class LegalEntityDetail(LegalEntity):
+    org_units: list[Ref] = []
+    applications: list[Ref] = []
+    children: list[Ref] = []
+
+
+class LegalEntityListResponse(_Model):
+    items: list[LegalEntity]
+    total: int
+
+
+def _lei(v: str | None) -> str | None:
+    if v is None:
+        return None
+    v = v.strip().upper()
+    if not v:
+        return None
+    if not lei_is_valid(v):
+        raise ValueError("LEI must be 20 letters or digits with valid check digits (ISO 17442)")
+    return v
+
+
+def _blank_none(v: str | None) -> str | None:
+    if v is None:
+        return None
+    v = v.strip()
+    return v or None
+
+
+class LegalEntityCreate(_Model):
+    name: str = Field(max_length=255)
+    registration_number: str | None = Field(default=None, max_length=100)
+    lei: str | None = None
+    description: str | None = None
+    parent_id: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str) -> str:
+        return _name(v) or v
+
+    @field_validator("lei")
+    @classmethod
+    def _check_lei(cls, v: str | None) -> str | None:
+        return _lei(v)
+
+    @field_validator("registration_number", "description")
+    @classmethod
+    def _blank(cls, v: str | None) -> str | None:
+        return _blank_none(v)
+
+
+class LegalEntityUpdate(_Model):
+    """Fields sent are changed; an explicit null clears an optional one."""
+
+    name: str | None = Field(default=None, max_length=255)
+    registration_number: str | None = Field(default=None, max_length=100)
+    lei: str | None = None
+    description: str | None = None
+    parent_id: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _check_name(cls, v: str | None) -> str | None:
+        if v is None:
+            raise ValueError("name can't be cleared")
+        return _name(v)
+
+    @field_validator("lei")
+    @classmethod
+    def _check_lei(cls, v: str | None) -> str | None:
+        return _lei(v)
+
+    @field_validator("registration_number", "description")
+    @classmethod
+    def _blank(cls, v: str | None) -> str | None:
+        return _blank_none(v)
+
+
+class LinkOrgUnit(_Model):
+    org_unit_id: str
+
+
+class LinkLegalEntity(_Model):
+    legal_entity_id: str

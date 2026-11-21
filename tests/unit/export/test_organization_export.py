@@ -88,3 +88,68 @@ async def test_geographies_file_lists_hierarchies_with_dated_memberships(session
     ]
     eu_row = next(g for g in data["geographies"] if g["id"] == eu.id)
     assert eu_row["entity"] == "node" and eu_row["hierarchy_id"] == h.id
+
+
+async def test_legal_entities_and_typed_links(session, tmp_path, monkeypatch):
+    """947 GEO-02 FR-011: legal entity files, org unit geo_links, application links file."""
+    from datetime import date
+
+    from adp.organization import geo_links, legal_entities
+    from adp.organization.models import GeoLinkCreate, LegalEntityCreate
+
+    async def _noop(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(legal_entities, "index_entity", _noop)
+    monkeypatch.setattr(legal_entities, "unindex_entity", _noop)
+    ou = await ostore.create_org_unit(OrgUnitCreate(name="Stores"), session)
+    await ostore.link_geography(ou.id, "geo-DE", session)
+    le = await legal_entities.create_legal_entity(LegalEntityCreate(name="Retail GmbH"), session)
+    await legal_entities.link_org_unit(le.id, ou.id, session)
+    await geo_links.add_link(
+        "legal_entity",
+        le.id,
+        GeoLinkCreate(
+            relation="incorporated_in", geography_id="geo-DE", valid_from=date(2001, 1, 1)
+        ),
+        session,
+    )
+    await session.execute(ostore._applications.insert().values(id="pos", name="POS"))
+    await legal_entities.link_application("pos", le.id, session)
+    await geo_links.add_link(
+        "application", "pos", GeoLinkCreate(relation="deployed_in", geography_id="geo-IE"), session
+    )
+    root = tmp_path / "out"
+    await reconcile_organization(root, session, NOW)
+
+    base = root / "organization"
+    entity = json.loads((base / "legal-entities" / f"{le.id}.json").read_text())
+    assert entity["org_unit_ids"] == [ou.id] and entity["application_ids"] == ["pos"]
+    assert entity["geo_links"] == [
+        {
+            "relation": "incorporated_in",
+            "geography_id": "geo-DE",
+            "valid_from": "2001-01-01",
+            "valid_to": None,
+        }
+    ]
+    unit = json.loads((base / "org-units" / f"{ou.id}.json").read_text())
+    assert [lk["relation"] for lk in unit["geo_links"]] == ["operates_in"]
+    apps = json.loads((base / "application-geo-links.json").read_text())["applications"]
+    assert apps == [
+        {
+            "application_id": "pos",
+            "legal_entity_ids": [le.id],
+            "geo_links": [
+                {
+                    "relation": "deployed_in",
+                    "geography_id": "geo-IE",
+                    "valid_from": None,
+                    "valid_to": None,
+                }
+            ],
+        }
+    ]
+    await legal_entities.delete_legal_entity(le.id, session)
+    await reconcile_organization(root, session, NOW)
+    assert not (base / "legal-entities" / f"{le.id}.json").exists()

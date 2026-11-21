@@ -12,23 +12,23 @@ import {
   ORG_UNIT_KIND_LABEL,
   useDeleteOrgUnit,
   useGeographies,
-  useLinkGeography,
   useOrgUnit,
   useOrgUnits,
-  useUnlinkGeography,
   useUnmatched,
   useUpdateOrgUnit,
 } from "../api/organization";
 import { useBusinessWrite } from "../application/appCapNav";
 import { useCan } from "../auth/permissions";
 import GeoHierarchies from "./GeoHierarchies";
+import GeoLinksEditor from "./GeoLinksEditor";
+import LegalEntities from "./LegalEntities";
 import OrgUnitTree from "./OrgUnitTree";
 import UnmatchedList from "./UnmatchedList";
 import OrgFindings from "./OrgFindings";
 import OrgUnitFootprint from "./OrgUnitFootprint";
 import { confirmAction } from "../ui/confirm";
 
-type Section = "org-units" | "geography" | "unmatched" | "findings";
+type Section = "org-units" | "legal-entities" | "geography" | "unmatched" | "findings";
 
 /** ADP-blp.65: the server's answer for WRITE_BUSINESS_ARCH (it used to borrow WRITE_APPLICATION's). */
 export function useCanWriteBusiness(): boolean {
@@ -59,17 +59,13 @@ function OrgUnitDetailPanel({
   const geos = useGeographies();
   const update = useUpdateOrgUnit();
   const del = useDeleteOrgUnit();
-  const link = useLinkGeography();
-  const unlink = useUnlinkGeography();
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [addGeo, setAddGeo] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   if (isLoading || !data) return <div style={muted}>Loading…</div>;
   const allGeos = (geos.data?.items ?? []).filter((g) => g.kind !== "global").sort((a, b) => a.name.localeCompare(b.name));
-  const linked = new Set(data.geography_ids);
   const run = async (fn: () => Promise<unknown>) => {
     setError(null);
     try {
@@ -165,54 +161,13 @@ function OrgUnitDetailPanel({
       )}
       <div style={muted}>For organizations whose business units are themselves geographic (e.g. “Europe Retail”).</div>
 
-      <h4 style={h4}>Operates in ({data.geographies.length})</h4>
-      {data.geographies.length === 0 ? (
-        <div style={muted}>No geographies yet.</div>
-      ) : (
-        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-          {data.geographies.map((g) => (
-            <li key={g.id} style={{ fontSize: 13, padding: "2px 0", display: "flex", gap: 8 }}>
-              {g.name}
-              {canWrite && (
-                <button
-                  aria-label={`Remove ${g.name}`}
-                  onClick={() => void run(() => unlink.mutateAsync({ id, geographyId: g.id }))}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--crit)", fontSize: 11 }}
-                >
-                  Remove
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {canWrite && (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!addGeo) return;
-            void run(async () => {
-              await link.mutateAsync({ id, geographyId: addGeo });
-              setAddGeo("");
-            });
-          }}
-          style={{ display: "flex", gap: 6, marginTop: 6 }}
-        >
-          <select aria-label="Add geography" value={addGeo} onChange={(e) => setAddGeo(e.target.value)} style={field}>
-            <option value="">Add a region or country…</option>
-            {allGeos
-              .filter((g) => !linked.has(g.id))
-              .map((g) => (
-                <option key={g.id} value={g.id}>
-                  {geoLabel(g)}
-                </option>
-              ))}
-          </select>
-          <button type="submit" className="ui-btn ui-btn-sm" disabled={!addGeo}>
-            Link
-          </button>
-        </form>
-      )}
+      {/* 947 GEO-02: typed, dated links. "Operates in" is the 940 operating geographies. */}
+      <GeoLinksEditor
+        subject="org_unit"
+        subjectId={id}
+        canWrite={canWrite}
+        hint="Operates in is what capability performer notes compare against."
+      />
 
       <h4 style={h4}>Owns applications ({data.applications.length})</h4>
       {data.applications.length === 0 ? (
@@ -255,12 +210,15 @@ export default function OrganizationTab({ onOpenCapability }: { onOpenCapability
   return (
     <div>
       <p style={{ ...muted, fontSize: 13, marginTop: 0 }}>
-        Who performs and owns the work (org units) and where (geography) are kept separate from the capability model, so a
+        Who performs and owns the work (org units), which companies sign and hold licences (legal entities) and where (geography) are kept separate from the capability model, so a
         reorg changes mappings, not capabilities.
       </p>
       <div role="tablist" aria-label="Organization sections" style={{ display: "flex", gap: 6, marginBottom: 12 }}>
         <button role="tab" aria-selected={section === "org-units"} style={tab(section === "org-units")} onClick={() => setSection("org-units")}>
           Org units
+        </button>
+        <button role="tab" aria-selected={section === "legal-entities"} style={tab(section === "legal-entities")} onClick={() => setSection("legal-entities")}>
+          Legal entities
         </button>
         <button role="tab" aria-selected={section === "geography"} style={tab(section === "geography")} onClick={() => setSection("geography")}>
           Geography
@@ -298,6 +256,7 @@ export default function OrganizationTab({ onOpenCapability }: { onOpenCapability
             </div>
           </div>
         ))}
+      {section === "legal-entities" && <LegalEntities canWrite={canWrite} />}
       {section === "geography" && <GeoHierarchies canWrite={canWrite} canWriteCompliance={canWriteCompliance} />}
       {section === "unmatched" && <UnmatchedList canWrite={canWrite} />}
       {section === "findings" && <OrgFindings onOpenCapability={onOpenCapability} />}

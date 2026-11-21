@@ -1051,6 +1051,41 @@ export interface paths {
         patch: operations["update_initiative_link_api_v1_applications__app_id__initiative_links__initiative_id__patch"];
         trace?: never;
     };
+    "/api/v1/applications/{app_id}/legal-entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Application Legal Entities */
+        get: operations["application_legal_entities_api_v1_applications__app_id__legal_entities_get"];
+        put?: never;
+        /** Link Application Legal Entity */
+        post: operations["link_application_legal_entity_api_v1_applications__app_id__legal_entities_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{app_id}/legal-entities/{le_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink Application Legal Entity */
+        delete: operations["unlink_application_legal_entity_api_v1_applications__app_id__legal_entities__le_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/applications/{app_id}/objectives": {
         parameters: {
             query?: never;
@@ -1176,6 +1211,42 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{subject_id}/geo-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Application Geo Links */
+        get: operations["list_application_geo_links"];
+        put?: never;
+        /** Add Application Geo Link */
+        post: operations["add_application_geo_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications/{subject_id}/geo-links/{link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a application geography link */
+        delete: operations["delete_application_geo_link"];
+        options?: never;
+        head?: never;
+        /** Update Application Geo Link */
+        patch: operations["update_application_geo_link"];
         trace?: never;
     };
     "/api/v1/auth/permissions": {
@@ -1678,6 +1749,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/business/geo-link-relations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Relations */
+        get: operations["get_relations_api_v1_business_geo_link_relations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/business/geo-memberships/{membership_id}": {
         parameters: {
             query?: never;
@@ -1746,6 +1834,113 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/legal-entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Legal Entities */
+        get: operations["list_legal_entities_api_v1_business_legal_entities_get"];
+        put?: never;
+        /** Create Legal Entity */
+        post: operations["create_legal_entity_api_v1_business_legal_entities_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/legal-entities/{le_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Legal Entity */
+        get: operations["get_legal_entity_api_v1_business_legal_entities__le_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Legal Entity */
+        delete: operations["delete_legal_entity_api_v1_business_legal_entities__le_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Legal Entity */
+        patch: operations["update_legal_entity_api_v1_business_legal_entities__le_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/business/legal-entities/{le_id}/org-units": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link Org Unit */
+        post: operations["link_org_unit_api_v1_business_legal_entities__le_id__org_units_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/legal-entities/{le_id}/org-units/{ou_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink Org Unit */
+        delete: operations["unlink_org_unit_api_v1_business_legal_entities__le_id__org_units__ou_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/legal-entities/{subject_id}/geo-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Legal Entity Geo Links */
+        get: operations["list_legal_entity_geo_links"];
+        put?: never;
+        /** Add Legal Entity Geo Link */
+        post: operations["add_legal_entity_geo_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/legal-entities/{subject_id}/geo-links/{link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a legal-entity geography link */
+        delete: operations["delete_legal_entity_geo_link"];
+        options?: never;
+        head?: never;
+        /** Update Legal Entity Geo Link */
+        patch: operations["update_legal_entity_geo_link"];
         trace?: never;
     };
     "/api/v1/business/org-units": {
@@ -1868,6 +2063,59 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/org-units/{ou_id}/legal-entities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Org Unit Legal Entities */
+        get: operations["org_unit_legal_entities_api_v1_business_org_units__ou_id__legal_entities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/org-units/{subject_id}/geo-links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Org Unit Geo Links */
+        get: operations["list_org_unit_geo_links"];
+        put?: never;
+        /** Add Org Unit Geo Link */
+        post: operations["add_org_unit_geo_link"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/business/org-units/{subject_id}/geo-links/{link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a org-unit geography link */
+        delete: operations["delete_org_unit_geo_link"];
+        options?: never;
+        head?: never;
+        /** Update Org Unit Geo Link */
+        patch: operations["update_org_unit_geo_link"];
         trace?: never;
     };
     "/api/v1/business/orphans": {
@@ -8294,6 +8542,78 @@ export interface components {
             /** Shape */
             shape?: ("strict_tree" | "dag") | null;
         };
+        /** GeoLink */
+        GeoLink: {
+            /** Active */
+            active: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            geography: components["schemas"]["LinkGeography"];
+            /** Id */
+            id: string;
+            /** Relation */
+            relation: string;
+            /** Subject Id */
+            subject_id: string;
+            /**
+             * Subject Type
+             * @enum {string}
+             */
+            subject_type: "application" | "legal_entity" | "org_unit";
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+        };
+        /** GeoLinkCreate */
+        GeoLinkCreate: {
+            /** Geography Id */
+            geography_id: string;
+            /** Relation */
+            relation: string;
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+        };
+        /** GeoLinkListResponse */
+        GeoLinkListResponse: {
+            /**
+             * As Of
+             * Format: date
+             */
+            as_of: string;
+            /** Items */
+            items: components["schemas"]["GeoLink"][];
+        };
+        /**
+         * GeoLinkRelations
+         * @description The relation matrix (FR-006): which relations each subject may use.
+         */
+        GeoLinkRelations: {
+            /** Subjects */
+            subjects: {
+                [key: string]: components["schemas"]["RelationRule"][];
+            };
+        };
+        /**
+         * GeoLinkUpdate
+         * @description Only the dates change (FR-005); both are replaced as sent (null = open).
+         */
+        GeoLinkUpdate: {
+            /** Valid From */
+            valid_from?: string | null;
+            /** Valid To */
+            valid_to?: string | null;
+        };
         /** GeoMembership */
         GeoMembership: {
             /**
@@ -8863,6 +9183,147 @@ export interface components {
                 [key: string]: components["schemas"]["Position"];
             };
         };
+        /** LegalEntity */
+        LegalEntity: {
+            /**
+             * Application Count
+             * @default 0
+             */
+            application_count: number;
+            /**
+             * Child Count
+             * @default 0
+             */
+            child_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: string;
+            /** Lei */
+            lei?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Org Unit Ids
+             * @default []
+             */
+            org_unit_ids: string[];
+            /** Parent Id */
+            parent_id?: string | null;
+            /**
+             * Path
+             * @default []
+             */
+            path: components["schemas"]["Ref"][];
+            /** Registration Number */
+            registration_number?: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** LegalEntityCreate */
+        LegalEntityCreate: {
+            /** Description */
+            description?: string | null;
+            /** Lei */
+            lei?: string | null;
+            /** Name */
+            name: string;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Registration Number */
+            registration_number?: string | null;
+        };
+        /** LegalEntityDetail */
+        LegalEntityDetail: {
+            /**
+             * Application Count
+             * @default 0
+             */
+            application_count: number;
+            /**
+             * Applications
+             * @default []
+             */
+            applications: components["schemas"]["Ref"][];
+            /**
+             * Child Count
+             * @default 0
+             */
+            child_count: number;
+            /**
+             * Children
+             * @default []
+             */
+            children: components["schemas"]["Ref"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Description */
+            description?: string | null;
+            /** Id */
+            id: string;
+            /** Lei */
+            lei?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Org Unit Ids
+             * @default []
+             */
+            org_unit_ids: string[];
+            /**
+             * Org Units
+             * @default []
+             */
+            org_units: components["schemas"]["Ref"][];
+            /** Parent Id */
+            parent_id?: string | null;
+            /**
+             * Path
+             * @default []
+             */
+            path: components["schemas"]["Ref"][];
+            /** Registration Number */
+            registration_number?: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** LegalEntityListResponse */
+        LegalEntityListResponse: {
+            /** Items */
+            items: components["schemas"]["LegalEntity"][];
+            /** Total */
+            total: number;
+        };
+        /**
+         * LegalEntityUpdate
+         * @description Fields sent are changed; an explicit null clears an optional one.
+         */
+        LegalEntityUpdate: {
+            /** Description */
+            description?: string | null;
+            /** Lei */
+            lei?: string | null;
+            /** Name */
+            name?: string | null;
+            /** Parent Id */
+            parent_id?: string | null;
+            /** Registration Number */
+            registration_number?: string | null;
+        };
         /** LifecycleEvent */
         LifecycleEvent: {
             /** Actor */
@@ -8904,6 +9365,31 @@ export interface components {
          * @enum {string}
          */
         LifecycleStatus: "draft" | "proposed" | "current" | "complete" | "deprecated" | "decommissioned";
+        /** LinkGeography */
+        LinkGeography: {
+            /** Code */
+            code?: string | null;
+            /** Entity */
+            entity: string;
+            /** Hierarchy Kind */
+            hierarchy_kind?: string | null;
+            /** Hierarchy Name */
+            hierarchy_name?: string | null;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** LinkLegalEntity */
+        LinkLegalEntity: {
+            /** Legal Entity Id */
+            legal_entity_id: string;
+        };
+        /** LinkOrgUnit */
+        LinkOrgUnit: {
+            /** Org Unit Id */
+            org_unit_id: string;
+        };
         /**
          * LinkedCapRef
          * @description A linked capability with its ancestor path (L1 first), for display.
@@ -10214,6 +10700,23 @@ export interface components {
         RejectOptionRequest: {
             /** Rejection Reason */
             rejection_reason: string;
+        };
+        /** RelationRule */
+        RelationRule: {
+            /** Label */
+            label: string;
+            /**
+             * Place Only
+             * @default false
+             */
+            place_only: boolean;
+            /** Relation */
+            relation: string;
+            /**
+             * Single Active
+             * @default false
+             */
+            single_active: boolean;
         };
         /**
          * Relationship
@@ -14649,6 +15152,102 @@ export interface operations {
             };
         };
     };
+    application_legal_entities_api_v1_applications__app_id__legal_entities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalEntity"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_application_legal_entity_api_v1_applications__app_id__legal_entities_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkLegalEntity"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalEntity"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_application_legal_entity_api_v1_applications__app_id__legal_entities__le_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: string;
+                le_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_application_objectives_api_v1_applications__app_id__objectives_get: {
         parameters: {
             query?: never;
@@ -14993,6 +15592,141 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_application_geo_links: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+                all?: boolean;
+            };
+            header?: never;
+            path: {
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoLinkListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_application_geo_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeoLinkCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_application_geo_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: string;
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_application_geo_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: string;
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeoLinkUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoLink"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -16189,6 +16923,26 @@ export interface operations {
             };
         };
     };
+    get_relations_api_v1_business_geo_link_relations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoLinkRelations"];
+                };
+            };
+        };
+    };
     delete_geo_membership_api_v1_business_geo_memberships__membership_id__delete: {
         parameters: {
             query?: never;
@@ -16366,6 +17120,354 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgUnit"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_legal_entities_api_v1_business_legal_entities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalEntityListResponse"];
+                };
+            };
+        };
+    };
+    create_legal_entity_api_v1_business_legal_entities_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LegalEntityCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalEntity"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_legal_entity_api_v1_business_legal_entities__le_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                le_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalEntityDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_legal_entity_api_v1_business_legal_entities__le_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                le_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_legal_entity_api_v1_business_legal_entities__le_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                le_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LegalEntityUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalEntity"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_org_unit_api_v1_business_legal_entities__le_id__org_units_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                le_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkOrgUnit"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalEntityDetail"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_org_unit_api_v1_business_legal_entities__le_id__org_units__ou_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                le_id: string;
+                ou_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_legal_entity_geo_links: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+                all?: boolean;
+            };
+            header?: never;
+            path: {
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoLinkListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_legal_entity_geo_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeoLinkCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_legal_entity_geo_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: string;
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_legal_entity_geo_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: string;
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeoLinkUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoLink"];
                 };
             };
             /** @description Validation Error */
@@ -16664,6 +17766,172 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    org_unit_legal_entities_api_v1_business_org_units__ou_id__legal_entities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ou_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LegalEntity"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_org_unit_geo_links: {
+        parameters: {
+            query?: {
+                as_of?: string | null;
+                all?: boolean;
+            };
+            header?: never;
+            path: {
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoLinkListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_org_unit_geo_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeoLinkCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoLink"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_org_unit_geo_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: string;
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_org_unit_geo_link: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subject_id: string;
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeoLinkUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoLink"];
+                };
             };
             /** @description Validation Error */
             422: {

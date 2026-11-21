@@ -32,6 +32,7 @@ from adp.organization.models import (
     DepthError,
     DuplicateCodeError,
     DuplicateLinkError,
+    DuplicateNameError,
     DuplicateSiblingError,
     Geography,
     GeographyLinkCreate,
@@ -50,6 +51,7 @@ from adp.organization.models import (
     HierarchyRuleError,
     InvalidCodeError,
     LevelRuleError,
+    LinkRuleError,
     MembershipConflictError,
     OrganizationError,
     OrgNotFoundError,
@@ -92,6 +94,9 @@ _STATUS: list[tuple[type[OrganizationError], int]] = [
     (MembershipConflictError, status.HTTP_409_CONFLICT),
     (HierarchyRuleError, status.HTTP_422_UNPROCESSABLE_CONTENT),
     (GeographyPermissionError, status.HTTP_403_FORBIDDEN),
+    # 947 GEO-02
+    (LinkRuleError, status.HTTP_422_UNPROCESSABLE_CONTENT),
+    (DuplicateNameError, status.HTTP_409_CONFLICT),
 ]
 
 
